@@ -1,0 +1,25 @@
+PARAMETERS
+
+action 	        fit
+pos_pixels	151
+pos_width       240.0
+length_step	2.0
+length_tol	0.01
+ratio_step	0.1
+ratio_abstol	0.001
+angle_step	5.0
+angle_abstol	0.1
+spin_step	5.0
+spin_tol	0.01
+photo_step	0.01
+photo_tol	0.001
+delcor_step	5.0
+delcor_tol	0.001
+term_prec	0.01
+vary_delcor0	all
+vary_radalb	all
+nsinc2		1
+sinc2width      6
+
+PENALTIES       1
+nonpa_uni       1

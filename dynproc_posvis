@@ -1,0 +1,188 @@
+matt@CUDA ~/cuda-workspace/shape-cuda-v1.0/Debug $ cuda-memcheck ./shape-cuda-v1.0 /home/matt/cuda-workspace/shape-cuda/Aux/zel.fpar /home/matt/cuda-workspace/shape-cuda/Aux/zel.mod /home/matt/cuda-workspace/shape-cuda/Aux/zel.obs
+========= CUDA-MEMCHECK
+Shape-CUDA-v1.0 running
+1 CUDA-capable GPU(s) detected.  shape-cuda will use device id 0.
+
+Device Number: 0
+  Device name: GeForce GTX 1060 3GB
+  Memory Clock Rate (GHz): 4.004000
+  Memory Bus Width (bits): 192
+  Peak Memory Bandwidth (GB/s): 192.192000
+  Compute Capability: 6.1
+  Number of multi-processors on GPU: 9
+  Maximum grid size: 2147483647 x 65535 x 65535
+  Maximum size of each dimension of a block: 1024 x 1024 x 64
+  Maximum threads per block: 1024
+  Maximum shared memory per block: 49152
+  Warp size: 32
+
+# shape-cuda-v1.0 version 0.750 build Tue Jul 1 15:28:14 PDT 2016#
+# command line: ./shape-cuda-v1.0 /home/matt/cuda-workspace/shape-cuda/Aux/zel.fpar /home/matt/cuda-workspace/shape-cuda/Aux/zel.mod /home/matt/cuda-workspace/shape-cuda/Aux/zel.obs
+#
+# starting time 2017 Jan 03 22:08:10 PST
+#
+# node  0 running as pid 26447
+#
+# reading parameters from file: /home/matt/cuda-workspace/shape-cuda/Aux/zel.fpar
+# action fit
+# pos_pixels 151
+# pos_width 2.400000e+02
+# length_step 2.000000e+00
+# length_tol 1.000000e-02
+# ratio_step 1.000000e-01
+# ratio_abstol 1.000000e-03
+# angle_step 5.000000e+00
+# angle_abstol 1.000000e-01
+# spin_step 5.000000e+00
+# spin_tol 1.000000e-02
+# photo_step 1.000000e-02
+# photo_tol 1.000000e-03
+# delcor_step 0.000000e+00
+# delcor_tol 1.000000e-03
+# term_prec 1.000000e-02
+# vary_delcor0 all
+# vary_radalb all
+# nsinc2 1
+# sinc2width 6
+# setting inertia_step = spin_step (5.000000e+00)
+# setting xyoff_step   = 1.000000e+00
+# setting spindot_step = spin_step/10000 (5.000000e-04)
+# setting lib_amp_step = (5.729578e-01)
+# setting lib_freq_step = spin_step (5.000000e+00)
+# setting lib_phase_step = (5.729578e+01)
+# setting inertia_tol    = spin_tol    (1.000000e-02)
+# setting inertia_abstol = spin_abstol (0.000000e+00)
+# setting xyoff_tol    = 0.000000e+00
+# setting xyoff_abstol = 1.000000e-02
+# setting spindot_tol    = spin_tol    (1.000000e-02)
+# setting spindot_abstol = spin_abstol/10000 (0.000000e+00)
+# setting lib_amp_tol    = _tol    (1.000000e-01)
+# setting lib_amp_abstol = spin_abstol/10000 (5.729578e+00)
+# setting lib_freq_tol    = spin_tol    (1.000000e-01)
+# setting lib_freq_abstol = spin_abstol/10000 (1.000000e-01)
+# setting lib_phase_tol    = 0.1    (1.000000e-01)
+# setting lib_phase_abstol = 0.1 (1.000000e-01)
+# setting mask_tol = 1.600000e+00
+# setting dd_maxsides = right-top
+# 1 penalty terms
+# penalty nonpa_uni, weight 1.000000e+00
+# finished reading parameter file
+
+par.action: 7 (line 75)
+
+
+mod.name: /home/matt/cuda-workspace/shape-cuda/Aux/zel.mod
+dat.name: /home/matt/cuda-workspace/shape-cuda/Aux/zel.obs
+# reading model from file: /home/matt/cuda-workspace/shape-cuda/Aux/zel.mod ...
+# shape has 1 components
+# component 0 is type ellipse
+# 45 theta steps
+# component 0 has 2586 vertices in realization
+# component 0 has 5168 facets in realization
+
+(read_mod.c, ln 495) mod->photo.nradlaws = 1 
+# radar scattering law 0: cosine
+# optical scattering law 0: none
+# initial JD of spin state: 2452308.500000
+# assuming PA rotation
+# finished reading model file
+#
+# fitting with CUDA
+#
+# reading data through file: /home/matt/cuda-workspace/shape-cuda/Aux/zel.obs ...
+# dataset  0:
+#     /home/matt/cuda-workspace/shape-cuda/Aux/data/zel06.run2.8u.dat
+#     /home/matt/cuda-workspace/shape-cuda/Aux/data/zel07.run1.8u.dat
+#     /home/matt/cuda-workspace/shape-cuda/Aux/data/zel08.run2.8u.dat
+#     /home/matt/cuda-workspace/shape-cuda/Aux/data/zel09.run1.8u.dat
+# dataset  1:
+#     /home/matt/cuda-workspace/shape-cuda/Aux/data/zel03.cw.vig.dat
+#     /home/matt/cuda-workspace/shape-cuda/Aux/data/zel04.cw.vig.dat
+#     /home/matt/cuda-workspace/shape-cuda/Aux/data/zel09.cw.vig.dat
+#     /home/matt/cuda-workspace/shape-cuda/Aux/data/zel10.cw.vig.dat
+# finished reading obs file
+#
+# CUDA fit (pid 26447 on CUDA)
+========= Invalid __global__ write of size 4
+=========     at 0x00007a68 in /home/matt/cuda-workspace/shape-cuda-v1.0/Debug/../src/shape/posvis-cuda_2.cu:512:posvis_fct_dynp_krnl(int, int, int, float*, float*, float*)
+=========     by thread (196,0,0) in block (7,0,0)
+=========     Address 0x10204073908 is out of bounds
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========     Host Frame:/usr/lib/x86_64-linux-gnu/libcuda.so.1 (cuLaunchKernel + 0x2c5) [0x204115]
+=========     Host Frame:./shape-cuda-v1.0 [0x129c91]
+=========     Host Frame:./shape-cuda-v1.0 [0x147833]
+=========     Host Frame:./shape-cuda-v1.0 [0x8a8df]
+=========     Host Frame:./shape-cuda-v1.0 [0x8a0b2]
+=========     Host Frame:./shape-cuda-v1.0 [0x8a10a]
+=========     Host Frame:./shape-cuda-v1.0 [0x89458]
+=========     Host Frame:./shape-cuda-v1.0 [0xefd67]
+=========     Host Frame:./shape-cuda-v1.0 [0x10671]
+=========     Host Frame:./shape-cuda-v1.0 [0xddb6c]
+=========     Host Frame:/lib/x86_64-linux-gnu/libc.so.6 (__libc_start_main + 0xf0) [0x20830]
+=========     Host Frame:./shape-cuda-v1.0 [0x3899]
+=========
+========= Invalid __global__ write of size 4
+=========     at 0x00007a68 in /home/matt/cuda-workspace/shape-cuda-v1.0/Debug/../src/shape/posvis-cuda_2.cu:512:posvis_fct_dynp_krnl(int, int, int, float*, float*, float*)
+=========     by thread (195,0,0) in block (7,0,0)
+=========     Address 0x10204073908 is out of bounds
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========     Host Frame:/usr/lib/x86_64-linux-gnu/libcuda.so.1 (cuLaunchKernel + 0x2c5) [0x204115]
+=========     Host Frame:./shape-cuda-v1.0 [0x129c91]
+=========     Host Frame:./shape-cuda-v1.0 [0x147833]
+=========     Host Frame:./shape-cuda-v1.0 [0x8a8df]
+=========     Host Frame:./shape-cuda-v1.0 [0x8a0b2]
+=========     Host Frame:./shape-cuda-v1.0 [0x8a10a]
+=========     Host Frame:./shape-cuda-v1.0 [0x89458]
+=========     Host Frame:./shape-cuda-v1.0 [0xefd67]
+=========     Host Frame:./shape-cuda-v1.0 [0x10671]
+=========     Host Frame:./shape-cuda-v1.0 [0xddb6c]
+=========     Host Frame:/lib/x86_64-linux-gnu/libc.so.6 (__libc_start_main + 0xf0) [0x20830]
+=========     Host Frame:./shape-cuda-v1.0 [0x3899]
+=========
+========= Invalid __global__ write of size 4
+=========     at 0x00007a68 in /home/matt/cuda-workspace/shape-cuda-v1.0/Debug/../src/shape/posvis-cuda_2.cu:512:posvis_fct_dynp_krnl(int, int, int, float*, float*, float*)
+=========     by thread (192,0,0) in block (7,0,0)
+=========     Address 0x10204073908 is out of bounds
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========     Host Frame:/usr/lib/x86_64-linux-gnu/libcuda.so.1 (cuLaunchKernel + 0x2c5) [0x204115]
+=========     Host Frame:./shape-cuda-v1.0 [0x129c91]
+=========     Host Frame:./shape-cuda-v1.0 [0x147833]
+=========     Host Frame:./shape-cuda-v1.0 [0x8a8df]
+=========     Host Frame:./shape-cuda-v1.0 [0x8a0b2]
+=========     Host Frame:./shape-cuda-v1.0 [0x8a10a]
+=========     Host Frame:./shape-cuda-v1.0 [0x89458]
+=========     Host Frame:./shape-cuda-v1.0 [0xefd67]
+=========     Host Frame:./shape-cuda-v1.0 [0x10671]
+=========     Host Frame:./shape-cuda-v1.0 [0xddb6c]
+=========     Host Frame:/lib/x86_64-linux-gnu/libc.so.6 (__libc_start_main + 0xf0) [0x20830]
+=========     Host Frame:./shape-cuda-v1.0 [0x3899]
+=========
+========= Program hit cudaErrorLaunchFailure (error 4) due to "unspecified launch failure" on CUDA API call to cudaDeviceSynchronize. 
+=========     Saved host backtrace up to driver entry point at error
+cudaDeviceSynchronize returned error code 4 after launching the kernel in psvs_facet_cpy_krnl.
+=========     Host Frame:/usr/lib/x86_64-linux-gnu/libcuda.so.1 [0x2eeda3]
+=========     Host Frame:./shape-cuda-v1.0 [0x147556]
+=========     Host Frame:./shape-cuda-v1.0 [0x58fa]
+=========     Host Frame:./shape-cuda-v1.0 [0x8946c]
+=========     Host Frame:./shape-cuda-v1.0 [0xefd67]
+=========     Host Frame:./shape-cuda-v1.0 [0x10671]
+=========     Host Frame:./shape-cuda-v1.0 [0xddb6c]
+=========     Host Frame:/lib/x86_64-linux-gnu/libc.so.6 (__libc_start_main + 0xf0) [0x20830]
+=========     Host Frame:./shape-cuda-v1.0 [0x3899]
+=========
+========= Program hit cudaErrorLaunchFailure (error 4) due to "unspecified launch failure" on CUDA API call to cudaMemcpyFromSymbol. 
+GPUassert: unspecified launch failure ../src/shape/posvis-cuda_2.cu 788
+=========     Saved host backtrace up to driver entry point at error
+=========     Host Frame:/usr/lib/x86_64-linux-gnu/libcuda.so.1 [0x2eeda3]
+=========     Host Frame:./shape-cuda-v1.0 [0x14993c]
+=========     Host Frame:./shape-cuda-v1.0 [0x8a8c0]
+=========     Host Frame:./shape-cuda-v1.0 [0x8948d]
+=========     Host Frame:./shape-cuda-v1.0 [0xefd67]
+=========     Host Frame:./shape-cuda-v1.0 [0x10671]
+=========     Host Frame:./shape-cuda-v1.0 [0xddb6c]
+=========     Host Frame:/lib/x86_64-linux-gnu/libc.so.6 (__libc_start_main + 0xf0) [0x20830]
+=========     Host Frame:./shape-cuda-v1.0 [0x3899]
+=========
+========= ERROR SUMMARY: 5 errors
+matt@CUDA ~/cuda-workspace/shape-cuda-v1.0/Debug $ 
+
