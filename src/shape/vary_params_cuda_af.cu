@@ -680,7 +680,6 @@ __host__ void vary_params_af( struct par_t *dpar, struct mod_t *dmod,
 	double *weight;
 	float zmax, xsec_set;
 
-	cudaStream_t *vpstream;
 	/*  Initialize variables  */
 	vp_init_vars_af_krnl<<<1,1>>>(dpar);
 	checkErrorAfterKernelLaunch("vp_init_vars_af_krnl");

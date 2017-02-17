@@ -360,6 +360,22 @@ __device__ struct doppler_t *cf_doppler;
 __device__ struct dopfrm_t *cf_dop_frame;
 __device__ struct dopview_t *cf_dop_view0;
 
+__global__ void cf_get_global_frmsz_krnl(int *global_lim, int4 *xylim,
+		int nframes) {
+	/* nframes-threaded kernel */
+	int f = threadIdx.x;
+	if (f < nframes) {
+		/* Initialize global_lim 	 */
+		for (int i=0; i<4; i++)
+			global_lim[i] = 0;
+
+		/* Now calculate minimum for all frames */
+		atomicMin(&global_lim[0], xylim[f].w);
+		atomicMax(&global_lim[1], xylim[f].x);
+		atomicMin(&global_lim[2], xylim[f].y);
+		atomicMax(&global_lim[3], xylim[f].z);
+	}
+}
 __global__ void cf_init_devpar_krnl(struct par_t *dpar, struct mod_t
 		*dmod, struct dat_t *ddat) {
 	/* Single-threaded kernel */
@@ -530,10 +546,8 @@ __global__ void cf_set_pos_ae_krnl(int v) {
 		}
 
 		/* Single-thread task */
-		if (offset == 0) {
+		if (offset == 0)
 			cf_pos->bistatic = 0;
-			cf_pos_n = cf_pos->n;
-		}
 	}
 }
 __global__ void cf_posclr_krnl(int n, int nx)
@@ -592,15 +606,23 @@ __global__ void cf_set_posbnd_krnl(struct par_t *dpar) {
 
 	}
 }
-__global__ void cf_get_exclude_seen_krnl(struct par_t *dpar, struct
-		mod_t *dmod) {
-	/* Single-threaded kernel */
-	if (threadIdx.x == 0) {
-		cf_exclude_seen = dpar->exclude_seen;
-		cf_xlim0 = cf_pos->xlim[0];
-		cf_xlim1 = cf_pos->xlim[1];
-		cf_ylim0 = cf_pos->ylim[0];
-		cf_ylim1 = cf_pos->ylim[1];
+__global__ void cf_get_exclude_seen_krnl(struct par_t *dpar,
+		struct mod_t *dmod,
+		struct pos_t **pos,
+		int4 *xylim,
+		int *global_lim,
+		int nframes		) {
+	/* nframes-threaded kernel */
+	int frm = threadIdx.x;
+	if (frm < nframes) {
+		if (threadIdx.x == 0)
+			cfaf_exclude_seen = dpar->exclude_seen;
+
+		xylim[frm].w = pos[frm]->xlim[0];
+		xylim[frm].x = pos[frm]->xlim[0];
+		xylim[frm].y = pos[frm]->xlim[0];
+		xylim[frm].z = pos[frm]->xlim[0];
+
 	}
 }
 __global__ void cf_mark_pixels_seen_krnl(struct par_t *dpar,

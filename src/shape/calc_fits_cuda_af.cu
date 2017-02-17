@@ -347,8 +347,7 @@ __host__ void calc_doppler_cuda(struct par_t *dpar, struct mod_t *dmod,
 //		lghtcrv_t *lghtcrv, int s);
 
 __device__ int cfaf_nframes, cfaf_nviews,
-			   cfaf_v0_index, cf_pos_n, cf_exclude_seen, cf_xlim0, cf_xlim1,
-			   cf_ylim0, cf_ylim1;
+			   cfaf_v0_index, cf_pos_n, cfaf_exclude_seen;
 __device__ unsigned char cfaf_type;
 __device__ float cf_overflow_o2_store, cf_overflow_m2_store, cf_overflow_xsec_store,
 		cf_overflow_delmean_store, cf_overflow_dopmean_store;
@@ -508,7 +507,8 @@ __global__ void cf_set_shortcuts_doppler_af_krnl(struct dat_t *ddat, int s,
 		int *ndop,
 		struct dopview_t *view0,
 		struct pos_t **pos,
-		float *overflow) {
+		float *overflow,
+		int4 *xylim) {
 	/* nframes-threaded kernel */
 	int frm = threadIdx.x;
 
@@ -606,26 +606,36 @@ __global__ void cf_posclr_af_krnl(struct pos_t **pos, int n, int nx, int frame_s
 		}
 	}
 }
-__global__ void cf_set_posbnd_krnl(struct par_t *dpar) {
-	/* Single-threaded kernel */
-	if (threadIdx.x == 0) {
-		dpar->posbnd = 1;
-		switch (cf_type) {
-		case DELAY:
-			dpar->posbnd_logfactor += cf_del_frame->dof * cf_pos->posbnd_logfactor;
-			break;
-		case DOPPLER:
-			dpar->posbnd_logfactor += cf_dop_frame->dof * cf_pos->posbnd_logfactor;
-			break;
-		}
-
+__global__ void cf_set_posbnd_deldop_af_krnl(struct par_t *dpar,
+		struct deldopfrm_t **frame,
+		struct pos_t **pos,
+		int nframes) {
+	/* nframes-threaded kernel */
+	int frm = threadIdx.x;
+	if (frm<nframes) {
+		if (frm==0)
+			dpar->posbnd = 1;
+		dpar->posbnd_logfactor += frame[frm]->dof * pos[frm]->posbnd_logfactor;
 	}
 }
-__global__ void cf_get_exclude_seen_krnl(struct par_t *dpar, struct
-		mod_t *dmod) {
+__global__ void cf_set_posbnd_doppler_af_krnl(struct par_t *dpar,
+		struct dopfrm_t **frame,
+		struct pos_t **pos,
+		int nframes) {
+	/* nframes-threaded kernel */
+	int frm = threadIdx.x;
+	if (frm<nframes) {
+		if (frm==0)
+			dpar->posbnd = 1;
+		dpar->posbnd_logfactor += frame[frm]->dof * pos[frm]->posbnd_logfactor;
+	}
+}
+__global__ void cf_get_exclude_seen_krnl(struct par_t *dpar,
+		struct mod_t *dmod,
+		struct pos_t **pos) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
-		cf_exclude_seen = dpar->exclude_seen;
+		cfaf_exclude_seen = dpar->exclude_seen;
 		cf_xlim0 = cf_pos->xlim[0];
 		cf_xlim1 = cf_pos->xlim[1];
 		cf_ylim0 = cf_pos->ylim[0];
@@ -816,13 +826,10 @@ __host__ void calc_deldop_cuda(struct par_t *dpar, struct mod_t *dmod,
 
 	for (f=0; f<nframes; f++) {
 		/* Set deldop, frame, view0, and pos */
-		cf_set_shortcuts_krnl<<<1,1>>>(ddat, s, f);
-		checkErrorAfterKernelLaunch("cf_deldop_set_shortcuts_krnl (calc_deldop_cuda)");
+		cf_set_shortcuts_krnl<<<1,1>>>(ddat, s, nframes, frame, ndel, ndop,
+				view0, pos, overflow);
+			checkErrorAfterKernelLaunch("cf_deldop_set_shortcuts_af_krnl");
 		gpuErrchk(cudaMemcpyFromSymbol(&nviews, cf_nviews, sizeof(int),
-				0, cudaMemcpyDeviceToHost));
-		gpuErrchk(cudaMemcpyFromSymbol(&ndel, cf_ndel, sizeof(int),
-				0, cudaMemcpyDeviceToHost));
-		gpuErrchk(cudaMemcpyFromSymbol(&ndop, cf_ndop, sizeof(int),
 				0, cudaMemcpyDeviceToHost));
 		gpuErrchk(cudaMemcpyFromSymbol(&v0_index, cf_v0_index, sizeof(int),
 				0, cudaMemcpyDeviceToHost));
@@ -845,11 +852,9 @@ __host__ void calc_deldop_cuda(struct par_t *dpar, struct mod_t *dmod,
 
 			/* Launch 9-threaded kernel to set pos->ae,pos->oe,pos->bistatic.*/
 			THD.x = 9;
-			cf_set_pos_ae_krnl<<<BLK,THD>>>(v);
-			checkErrorAfterKernelLaunch("cf_deldop_set_pos_ae_krnl "
-					"(calc_deldop_cuda)");
-			gpuErrchk(cudaMemcpyFromSymbol(&pos_n, cf_pos_n, sizeof(int),
-					0, cudaMemcpyDeviceToHost));
+			cf_set_pos_ae_deldop_af_krnl(pos, frame, pos_n, nframes, v);
+			checkErrorAfterKernelLaunch("cf_deldop_set_pos_ae_deldop_af_krnl ");
+
 
 			/* Configure & launch posclr_krnl to initialize POS view */
 			BLK.x = floor((maxThreadsPerBlock - 1 + (2*pos_n+1)*(2*pos_n+1)) /
