@@ -721,7 +721,10 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 			if (++cntr >= par->npar_update) {
 				cntr = 0;
 				showvals = 1;
-				calc_fits_cuda(dpar, dmod, ddat);
+				if (AF)
+					calc_fits_cuda_af(dpar,dmod,ddat);
+				else
+					calc_fits_cuda(dpar, dmod, ddat);
 				chi2_cuda(dpar, ddat, 0);
 				//write_mod( par, mod);
 				//write_dat( par, dat);
@@ -732,7 +735,10 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 		 * region within each delay-Doppler or Doppler frame for which model
 		 * power is nonzero.                                               */
 		if (cntr != 0) {
-			calc_fits_cuda(dpar, dmod, ddat);
+			if (AF)
+				calc_fits_cuda_af(dpar,dmod,ddat);
+			else
+				calc_fits_cuda(dpar, dmod, ddat);
 			chi2_cuda(dpar, ddat, 0);
 			//write_mod( par, mod);
 			//write_dat( par, dat);
@@ -943,7 +949,10 @@ __host__ double objective_cuda( double x)
 	if (newxyoff)
 		realize_xyoff_cuda(sdev_dat);
 
-	calc_fits_cuda(sdev_par, sdev_mod, sdev_dat);
+	if (AF)
+		calc_fits_cuda_af(sdev_par, sdev_mod, sdev_dat);
+	else
+		calc_fits_cuda(sdev_par, sdev_mod, sdev_dat);
 	err = chi2_cuda(sdev_par, sdev_dat, 0);
 
 	/* Divide chi-square by DOF to get reduced chi-square.    */

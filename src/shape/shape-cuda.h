@@ -67,6 +67,8 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod, struct dat_
 		*ddat, struct par_t *par, struct mod_t *mod, struct dat_t *dat);
 __host__ void calc_fits_cuda(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat);
+__host__ void calc_fits_cuda_af(struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat);
 __host__ double chi2_cuda(struct par_t *dpar, struct dat_t *ddat, int list_breakdown);
 __host__ void compute_dv_dcom_dI_reduction(float *dv, float *dcom0, float
 		*dcom1, float *dcom2, float *dI00, float *dI01, float *dI02, float
@@ -118,7 +120,7 @@ __host__ int posvis_cuda_2(struct par_t *dpar, struct mod_t *dmod, struct
 		dat_t *ddat, double orbit_offset[3], int set, int frame, int src,
 		int body, int comp);
 __host__ int posvis_af(struct par_t *dpar, struct mod_t *dmod,
-		struct dat_t *ddat, double orbit_offset[3], int set, int nframes,
+		struct dat_t *ddat, float orbit_offset[3], int set, int nframes,
 		int src, int body, int comp);
 __host__ void realize_delcor_cuda(struct dat_t *ddat, double delta_delcor0,
 		int delcor0_mode, int nsets);
@@ -156,6 +158,7 @@ __device__ void dev_facmom( double fv0[3], double fv1[3], double fv2[3], double 
         double *dv, double dvr[3], double dI[3][3]);
 __device__ double dev_facnrm( struct vertices_t verts, int fi);
 __device__ int dev_gamma_trans(float *datum, double gamma);
+__device__ int dev_gamma_trans_float(float *datum, float gamma);
 __device__ double dev_gammln(double xx);
 __device__ double dev_hapke( double cosi, double cose, double phase,
         double w, double h, double B0, double g, double theta);

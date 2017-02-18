@@ -425,7 +425,7 @@ __global__ void posvis_set_logfactor_af_krnl(struct pos_t **pos,
 }
 
 __host__ int posvis_af(struct par_t *dpar, struct mod_t *dmod,
-		struct dat_t *ddat, double orbit_offset[3], int set, int nframes,
+		struct dat_t *ddat, float orbit_offset[3], int set, int nframes,
 		int src, int body, int comp) {
 	int nf, outbnd, n, nThreads;
 	dim3 BLK,THD;

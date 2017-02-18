@@ -665,7 +665,7 @@ __host__ void vary_params_af( struct par_t *dpar, struct mod_t *dmod,
 	 * int nsets 				- ddat->nsets
 	 */
 
-	double orbit_offset[3] = {0.0, 0.0, 0.0};
+	float orbit_offset[3] = {0.0, 0.0, 0.0};
 	int c=0, f, s, i, compute_brightness, compute_zmax,
 			compute_cosdelta, n, ncalc, nx, lghtcrv_bistatic, nframes,
 			xlim[2], ylim[2], xspan, yspan, lghtcrv_n, *compute_xsec,

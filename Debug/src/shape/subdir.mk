@@ -8,6 +8,7 @@ CU_SRCS += \
 ../src/shape/bestfit_CUDA.cu \
 ../src/shape/bsstep_cuda.cu \
 ../src/shape/calc_fits_cuda.cu \
+../src/shape/calc_fits_cuda_af.cu \
 ../src/shape/cel_cuda.cu \
 ../src/shape/chi2_cuda.cu \
 ../src/shape/copy_to_device.cu \
@@ -112,6 +113,7 @@ OBJS += \
 ./src/shape/bsstep_cuda.o \
 ./src/shape/calc_fits.o \
 ./src/shape/calc_fits_cuda.o \
+./src/shape/calc_fits_cuda_af.o \
 ./src/shape/calc_orbit.o \
 ./src/shape/cel_cuda.o \
 ./src/shape/check_cuda.o \
@@ -206,6 +208,7 @@ CU_DEPS += \
 ./src/shape/bestfit_CUDA.d \
 ./src/shape/bsstep_cuda.d \
 ./src/shape/calc_fits_cuda.d \
+./src/shape/calc_fits_cuda_af.d \
 ./src/shape/cel_cuda.d \
 ./src/shape/chi2_cuda.d \
 ./src/shape/copy_to_device.d \
