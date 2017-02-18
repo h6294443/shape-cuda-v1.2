@@ -16,6 +16,24 @@ __global__ void clrvect_krnl(struct dat_t *ddat, int s, int f, int nThreads) {
 		}
 	}
 }
+__global__ void clrvect_af_krnl(struct dat_t *ddat, int s, int nframes,
+		int nThreads, int frame_size) {
+	/* multi-threaded kernel for all frames in a set */
+	int total_offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int frm = total_offset / frame_size;
+	int offset = offset % frame_size;
+
+	if ((offset < nThreads) && (frm < nframes)) {
+		switch (ddat->set[s].type) {
+		case DELAY:
+			ddat->set[s].desc.deldop.frame[frm].fit_s[offset] = 0.0;
+			break;
+		case DOPPLER:
+			ddat->set[s].desc.doppler.frame[frm].fit_s[offset] = 0.0;
+			break;
+		}
+	}
+}
 
 void cotrans_cuda(double y[3], double a[3][3], double x[3], int dir)
 {

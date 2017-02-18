@@ -346,18 +346,10 @@ __host__ void calc_doppler_cuda(struct par_t *dpar, struct mod_t *dmod,
 //__host__ void calc_lghtcrv_cuda(struct par_t *par, struct mod_t *mod, struct
 //		lghtcrv_t *lghtcrv, int s);
 
-__device__ int cfaf_nframes, cfaf_nviews,
-			   cfaf_v0_index, cf_pos_n, cfaf_exclude_seen;
+__device__ int cfaf_nframes, cfaf_nviews, cfaf_v0_index, cfaf_exclude_seen;
 __device__ unsigned char cfaf_type;
 __device__ float cf_overflow_o2_store, cf_overflow_m2_store, cf_overflow_xsec_store,
 		cf_overflow_delmean_store, cf_overflow_dopmean_store;
-__device__ struct deldop_t *cf_deldop;
-__device__ struct deldopfrm_t *cf_del_frame;
-__device__ struct deldopview_t *cf_del_view0;
-__device__ struct pos_t *cf_pos;
-__device__ struct doppler_t *cf_doppler;
-__device__ struct dopfrm_t *cf_dop_frame;
-__device__ struct dopview_t *cf_dop_view0;
 
 __global__ void cf_init_devpar_af_krnl(struct par_t *dpar, struct mod_t
 		*dmod, struct dat_t *ddat, int c, int *nf_nsets) {
@@ -567,7 +559,8 @@ __global__ void cf_set_pos_ae_doppler_af_krnl(struct pos_t **pos, struct dopfrm_
 		}
 	}
 }
-__global__ void cf_posclr_af_krnl(struct pos_t **pos, int n, int nx, int frame_size)
+__global__ void cf_posclr_af_krnl(struct pos_t **pos, int n, int nx, int frame_size,
+		int nframes)
 {
 	/* (nframes * npixels)-threaded kernel where npixels is the number of pixels
 	 * in the full POS image, so (2*pos->n + 1)^2 */
@@ -630,78 +623,129 @@ __global__ void cf_set_posbnd_doppler_af_krnl(struct par_t *dpar,
 		dpar->posbnd_logfactor += frame[frm]->dof * pos[frm]->posbnd_logfactor;
 	}
 }
-__global__ void cf_get_exclude_seen_krnl(struct par_t *dpar,
+__global__ void cf_get_exclude_seen_af_krnl(struct par_t *dpar,
 		struct mod_t *dmod,
-		struct pos_t **pos) {
-	/* Single-threaded kernel */
-	if (threadIdx.x == 0) {
-		cfaf_exclude_seen = dpar->exclude_seen;
-		cf_xlim0 = cf_pos->xlim[0];
-		cf_xlim1 = cf_pos->xlim[1];
-		cf_ylim0 = cf_pos->ylim[0];
-		cf_ylim1 = cf_pos->ylim[1];
+		struct pos_t **pos,
+		int4 *xylim,
+		int nframes) {
+	/* nframes-threaded kernel */
+	int frm = threadIdx.x;
+	if (frm < nframes) {
+		if (threadIdx.x == 0)
+			cfaf_exclude_seen = dpar->exclude_seen;
+		xylim[frm].w = pos[frm]->xlim[0];
+		xylim[frm].x = pos[frm]->xlim[1];
+		xylim[frm].y = pos[frm]->ylim[0];
+		xylim[frm].z = pos[frm]->ylim[1];
 	}
 }
-__global__ void cf_mark_pixels_seen_krnl(struct par_t *dpar,
-		struct mod_t *dmod, int npixels, int xspan) {
-	/* Multi-threaded kernel */
-	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int k = (offset % xspan) + cf_xlim0;
-	int l = (offset / xspan) + cf_ylim0;
+__global__ void cf_get_global_frmsz_krnl(int *global_lim, int4 *xylim,
+		int nframes) {
+	/* nframes-threaded kernel */
+	int frm = threadIdx.x;
+	if (frm < nframes) {
+		/* Initialize global_lim 	 */
+		for (int i=0; i<4; i++)
+			global_lim[i] = 0;
+
+		/* Now calculate minimum for all frames */
+		atomicMin(&global_lim[0], xylim[frm].w);
+		atomicMax(&global_lim[1], xylim[frm].x);
+		atomicMin(&global_lim[2], xylim[frm].y);
+		atomicMax(&global_lim[3], xylim[frm].z);
+	}
+}
+__global__ void cf_mark_pixels_seen_af_krnl(
+		struct par_t *dpar,
+		struct mod_t *dmod,
+		struct pos_t **pos,
+		int *global_lim,
+		int frame_size,
+		int xspan,
+		int nframes,
+		int c) {
+	/* nframes*npixels-threaded kernel */
+	int total_offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int frm = total_offset / frame_size;
+	int offset = totala_offset % frame_size;
+	int k = (offset % xspan) + global_lim[0]; // cf_xlim0;
+	int l = (offset / xspan) + global_lim[2]; // cf_ylim0;
 	int facetnum;
+	c = 0;
 
-	if (offset < npixels) {
-		if ((cf_pos->cose_s[offset] > dpar->mincosine_seen)
-				&& (cf_pos->f[k][l] >= 0)) {
-			facetnum = cf_pos->f[k][l];
+	if ((offset < npixels) && (frm < nframes)) {
+		if ((pos[frm]->cose_s[offset] > dpar->mincosine_seen)
+				&& (pos[frm]->f[k][l] >= 0)) {
+			facetnum = pos[frm]->f[k][l];
 			//c = cf_pos->comp[k][l];
-			dmod->shape.comp[0].real.f[facetnum].seen = 1;
+			dmod->shape.comp[c].real.f[facetnum].seen = 1;
 		}
 	}
 }
-__global__ void cf_set_badradar_krnl(struct par_t *dpar) {
-	/* Single-threaded kernel */
-	if (threadIdx.x == 0) {
-		switch (cf_type) {
-		case DELAY:
-			dpar->badradar = 1;
-			dpar->badradar_logfactor += cf_del_frame->dof *
-				cf_del_frame->badradar_logfactor / cf_deldop->nviews;
-			break;
-		case DOPPLER:
-			dpar->badradar = 1;
-			dpar->badradar_logfactor += cf_dop_frame->dof *
-				cf_dop_frame->badradar_logfactor / cf_doppler->nviews;
-			break;
-		}
-	}
-}
-__global__ void cf_add_fit_store_krnl1(struct dat_t *ddat, float *fit_store,
-		int nThreads, int s, int f) {
-	/* ndel*ndop-threaded kernel */
-	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void cf_set_badradar_deldop_af_krnl(
+		struct par_t *dpar,
+		struct dat_t *ddat,
+		struct deldopfrm_t **frame,
+		int s,
+		int nframes) {
 
-	if (offset < (nThreads)) {
+	/* nframes-threaded kernel */
+	int frm = threadIdx.x;
+	if (frm < nframes) {
+		if (threadIdx.x == 0)
+			dpar->badradar = 1;
+		dpar->badradar_logfactor += frame[frm]->dof *
+				frame[frm]->badradar_logfactor / ddat->set[s].desc.deldop.nviews;
+	}
+}
+__global__ void cf_set_badradar_doppler_af_krnl(
+		struct par_t *dpar,
+		struct dat_t *ddat,
+		struct deldopfrm_t **frame,
+		int s,
+		int nframes) {
+
+	/* nframes-threaded kernel */
+	int frm = threadIdx.x;
+	if (frm < nframes) {
+		if (threadIdx.x == 0)
+			dpar->badradar = 1;
+		dpar->badradar_logfactor +=frame[frm]->dof *
+				frame[frm]->badradar_logfactor / ddat->set[s].desc.doppler.nviews;
+	}
+}
+__global__ void cf_add_fit_store_af_krnl1(
+		struct dat_t *ddat,
+		float *fit_store,
+		int frame_size,
+		int s,
+		int nframes) {
+	/* (nframes*ndel*ndop)-threaded kernel */
+	int total_offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int frm = total_offset / frame_size;
+	int offset = total_offset % frame_size;
+
+	if ((offset < nThreads) && (frm < nframes)) {
 		switch (cf_type) {
 		case DELAY:
-			fit_store[offset] += ddat->set[s].desc.deldop.frame[f].fit_s[offset];
+			atomicAdd(&fit_store[offset], ddat->set[s].desc.deldop.frame[frm].fit_s[offset]);
 			break;
 		case DOPPLER:
-			fit_store[offset] += ddat->set[s].desc.doppler.frame[f].fit_s[offset];
+			atomicAdd(&fit_store[offset], ddat->set[s].desc.doppler.frame[frm].fit_s[offset]);
 			break;
 		}
 	}
 }
 __global__ void cf_add_fit_store_krnl2() {
-	/* ndel*ndop-threaded kernel */
+	/* nframes-threaded kernel */
 	if (threadIdx.x == 0) {
 		switch (cf_type) {
 		case DELAY:
-			cf_overflow_o2_store += cf_del_frame->overflow_o2;
-			cf_overflow_m2_store += cf_del_frame->overflow_m2;
-			cf_overflow_xsec_store += cf_del_frame->overflow_xsec;
-			cf_overflow_delmean_store += cf_del_frame->overflow_delmean;
-			cf_overflow_dopmean_store += cf_del_frame->overflow_dopmean;
+			cfaf_overflow_o2_store += cf_del_frame->overflow_o2;
+			cfaf_overflow_m2_store += cf_del_frame->overflow_m2;
+			cfaf_overflow_xsec_store += cf_del_frame->overflow_xsec;
+			cfaf_overflow_delmean_store += cf_del_frame->overflow_delmean;
+			cfaf_overflow_dopmean_store += cf_del_frame->overflow_dopmean;
 			break;
 		case DOPPLER:
 			cf_overflow_o2_store += cf_dop_frame->overflow_o2;
@@ -810,158 +854,176 @@ __global__ void cf_copy_fit_back_krnl(struct dat_t *ddat, float *fit, int s,
 }
 
 __host__ void calc_deldop_cuda(struct par_t *dpar, struct mod_t *dmod,
-		struct dat_t *ddat, int s)
+		struct dat_t *ddat, int s, int c)
 {
 	double orbit_offset[3] = {0.0, 0.0, 0.0};
-	int nframes, nviews, ndel, ndop, v0_index, pos_n, nx, exclude_seen, xlim0,
-		xlim1, ylim0, ylim1, f, v, v2;
-	float *fit_store;
+	int nframes, nThreads, nviews, v0_index,  nx, exclude_seen, f, v, v2,
+		xspan, yspan, frmsz;
+	int *ndel, *ndop, *global_lim, *pos_n;
+	int4 *xylim;
+	float *overflow, *fit_store;
+	struct deldopfrm_t **frame;
+	struct deldopview_t *view0;
+	struct pos_t **pos;
 	dim3 BLK,THD;
 
+	/* Allocate memory */
+	cudaCalloc((void**)&frame, 		sizeof(struct deldopfrm_t*), nframes);
+	cudaCalloc((void**)&view0, 		sizeof(struct deldopview_t), nframes);
+	cudaCalloc((void**)&pos, 		sizeof(struct pos_t*), 		 nframes);
+	cudaCalloc((void**)&overflow, 	sizeof(float),				 nframes);
+	cudaCalloc((void**)&ndel, 		sizeof(int),				 nframes);
+	cudaCalloc((void**)&ndop, 		sizeof(int),				 nframes);
+	cudaCalloc((void**)&pos_n, 		sizeof(int),				 nframes);
+	cudaCalloc((void**)&global_lim, sizeof(int),				 nframes);
+	cudaCalloc((void**)&xylim, 		sizeof(int4),				 nframes);
+
 	/* Get # of frames for this deldop */
-	cf_get_frames_krnl<<<1,1>>>(ddat, s);
-	checkErrorAfterKernelLaunch("cf_get_nframes_krnl (calc_deldop_cuda)");
-	gpuErrchk(cudaMemcpyFromSymbol(&nframes, cf_nframes, sizeof(int),
+	cf_get_frames_af_krnl<<<1,1>>>(ddat, s);
+	checkErrorAfterKernelLaunch("cf_get_nframes_af_krnl");
+	gpuErrchk(cudaMemcpyFromSymbol(&nframes, cfaf_nframes, sizeof(int),
 			0, cudaMemcpyDeviceToHost));
 
-	for (f=0; f<nframes; f++) {
+//	for (f=0; f<nframes; f++) {
 		/* Set deldop, frame, view0, and pos */
-		cf_set_shortcuts_krnl<<<1,1>>>(ddat, s, nframes, frame, ndel, ndop,
-				view0, pos, overflow);
-			checkErrorAfterKernelLaunch("cf_deldop_set_shortcuts_af_krnl");
-		gpuErrchk(cudaMemcpyFromSymbol(&nviews, cf_nviews, sizeof(int),
-				0, cudaMemcpyDeviceToHost));
-		gpuErrchk(cudaMemcpyFromSymbol(&v0_index, cf_v0_index, sizeof(int),
-				0, cudaMemcpyDeviceToHost));
+	cf_set_shortcuts_deldop_af_krnl<<<1,1>>>(ddat, s, nframes, frame, ndel,
+			ndop, view0, pos, overflow);
+	checkErrorAfterKernelLaunch("cf_deldop_set_shortcuts_af_krnl");
+	gpuErrchk(cudaMemcpyFromSymbol(&nviews, cfaf_nviews, sizeof(int),
+			0, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpyFromSymbol(&v0_index, cfaf_v0_index, sizeof(int),
+			0, cudaMemcpyDeviceToHost));
 
-		/* If smearing is being modeled, initialize variables that
-		 * will be used to sum results calculated for individual views.  */
-		if (nviews > 1) {
-			/* Allocate fit_store as a single pointer, originally a double
-			 * pointer. This also initializes the entire array to zero. */
-			cudaCalloc((void**)&fit_store, sizeof(float), ndel*ndop);
-		}
-
-		/*  Loop over all views for this (smeared) frame, going in an order that
+	/* If smearing is being modeled, initialize variables that
+	 * will be used to sum results calculated for individual views.  */
+	if (nviews > 1) {
+		/* Allocate fit_store as a single pointer, originally a double
+		 * pointer. This also initializes the entire array to zero. */
+		cudaCalloc((void**)&fit_store, sizeof(float), ndel*ndop);
+	}
+	/*  Loop over all views for this (smeared) frame, going in an order that
         ends with the view corresponding to the epoch listed for this frame
         in the obs file; this way we can use the calculated information for
         that view in the "write" action screen and disk output that follows   */
 
-		for (v2=v0_index+1; v2<=v0_index+nviews; v2++) {
-			v = v2 % nviews;
+	for (v2=v0_index+1; v2<=v0_index+nviews; v2++) {
+		v = v2 % nviews;
 
-			/* Launch 9-threaded kernel to set pos->ae,pos->oe,pos->bistatic.*/
-			THD.x = 9;
-			cf_set_pos_ae_deldop_af_krnl(pos, frame, pos_n, nframes, v);
-			checkErrorAfterKernelLaunch("cf_deldop_set_pos_ae_deldop_af_krnl ");
+		/* Launch 9*nframes-threaded kernel to set pos->ae,pos->oe,pos->bistatic.*/
+		THD.x = 9;
+		BLK.x = nframes;
+		cf_set_pos_ae_deldop_af_krnl<<<BLK,THD>>>(pos, frame, pos_n, nframes, v);
+		checkErrorAfterKernelLaunch("cf_set_pos_ae_deldop_af_krnl");
+		deviceSyncAfterKernelLaunch("cf_set_pos_ae_deldop_af_krnl");
 
+		/* Configure & launch posclr_krnl to initialize POS view */
+		nx = 2*pos_n[0]+1;
+		nThreads = nframes * nx * nx;
+		BLK.x = floor((maxThreadsPerBlock - 1 + nThreads) /
+				maxThreadsPerBlock);
+		THD.x = maxThreadsPerBlock; // Thread block dimensions
+		cf_posclr_af_krnl<<<BLK,THD>>>(pos, pos_n[0], nx, (nx*nx), nframes)
+		checkErrorAfterKernelLaunch("cf_posclr_af_krnl");
 
-			/* Configure & launch posclr_krnl to initialize POS view */
-			BLK.x = floor((maxThreadsPerBlock - 1 + (2*pos_n+1)*(2*pos_n+1)) /
-					maxThreadsPerBlock);
-			THD.x = maxThreadsPerBlock; // Thread block dimensions
-			nx = 2*pos_n + 1;
-			cf_posclr_krnl<<<BLK,THD>>>(pos_n, nx);
-			checkErrorAfterKernelLaunch("cf_posclr_krnl (calc_fits_cuda)");
+		/* Call posvis_cuda_2 to get facet number, scattering angle,
+		 * distance toward Earth at center of each POS pixel; set flag
+		 * posbnd if any model portion extends beyond POS frame limits.*/
+		/* NOTE: Limited to single component for now */
 
-			/* Call posvis_cuda_2 to get facet number, scattering angle,
-			 * distance toward Earth at center of each POS pixel; set flag
-			 * posbnd if any model portion extends beyond POS frame limits.*/
-			/* NOTE: Limited to single component for now */
-
-			if (posvis_cuda_2(dpar, dmod, ddat, orbit_offset, s, f, 0, 0, 0) &&
-					v == v0_index) {
-				/* Call single-threaded kernel to set dpar->posbnd and
-				 * dpar->posbnd_logfactor */
-				cf_set_posbnd_krnl<<<1,1>>>(dpar);
-				checkErrorAfterKernelLaunch("cf_deldop_set_posbnd_krnl (calc_fits_cuda)");
-			}
-
-			/* Launch single-threaded kernel to get dpar->exclude_seen */
-			cf_get_exclude_seen_krnl<<<1,1>>>(dpar, dmod);
-			checkErrorAfterKernelLaunch("cf_get_exclude_seen_krnl (calc_fits_cuda)");
-			gpuErrchk(cudaMemcpyFromSymbol(&exclude_seen, cf_exclude_seen, sizeof(int),
-					0, cudaMemcpyDeviceToHost));
-			gpuErrchk(cudaMemcpyFromSymbol(&xlim0, cf_xlim0, sizeof(int),
-					0, cudaMemcpyDeviceToHost));
-			gpuErrchk(cudaMemcpyFromSymbol(&xlim1, cf_xlim1, sizeof(int),
-					0, cudaMemcpyDeviceToHost));
-			gpuErrchk(cudaMemcpyFromSymbol(&ylim0, cf_ylim0, sizeof(int),
-					0, cudaMemcpyDeviceToHost));
-			gpuErrchk(cudaMemcpyFromSymbol(&ylim1, cf_ylim1, sizeof(int),
-					0, cudaMemcpyDeviceToHost));
-
-			/* Go through all POS pixels which are visible with low enough
-			 * scattering angle and mark the facets which project onto their
-			 * centers as having been "seen" at least once                   */
-			/* I'll launch a multi-threaded kernel here:
-			 * (xlim1 - xlim0 + 1)^2 threads			 */
-
-			if (s != exclude_seen && v == v0_index) {
-
-				int xspan = xlim1 - xlim0 + 1;
-				int yspan = ylim1 - ylim0 + 1;
-				int nThreads = xspan * yspan;
-
-				/* Configure & launch posclr_krnl to initialize POS view */
-				BLK.x = floor((maxThreadsPerBlock - 1 + nThreads) /
-						maxThreadsPerBlock);
-				THD.x = maxThreadsPerBlock; // Thread block dimensions
-				cf_mark_pixels_seen_krnl<<<BLK,THD>>>(dpar, dmod,
-						nThreads, xspan);
-				checkErrorAfterKernelLaunch("cf_posclr_krnl (calc_fits_cuda)");
-			}
-
-			/* Zero out the fit delay-Doppler image, then call pos2deldop to
-			 * create the fit image by mapping power from the plane of the sky
-			 * to delay-Doppler space.                             */
-			BLK.x = floor((maxThreadsPerBlock - 1 + ndel*ndop) /
-					maxThreadsPerBlock);
-			THD.x = maxThreadsPerBlock; // Thread block dimensions
-			clrvect_krnl<<<BLK,THD>>>(ddat, s, f, ndel*ndop);
-			checkErrorAfterKernelLaunch("clrvect_krnl, calc_fits_cuda:882");
-
-			if (pos2deldop_cuda_2(dpar,dmod,ddat,0.0,0.0,0.0,0, s,f,v)) {
-				/* Call single-threaded kernel to set badradar flag and
-				 * associated badradar_logfactor			 */
-				cf_set_badradar_krnl<<<1,1>>>(dpar);
-				checkErrorAfterKernelLaunch("cf_deldop_set_badradar_krnl (calc_fits_cuda)");
-			}
-
-			/* If smearing is being modeled, include delay-Doppler calculations
-			 * from this view in the summed results for this frame  */
-			if (nviews > 1) {
-				/* Launch ndel*ndop-threaded kernel to add fit[i][j] to
-				 * fit_store[i][j]*/
-				BLK.x = floor((maxThreadsPerBlock - 1 + (ndel)*(ndop)) /
-						maxThreadsPerBlock);
-				THD.x = maxThreadsPerBlock; // Thread block dimensions
-				cf_add_fit_store_krnl1<<<BLK,THD>>>(ddat,fit_store,(ndel*ndop),s,f);
-				checkErrorAfterKernelLaunch("cf_add_fit_store_krnl1 (calc_fits_cuda)");
-				cf_add_fit_store_krnl2<<<1,1>>>();
-				checkErrorAfterKernelLaunch("cf_add_fit_store_krnl2 (calc_fits_cuda)");
-			}
+		if (posvis_cuda_af(dpar,dmod,ddat,orbit_offset,s,nframes,0,0,0) &&
+				v == v0_index) {
+			/* Call single-threaded kernel to set dpar->posbnd and
+			 * dpar->posbnd_logfactor */
+			THD.x = nframes;
+			cf_set_posbnd_deldop_af_krnl<<<BLK,THD>>>(dpar,frame,pos,nframes);
+			checkErrorAfterKernelLaunch("cf_set_posbnd_deldop_af_krnl");
 		}
 
-		/* If smearing is being modeled, compute mean values over all views for
-		 * this frame and store them in the standard frame structure     */
-		/* This kernel also carries out the gamma transformation on the fit
-		 * image if the par->dd_gamma flag is not set  */
+		/* Launch nframes-threaded kernel to get dpar->exclude_seen */
+		THD.x = nframes;
+		cf_get_exclude_seen_af_krnl<<<1,THD>>>(dpar,dmod,pos,xylim,nframes);
+		checkErrorAfterKernelLaunch("cf_get_exclude_seen_af_krnl");
+		gpuErrchk(cudaMemcpyFromSymbol(&exclude_seen, cf_exclude_seen, sizeof(int),
+				0, cudaMemcpyDeviceToHost));
+
+		/* Get the largest pos->xlim and ylim values for all frames */
+		cf_get_global_frmsz_krnl<<<1,THD>>>(global_lim, xylim, nframes);
+		checkErrorAfterKernelLaunch("cf_get_global_frmsz_krnl");
+		deviceSyncAfterKernelLaunch("cf_get_global_frmsz_krnl");
+
+		/* Go through all POS pixels which are visible with low enough
+		 * scattering angle and mark the facets which project onto their
+		 * centers as having been "seen" at least once                   */
+		if (s != exclude_seen && v == v0_index) {
+
+			int xspan = global_lim[1] - global_lim[0] + 1; // xlim1 - xlim0 + 1;
+			int yspan = global_lim[3] - global_lim[2] + 1; // ylim1 - ylim0 + 1;
+			int nThreads = nframes * xspan * yspan;
+
+			/* Configure & launch posclr_af_krnl to initialize POS view */
+			BLK.x = floor((maxThreadsPerBlock - 1 + nThreads) /
+					maxThreadsPerBlock);
+			THD.x = maxThreadsPerBlock; // Thread block dimensions
+			cf_mark_pixels_seen_krnl<<<BLK,THD>>>(dpar, dmod, pos, global_lim,
+					(xspan*yspan), xspan, nframes, c);
+			checkErrorAfterKernelLaunch("cf_posclr_af_krnl");
+		}
+
+		/* Zero out the fit delay-Doppler image, then call pos2deldop to
+		 * create the fit image by mapping power from the plane of the sky
+		 * to delay-Doppler space.                             */
+		deviceSyncAfterKernelLaunch("pre-clrvect_krnl sync");
+		frmsz = ndel[0]*ndop[0];
+		nThreads = frmsz * nframes;
+		BLK.x = floor((maxThreadsPerBlock - 1 + nThreads) /
+				maxThreadsPerBlock);
+		THD.x = maxThreadsPerBlock; // Thread block dimensions
+		clrvect_af_krnl<<<BLK,THD>>>(ddat, s, nframes, nThreads, frmsz);
+		checkErrorAfterKernelLaunch("clrvect_af_krnl, calc_fits_cuda");
+
+		if (pos2deldop_cuda_af(dpar,dmod,ddat,0.0,0.0,0.0,0, s,nframes,v)) {
+			/* Call single-threaded kernel to set badradar flag and
+			 * associated badradar_logfactor			 */
+			THD.x = nframes;
+			cf_set_badradar_deldop_af_krnl<<<1,THD>>>(dpar, ddat, frame, s,
+					nframes);
+			checkErrorAfterKernelLaunch("cf_set_badradar_deldop_af_krnl");
+		}
+
+		/* If smearing is being modeled, include delay-Doppler calculations
+		 * from this view in the summed results for this frame  */
 		if (nviews > 1) {
 			/* Launch ndel*ndop-threaded kernel to add fit[i][j] to
 			 * fit_store[i][j]*/
 			BLK.x = floor((maxThreadsPerBlock - 1 + (ndel)*(ndop)) /
 					maxThreadsPerBlock);
 			THD.x = maxThreadsPerBlock; // Thread block dimensions
-			cf_finish_fit_store_krnl<<<BLK,THD>>>(ddat, fit_store,s, f, (ndel*ndop));
-			checkErrorAfterKernelLaunch("cf_deldop_finish_fit_store (calc_fits_cuda)");
-			cf_finish_fit_krnl2<<<1,1>>>();
-			checkErrorAfterKernelLaunch("cf_finish_fit_krnl2");
-			cf_gamma_trans_krnl<<<BLK,THD>>>(dpar, ddat, s, f, (ndel*ndop));
-			checkErrorAfterKernelLaunch("cf_gamma_trans_krnl");
-			cudaFree(fit_store);
+			cf_add_fit_store_krnl1<<<BLK,THD>>>(ddat,fit_store,(ndel*ndop),s,f);
+			checkErrorAfterKernelLaunch("cf_add_fit_store_krnl1 (calc_fits_cuda)");
+			cf_add_fit_store_krnl2<<<1,1>>>();
+			checkErrorAfterKernelLaunch("cf_add_fit_store_krnl2 (calc_fits_cuda)");
 		}
-	}  /* end loop over frames */
+	} /* end views loop */
+
+	/* If smearing is being modeled, compute mean values over all views for
+	 * this frame and store them in the standard frame structure     */
+	/* This kernel also carries out the gamma transformation on the fit
+	 * image if the par->dd_gamma flag is not set  */
+	if (nviews > 1) {
+		/* Launch ndel*ndop-threaded kernel to add fit[i][j] to
+		 * fit_store[i][j]*/
+		BLK.x = floor((maxThreadsPerBlock - 1 + (ndel)*(ndop)) /
+				maxThreadsPerBlock);
+		THD.x = maxThreadsPerBlock; // Thread block dimensions
+		cf_finish_fit_store_krnl<<<BLK,THD>>>(ddat, fit_store,s, f, (ndel*ndop));
+		checkErrorAfterKernelLaunch("cf_deldop_finish_fit_store (calc_fits_cuda)");
+		cf_finish_fit_krnl2<<<1,1>>>();
+		checkErrorAfterKernelLaunch("cf_finish_fit_krnl2");
+		cf_gamma_trans_krnl<<<BLK,THD>>>(dpar, ddat, s, f, (ndel*ndop));
+		checkErrorAfterKernelLaunch("cf_gamma_trans_krnl");
+		cudaFree(fit_store);
+	}
+	//}  /* end loop over frames */
 }
 
 
@@ -1060,9 +1122,9 @@ __host__ void calc_doppler_cuda(struct par_t *dpar, struct mod_t *dmod,
 			 * (xlim1 - xlim0 + 1)^2 threads			 */
 			if (s != exclude_seen && v == v0_index) {
 
-				int xspan = xlim1 - xlim0 + 1;
-				int yspan = ylim1 - ylim0 + 1;
-				int nThreads = xspan * yspan;
+				xspan = xlim1 - xlim0 + 1;
+				yspan = ylim1 - ylim0 + 1;
+				nThreads = xspan * yspan;
 
 				/* Configure & launch posclr_krnl to initialize POS view */
 				BLK.x = floor((maxThreadsPerBlock - 1 + nThreads) /

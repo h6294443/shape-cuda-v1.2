@@ -181,6 +181,8 @@ __device__ double radlaw_cuda(union radscat_t *radar, unsigned char *radtype,
 		int ilaw, double cosinc, int c, int f);
 
 __global__ void clrvect_krnl(struct dat_t *ddat, int s, int f, int nThreads);
+__global__ void clrvect_af_krnl(struct dat_t *ddat, int s, int nframes,
+		int nThreads, int frame_size);
 __global__ void euler2mat_krnl( double m[3][3], double phi, double theta, double psi);
 __global__ void euler2mat_realize_mod_krnl(struct mod_t *dmod);
 
