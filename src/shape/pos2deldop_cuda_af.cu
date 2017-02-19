@@ -829,7 +829,7 @@ __host__ int pos2deldop_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 	/* Variables now in other types:
 	 *
 	 * double xincr 	- float2 xyincr.x
-	 * double yincr 	- 		 xyincr.y
+	 * double yincr 	-		 xyincr.y
 	 * double ax		- float2 axay.x
 	 * double ay		- 	 	 axay.y
 	 * double delshift	- float2 deldopshift.x
@@ -907,12 +907,13 @@ __host__ int pos2deldop_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 			dop, set, nframes, fit_overflow);
 	checkErrorAfterKernelLaunch("pos2deldop_deldoplim_af_krnl");
 
-	/* Launch a single-threaded kerenl to calclate the overflow contributions to
+	/* Launch a single-threaded kernel to calclate the overflow contributions to
 	 * chi squared.  This could be split into one single-thread kernel and one
 	 * (i2-i1)*(j2-j1)-threaded kernel   */
 	pos2deldop_overflow_af_krnl<<<1,THD>>>(dpar, frame, idel0, idop0, ndel,
 			ndop, set, nframes, fit_overflow);
 	checkErrorAfterKernelLaunch("pos2deldop_overflow_af_krnl");
+	deviceSyncAfterKernelLaunch("pos2deldop_overflow_af_krnl");
 	gpuErrchk(
 			cudaMemcpyFromSymbol(&hbadradar, af_badradar, sizeof(int), 0,
 					cudaMemcpyDeviceToHost));
@@ -923,23 +924,20 @@ __host__ int pos2deldop_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 		dbg_print_deldop_fit(ddat, set, 3);
 
 	/* Free pointers */
-//	pos2deldop_cuda_af_free(idel0, idop0, ndel, ndop, frame, pos, w, axay,
-//			xyincr, dop, deldopshift, xylim, global_lim, deldoplim, fit_overflow);
-
-	//cudaFree(pos);
-//	cudaFree(frame);
-//	cudaFree(idel0);
-//	cudaFree(idop0);
-//	cudaFree(ndel);
-//	cudaFree(ndop);
-//	cudaFree(w);
-//	cudaFree(axay);
-//	cudaFree(xyincr);
-//	cudaFree(dop);
-//	cudaFree(deldopshift);
-//	cudaFree(xylim);
-//	cudaFree(deldoplim);
-//	cudaFree(fit_overflow);
-//	cudaFree(global_lim);
+	cudaFree(pos);
+	cudaFree(frame);
+	cudaFree(idel0);
+	cudaFree(idop0);
+	cudaFree(ndel);
+	cudaFree(ndop);
+	cudaFree(w);
+	cudaFree(axay);
+	cudaFree(xyincr);
+	cudaFree(dop);
+	cudaFree(deldopshift);
+	cudaFree(xylim);
+	cudaFree(deldoplim);
+//  cudaFree(fit_overflow);
+	cudaFree(global_lim);
 	return hbadradar;
 }

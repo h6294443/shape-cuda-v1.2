@@ -106,9 +106,8 @@ __device__ void dev_POSrect3(struct pos_t *pos, int src, float imin_dbl, float
 	int n, imin, imax, jmin, jmax;
 	n = pvs_n;
 
-	/*  Update the POS region that contains the target without
-	 regard to whether or not it extends beyond the POS frame  */
-
+	/* Update the POS region that contains the target without
+	 * regard to whether or not it extends beyond the POS frame */
 	atomicMinf(&ijminmax_overall[frm].w, imin_dbl);
 	atomicMaxf(&ijminmax_overall[frm].x, imax_dbl);
 	atomicMinf(&ijminmax_overall[frm].y, jmin_dbl);

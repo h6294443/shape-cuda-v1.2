@@ -12,7 +12,7 @@
 int CUDA = 1;			/* Flag whether to use CUDA or run CPU code */
 int DYNPROC = 0;		/* Flag whether to use dynamic processing or not */
 int STREAMS = 0;		/* Flag whether to use streams or not */
-int GPU = 1;			/* Which GPU will run code */
+int GPU = 0;			/* Which GPU will run code */
 int POSVIS_SEPARATE = 0;/* Flag to calculate xlim/ylim separately */
 int AF = 1;				/* Flag whether to process all frames in set simultaneously */
 

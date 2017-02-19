@@ -588,5 +588,9 @@ __host__ int pos2doppler_cuda_2( struct par_t *dpar, struct mod_t *dmod,
 	gpuErrchk(cudaMemcpyFromSymbol(&badradar, p2d_badradar, sizeof(badradar),
 			0, cudaMemcpyDeviceToHost));
 
+	int debug = 0;
+	if (debug)
+		dbg_print_fit(ddat, set, frm);
+
 	return badradar;
 }
