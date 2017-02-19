@@ -948,11 +948,23 @@ __host__ double objective_cuda( double x)
 		realize_dopscale_cuda(sdev_par, sdev_dat, 1.0, 0);  /* set dopscale_save to dopscale */
 	if (newxyoff)
 		realize_xyoff_cuda(sdev_dat);
-
 	if (AF)
 		calc_fits_cuda_af(sdev_par, sdev_mod, sdev_dat);
 	else
 		calc_fits_cuda(sdev_par, sdev_mod, sdev_dat);
+
+	int debug = 0;
+	if (debug) {
+		dbg_print_deldop_fit(sdev_dat, 0, 0);
+		dbg_print_deldop_fit(sdev_dat, 0, 1);
+		dbg_print_deldop_fit(sdev_dat, 0, 2);
+		dbg_print_deldop_fit(sdev_dat, 0, 3);
+		dbg_print_fit(sdev_dat, 1, 0);
+		dbg_print_fit(sdev_dat, 1, 1);
+		dbg_print_fit(sdev_dat, 1, 2);
+		dbg_print_fit(sdev_dat, 1, 3);
+	}
+
 	err = chi2_cuda(sdev_par, sdev_dat, 0);
 
 	/* Divide chi-square by DOF to get reduced chi-square.    */

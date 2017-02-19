@@ -177,20 +177,19 @@ void dbg_print_fit_host(struct dat_t *ddat, int s, int f) {
 	int idop, nThreads;
 	FILE *fp_fit;
 	char *filename_fit;
-	filename_fit = "dbg_fit_std.csv";
+	filename_fit = "CPU_doppler_fit.csv";
 	nThreads = (ddat->set[s].desc.doppler.frame[f].pos.xlim[1]-
 			ddat->set[s].desc.doppler.frame[f].pos.xlim[0]+1)*
 					(ddat->set[s].desc.doppler.frame[f].pos.ylim[1]-
 							ddat->set[s].desc.doppler.frame[f].pos.ylim[0]+1);
 
 	printf("\n %sfile created",filename_fit);
-	printf("\n\nFilename: %s",filename_fit);
 	fp_fit = fopen(filename_fit, "w+");
 
 	fprintf(fp_fit, "idel , ");
 
 	for (idop=1; idop<=ddat->set[s].desc.doppler.frame[f].ndop; idop++)
-		fprintf(fp_fit,	"\n%i , %g", idop, ddat->set[s].desc.doppler.frame->fit[idop]);
+		fprintf(fp_fit,	"\n%i , %g", idop, ddat->set[s].desc.doppler.frame[f].fit[idop]);
 
 	fprintf(fp_fit, "\nxlim0 , %i", ddat->set[s].desc.doppler.frame[f].pos.xlim[0]);
 	fprintf(fp_fit, "\nxlim1 , %i", ddat->set[s].desc.doppler.frame[f].pos.xlim[1]);
@@ -269,15 +268,14 @@ __host__ void dbg_print_deldop_fit(struct dat_t *ddat, int s, int f) {
 	//cudaFree(fit_dd);
 }
 __host__ void dbg_print_deldop_fit_host(struct dat_t *ddat, int s, int f) {
-	/* Debug function that prints all Doppler frame fit values to csv */
+	/* Debug function that prints all Delay-Doppler frame fit values to csv */
 
 	int idop, ndop, idel, ndel, nThreads, xlim[2], ylim[2];
 	FILE *fp_fit;
 	char *filename_fit;
 
-	filename_fit = "dbg_fit_std.csv";
+	filename_fit = "CPU_deldop_fit.csv";
 	printf("\n %sfile created",filename_fit);
-	printf("\n\nFilename: %s",filename_fit);
 
 	for (idop=0;idop<2;idop++){
 		xlim[idop] = ddat->set[s].desc.deldop.frame[f].pos.xlim[idop];

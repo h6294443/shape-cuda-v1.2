@@ -1052,7 +1052,6 @@ __host__ void calc_deldop_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 	cudaFree(xylim);
 }
 
-
 __host__ void calc_doppler_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int s, int c)
 {
@@ -1188,6 +1187,7 @@ __host__ void calc_doppler_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 
 		clrvect_af_krnl<<<BLK,THD>>>(ddat, s, nframes, nThreads, frmsz);
 		checkErrorAfterKernelLaunch("clrvect_af_krnl");
+		deviceSyncAfterKernelLaunch("clrvect_af_krnl");
 
 		if (pos2doppler_cuda_af(dpar,dmod,ddat,0.0,0.0,0.0,0, s,nframes,v)) {
 			/* nframes-threaded kernel to set badradar flag and calc. logfactor*/

@@ -21,7 +21,7 @@ __global__ void clrvect_af_krnl(struct dat_t *ddat, int s, int nframes,
 	/* multi-threaded kernel for all frames in a set */
 	int total_offset = blockIdx.x * blockDim.x + threadIdx.x;
 	int frm = total_offset / frame_size;
-	int offset = offset % frame_size;
+	int offset = total_offset % frame_size;
 
 	if ((offset < nThreads) && (frm < nframes)) {
 		switch (ddat->set[s].type) {
