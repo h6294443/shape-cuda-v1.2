@@ -227,11 +227,18 @@ Modified 2003 April 24 by CM:
 extern "C" {
 #include "head.h"
 }
-__device__ int c2_print_breakdown, dof;
-__device__ unsigned char c2_write_chi2fit0, c2_badradar,
-		c2_badphoto, c2_baddopscale, c2_badposet, c2_posbnd, c2_baddiam;
-__device__ double c2_dof_deldop, c2_dof_doppler, c2_dof_poset, c2_dof_lghtcrv,
-					c2_dof;
+__device__ int c2af_print_breakdown, c2af_nframes;
+
+__device__ unsigned char c2af_write_chi2fit0, c2af_badradar,
+		c2af_badphoto, c2af_baddopscale, c2af_badposet, c2af_posbnd,
+		c2af_baddiam;
+
+__device__ double c2af_dof_deldop, c2af_dof_doppler, c2af_dof_poset,
+	c2af_dof_lghtcrv, c2af_dof, c2af_chi2_all_doppler, c2af_chi2_fit0_doppler,
+	c2af_dof_fit0_doppler, c2af_chi2_fit0_deldop, c2af_dof_fit0_deldop, c2af_chi2;
+__device__ unsigned char c2af_type;
+
+
 
 __host__ double chi2_deldop_cuda_af(struct par_t *dpar, struct dat_t *ddat, int s,
 		int list_breakdown, double *chi2_all_deldop, double *chi2_fit0_deldop,
@@ -240,235 +247,232 @@ __host__ double chi2_doppler_cuda_af(struct par_t *dpar, struct dat_t *ddat, int
 		int list_breakdown, double *chi2_all_doppler, double *chi2_fit0_doppler,
 		double *dof_fit0_doppler);
 
-__device__ double c2_chi2, c2_chi2_frame, c2_chi2_set, c2_weight,
-	c2_chi2_all_doppler, chi2_fit0_doppler, dof_fit0_doppler, c2_chi2_all_deldop,
-	chi2_fit0_deldop, dof_fit0_deldop;
-__device__ int c2_nsets, c2_nframes, c2_ndel, c2_ndop;
-__device__ unsigned char c2_type;
-__device__ float o2, m2, om;
-__device__ struct deldop_t *c2_deldop;
-__device__ struct doppler_t *c2_doppler;
-__device__ float dbg_sum_fit=0.0, dbg_sum_obs=0.0, dbg_sum_oov=0.0;
-__device__ double sum_oov=0.0, sum_oovs=0.0, dom=0.0, dm2=0.0, do2=0.0, dopo2=0.0,
-		dopm2=0.0, dopom=0.0, sum_fit=0.0, sum_obs=0.0, sum_one=0.0;
-
-__global__ void c2_init_krnl(struct dat_t *ddat) {
+__global__ void c2af_init_krnl(struct dat_t *ddat) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
 		ddat->chi2 =  0.0;
-		c2_nsets = ddat->nsets;
-		c2_chi2_set = 0.0;
-		c2_weight = 0.0;
-		c2_chi2_all_doppler = 0.0;
+		//c2af_chi2_set = 0.0;
+		//c2_weight = 0.0;
+		c2af_chi2_all_doppler = 0.0;
 	}
 }
-__global__ void c2_get_type_krnl(struct dat_t *ddat, int s) {
+__global__ void c2af_get_type_krnl(struct dat_t *ddat, int s) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0)
-		c2_type = ddat->set[s].type;
+		c2af_type = ddat->set[s].type;
 }
-__global__ void c2_add_chi2_krnl(struct dat_t *ddat, int s) {
+__global__ void c2af_add_chi2_krnl(struct dat_t *ddat, int s) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0)
 		ddat->chi2 += ddat->set[s].chi2;
 }
-__global__ void c2_retrieve_chi2_krnl(struct dat_t *ddat) {
+__global__ void c2af_retrieve_chi2_krnl(struct dat_t *ddat) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0)
-		c2_chi2 = ddat->chi2;
+		c2af_chi2 = ddat->chi2;
 }
-__global__ void c2_get_frames_krnl(struct dat_t *ddat, int s) {
+__global__ void c2af_get_frames_krnl(
+		struct dat_t *ddat,
+		int s) {
 	/* Single-threaded kernel */
-	if (threadIdx.x == 0) {
-		switch (c2_type) {
+	if (threadIdx.x ==0) {
+		switch (c2af_type) {
 		case DELAY:
-			c2_deldop = &ddat->set[s].desc.deldop;
-			c2_nframes = c2_deldop->nframes;
-			c2_ndel = c2_deldop->ndel;
-			c2_ndop = c2_deldop->ndop;
-
+			c2af_nframes = ddat->set[s].desc.deldop.nframes;
 			break;
 		case DOPPLER:
-			c2_doppler = &ddat->set[s].desc.doppler;
-			c2_nframes = c2_doppler->nframes;
-			c2_ndel = NULL;
-			c2_ndop = c2_doppler->ndop;
+			c2af_nframes = ddat->set[s].desc.doppler.nframes;
 			break;
 		}
 	}
 }
-__global__ void c2_get_ndop_krnl(int f) {
-	/* Single-threaded kernel */
-	if (threadIdx.x == 0) {
-		switch (c2_type) {
-		case DELAY:
-			c2_ndel = c2_deldop->frame[f].ndel;
-			c2_ndop = c2_deldop->frame[f].ndop;
-			/* Initialize contributions to chi2 to values that account for overflow
-			 * beyond limits of data frame. Contributions were computed by
-			 * pos2deldop_cuda_2.               */
-			o2 = c2_deldop->frame[f].overflow_o2;
-			m2 = c2_deldop->frame[f].overflow_m2;
-			om = 0.0;
-			c2_weight = c2_deldop->frame[f].weight;
-			break;
-		case DOPPLER:
-			c2_ndel = NULL;
-			c2_ndop = c2_doppler->frame[f].ndop;
-			o2 = c2_doppler->frame[f].overflow_o2;
-			m2 = c2_doppler->frame[f].overflow_m2;
-			om = 0.0;
-			c2_weight = c2_doppler->frame[f].weight;
-			break;
-		}
+__global__ void c2af_deldop_set_shortcuts_krnl(
+		struct dat_t *ddat,
+		struct deldopfrm_t **frame,
+		int *ndel,
+		int *ndop,
+		float4 *o2_m2_om_wt,
+		int s,
+		int nframes) {
+	/* nframes-threaded kernel */
+	int frm = threadIdx.x;
 
+	if (frm < nframes) {
+
+		frame[frm] = &ddat->set[s].desc.deldop.frame[frm];
+		ndel[frm] = frame[frm]->ndel;
+		ndop[frm] = frame[frm]->ndop;
+		/* Initialize contributions to chi2 to values that account for overflow
+		 * beyond limits of data frame. Contributions were computed by
+		 * pos2deldop_cu_af               */
+		o2_m2_om_wt[frm].w = frame[frm]->overflow_o2;
+		o2_m2_om_wt[frm].x = frame[frm]->overflow_m2;
+		o2_m2_om_wt[frm].y = 0.0;
+		o2_m2_om_wt[frm].z = frame[frm]->weight;
 	}
 }
-__global__ void c2_deldop_add_o2_krnl(struct par_t *dpar, struct
-		dat_t *ddat, int s, int f) {
+__global__ void c2af_doppler_set_shortcuts_krnl(
+		struct dat_t *ddat,
+		struct dopfrm_t **frame,
+		int *ndop,
+		float4 *o2_m2_om_wt,
+		int s,
+		int nframes) {
+	/* nframes-threaded kernel */
+	int frm = threadIdx.x;
+
+	if (frm < nframes) {
+
+		frame[frm] = &ddat->set[s].desc.doppler.frame[frm];
+		ndop[frm] = frame[frm]->ndop;
+		o2_m2_om_wt[frm].w = frame[frm]->overflow_o2;
+		o2_m2_om_wt[frm].x = frame[frm]->overflow_m2;
+		o2_m2_om_wt[frm].y = 0.0;
+		o2_m2_om_wt[frm].z = frame[frm]->weight;
+	}
+}
+__global__ void c2af_deldop_prep_o2_m2_krnl(
+		struct dat_t *ddat,
+		struct deldopfrm_t **frame,
+		float **temp_o2,
+		float **temp_m2,
+		float **temp_om,
+		int *ndel,
+		int *ndop,
+		int s,
+		int nframes,
+		int frame_size) {
+
 	/* ndel*ndop-threaded kernel */
-	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int i = offset % c2_ndel + 1;
-	int j = offset / c2_ndel + 1;
-	float temp;
+	int total_offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int frm = total_offset / frame_size;
+	int offset = total_offset % frame_size;
+	int i = offset % ndel[0] + 1;
+	int j = offset / ndel[0] + 1;
 
-	if (offset < (c2_ndel*c2_ndop)) {
+	if ((offset < frame_size) && (frm < nframes)) {
 		/* The following two lines implement this:
 		 * o2 += obs[i][j]*obs[i][j]*oneovervar[i][j];	 */
-		temp = c2_deldop->frame[f].obs[i][j] * c2_deldop->frame[f].obs[i][j] *
-				c2_deldop->frame[f].oneovervar[i][j];
-		atomicAdd(&o2, temp);
+		temp_o2[frm][offset] = frame[frm]->obs[i][j] * frame[frm]->obs[i][j] *
+						  frame[frm]->oneovervar[i][j];
+		//atomicAdd(&o2, temp);
 
 		/* The following two lines implement this:
 		 * m2 += fit[i][j]*fit[i][j]*oneovervar[i][j];		 */
-		temp = c2_deldop->frame[f].fit_s[offset] * c2_deldop->frame[f].fit_s[offset] *
-				c2_deldop->frame[f].oneovervar[i][j];
-		atomicAdd(&m2, temp);
+		temp_m2[frm][offset] = frame[frm]->fit_s[offset] * frame[frm]->fit_s[offset] *
+						 frame[frm]->oneovervar[i][j];
+		//atomicAdd(&m2, temp);
 
 		/* The following two lines implement this:
 		 * om += fit[i][j]*obs[i][j]*oneovervar[i][j];		 */
-		temp = c2_deldop->frame[f].fit_s[offset] * c2_deldop->frame[f].obs[i][j] *
-				c2_deldop->frame[f].oneovervar[i][j];
-		atomicAdd(&om, temp);
-	}
-	__syncthreads();
-}
-__global__ void c2_deldop_dbg_krnl(struct par_t *dpar, struct dat_t *ddat,
-		int s, int f) {
-	/* ndel*ndop-threaded kernel */
-	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-
-	if (offset < (c2_ndel*c2_ndop)) {
-		atomicAdd(&dbg_sum_fit, (float)c2_deldop->frame[f].fit_s[offset]);
-//		atomicAdd(&dbg_sum_obs, (float)c2_deldop->frame[f].obs_s[offset]);
-//		atomicAdd(&dbg_sum_oov, (float)c2_deldop->frame[f].oneovervar_s[offset]);
-		atomicAdd(&c2_occ1, 1);
+		temp_om[frm][offset] = frame[frm]->fit_s[offset] * frame[frm]->obs[i][j] *
+						  frame[frm]->oneovervar[i][j];
+		//atomicAdd(&om, temp);
 	}
 }
+__global__ void c2af_add_deldop_contributions_krnl(
+		struct par_t *dpar,
+		struct deldopfrm_t **frame,
+		float **temp_o2,
+		float **temp_m2,
+		float **temp_om,
+		double *chi2_frame,
+		float4 *o2_m2_om_wt,
+		int *ndel,
+		int *ndop,
+		int s,
+		int nframes) {
 
-__global__ void c2_deldop_add_o2_serial_krnl(struct par_t *dpar,
-		struct dat_t *ddat, int s, int f) {
-	/* Single threaded kernel for debugging */
-	if (threadIdx.x == 0) {
-		double temp;
-		int ndel = c2_ndel;
-		int ndop = c2_ndop;
-		int i, j, off;
-		for (i=1; i<=ndel; i++) {
-			for (j=1; j<=ndop; j++){
-				off = (j-1)*ndel + (i-1);
-				temp = c2_deldop->frame[f].obs[i][j] * c2_deldop->frame[f].obs[i][j] *
-						c2_deldop->frame[f].oneovervar[i][j];
-				do2 += temp;
-				temp = c2_deldop->frame[f].fit_s[off] * c2_deldop->frame[f].fit_s[off] *
-						c2_deldop->frame[f].oneovervar[i][j];
-				dm2 += temp;
-				temp = c2_deldop->frame[f].fit_s[off] * c2_deldop->frame[f].obs[i][j] *
-						c2_deldop->frame[f].oneovervar[i][j];
-				dom += temp;
-			}
-		}
-	}
-	__syncthreads();
-}
+	/* nframes-threaded kernel */
+	int frm = threadIdx.x;
+	float calval, err, o2_fit0, dof_fit0, err_fit0, thresh_fit0;
+	float o2, m2, om, wt;
+	int off, i, j;
 
-__global__ void c2_add_deldop_contributions_krnl(struct par_t *dpar, struct
-		dat_t *ddat, int s, int f) {
-	/* Single-threaded kernel */
-	if (threadIdx.x == 0) {
+	if (frm < nframes) {
+		o2 = o2_m2_om_wt[frm].w + temp_o2[frm][0];
+		m2 = o2_m2_om_wt[frm].x + temp_m2[frm][0];
+		om = o2_m2_om_wt[frm].y + temp_om[frm][0];
+		wt = o2_m2_om_wt[frm].z;
 
-		double calval, err, o2_fit0, dof_fit0, err_fit0, thresh_fit0;
-		c2_chi2_frame = 0.0;
-		int off, i, j;
+		chi2_frame[frm] = 0.0;
 
-		/* If this frame's calibration factor is allowed to float, set it to
+		/* If frame's calibration factor is allowed to float, set it to
 		 * minimize chi-square, the sum over all pixels of
 		 * 		        { (obs - calfact*fit)^2 / variance }              */
 
-		if (c2_deldop->frame[f].cal.state == 'f') {
-			if (om > 0.0)	c2_deldop->frame[f].cal.val = om/m2;
-			else			c2_deldop->frame[f].cal.val = TINYCALFACT;
+		if (frame[frm]->cal.state == 'f') {
+			if (om > 0.0)	frame[frm]->cal.val = om/m2;
+			else			frame[frm]->cal.val = TINYCALFACT;
 		}
 
 		/*  Compute chi-square for this frame  */
-		calval = c2_deldop->frame[f].cal.val;
-		err = c2_weight*(o2 - 2*calval*om + calval*calval*m2);
-		c2_deldop->frame[f].chi2 = err;
-		c2_chi2_frame += err;
+		calval = frame[frm]->cal.val;
+		err = wt*(o2 - 2*calval*om + calval*calval*m2);
+		frame[frm]->chi2 = err;
+		chi2_frame[frm] += err;
 
 		/* Compute chi-square contributions and deg. of freedom due to pixels
 		 * whose model signal is less than or equal to 'chi2fit0_thresh'
 		 * standard deviations of the noise in the data frame   */
-		o2_fit0 = 0.0;
-		dof_fit0 = 0.0;
-		err_fit0 = 0.0;
-		thresh_fit0 = dpar->chi2fit0_thresh * c2_deldop->frame[f].sdev;
+		o2_fit0 = dof_fit0 = err_fit0 = 0.0;
+		thresh_fit0 = dpar->chi2fit0_thresh * frame[frm]->sdev;
 		if (dpar->write_chi2fit0) {
-			for (i=0; i<c2_ndel; i++)
-				for (j=0; j<c2_ndop; j++)
-					off = j*c2_ndel + i; // For the unrolled fit, obs pointers
-					if (calval*c2_deldop->frame[f].fit_s[off] <= thresh_fit0) {
-						o2_fit0 += c2_deldop->frame[f].obs[i][j]*
-								c2_deldop->frame[f].obs[i][j]*
-								c2_deldop->frame[f].oneovervar[i][j];
-						if (c2_deldop->frame[f].oneovervar[i][j] > 0.0)
-							dof_fit0 += c2_weight;
+			for (i=0; i<ndel[0]; i++)
+				for (j=0; j<ndop[0]; j++)
+					off = j*ndel[0] + i; // For the unrolled fit, obs pointers
+					if (calval*frame[frm]->fit_s[off] <= thresh_fit0) {
+						o2_fit0 += frame[frm]->obs[i][j]*frame[frm]->obs[i][j]*
+								frame[frm]->oneovervar[i][j];
+						if (frame[frm]->oneovervar[i][j] > 0.0)
+							dof_fit0 += wt;
 					}
-			err_fit0 = c2_weight*o2_fit0;
-			chi2_fit0_deldop += err_fit0;
-			dof_fit0_deldop += dof_fit0;
+			err_fit0 = wt*o2_fit0;
+			c2af_chi2_fit0_deldop += err_fit0;
+			c2af_dof_fit0_deldop += dof_fit0;
 		}
 	}
 }
+__global__ void c2af_add_doppler_contributions_krnl(
+		struct par_t *dpar,
+		struct dopfrm_t **frame,
+		double *chi2_frame,
+		float *o2_arr,
+		float *m2_arr,
+		float *om_arr,
+		float4 *o2_m2_om_wt,
+		int *ndop,
+		int s,
+		int nframes) {
+	/* nframes-threaded kernel */
+	int j, frm = threadIdx.x;
+	double calval, err, o2_fit0, dof_fit0, err_fit0, thresh_fit0;
+	float o2, m2, om, wt;
 
-__global__ void c2_add_doppler_contributions_serial_krnl(struct par_t *dpar,
-		struct dat_t *ddat, int s, int f) {
-	/* Single-threaded kernel */
-	if (threadIdx.x == 0) {
-		int j;
-		double calval, err, o2_fit0, dof_fit0, err_fit0, thresh_fit0;
-		c2_chi2_frame = 0.0;
+	if (frm < nframes) {
+		o2 = o2_m2_om_wt[frm].w + o2_arr[frm];
+		m2 = o2_m2_om_wt[frm].x + m2_arr[frm];
+		om = o2_m2_om_wt[frm].y + om_arr[frm];
+		wt = o2_m2_om_wt[frm].z;
+		chi2_frame[frm] = 0.0;
 
 		/* If this frame's calibration factor is allowed to float, set it to
 		 * minimize chi-square, the sum over all bins of
 		        { (obs - calfact*fit)^2 / variance }.                     */
-
-		if (c2_doppler->frame[f].cal.state == 'f') {
-			if (om > 0.0) 	c2_doppler->frame[f].cal.val = om/m2;
+		if (frame[frm]->cal.state == 'f') {
+			if (om > 0.0) 	frame[frm]->cal.val = om/m2;
 			else {
-				c2_doppler->frame[f].cal.val = TINYCALFACT;
+				frame[frm]->cal.val = TINYCALFACT;
 				if (dpar->action != FIT )
 					printf("WARNING: set %2d frame %2d had negative calfact reset to %10.4e\n",
-							s, f, c2_doppler->frame[f].cal.val);	}
+							s, frm, frame[frm]->cal.val);	}
 		}
 
 		/* Compute chi-square for this frame  */
-		calval = c2_doppler->frame[f].cal.val;
-		err = c2_weight*(o2 - 2*calval*om + calval*calval*m2);
-		c2_doppler->frame[f].chi2 = err;
-		c2_chi2_frame += err;
-		//if (list_breakdown)
-		c2_chi2_all_doppler += err;
+		calval = frame[frm]->cal.val;
+		err = wt*(o2 - 2*calval*om + calval*calval*m2);
+		frame[frm]->chi2 = err;
+		chi2_frame[frm] += err;
 
 		/* Compute chi-square contributions and dof due to bins whose model
 		 * signal is =< 'chi2fit0_thresh' standard deviations of the noise in
@@ -476,122 +480,86 @@ __global__ void c2_add_doppler_contributions_serial_krnl(struct par_t *dpar,
 		o2_fit0 = 0.0;
 		dof_fit0 = 0.0;
 		err_fit0 = 0.0;
-		thresh_fit0 = dpar->chi2fit0_thresh * c2_doppler->frame[f].sdev;
+		thresh_fit0 = dpar->chi2fit0_thresh * frame[frm]->sdev;
 		if (dpar->write_chi2fit0) {
-			for (j=0; j<c2_ndop; j++)
-				if (calval*c2_doppler->frame[f].fit[j] <= thresh_fit0) {
-					o2_fit0 += c2_doppler->frame[f].obs[j]*c2_doppler->frame[f].obs[j]
-					  *c2_doppler->frame[f].oneovervar[j];
-					if (c2_doppler->frame[f].oneovervar[j] > 0.0)
-						dof_fit0 += c2_weight;
+			for (j=0; j<ndop[0]; j++)
+				if (calval*frame[frm]->fit[j] <= thresh_fit0) {
+					o2_fit0 += frame[frm]->obs[j]*frame[frm]->obs[j]
+					  *frame[frm]->oneovervar[j];
+					if (frame[frm]->oneovervar[j] > 0.0)
+						dof_fit0 += wt;
 				}
-			err_fit0 = c2_weight*o2_fit0;
-			chi2_fit0_doppler += err_fit0;
-			dof_fit0_doppler += dof_fit0;
+			err_fit0 = wt*o2_fit0;
+			c2af_chi2_fit0_doppler += err_fit0;
+			c2af_dof_fit0_doppler += dof_fit0;
 		}
 	}
 }
-__global__ void c2_doppler_add_o2_krnl(struct par_t *dpar, struct
-		dat_t *ddat, int s, int f) {//, double *atomo2, double
-	//	*atomm2,  double *atomom) {
-	/* ndop-threaded kernel */
-	int j = blockIdx.x * blockDim.x + threadIdx.x;
-	float temp;
+__global__ void c2af_doppler_add_o2_krnl(
+		struct par_t *dpar,
+		struct dopfrm_t **frame,
+		int *ndop,
+		float *o2,
+		float *m2,
+		float *om,
+		int s,
+		int frmsz,
+		int nframes) {
 
-	if (j < c2_ndop) {
+	/* ndop-threaded kernel */
+	int total_offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int frm = total_offset / frmsz;
+	int j = total_offset % frmsz;
+	float temp1, temp2, temp3;
+
+	if ((j < ndop[0]) && (frm<nframes)) {
 		/* Add contributions from power within frame limits */
 
 		/* Next 2 lines implement: o2 += obs[j]*obs[j]*oneovervar[j];	 */
-		temp = c2_doppler->frame[f].obs[j] * c2_doppler->frame[f].obs[j] *
-				c2_doppler->frame[f].oneovervar[j];
-		atomicAdd(&o2, temp);
-		//atomo2[j+1] = temp;
-
+		temp1 = frame[frm]->obs[j] * frame[frm]->obs[j] *
+				frame[frm]->oneovervar[j];
+		atomicAdd(&o2[frm], temp1);
 
 		/* Next 2 lines implement: m2 += fit[j]*fit[j]*oneovervar[j];		 */
-		temp = c2_doppler->frame[f].fit_s[j] * c2_doppler->frame[f].fit_s[j] *
-				c2_doppler->frame[f].oneovervar[j];
-		atomicAdd(&m2, temp);
-		//atomm2[j+1] = temp;
+		temp2 = frame[frm]->fit_s[j] * frame[frm]->fit_s[j] *
+				frame[frm]->oneovervar[j];
+		atomicAdd(&m2[frm], temp2);
 
 		/* Next 2 lines implement: om += fit[j]*obs[j]*oneovervar[j];		 */
-		temp = c2_doppler->frame[f].fit_s[j] * c2_doppler->frame[f].obs[j] *
-				c2_doppler->frame[f].oneovervar[j];
-		atomicAdd(&om, temp);
-		//atomom[j+1] = temp;
+		temp3 = frame[frm]->fit_s[j] * frame[frm]->obs[j] *
+				frame[frm]->oneovervar[j];
+		atomicAdd(&om[frm], temp3);
 	}
-	__syncthreads();
 }
-__global__ void c2_doppler_add_o2_serial_krnl(int f) {
-	/* Single-threaded kernel */
-	int j;
-	if (threadIdx.x == 0) {
-		for (j=0; j<=c2_ndop; j++) {
-			dopo2 += c2_doppler->frame[f].obs[j] * c2_doppler->frame[f].obs[j] *
-					c2_doppler->frame[f].oneovervar[j];
-			dopm2 += c2_doppler->frame[f].fit_s[j] * c2_doppler->frame[f].fit_s[j] *
-					c2_doppler->frame[f].oneovervar[j];
-			dopom += c2_doppler->frame[f].fit_s[j] * c2_doppler->frame[f].obs[j] *
-					c2_doppler->frame[f].oneovervar[j];
-			sum_fit += c2_doppler->frame[f].fit_s[j];
-			sum_obs += c2_doppler->frame[f].obs[j];
-			sum_one += c2_doppler->frame[f].oneovervar[j];
-		}
-	}
-	__syncthreads();
-}
-__global__ void c2_set_chi2_krnl(struct dat_t *ddat, double chi2, int s) {
+__global__ void c2af_set_chi2_krnl(struct dat_t *ddat, double chi2, int s) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0)
 		ddat->set[s].chi2 = chi2;
 }
-__global__ void c2_dbg3_krnl(struct dat_t *ddat, double **obs, double **oov,
-		float *fit, int s, int f) {
-	/* ndel*ndop-threaded kernel */
-	int off = blockIdx.x * blockDim.x + threadIdx.x;
-	int idel = off % c2_ndel + 1;
-	int idop = off / c2_ndel + 1;
-	if (off < (c2_ndel*c2_ndop)) {
-		fit[off] = ddat->set[s].desc.deldop.frame[f].fit_s[off];
-		obs[idel][idop] = ddat->set[s].desc.deldop.frame[f].obs[idel][idop];
-		oov[idel][idop] = ddat->set[s].desc.deldop.frame[f].oneovervar[idel][idop];
-	}
-	__syncthreads();
-}
-__global__ void c2_dbg4_krnl(double *obs, double *oov,	double *fit, int f) {
-	/* ndel*ndop-threaded kernel */
-	int off = blockIdx.x * blockDim.x + threadIdx.x;
-	int idop = off + 1;
-	if (off < c2_ndop) {
-		fit[idop] = c2_doppler->frame[f].fit_s[idop];
-		obs[idop] = c2_doppler->frame[f].obs[idop];
-		oov[idop] = c2_doppler->frame[f].oneovervar[idop];
-	}
-	__syncthreads();
-}
-__global__ void c2_get_prntflgs_krnl(struct par_t *dpar, struct dat_t *ddat) {
+__global__ void c2af_get_prntflgs_krnl(struct par_t *dpar, struct dat_t *ddat) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
-		c2_print_breakdown = (ddat->dof_deldop > SMALLVAL || ddat->dof_doppler  > SMALLVAL
+		c2af_print_breakdown = (ddat->dof_deldop > SMALLVAL || ddat->dof_doppler  > SMALLVAL
 				|| ddat->dof_poset    > SMALLVAL	|| ddat->dof_lghtcrv  > SMALLVAL);
-		c2_dof_deldop = ddat->dof_deldop;
-		c2_dof_doppler = ddat->dof_doppler;
-		c2_dof_poset = ddat->dof_poset;
-		c2_dof_lghtcrv = ddat->dof_lghtcrv;
-		c2_dof = ddat->dof;
-		c2_write_chi2fit0 = dpar->write_chi2fit0;
-		c2_badradar = dpar->badradar;
-		c2_badphoto = dpar->badphoto;
-		c2_baddopscale = dpar->baddopscale;
-		c2_badposet = dpar->badposet;
-		c2_posbnd = dpar->posbnd;
-		c2_baddiam = dpar->baddiam;
+		c2af_dof_deldop = ddat->dof_deldop;
+		c2af_dof_doppler = ddat->dof_doppler;
+		c2af_dof_poset = ddat->dof_poset;
+		c2af_dof_lghtcrv = ddat->dof_lghtcrv;
+		c2af_dof = ddat->dof;
+		c2af_write_chi2fit0 = dpar->write_chi2fit0;
+		c2af_badradar = dpar->badradar;
+		c2af_badphoto = dpar->badphoto;
+		c2af_baddopscale = dpar->baddopscale;
+		c2af_badposet = dpar->badposet;
+		c2af_posbnd = dpar->posbnd;
+		c2af_baddiam = dpar->baddiam;
 	}
 }
 
-__host__ double chi2_cuda_af(struct par_t *dpar, struct dat_t *ddat, int list_breakdown)
+__host__ double chi2_cuda_af(struct par_t *dpar, struct dat_t *ddat,
+		int list_breakdown, int nsets)
 {
-	int s, nsets, print_breakdown;
+	int s, print_breakdown;
 	unsigned char write_chi2fit0, baddiam, badphoto, badposet, baddopscale,
 			posbnd, badradar;
 	unsigned char type;
@@ -607,36 +575,32 @@ __host__ double chi2_cuda_af(struct par_t *dpar, struct dat_t *ddat, int list_br
 	chi2_all_deldop = chi2_all_doppler = /*chi2_all_poset = chi2_all_lghtcrv = */
 			chi2_fit0_deldop = chi2_fit0_doppler /*= chi2_fit0_poset*/ = 0.0;
 	dof_fit0_deldop = dof_fit0_doppler/* = dof_fit0_poset*/ = 0.0;
-
+	chi2 = 0.0;
 	/* Initialize variables that accumulate chi-square values  */
-	c2_init_krnl<<<1,1>>>(ddat);
+	c2af_init_krnl<<<1,1>>>(ddat);
 	checkErrorAfterKernelLaunch("c2_init_krnl, chi2_cuda");
-	gpuErrchk(cudaMemcpyFromSymbol(&nsets, c2_nsets, sizeof(int),
-			0, cudaMemcpyDeviceToHost));
 
-	/* Any references to MPI stuff has been removed
-	 * for this "FIT" only cuda version.   */
 	/* Loop through all datasets, carry out chi-square computations, and
 	 * provide screen and image output                            */
 	for (s=0; s<nsets; s++) {
 		/* Launch single-threaded kernel to get type */
-		c2_get_type_krnl<<<1,1>>>(ddat, s);
-		checkErrorAfterKernelLaunch("c2_get_type_krnl, chi2_cuda");
-		gpuErrchk(cudaMemcpyFromSymbol(&type, c2_type, sizeof(unsigned char),
+		c2af_get_type_krnl<<<1,1>>>(ddat, s);
+		checkErrorAfterKernelLaunch("c2af_get_type_krnl");
+		gpuErrchk(cudaMemcpyFromSymbol(&type, c2af_type, sizeof(unsigned char),
 				0, cudaMemcpyDeviceToHost));
 
 		switch (type) {
 		case DELAY:
 			chi2 = chi2_deldop_cuda_af(dpar, ddat, s, list_breakdown,
 				   &chi2_all_deldop, &chi2_fit0_deldop, &dof_fit0_deldop);
-			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
-			checkErrorAfterKernelLaunch("c2_set_chi2_krnl, chi2_cuda");
+			c2af_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
+			checkErrorAfterKernelLaunch("c2af_set_chi2_krnl");
 			break;
 		case DOPPLER:
 			chi2 = chi2_doppler_cuda_af(dpar, ddat, s, list_breakdown,
 				   &chi2_all_doppler, &chi2_fit0_deldop, &dof_fit0_doppler);
-			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
-			checkErrorAfterKernelLaunch("c2_set_chi2_krnl, chi2_cuda");
+			c2af_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
+			checkErrorAfterKernelLaunch("c2af_set_chi2_krnl");
 			break;
 		case POS:
 			printf("\nWrite chi2_poset_cuda!\n");
@@ -651,46 +615,46 @@ __host__ double chi2_cuda_af(struct par_t *dpar, struct dat_t *ddat, int list_br
 		}
 
 		/* Single-thread kernel adds ddat->set[s].chi2 to ddat->chi2 */
-		c2_add_chi2_krnl<<<1,1>>>(ddat, s);
+		c2af_add_chi2_krnl<<<1,1>>>(ddat, s);
 		checkErrorAfterKernelLaunch("c2_add_chi2_krnl, chi2_cuda");
 
 	}  /* end for loop over datasets */
 	/* Launch single-threaded kernel to retrieve ddat->chi2 to return it */
-	c2_retrieve_chi2_krnl<<<1,1>>>(ddat);
-	checkErrorAfterKernelLaunch("c2_retrieve_chi2_krnl, chi2_cuda");
-	gpuErrchk(cudaMemcpyFromSymbol(&chi2, c2_chi2, sizeof(double),
+	c2af_retrieve_chi2_krnl<<<1,1>>>(ddat);
+	checkErrorAfterKernelLaunch("c2af_retrieve_chi2_krnl");
+	gpuErrchk(cudaMemcpyFromSymbol(&chi2, c2af_chi2, sizeof(double),
 			0, cudaMemcpyDeviceToHost));
 	/*.......................................................................*/
 
 
 	/* Call kernel to get flags from ddat */
-	c2_get_prntflgs_krnl<<<1,1>>>(dpar, ddat);
+	c2af_get_prntflgs_krnl<<<1,1>>>(dpar, ddat);
 	checkErrorAfterKernelLaunch("c2_get_prntflgs_krnl");
-	gpuErrchk(cudaMemcpyFromSymbol(&print_breakdown, c2_print_breakdown,
+	gpuErrchk(cudaMemcpyFromSymbol(&print_breakdown, c2af_print_breakdown,
 			sizeof(int), 0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&dof_deldop, c2_dof_deldop, sizeof(double),
+	gpuErrchk(cudaMemcpyFromSymbol(&dof_deldop, c2af_dof_deldop, sizeof(double),
 			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&dof_doppler, c2_dof_doppler, sizeof(double),
+	gpuErrchk(cudaMemcpyFromSymbol(&dof_doppler, c2af_dof_doppler, sizeof(double),
 			0, cudaMemcpyDeviceToHost));
 //	gpuErrchk(cudaMemcpyFromSymbol(&dof_poset, c2_dof_poset, sizeof(double),
 //			0, cudaMemcpyDeviceToHost));
 //	gpuErrchk(cudaMemcpyFromSymbol(&dof_lgthcrv, c2_dof_lgthcrvr, sizeof(double),
 //			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&write_chi2fit0, c2_write_chi2fit0,
+	gpuErrchk(cudaMemcpyFromSymbol(&write_chi2fit0, c2af_write_chi2fit0,
 			sizeof(unsigned char), 0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&dof, c2_dof, sizeof(double),
+	gpuErrchk(cudaMemcpyFromSymbol(&dof, c2af_dof, sizeof(double),
 			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&baddiam, c2_baddiam, sizeof(unsigned char),
+	gpuErrchk(cudaMemcpyFromSymbol(&baddiam, c2af_baddiam, sizeof(unsigned char),
 			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&badphoto, c2_badphoto, sizeof(unsigned char),
+	gpuErrchk(cudaMemcpyFromSymbol(&badphoto, c2af_badphoto, sizeof(unsigned char),
 			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&posbnd, c2_posbnd, sizeof(unsigned char),
+	gpuErrchk(cudaMemcpyFromSymbol(&posbnd, c2af_posbnd, sizeof(unsigned char),
 			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&badposet, c2_badposet, sizeof(unsigned char),
+	gpuErrchk(cudaMemcpyFromSymbol(&badposet, c2af_badposet, sizeof(unsigned char),
 			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&badradar, c2_badradar, sizeof(unsigned char),
+	gpuErrchk(cudaMemcpyFromSymbol(&badradar, c2af_badradar, sizeof(unsigned char),
 			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&baddopscale, c2_baddopscale, sizeof(unsigned char),
+	gpuErrchk(cudaMemcpyFromSymbol(&baddopscale, c2af_baddopscale, sizeof(unsigned char),
 			0, cudaMemcpyDeviceToHost));
 
 	if (list_breakdown) {
@@ -766,43 +730,86 @@ __host__ double chi2_deldop_cuda_af(struct par_t *dpar, struct dat_t *ddat, int 
 		int list_breakdown, double *chi2_all_deldop, double *chi2_fit0_deldop,
 		double *dof_fit0_deldop)
 {
-	int f, ndel, ndop, nframes;
-	double chi2_set, chi2_frame;
+	int *ndel, *ndop, nframes, nThreads, frmsz;
+	double chi2_set, *chi2_frame;
+	float4 *o2_m2_om_wt;
+	float **temp_o2, **temp_m2, **temp_om;
+	struct deldopfrm_t **frame;
 	dim3 BLK,THD;
 	chi2_set = 0.0;
 
-	/* Launch single-threaded kernel to get # of frames for this set */
-	c2_get_frames_krnl<<<1,1>>>(ddat, s);
-	checkErrorAfterKernelLaunch("c2_get_frames_krnl, chi2_cuda");
-	gpuErrchk(cudaMemcpyFromSymbol(&nframes, c2_nframes, sizeof(int),
+	/* Launch nframes-threaded kernel to get # of frames for this set */
+	c2af_get_frames_krnl<<<1,1>>>(ddat, s);
+	checkErrorAfterKernelLaunch("c2af_deldop_get_frames_krnl");
+	gpuErrchk(cudaMemcpyFromSymbol(&nframes, c2af_nframes, sizeof(int),
 			0, cudaMemcpyDeviceToHost));
 
-	/*  Loop through all frames for this dataset  */
-	for (f=0; f<nframes; f++) {
-		/* Launch single-threaded kernel to get ndel/ndop for this frame */
-		c2_get_ndop_krnl<<<1,1>>>(s);
-		checkErrorAfterKernelLaunch("c2_get_frames_krnl, chi2_cuda");
-		gpuErrchk(cudaMemcpyFromSymbol(&ndel, c2_ndel, sizeof(int),
-				0, cudaMemcpyDeviceToHost));
-		gpuErrchk(cudaMemcpyFromSymbol(&ndop, c2_ndop, sizeof(int),
-				0, cudaMemcpyDeviceToHost));
+	/* Allocate memory */
+	cudaCalloc((void**)&ndel, 		 sizeof(int),    nframes);
+	cudaCalloc((void**)&ndop, 		 sizeof(int), 	 nframes);
+	cudaCalloc((void**)&o2_m2_om_wt, sizeof(float4), nframes);
+	cudaCalloc((void**)&frame, 		 sizeof(struct deldopfrm_t), nframes);
+	cudaCalloc((void**)&temp_o2, 	 sizeof(float*), nframes);
+	cudaCalloc((void**)&temp_m2,   	 sizeof(float*), nframes);
+	cudaCalloc((void**)&temp_om, 	 sizeof(float*), nframes);
+	cudaCalloc((void**)&chi2_frame,  sizeof(double), nframes);
 
-		/* Add contributions from power within limits of data frame.
-		 * This kernel also takes care of the frame's calibration factor and
-		 * computes chi2 for this frame */
-		BLK.x = floor((maxThreadsPerBlock - 1 + (ndel*ndop)) / maxThreadsPerBlock);
-		THD.x = maxThreadsPerBlock; // Thread block dimensions
-		c2_deldop_add_o2_krnl<<<BLK,THD>>>(dpar, ddat, s, f);
-		checkErrorAfterKernelLaunch("c2_add_deldop_contributions_krnl, line ");
+	/* Launch nframes-threaded kernel to get ndel/ndop for this frame and
+	 * set up other radar parameter shortcuts. See kernel for details. */
+	THD.x = nframes;
+	c2af_deldop_set_shortcuts_krnl<<<1,THD>>>(ddat, frame, ndel, ndop, \
+			o2_m2_om_wt, s, nframes);
+	checkErrorAfterKernelLaunch("c2af_deldop_set_shortcuts_krnl");
+	deviceSyncAfterKernelLaunch("c2af_deldop_set_shortcuts_krnl");
 
-		c2_add_deldop_contributions_krnl<<<1,1>>>(dpar, ddat, s, f);
-		checkErrorAfterKernelLaunch("c2_add_deldop_contributions_krnl, line ");
-		gpuErrchk(cudaMemcpyFromSymbol(&chi2_frame, c2_chi2_frame, sizeof(double),
-				0, cudaMemcpyDeviceToHost));
-		chi2_set += chi2_frame;
+	/* Allocate the inner loops for temp arrays */
+	frmsz = ndel[0] * ndop[0];
+	nThreads = nframes * frmsz;
+	for (int frm=0; frm<nframes; frm++) {
+		cudaCalloc((void**)&temp_o2[frm], sizeof(float), frmsz);
+		cudaCalloc((void**)&temp_m2[frm], sizeof(float), frmsz);
+		cudaCalloc((void**)&temp_om[frm], sizeof(float), frmsz);
+	}
+
+	/* Configure and launch kernel that prepares three arrays (o2, m2, om)
+	 * for parallel reduction 	 */
+	BLK.x = floor((maxThreadsPerBlock-1+nThreads)/maxThreadsPerBlock);
+	THD.x = maxThreadsPerBlock;
+
+	c2af_deldop_prep_o2_m2_krnl<<<BLK,THD>>>(ddat,frame,temp_o2,temp_m2,temp_om,
+			ndel,ndop,s,nframes,frmsz);
+	checkErrorAfterKernelLaunch("c2af_deldop_prep_o2_m2_krnl");
+
+	/* Now launch the parallel reduction function to get the summations for
+	 * all three double-arrays (all frames). Results for each frame and each
+	 * array is in temp_o2[frm][0].	 */
+	c2af_deldop_add_o2_m2(temp_o2, temp_m2, temp_om, frmsz, nframes);
+
+	THD.x = nframes;
+	c2af_add_deldop_contributions_krnl<<<1,THD>>>(dpar, frame, temp_o2, temp_m2,
+			temp_om, chi2_frame, o2_m2_om_wt, ndel, ndop, s, nframes);
+	checkErrorAfterKernelLaunch("c2af_add_deldop_contributions_krnl");
+	deviceSyncAfterKernelLaunch("c2af_add_deldop_contributions_krnl");
+	gpuErrchk(cudaMemcpyFromSymbol(&chi2_fit0_deldop, c2af_chi2_fit0_deldop,
+			sizeof(double),	0, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpyFromSymbol(&dof_fit0_deldop, c2af_dof_fit0_deldop,
+				sizeof(double),	0, cudaMemcpyDeviceToHost));
+
+	for (int frm=0; frm<nframes; frm++) {
+		chi2_set += chi2_frame[frm];
 		if (list_breakdown)
-			*chi2_all_deldop += chi2_frame;
-	}  /* end for loop over frames */
+			*chi2_all_deldop += chi2_frame[frm];
+	}
+
+	/* De-allocate memory */
+	cudaFree(ndel);
+	cudaFree(ndop);
+	cudaFree(o2_m2_om_wt);
+	cudaFree(frame);
+	cudaFree(temp_o2);
+	cudaFree(temp_m2);
+	cudaFree(temp_om);
+	cudaFree(chi2_frame);
 	return chi2_set;
 }
 
@@ -810,44 +817,76 @@ __host__ double chi2_doppler_cuda_af(struct par_t *dpar, struct dat_t *ddat, int
 		int list_breakdown, double *chi2_all_doppler, double *chi2_fit0_doppler,
 		double *dof_fit0_doppler)
 {
-	int f, ndop, nframes;
-	double chi2_set, chi2_frame;
+	int *ndop, nframes, frmsz, nThreads;
+	double chi2_set, *chi2_frame;
+	struct dopfrm_t **frame;
+	float *temp_o2, *temp_m2, *temp_om;
+	float4 *o2_m2_om_wt;
 	dim3 BLK,THD;
+
 	/* Initialize chi-square for dataset  */
 	chi2_set = 0.0;
 
-	/* Launch single-threaded kernel to get # of frames for this set */
-	c2_get_frames_krnl<<<1,1>>>(ddat, s);
-	checkErrorAfterKernelLaunch("c2_get_frames_krnl, chi2_cuda");
-	gpuErrchk(cudaMemcpyFromSymbol(&nframes, c2_nframes, sizeof(int),
+	/* Launch nframes-threaded kernel to get # of frames for this set */
+	c2af_get_frames_krnl<<<1,1>>>(ddat, s);
+	checkErrorAfterKernelLaunch("c2af_get_frames_krnl");
+	gpuErrchk(cudaMemcpyFromSymbol(&nframes, c2af_nframes, sizeof(int),
 			0, cudaMemcpyDeviceToHost));
 
-	/*  Loop through all frames for this dataset  */
-	for (f=0; f<nframes; f++) {
+	/* Allocate memory */
+	cudaCalloc((void**)&ndop, 		 sizeof(int), 	 nframes);
+	cudaCalloc((void**)&o2_m2_om_wt, sizeof(float4), nframes);
+	cudaCalloc((void**)&frame, 		 sizeof(struct dopfrm_t), nframes);
+	cudaCalloc((void**)&temp_o2, 	 sizeof(float), nframes);
+	cudaCalloc((void**)&temp_m2,   	 sizeof(float), nframes);
+	cudaCalloc((void**)&temp_om, 	 sizeof(float), nframes);
+	cudaCalloc((void**)&chi2_frame,  sizeof(double), nframes);
 
-		/* Launch single-threaded kernel to get ndel/ndop for this frame */
-		c2_get_ndop_krnl<<<1,1>>>(s);
-		checkErrorAfterKernelLaunch("c2_get_ndop_krnl, chi2_cuda");
-		gpuErrchk(cudaMemcpyFromSymbol(&ndop, c2_ndop, sizeof(int),
-				0, cudaMemcpyDeviceToHost));
-		chi2_frame = 0.0;
-		/* Add contributions from power within limits of data frame.
-		 * This kernel also takes care of the frame's calibration factor and
-		 * computes chi2 for this frame */
-		BLK.x = floor((maxThreadsPerBlock - 1 + ndop) / maxThreadsPerBlock);
-		THD.x = maxThreadsPerBlock; // Thread block dimensions
-		c2_doppler_add_o2_krnl<<<BLK,THD>>>(dpar, ddat, s, f);//, atomo2, atomm2, atomom);
-		checkErrorAfterKernelLaunch("c2_add_o2_krnl, line ");
+	/* Launch nframes-threaded kernel to get ndel/ndop for this frame and
+	 * set up other radar parameter shortcuts. See kernel for details. */
+	THD.x = nframes;
+	c2af_doppler_set_shortcuts_krnl<<<1,THD>>>(ddat, frame, ndop, o2_m2_om_wt,
+			s, nframes);
+	checkErrorAfterKernelLaunch("c2af_doppler_set_shortcuts_krnl");
+	deviceSyncAfterKernelLaunch("c2af_doppler_set_shortcuts_krnl");
 
-		c2_add_doppler_contributions_serial_krnl<<<1,1>>>(dpar, ddat, s, f);
-		checkErrorAfterKernelLaunch("c2_add_doppler_contributions_serial_krnl, line ");
-		gpuErrchk(cudaMemcpyFromSymbol(&chi2_frame, c2_chi2_frame, sizeof(double),
-				0, cudaMemcpyDeviceToHost));
+	frmsz = ndop[0];
+	nThreads = nframes * frmsz;
+
+	/* Add contributions from power within limits of data frame.
+	 * This kernel also takes care of the frame's calibration factor and
+	 * computes chi2 for this frame */
+	BLK.x = floor((maxThreadsPerBlock-1+nThreads)/maxThreadsPerBlock);
+	THD.x = maxThreadsPerBlock;
+
+	c2af_doppler_add_o2_krnl<<<BLK,THD>>>(dpar, frame, ndop, temp_o2,
+			temp_m2, temp_om, s, frmsz, nframes);
+	checkErrorAfterKernelLaunch("c2af_add_o2_krnl");
+
+	THD.x = nframes;
+	c2af_add_doppler_contributions_krnl<<<1,THD>>>(dpar, frame, chi2_frame,
+			temp_o2, temp_m2, temp_om, o2_m2_om_wt, ndop, s, nframes);
+	checkErrorAfterKernelLaunch("c2af_add_doppler_contributions_krnl, line ");
+	deviceSyncAfterKernelLaunch("c2af_add_doppler_contributions_krnl");
+	gpuErrchk(cudaMemcpyFromSymbol(&chi2_fit0_doppler, c2af_chi2_fit0_deldop,
+			sizeof(double),	0, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpyFromSymbol(&dof_fit0_doppler, c2af_dof_fit0_deldop,
+			sizeof(double),	0, cudaMemcpyDeviceToHost));
+
+	for (int frm=0; frm<nframes; frm++) {
+		chi2_set += chi2_frame[frm];
 		if (list_breakdown)
-					*chi2_all_doppler += chi2_frame;
-
-		chi2_set += chi2_frame;
+			*chi2_all_doppler += chi2_frame[frm];
 	}
+
+	/* De-allocate memory */
+	cudaFree(ndop);
+	cudaFree(o2_m2_om_wt);
+	cudaFree(frame);
+	cudaFree(temp_o2);
+	cudaFree(temp_m2);
+	cudaFree(temp_om);
+	cudaFree(chi2_frame);
 	return chi2_set;
 }
 

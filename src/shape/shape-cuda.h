@@ -65,11 +65,15 @@ __host__ double apply_photo_cuda(struct mod_t *dmod, struct dat_t *ddat,
 		int body, int set, int frm);
 __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod, struct dat_t
 		*ddat, struct par_t *par, struct mod_t *mod, struct dat_t *dat);
+__host__ void c2af_deldop_add_o2_m2(float **temp_o2, float **temp_m2,
+		float **temp_om, int size, int nframes);
 __host__ void calc_fits_cuda(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat);
 __host__ void calc_fits_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat);
 __host__ double chi2_cuda(struct par_t *dpar, struct dat_t *ddat, int list_breakdown);
+__host__ double chi2_cuda_af(struct par_t *dpar,struct dat_t *ddat,
+		int list_breakdown, int nsets);
 __host__ void compute_dv_dcom_dI_reduction(float *dv, float *dcom0, float
 		*dcom1, float *dcom2, float *dI00, float *dI01, float *dI02, float
 		*dI10, float *dI11, float *dI12, float *dI20, float *dI21, float *dI22,

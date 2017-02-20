@@ -295,7 +295,7 @@ __global__ void pos2doppler_get_global_frmsz_krnl(int *global_lim, int4 *xylim,
 		atomicMax(&global_lim[3], xylim[f].z);
 	}
 }
-__global__ void pos2doppler_pixel_krnl(
+__global__ void pos2doppler_pixel_af_krnl(
 		struct par_t *dpar,
 		struct mod_t *dmod,
 		struct dat_t *ddat,
@@ -635,7 +635,7 @@ __host__ int pos2doppler_cuda_af( struct par_t *dpar, struct mod_t *dmod,
 	BLK.x = floor((maxThreadsPerBlock - 1 + nThreads) / maxThreadsPerBlock);
 	THD.x = maxThreadsPerBlock; // Thread block dimensions
 
-	pos2doppler_pixel_krnl<<<BLK,THD>>>(dpar, dmod, ddat, pos, frame, xspan,
+	pos2doppler_pixel_af_krnl<<<BLK,THD>>>(dpar, dmod, ddat, pos, frame, xspan,
 			set, nframes, frmsz, nThreads, body, orbit_xoff, orbit_yoff,
 			axay, doplim, xyincr, dop, ndop, idop0, global_lim, dopshift, fit_overflow);
 	checkErrorAfterKernelLaunch("pos2doppler_pixel_af_krnl");

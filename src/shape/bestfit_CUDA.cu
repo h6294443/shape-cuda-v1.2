@@ -476,7 +476,10 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 		fflush(stdout);
 
 		/* Show breakdown of chi-square by data type    */
-		chi2_cuda(dpar, ddat, 1);
+		if (AF)
+			chi2_cuda_af(dpar,ddat,1,dat->nsets);
+		else
+			chi2_cuda(dpar, ddat, 1);
 
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % par->npar_update;
@@ -722,10 +725,13 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 				cntr = 0;
 				showvals = 1;
 				if (AF)
-					calc_fits_cuda_af(dpar,dmod,ddat);
+					calc_fits_cuda_af(dpar, dmod, ddat);
 				else
 					calc_fits_cuda(dpar, dmod, ddat);
-				chi2_cuda(dpar, ddat, 0);
+				if (AF)
+					chi2_cuda_af(dpar, ddat, 0, dat->nsets);
+				else
+					chi2_cuda(dpar, ddat, 0);
 				//write_mod( par, mod);
 				//write_dat( par, dat);
 			}
@@ -735,11 +741,14 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 		 * region within each delay-Doppler or Doppler frame for which model
 		 * power is nonzero.                                               */
 		if (cntr != 0) {
-			if (AF)
-				calc_fits_cuda_af(dpar,dmod,ddat);
-			else
+			if (AF){
+				calc_fits_cuda_af(dpar, dmod, ddat);
+				chi2_cuda_af(dpar, ddat, 0, dat->nsets);
+			}
+			else {
 				calc_fits_cuda(dpar, dmod, ddat);
-			chi2_cuda(dpar, ddat, 0);
+				chi2_cuda(dpar, ddat, 0);
+			}
 			//write_mod( par, mod);
 			//write_dat( par, dat);
 		}
@@ -790,7 +799,10 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 
 	/* Show final values of reduced chi-square, individual penalty functions,
 	 * and the objective function  */
-	final_chi2 = chi2_cuda(dpar, ddat, 1);
+	if (AF)
+		final_chi2 = chi2_cuda_af(dpar, ddat, 1, dat->nsets);
+	else
+		final_chi2 = chi2_cuda(dpar, ddat, 1);
 	final_redchi2 = final_chi2/dat->dof;
 	printf("# search completed\n");
 
@@ -948,10 +960,14 @@ __host__ double objective_cuda( double x)
 		realize_dopscale_cuda(sdev_par, sdev_dat, 1.0, 0);  /* set dopscale_save to dopscale */
 	if (newxyoff)
 		realize_xyoff_cuda(sdev_dat);
-	if (AF)
+	if (AF) {
 		calc_fits_cuda_af(sdev_par, sdev_mod, sdev_dat);
-	else
+		err = chi2_cuda_af(sdev_par, sdev_dat, 0, sdat->nsets);
+	}
+	else {
 		calc_fits_cuda(sdev_par, sdev_mod, sdev_dat);
+		err = chi2_cuda(sdev_par, sdev_dat, 0);
+	}
 
 	int debug = 0;
 	if (debug) {
@@ -965,7 +981,6 @@ __host__ double objective_cuda( double x)
 		dbg_print_fit(sdev_dat, 1, 3);
 	}
 
-	err = chi2_cuda(sdev_par, sdev_dat, 0);
 
 	/* Divide chi-square by DOF to get reduced chi-square.    */
 	err /= sdat->dof;

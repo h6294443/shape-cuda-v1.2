@@ -261,10 +261,8 @@ double chi2( struct par_t *par, struct dat_t *dat, int list_breakdown)
       If we're not parallel processing, or if list_breakdown = 0, or if this
       is the root node, we loop through ALL datasets on this call to chi2.    */
 
-
 	set_min = 0;
 	set_max = dat->nsets - 1;
-
 
 	/*  Loop through all datasets, carry out chi-square computations,
       and provide screen and image output                            */
@@ -387,58 +385,6 @@ double chi2( struct par_t *par, struct dat_t *dat, int list_breakdown)
 				100*sqrt(dat->chi2_variance)/dat->dof);
 		fflush(stdout);
 	}
-
-
-//	/* Start debug section */
-//	int idel, idop, off, ndel, ndop;
-//	FILE *fp_fit, *fp_obs, *fp_oov;
-//	char *filename_fit, *filename_obs, *filename_oov;
-//	filename_fit = "dbg_fit_std.csv";
-//	filename_obs = "dbg_obs_std.csv";
-//	filename_oov = "dbg_oov_std.csv";
-//
-//	printf("\n %sfile created",filename_fit);
-//	printf("\n\nFilename: %s",filename_fit);
-//	fp_fit = fopen(filename_fit, "w+");
-//	fp_obs = fopen(filename_obs, "w+");
-//	fp_oov = fopen(filename_oov, "w+");
-//
-//	fprintf(fp_fit, "idel/idop , ");
-//	fprintf(fp_obs, "idel/idop , ");
-//	fprintf(fp_oov, "idel/idop , ");
-//
-//	ndel = dat->set[0].desc.deldop.frame[0].ndel;
-//	ndop = dat->set[0].desc.deldop.frame[0].ndop;
-//	for (idel=1; idel<=ndel; idel++){
-//		fprintf(fp_fit,	"%i , ", idel);
-//		fprintf(fp_obs,	"%i , ", idel);
-//		fprintf(fp_oov, "%i , ", idel);
-//	}
-//
-//	/* The following loops write fit, obs, and oov to file */
-//	for (idop=1; idop<=ndop; idop++){
-//		fprintf(fp_fit,	"\n%i , ", idop);
-//		fprintf(fp_obs,	"\n%i , ", idop);
-//		fprintf(fp_oov, "\n%i , ", idop);
-//
-//		for (idel=1; idel<=ndel; idel++){
-//			off = (idop-1)*ndel + (idel-1);
-//			fprintf(fp_fit,	"%g , ", dat->set[0].desc.deldop.frame[0].fit[idel][idop]);
-//			fprintf(fp_obs,	"%g , ", dat->set[0].desc.deldop.frame[0].obs[idel][idop]);
-//			fprintf(fp_oov, "%g , ", dat->set[0].desc.deldop.frame[0].oneovervar[idel][idop]);
-//		}
-//	}
-//
-//	fclose(fp_fit);
-//	fclose(fp_obs);
-//	fclose(fp_oov);
-
-	/* End debug section */
-
-
-
-
-
 
 	return dat->chi2;
 }
