@@ -959,7 +959,6 @@ __global__ void comp_moments_facet_krnl(struct mod_t *dmod, int c, float *dvarr,
 		dI22[f] 	= (float)dI[2][2];
 	}
 }
-
 __global__ void comp_moments_facets_old_krnl(struct mod_t *dmod)
 {
 	/* nf-threaded kernel */

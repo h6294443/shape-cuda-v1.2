@@ -11,28 +11,15 @@ __global__ void bf_deldop_dbg2_krnl(struct par_t *dpar, struct dat_t *ddat,
 		int s, int f) {
 	/* Single-threaded kernel */
 	int idel, idop, i;
-	//int i = blockIdx.x * blockDim.x + threadIdx.x;
 
-	//if (i < (c2_ndel*c2_ndop)) {
 	if (threadIdx.x == 0) {
-//		for (idel=0; idel<c2_ndel; idel++)
-//			for (idop=0; idop<c2_ndop; idop++) {
-//				//sum_oov += ddat->set[s].desc.deldop.frame[f].oneovervar[idel+1][idop+1];
-//				sum_oovs += ddat->set[s].desc.deldop.frame[f].oneovervar_s[idop*c2_ndel+idel];
-//			}
 		int ndel = ddat->set[s].desc.deldop.frame[f].ndel;
 		int ndop = ddat->set[s].desc.deldop.frame[f].ndop;
 		int initial = ndel*ndop - 11;
 		for (idel=1; idel<=ndel; idel++)
 			for (idop=1; idop<=ndop; idop++)
 				bf_sum_oovs += ddat->set[s].desc.deldop.frame[f].oneovervar[idel][idop];
-//		for (i=0; i<(ndel*ndop); i++){
-//			bf_sum_oovs += ddat->set[s].desc.deldop.frame[f].oneovervar_s[i];
-////			atomicAdd(&c2_occ2, 1);
-////			printf("oneovervar[%i]: %f\n", i, ddat->set[s].desc.deldop.frame[f].oneovervar_s[i]);
-//		}
 	}
-	__syncthreads();
 }
 __global__ void dbg_print_fit_krnl1(struct dat_t *ddat, int s, int f){
 	/* Single-threaded debug kernel */
@@ -63,7 +50,6 @@ __global__ void dbg_print_fit_krnl2(struct dat_t *ddat, double *fit, int s, int 
 	if (idop <= dbg_ndop1) {
 		fit[idop] = ddat->set[s].desc.doppler.frame[f].fit_s[idop];
 	}
-	__syncthreads();
 }
 __global__ void dbg_print_poz_krnl(struct dat_t *ddat, float *zz, int s, int f, int size) {
 	/* ndop-threaded kernel */
@@ -75,7 +61,6 @@ __global__ void dbg_print_poz_krnl(struct dat_t *ddat, float *zz, int s, int f, 
 		if (ddat->set[s].type == DOPPLER)
 			zz[offset] = ddat->set[s].desc.doppler.frame[f].pos.z_s[offset];
 	}
-	__syncthreads();
 }
 __global__ void dbg_print_poz_af_krnl(struct dat_t *ddat, float *zz0, float *zz1,
 		float *zz2, float *zz3, int s, int size) {
@@ -96,7 +81,6 @@ __global__ void dbg_print_poz_af_krnl(struct dat_t *ddat, float *zz0, float *zz1
 			zz3[offset] = ddat->set[s].desc.doppler.frame[3].pos.z_s[offset];
 		}
 	}
-	__syncthreads();
 }
 __global__ void dbg_print_cose_krnl(struct dat_t *ddat, float *cose, int s, int f, int size) {
 	/* ndop-threaded kernel */
@@ -108,7 +92,6 @@ __global__ void dbg_print_cose_krnl(struct dat_t *ddat, float *cose, int s, int 
 		if (ddat->set[s].type == DOPPLER)
 			cose[offset] = ddat->set[s].desc.doppler.frame[f].pos.cose_s[offset];
 	}
-	__syncthreads();
 }
 __global__ void dbg_print_cos_af_krnl(struct dat_t *ddat, float *cos0, float *cos1,
 		float *cos2, float *cos3, int s, int size) {
@@ -129,7 +112,6 @@ __global__ void dbg_print_cos_af_krnl(struct dat_t *ddat, float *cos0, float *co
 			cos3[offset] = ddat->set[s].desc.doppler.frame[3].pos.cose_s[offset];
 		}
 	}
-	__syncthreads();
 }
 __global__ void dbg_print_fit_deldop_krnl2(struct dat_t *ddat, double *fit, int s, int f){
 	/* ndel*ndop-threaded kernel */
@@ -195,20 +177,19 @@ void dbg_print_fit_host(struct dat_t *ddat, int s, int f) {
 	int idop, nThreads;
 	FILE *fp_fit;
 	char *filename_fit;
-	filename_fit = "dbg_fit_std.csv";
+	filename_fit = "CPU_doppler_fit.csv";
 	nThreads = (ddat->set[s].desc.doppler.frame[f].pos.xlim[1]-
 			ddat->set[s].desc.doppler.frame[f].pos.xlim[0]+1)*
 					(ddat->set[s].desc.doppler.frame[f].pos.ylim[1]-
 							ddat->set[s].desc.doppler.frame[f].pos.ylim[0]+1);
 
 	printf("\n %sfile created",filename_fit);
-	printf("\n\nFilename: %s",filename_fit);
 	fp_fit = fopen(filename_fit, "w+");
 
 	fprintf(fp_fit, "idel , ");
 
 	for (idop=1; idop<=ddat->set[s].desc.doppler.frame[f].ndop; idop++)
-		fprintf(fp_fit,	"\n%i , %g", idop, ddat->set[s].desc.doppler.frame->fit[idop]);
+		fprintf(fp_fit,	"\n%i , %g", idop, ddat->set[s].desc.doppler.frame[f].fit[idop]);
 
 	fprintf(fp_fit, "\nxlim0 , %i", ddat->set[s].desc.doppler.frame[f].pos.xlim[0]);
 	fprintf(fp_fit, "\nxlim1 , %i", ddat->set[s].desc.doppler.frame[f].pos.xlim[1]);
@@ -287,15 +268,14 @@ __host__ void dbg_print_deldop_fit(struct dat_t *ddat, int s, int f) {
 	//cudaFree(fit_dd);
 }
 __host__ void dbg_print_deldop_fit_host(struct dat_t *ddat, int s, int f) {
-	/* Debug function that prints all Doppler frame fit values to csv */
+	/* Debug function that prints all Delay-Doppler frame fit values to csv */
 
 	int idop, ndop, idel, ndel, nThreads, xlim[2], ylim[2];
 	FILE *fp_fit;
 	char *filename_fit;
 
-	filename_fit = "dbg_fit_std.csv";
+	filename_fit = "CPU_deldop_fit.csv";
 	printf("\n %sfile created",filename_fit);
-	printf("\n\nFilename: %s",filename_fit);
 
 	for (idop=0;idop<2;idop++){
 		xlim[idop] = ddat->set[s].desc.deldop.frame[f].pos.xlim[idop];

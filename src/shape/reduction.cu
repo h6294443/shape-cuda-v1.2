@@ -1702,6 +1702,13 @@ __global__ void deldop_xsec_set_finalize_krnl(struct dat_t *ddat,
 				reduction_sum_rad_xsec += xsec[f]*ddat->set[s].desc.deldop.frame[f].weight;
 		}
 	}
+__global__ void c2af_set_data_krnl(float **input, float *d_idata, int frm, int frmsz) {
+	/* frmsz-threaded kernel */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	if (offset < frmsz) {
+		d_idata[offset] = input[frm][offset];
+	}
+}
 __host__ float compute_deldop_xsec_pr6(struct dat_t *ddat, int ndel, int ndop,
 		int set, int frm) {
 	/* Function calculates a delay-Doppler frame's radar cross section with
@@ -1709,8 +1716,8 @@ __host__ float compute_deldop_xsec_pr6(struct dat_t *ddat, int ndel, int ndop,
 	 * shape).  The function returns the cross section as a float 	 */
 
 	int s, size = ndel*ndop;		// array size
-	int maxThreads = 256;		// max # of threads per block
-	int maxBlocks = 256;		// max # of blocks per grid
+	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
+	int maxBlocks = 2048;		// max # of blocks per grid
 	int whichKernel = 6;		// id of reduction kernel
 	int numBlocks = 0;			// initialize numBlocks
 	int numThreads = 0;			// initialize numThreads
@@ -1786,7 +1793,7 @@ __host__ float compute_deldop_xsec_snglkrnl(struct dat_t *ddat, int ndel, int nd
 
 	int size = ndel*ndop;		// array size
 	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
-	int maxBlocks = 512;		// max # of blocks per grid
+	int maxBlocks = 2048;		// max # of blocks per grid
 	int numBlocks = 0;			// initialize numBlocks
 	int numThreads = 0;			// initialize numThreads
 	float xsec = 0.0;			// radar cross section; return value
@@ -1830,7 +1837,7 @@ __host__ float compute_deldop_xsec_all_frames(struct dat_t *ddat, int ndel, int 
 
 	int size = ndel*ndop;		// array size
 	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
-	int maxBlocks = 1024;		// max # of blocks per grid
+	int maxBlocks = 2048;		// max # of blocks per grid
 	int numBlocks = 0;			// initialize numBlocks
 	int numThreads = 0;			// initialize numThreads
 	float *xsec, xsec_set;   	// radar cross section; return value
@@ -1893,8 +1900,8 @@ __host__ float compute_pos_zmax(struct dat_t *ddat, int size,
 	 * shape).  The function returns the cross section as a float 	 */
 
 	int s;						// array size
-	int maxThreads = 256;		// max # of threads per block
-	int maxBlocks = 256;		// max # of blocks per grid
+	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
+	int maxBlocks = 2048;		// max # of blocks per grid
 	int whichKernel = 6;		// id of reduction kernel
 	int numBlocks = 0;			// initialize numBlocks
 	int numThreads = 0;			// initialize numThreads
@@ -1967,7 +1974,7 @@ __host__ float compute_pos_zmax_all_frames(struct dat_t *ddat, int frame_size, i
 	 * Code assumes that frame_size is the same for all frames in set */
 
 	int s;						// array size
-	int maxBlocks = 1024;		// max # of blocks per grid
+	int maxBlocks = 2048;		// max # of blocks per grid
 	int numBlocks = 0;			// initialize numBlocks
 	int numThreads = 0;			// initialize numThreads
 	float *zmax, final;			// radar cross section (per frame)
@@ -2033,7 +2040,7 @@ __host__ float compute_pos_zmax_all_frames_2(struct dat_t *ddat, int size,
 
 	int s;								// array size
 	int maxThreads = maxThreadsPerBlock;// max # of threads per block
-	int maxBlocks = 1024;				// max # of blocks per grid
+	int maxBlocks = 2048;				// max # of blocks per grid
 	int whichKernel = 6;				// id of reduction kernel
 	int numBlocks = 0;					// initialize numBlocks
 	int numThreads = 0;					// initialize numThreads
@@ -2119,8 +2126,8 @@ __host__ float compute_doppler_xsec(struct dat_t *ddat, int ndop,
 	 * shape).  The function returns the cross section as a float 	 */
 
 	int s, size=ndop;			// array size
-	int maxThreads = 256;		// max # of threads per block
-	int maxBlocks = 256;		// max # of blocks per grid
+	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
+	int maxBlocks = 2048;		// max # of blocks per grid
 	int whichKernel = 6;		// id of reduction kernel
 	int numBlocks = 0;			// initialize numBlocks
 	int numThreads = 0;			// initialize numThreads
@@ -2194,8 +2201,8 @@ __host__ float compute_model_area1(struct mod_t *dmod, int c, int size) {
 	 * shape).  The function returns the cross section as a float 	 */
 
 	int s;						// array size
-	int maxThreads = 256;		// max # of threads per block
-	int maxBlocks = 256;		// max # of blocks per grid
+	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
+	int maxBlocks = 2048;		// max # of blocks per grid
 	int whichKernel = 6;		// id of reduction kernel
 	int numBlocks = 0;			// initialize numBlocks
 	int numThreads = 0;			// initialize numThreads
@@ -2270,7 +2277,7 @@ __host__ float compute_model_area(struct mod_t *dmod, int c, int size) {
 	 * shape).  The function returns the cross section as a float 	 */
 
 	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
-	int maxBlocks = 512;		// max # of blocks per grid
+	int maxBlocks = 2048;		// max # of blocks per grid
 	int numBlocks = 0;			// initialize numBlocks
 	int numThreads = 0;			// initialize numThreads
 	float area = 0.0;			// radar cross section; return value
@@ -2312,8 +2319,8 @@ __host__ void dvdI_reduce_single(struct mod_t *dmod, float *dv, float *dcom0,
 		float *dI10, float *dI11, float *dI12, float *dI20, float *dI21,
 		float *dI22, int size, int c)
 {
-	int maxThreads = 512;		// max # of threads per block
-	int maxBlocks = 512;		// max # of blocks per grid
+	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
+	int maxBlocks = 2048;		// max # of blocks per grid
 	int numBlocks = 0;			// initialize numBlocks
 	int numThreads = 0;			// initialize numThreads
 	float2 xblock_ythread;		// used for return value of getNumBlocksAndThreads
@@ -2404,8 +2411,8 @@ __host__ void compute_dv_dcom_dI_reduction(float *dv, float *dcom0, float
 	/* Function calculates the model's COM and Inertia tensors	 */
 
 	int s;						// array size
-	int maxThreads = 512;		// max # of threads per block
-	int maxBlocks = 512;		// max # of blocks per grid
+	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
+	int maxBlocks = 2048;		// max # of blocks per grid
 	int whichKernel = 6;		// id of reduction kernel
 	int numBlocks = 0;			// initialize numBlocks
 	int numThreads = 0;			// initialize numThreads
@@ -2735,4 +2742,87 @@ __host__ void compute_xlim_ylim(struct dat_t *ddat, int size,
 	cudaFree(d_odata_jmax);
 	cudaFree(d_odata_jmin);
 }
+
+__host__ void c2af_deldop_add_o2_m2(
+		float **temp_o2,
+		float **temp_m2,
+		float **temp_om,
+		int size,
+		int nframes) {
+	/* Function reduces the input arrays for nframes-frames, once per frame.
+	 * The input array is structured like this:  input[nframes][size]  */
+
+	int maxThreads = maxThreadsPerBlock;
+	int maxBlocks = 2048;
+	int numBlocks = 0;			// initialize numBlocks
+	int numThreads = 0;			// initialize numThreads
+	float *d_odata_o2, *d_odata_m2, *d_odata_om;
+	float *d_idata_o2, *d_idata_m2, *d_idata_om;
+	float2 xblock_ythread;
+
+	dim3 BLK,THD;
+	BLK.x = floor((maxThreadsPerBlock - 1 + size)/maxThreadsPerBlock);
+	THD.x = maxThreadsPerBlock; // Thread block dimensions
+
+	/* Find number of blocks & threads needed to reduce ONE FRAME ONLY */
+	xblock_ythread = getNumBlocksAndThreads(size, maxBlocks, maxThreads);
+	numBlocks = xblock_ythread.x;
+	numThreads = xblock_ythread.y;
+	dim3 dimBlock(numThreads, 1, 1);
+	dim3 dimGrid(numBlocks, 1, 1);
+
+	/* Allocate memory for d_idata and d_odata */
+	cudaCalloc((void**)&d_idata_o2, sizeof(float), size);
+	cudaCalloc((void**)&d_odata_o2,  sizeof(float), numBlocks);
+	cudaCalloc((void**)&d_idata_m2, sizeof(float), size);
+	cudaCalloc((void**)&d_odata_m2,  sizeof(float), numBlocks);
+	cudaCalloc((void**)&d_idata_om, sizeof(float), size);
+	cudaCalloc((void**)&d_odata_om,  sizeof(float), numBlocks);
+
+	for (int frm=0; frm<nframes; frm++) {
+		c2af_set_data_krnl<<<BLK,THD>>>(temp_o2, d_idata_o2, frm, size);
+		checkErrorAfterKernelLaunch("c2af_set_data_krnl in reduction.cu");
+
+		c2af_set_data_krnl<<<BLK,THD>>>(temp_m2, d_idata_m2, frm, size);
+		checkErrorAfterKernelLaunch("c2af_set_data_krnl in reduction.cu");
+
+		c2af_set_data_krnl<<<BLK,THD>>>(temp_om, d_idata_om, frm, size);
+		checkErrorAfterKernelLaunch("c2af_set_data_krnl in reduction.cu");
+
+		/* Call reduction  */
+		device_reduce_block_atomic_kernel<<< dimGrid, dimBlock>>>(d_idata_o2,
+				d_odata_o2, size);
+		checkErrorAfterKernelLaunch("device_reduce_block_atomic_kernel");
+
+		device_reduce_block_atomic_kernel<<< dimGrid, dimBlock>>>(d_idata_m2,
+				d_odata_m2, size);
+		checkErrorAfterKernelLaunch("device_reduce_block_atomic_kernel");
+
+		device_reduce_block_atomic_kernel<<< dimGrid, dimBlock>>>(d_idata_om,
+				d_odata_om, size);
+		checkErrorAfterKernelLaunch("device_reduce_block_atomic_kernel");
+
+		deviceSyncAfterKernelLaunch("device_reduce_block_atomic_kernel");
+
+		temp_o2[frm][0] = d_odata_o2[0];
+		temp_m2[frm][0] = d_odata_m2[0];
+		temp_om[frm][0] = d_odata_om[0];
+
+		gpuErrchk(cudaMemset(d_odata_o2, 0, numBlocks*sizeof(float)));
+		gpuErrchk(cudaMemset(d_odata_m2, 0, numBlocks*sizeof(float)));
+		gpuErrchk(cudaMemset(d_odata_om, 0, numBlocks*sizeof(float)));
+
+	}
+	/* Output sum for each frame is in first entry for each frame in the
+	 * input array	 */
+
+	cudaFree(d_odata_o2);
+	cudaFree(d_idata_o2);
+	cudaFree(d_odata_m2);
+	cudaFree(d_idata_m2);
+	cudaFree(d_odata_om);
+	cudaFree(d_idata_om);
+
+}
 //#endif // #ifndef _REDUCE_KERNEL_H_
+

@@ -243,10 +243,10 @@ int read_doppler( FILE *fp, struct par_t *par, struct doppler_t *doppler,
 		int nradlaws, int s, double *chi2_variance);
 void set_up_pos( struct par_t *par, struct dat_t *dat);
 void set_up_pos_cuda(struct par_t *par, struct dat_t *dat);
-/* int read_poset( FILE *fp, struct par_t *par, struct poset_t *poset,
+int read_poset( FILE *fp, struct par_t *par, struct poset_t *poset,
                           int noptlaws, int s, double *chi2_variance);
 int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
-                            int noptlaws, int s, double *chi2_variance); */
+                            int noptlaws, int s, double *chi2_variance);
 
 void read_deldop_ascii(FILE *fin, struct deldop_t *deldop, int iframe,
 		int idel_use[2], int idop_use[2]);
@@ -263,9 +263,9 @@ void read_doppler_binary(FILE *fin, struct doppler_t *doppler, int iframe,
 void read_doppler_rdf(FILE *fin, struct doppler_t *doppler, int iframe,
 		int idop_use[2], int swap_bytes);
 /* void read_doppler_fits(char *filename, struct doppler_t *doppler, int iframe,
-                                       int idop_use[2]);
+                                       int idop_use[2]); */
 void read_poset_fits(char *filename, struct poset_t *poset, int iframe,
-                                     int irow_use[2], int icol_use[2], int read_data); */
+                                     int irow_use[2], int icol_use[2], int read_data);
 
 
 int read_dat( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
@@ -349,20 +349,20 @@ int read_dat( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			dat->sum_rad_xsec_weights += dat->set[s].desc.deldop.sum_rad_xsec_weights;
 			dat->sum_cos_subradarlat_weights += dat->set[s].desc.deldop.sum_cos_subradarlat_weights;
 		}
-		/*else if (!strcmp( str, "plane-of-sky")) {
-      dat->set[s].type = POS;
-      npar += read_poset( fp, par, &dat->set[s].desc.poset, mod->photo.noptlaws,
-                          s, &chi2_variance);
-      dat->dof_poset += dat->set[s].desc.poset.dof;
-    }
-    else if (!strcmp( str, "lightcurve")) {
-      dat->set[s].type = LGHTCRV;
-      npar += read_lghtcrv( fp, par, &dat->set[s].desc.lghtcrv, mod->photo.noptlaws,
-                            s, &chi2_variance);
-      dat->dof_lghtcrv += dat->set[s].desc.lghtcrv.dof;
-      dat->sum_opt_brightness_weights +=
-                  dat->set[s].desc.lghtcrv.sum_opt_brightness_weights;
-    }*/
+		else if (!strcmp( str, "plane-of-sky")) {
+			dat->set[s].type = POS;
+			npar += read_poset( fp, par, &dat->set[s].desc.poset, mod->photo.noptlaws,
+					s, &chi2_variance);
+			dat->dof_poset += dat->set[s].desc.poset.dof;
+		}
+		else if (!strcmp( str, "lightcurve")) {
+			dat->set[s].type = LGHTCRV;
+			npar += read_lghtcrv( fp, par, &dat->set[s].desc.lghtcrv, mod->photo.noptlaws,
+					s, &chi2_variance);
+			dat->dof_lghtcrv += dat->set[s].desc.lghtcrv.dof;
+			dat->sum_opt_brightness_weights +=
+					dat->set[s].desc.lghtcrv.sum_opt_brightness_weights;
+		}
 		else {
 			printf("ERROR: Can't handle type '%s' for dataset %d\n", str, s);
 			bailout("read_dat.c\n");
@@ -422,7 +422,7 @@ int read_deldop( FILE *fp, struct par_t *par, struct deldop_t *deldop,
 	/*  Read the asteroid ephemeris*/
 
 	deldop->astephem.n = getint( fp);  //# of points in ephemeris
-	/*=======================================================================*/
+	/*==BLK=====================================================================*/
 	if (CUDA)
 		cudaCalloc((void**)&deldop->astephem.pnt, sizeof(struct ephpnt_t),
 				deldop->astephem.n);
@@ -827,19 +827,6 @@ int read_deldop( FILE *fp, struct par_t *par, struct deldop_t *deldop,
 
     printf("#     %s\n", fullname);
     fflush(stdout);
-
-
-    /* Copy the double arrays obs and oneovervar to their single equivalents */
-//    if (CUDA) {
-//    	int idel, idop, ndel, off;
-//    	ndel = deldop->frame[i].ndel;
-//    	for (idel=1; idel<=ndel; idel++)
-//    		for (idop=1; idop<=deldop->frame[i].ndop; idop++) {
-//    			off = (idop-1)*ndel + (idel-1);
-//    			deldop->frame[i].obs_s[off] = deldop->frame[i].obs[idel][idop];
-//    			deldop->frame[i].oneovervar_s[off] = deldop->frame[i].oneovervar[idel][idop];
-//    		}
-//    }
 	}
 	return npar;
 }
@@ -1207,29 +1194,6 @@ int read_doppler( FILE *fp, struct par_t *par, struct doppler_t *doppler,
 		printf("#     %s\n", fullname);
 		fflush(stdout);
 	}
-/*xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx*/
-	/* Start debug */
-	int debug = 0;
-	if (debug) {
-
-		int idop;
-		FILE *fp_oov;
-		char *filename_oov;
-		filename_oov = "dbg_oov_std.csv";
-
-		printf("\n %sfile created",filename_oov);
-		printf("\n\nFilename: %s",filename_oov);
-		fp_oov = fopen(filename_oov, "w+");
-		fprintf(fp_oov, "idop , ");
-		for (idop=1; idop<=doppler->frame[0].ndop; idop++)
-			fprintf(fp_oov, "\n%i , %g", idop, doppler->frame[0].oneovervar[idop]);
-
-		fclose(fp_oov);
-	}
-	/* End debug */
-/*xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx*/
-
-
 	return npar;
 }
 
@@ -1929,60 +1893,56 @@ void set_up_pos_cuda( struct par_t *par, struct dat_t *dat)
 }
 
 
-/*
+
 int read_poset( FILE *fp, struct par_t *par, struct poset_t *poset,
                           int noptlaws, int s, double *chi2_variance)
 {
-  int i, j, npar=0, k, jskip, kskip, bistatic=0, irow_use[2], icol_use[2],
-      nrow_raw, ncol_raw, nrow, ncol, n, nmaskvals;
-  char fullname[160], smearingstring[7], pixweightfile[MAXLEN];
-  FILE *wp=0;
-  double dist, dof, **pixweight=NULL;
+	int i, j, npar=0, k, jskip, kskip, bistatic=0, irow_use[2], icol_use[2],
+			nrow_raw, ncol_raw, nrow, ncol, n, nmaskvals;
+	char fullname[160], smearingstring[7], pixweightfile[MAXLEN];
+	FILE *wp=0;
+	double dist, dof, **pixweight=NULL;
 
-    Initialize degrees of freedom and variance of chi2 estimate
+	/* Initialize degrees of freedom and variance of chi2 estimate*/
+	poset->dof = 0.0;
+	*chi2_variance = 0.0;
 
-  poset->dof = 0.0;
- *chi2_variance = 0.0;
+	/* Read which optical scattering law to use for this dataset*/
+	poset->ioptlaw = getint( fp);
+	if (poset->ioptlaw < 0 || poset->ioptlaw >= noptlaws) {
+		printf("ERROR in set %d: must have 0 <= optical scattering law <= %d\n",
+				s, noptlaws-1);
+		bailout("read_poset in read_dat.c\n");
+	}
 
-    Read which optical scattering law to use for this dataset
-
-  poset->ioptlaw = getint( fp);
-  if (poset->ioptlaw < 0 || poset->ioptlaw >= noptlaws) {
-    printf("ERROR in set %d: must have 0 <= optical scattering law <= %d\n",
-           s, noptlaws-1);
-    bailout("read_poset in read_dat.c\n");
-  }
-
-    Read the asteroid ephemeris
-
-  poset->astephem.n = getint( fp);  # of points in ephemeris
-  /*=======================================================================
+	/* Read the asteroid ephemeris */
+	poset->astephem.n = getint( fp); // # of points in ephemeris
+	/*=======================================================================*/
 	if (CUDA)
 		cudaCalloc((void**)&poset->astephem.pnt, sizeof(struct ephpnt_t),
-			poset->astephem.n);
+				poset->astephem.n);
 	else
 		poset->astephem.pnt = (struct ephpnt_t *) calloc( poset->astephem.n,
-        	sizeof( struct ephpnt_t));
-	/*=======================================================================
+				sizeof( struct ephpnt_t));
+	/*=======================================================================*/
 
-  for (i=0; i<poset->astephem.n; i++) {
-    rdcal2jd( fp, &poset->astephem.pnt[i].t);
-    poset->astephem.pnt[i].ra = getdouble( fp)*D2R;
-    poset->astephem.pnt[i].dec = getdouble( fp)*D2R;
-    poset->astephem.pnt[i].dist = getdouble( fp);
-  }
+	for (i=0; i<poset->astephem.n; i++) {
+		rdcal2jd( fp, &poset->astephem.pnt[i].t);
+		poset->astephem.pnt[i].ra = getdouble( fp)*D2R;
+		poset->astephem.pnt[i].dec = getdouble( fp)*D2R;
+		poset->astephem.pnt[i].dist = getdouble( fp);
+	}
 
-    Read the solar ephemeris
-
-  poset->solephem.n = getint( fp);  # of points in ephemeris
-  /*=======================================================================
+	/*Read the solar ephemeris*/
+	poset->solephem.n = getint( fp); /* # of points in ephemeris*/
+	/*=======================================================================*/
 	if (CUDA)
 		cudaCalloc((void**)&poset->solephem.pnt, sizeof(struct ephpnt_t),
 			poset->solephem.n);
 	else
 		poset->solephem.pnt = (struct ephpnt_t *) calloc( poset->solephem.n,
         	sizeof( struct ephpnt_t));
-	/*=======================================================================
+	/*=======================================================================*/
 
   for (i=0; i<poset->solephem.n; i++) {
     rdcal2jd( fp, &poset->solephem.pnt[i].t);
@@ -1992,16 +1952,14 @@ int read_poset( FILE *fp, struct par_t *par, struct poset_t *poset,
       bistatic = 1;
   }
 
-    Input angular pixel size in arcseconds, convert to radians
-
+  /* Input angular pixel size in arcseconds, convert to radians*/
   poset->angle_per_pixel = (getdouble( fp)/3600)*D2R;
 
-    Read smearing information
-
-  poset->nviews = getint( fp);  # views per frame
-  poset->view_interval = getdouble( fp);  view interval (s)
-  poset->view_interval /= 86400;  convert to days
-  gettstr( fp, smearingstring);    smearing mode
+  /* Read smearing information*/
+  poset->nviews = getint( fp); /* # views per frame*/
+  poset->view_interval = getdouble( fp); /* view interval (s) */
+  poset->view_interval /= 86400;  /* convert to days*/
+  gettstr( fp, smearingstring);   /* smearing mode*/
   if (!strcmp(smearingstring, "center")) {
       poset->smearing_mode = SMEAR_CENTER;
       poset->v0 = poset->nviews / 2;
@@ -2012,74 +1970,65 @@ int read_poset( FILE *fp, struct par_t *par, struct poset_t *poset,
       bailout("read_poset in read_dat.c: can't do that smearing mode yet\n");
   }
 
-    Get the data directory and the number of frames in the dataset
-
+  /* Get the data directory and the number of frames in the dataset */
   gettstr( fp, poset->dir);
   poset->nframes = getint( fp);
-  /*=======================================================================
+  /*=======================================================================*/
 	if (CUDA)
 		cudaCalloc((void**)&poset->frame, sizeof(struct posetfrm_t *),
 			poset->nframes);
 	else
 		poset->frame = (struct posetfrm_t *) calloc( poset->nframes,
 			sizeof(struct posetfrm_t));
-	/*=======================================================================
+	/*=======================================================================*/
 
   for (i=0; i<poset->nframes; i++)
-    /*=======================================================================
+    /*=======================================================================*/
 	if (CUDA)
 		cudaCalloc((void**)&poset->frame[i].view, sizeof(struct posetview_t),
 			poset->nviews);
 	else
 		poset->frame[i].view = (struct posetview_t *)
         	calloc( poset->nviews, sizeof(struct posetview_t));
-	/*=======================================================================
+	/*=======================================================================*/
 
-    Loop through the frames
-
+  /* Loop through the frames */
   for (i=0; i<poset->nframes; i++) {
-    gettstr( fp, poset->frame[i].name);  name of data file
+    gettstr( fp, poset->frame[i].name);  /*name of data file*/
     sprintf( fullname, "%s/%s", poset->dir, poset->frame[i].name);
     rdcal2jd( fp, &poset->frame[i].t0);
 
-      Read angle at which north points (counter-clockwise from upward)
-
+    /* Read angle at which north points (counter-clockwise from upward)*/
     poset->frame[i].northangle = getdouble( fp)*D2R;
 
-      The calibration factor is no longer in the obs file,
-        so force it to float and assign it a dummy value
-
+    /* The calibration factor is no longer in the obs file, so force it to
+     * float and assign it a dummy value*/
     poset->frame[i].cal.state = 'f';
     poset->frame[i].cal.val = -9.99;
 
-      Read the x offset (columns) and y offset (rows) of the COM for this frame
-
+    /* Read the x offset (columns) and y offset (rows) of the COM for this frame*/
     npar += readparam( fp, &poset->frame[i].off[0]);
     npar += readparam( fp, &poset->frame[i].off[1]);
 
-      Read this frame's relative weight and the pixel-weighting "mask" flag
-
+    /* Read this frame's relative weight and the pixel-weighting "mask" flag */
     poset->frame[i].weight = getdouble( fp);
     poset->frame[i].pixels_weighted = getint( fp);
 
-      Get the raw image dimensions from the image file
-
+    /*  Get the raw image dimensions from the image file*/
     read_poset_fits(fullname, poset, i, icol_use, irow_use, 0);
     ncol_raw = poset->frame[i].ncol;
     nrow_raw = poset->frame[i].nrow;
 
-      If a pixel-weighting mask is being used, read it in;
-        then get the frame's vignetted dimensions and degrees of freedom
-
+    /* If a pixel-weighting mask is being used, read it in. Then get frame's
+     * vignetted dimensions and degrees of freedom */
     dof = 0.0;
     if (poset->frame[i].pixels_weighted) {
-
-          Open the mask file, count the entries, and make sure that it's the
+    	/*  Open the mask file, count the entries, and make sure that it's the
             expected number of entries (in case someone has changed the numbering
             of datasets without changing mask filenames accordingly) 
 
             Note that the countdata routine resets the file position indicator to
-            its initial value after it finishes reading data entries
+            its initial value after it finishes reading data entries*/
 
         if (strcmp( par->maskdir, "")) {
             if (poset->nframes > 100)
@@ -2102,11 +2051,11 @@ int read_poset( FILE *fp, struct par_t *par, struct poset_t *poset,
           bailout("read_poset in read_dat.c\n");
         }
 
-          Allocate memory for the mask values and read them in.
-
+        /* Allocate memory for the mask values and read them in.
             Note that plane-of-sky image arrays have columns as the first
-            index and rows as the second: see comment in read_poset_fits.
-
+            index and rows as the second: see comment in read_poset_fits.*/
+        /* This need not be a CUDA allocation as pixweight is only used
+         * temporarily within this function.         */
         pixweight = matrix( 1, ncol_raw, 1, nrow_raw);
         icol_use[0] = ncol_raw + 1;
         icol_use[1] = 0;
@@ -2116,23 +2065,23 @@ int read_poset( FILE *fp, struct par_t *par, struct poset_t *poset,
           for (j=1; j<=ncol_raw; j++) {
             pixweight[j][k] = getdouble( wp);
             if (pixweight[j][k] > 0.0) {
-              dof += poset->frame[i].weight;
- *chi2_variance += 2 * poset->frame[i].weight * poset->frame[i].weight;
-              icol_use[0] = MIN( icol_use[0], j);
-              icol_use[1] = MAX( icol_use[1], j);
-              irow_use[0] = MIN( irow_use[0], k);
-              irow_use[1] = MAX( irow_use[1], k);
+            	dof += poset->frame[i].weight;
+            	*chi2_variance += 2 * poset->frame[i].weight * poset->frame[i].weight;
+            	icol_use[0] = MIN( icol_use[0], j);
+            	icol_use[1] = MAX( icol_use[1], j);
+            	irow_use[0] = MIN( irow_use[0], k);
+            	irow_use[1] = MAX( irow_use[1], k);
             }
           }
         fclose( wp);
     } else {
-        dof = poset->frame[i].weight * ncol_raw * nrow_raw;
- *chi2_variance += 2 * poset->frame[i].weight * poset->frame[i].weight
- * ncol_raw * nrow_raw;
-        icol_use[0] = 1;
-        icol_use[1] = ncol_raw;
-        irow_use[0] = 1;
-        irow_use[1] = nrow_raw;
+    	dof = poset->frame[i].weight * ncol_raw * nrow_raw;
+    	*chi2_variance += 2 * poset->frame[i].weight * poset->frame[i].weight
+    			* ncol_raw * nrow_raw;
+    	icol_use[0] = 1;
+    	icol_use[1] = ncol_raw;
+    	irow_use[0] = 1;
+    	irow_use[1] = nrow_raw;
     }
     poset->frame[i].dof = dof;
     poset->dof += dof;
@@ -2141,22 +2090,48 @@ int read_poset( FILE *fp, struct par_t *par, struct poset_t *poset,
     poset->frame[i].colcom_vig = (ncol_raw + 1)/2.0 - icol_use[0] + 1;
     poset->frame[i].rowcom_vig = (nrow_raw + 1)/2.0 - irow_use[0] + 1;
 
-      If this node handles this dataset,
-        allocate memory for observed data and fits
+    if (CUDA) {
+    	/* Allocate single pointers and outer loop of double pointers */
+    	cudaCalloc((void**)&poset->frame[i].obs.b, 		sizeof(double*), ncol);
+    	cudaCalloc((void**)&poset->frame[i].fit.b, 		sizeof(double*), ncol);
+    	cudaCalloc((void**)&poset->frame[i].fit.z, 		sizeof(double*), ncol);
+    	cudaCalloc((void**)&poset->frame[i].oneovervar, sizeof(double*), ncol);
+    	cudaCalloc((void**)&poset->frame[i].fit.f, 		sizeof(int*),	 ncol);
 
-    //    if (mpi_rank == mpi_setlist[s]) {
-    poset->frame[i].obs.b = matrix( 1, ncol, 1, nrow);
-    poset->frame[i].fit.b = matrix( 1, ncol, 1, nrow);
-    poset->frame[i].fit.z = matrix( 1, ncol, 1, nrow);
-    poset->frame[i].fit.f = imatrix( 1, ncol, 1, nrow);
-    poset->frame[i].oneovervar = matrix( 1, ncol, 1, nrow);
+    	/* Offset addressing if needed */
+    	poset->frame[i].obs.b 		-= 1;
+    	poset->frame[i].fit.b 		-= 1;
+    	poset->frame[i].fit.z 		-= 1;
+    	poset->frame[i].fit.f 		-= 1;
+    	poset->frame[i].oneovervar 	-= 1;
 
-      Now read in the pixel values
+    	/* Allocate inner loop of double pointers and offset addressing*/
+    	for (int j=0; j<ncol; ncol++) {
+    		cudaCalloc((void**)&poset->frame[i].obs.b[j],sizeof(double), nrow);
+    		cudaCalloc((void**)&poset->frame[i].fit.b[j],sizeof(double), ncol);
+    		cudaCalloc((void**)&poset->frame[i].fit.z[j],sizeof(double), ncol);
+    		cudaCalloc((void**)&poset->frame[i].oneovervar[j], sizeof(double), ncol);
+    		cudaCalloc((void**)&poset->frame[i].fit.f[j],sizeof(int),	 ncol);
 
+    		poset->frame[i].obs.b[j] 		-= 1;
+    		poset->frame[i].fit.b[j]		-= 1;
+    		poset->frame[i].fit.z[j] 		-= 1;
+    		poset->frame[i].fit.f[j]		-= 1;
+    		poset->frame[i].oneovervar[j] 	-= 1;
+    	}
+    }
+    else { /* Not CUDA - standard CPU allocations */
+    	poset->frame[i].obs.b = matrix( 1, ncol, 1, nrow);
+    	poset->frame[i].fit.b = matrix( 1, ncol, 1, nrow);
+    	poset->frame[i].fit.z = matrix( 1, ncol, 1, nrow);
+    	poset->frame[i].fit.f = imatrix( 1, ncol, 1, nrow);
+    	poset->frame[i].oneovervar = matrix( 1, ncol, 1, nrow);
+    }
+
+    /* Now read in the pixel values*/
     read_poset_fits(fullname, poset, i, icol_use, irow_use, 1);
 
-      Apply pixel weighting (if any)
-
+    /* Apply pixel weighting (if any)*/
     jskip = icol_use[0] - 1;
     kskip = irow_use[0] - 1;
 
@@ -2166,29 +2141,25 @@ int read_poset( FILE *fp, struct par_t *par, struct poset_t *poset,
     			poset->frame[i].oneovervar[j][k] = pixweight[j+jskip][k+kskip];
     		else
     			poset->frame[i].oneovervar[j][k] = 1.0;
-    //    } // end if block
 
-      Free memory for the pixel-weighting mask
-
+    /*  Free memory for the pixel-weighting mask*/
     if (poset->frame[i].pixels_weighted)
       free_matrix( pixweight, 1, ncol_raw, 1, nrow_raw);
 
-      Loop through all views contributing to this (smeared) frame
-
+    /* Loop through all views contributing to this (smeared) frame*/
     for (k=0; k<poset->nviews; k++) {
 
-        Compute the epoch of this view, uncorrected for light-travel time
+    	/* Compute the epoch of this view, uncorrected for light-travel time*/
+    	poset->frame[i].view[k].t = poset->frame[i].t0
+    			+ (k - poset->v0)*poset->view_interval;
 
-      poset->frame[i].view[k].t = poset->frame[i].t0
-                                    + (k - poset->v0)*poset->view_interval;
-
-        Use this dataset's ephemeris (and linear interpolation) to get the target's
+    	/*Use this dataset's ephemeris (and linear interpolation) to get the target's
           distance (AU) at this view's epoch.  Also compute frame[i].view[k].oe, the
           transformation matrix from ecliptic to observer coordinates at that epoch;
           frame[i].view[k].se, the transformation matrix from ecliptic to source (solar)
           coordinates; frame[i].view[k].orbspin, the plane-of-sky-motion contribution to
           the apparent spin vector at that epoch (in ecliptic coordinates); and the
-          solar phase angle and azimuth angle (north through east).
+          solar phase angle and azimuth angle (north through east).*/
 
       dist = ephem2mat( poset->astephem, poset->solephem,
                         poset->frame[i].view[k].t,
@@ -2197,11 +2168,10 @@ int read_poset( FILE *fp, struct par_t *par, struct poset_t *poset,
                         &poset->frame[i].view[k].solar_phase,
                         &poset->frame[i].view[k].solar_azimuth, bistatic);
 
-        If the perform_ltc parameter is turned on, use the distance
+      /* If the perform_ltc parameter is turned on, use the distance
           just obtained to subtract the one-way light-travel time from
           this view's epoch; then go back to the ephemeris and recompute
-          the various quantities for the corrected epoch.
-
+          the various quantities for the corrected epoch.*/
       if (par->perform_ltc) {
         poset->frame[i].view[k].t -= DAYSPERAU*dist;
         ephem2mat( poset->astephem, poset->solephem,
@@ -2211,26 +2181,21 @@ int read_poset( FILE *fp, struct par_t *par, struct poset_t *poset,
                    &poset->frame[i].view[k].solar_phase,
                    &poset->frame[i].view[k].solar_azimuth, bistatic);
       }
-
     }
 
-      Convert angular pixel size to linear pixel size
-
+    /* Convert angular pixel size to linear pixel size*/
     poset->frame[i].fit.km_per_pixel = poset->angle_per_pixel*(dist*AU);
 
-      Initialize quantities related to spin impulses
-
+    /* Initialize quantities related to spin impulses*/
     poset->frame[i].n_integrate = -999;
     for (n=0; n<MAXIMP+2; n++) {
       poset->frame[i].t_integrate[n] = -HUGENUMBER;
       for (j=0; j<=2; j++)
         poset->frame[i].impulse[n][j] = 0.0;
     }
-
     printf("#     %s\n", fullname);
     fflush(stdout);
   }
-
   return npar;
 }
 
@@ -2245,13 +2210,11 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
          t1, t2, dt, obsepoch, obsmag, obsmagerr, obsintens, obsintenserr;
   double *obsepoch_raw, *obsepoch_unique;
 
-    Initialize some variables to avoid compilation warnings
-
+  /*  Initialize some variables to avoid compilation warnings*/
   t1 = t2 = dt = 0.0;
   obsepoch_raw = NULL;
 
-    Read which optical scattering law to use for this dataset
-
+  /*  Read which optical scattering law to use for this dataset*/
   lghtcrv->ioptlaw = getint( fp);
   if (lghtcrv->ioptlaw < 0 || lghtcrv->ioptlaw >= noptlaws) {
     printf("ERROR in set %d: must have 0 <= optical scattering law <= %d\n",
@@ -2259,17 +2222,16 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
     bailout("read_lghtcrv in read_dat.c\n");
   }
 
-    Read the asteroid ephemeris
-
-  lghtcrv->astephem.n = getint( fp);  # of points in ephemeris
-  /*=======================================================================
+  /*  Read the asteroid ephemeris*/
+  lghtcrv->astephem.n = getint( fp); /* # of points in ephemeris*/
+  /*=========================================================================*/
 	if (CUDA)
-		cudaCalloc((void**)&lightcrv->astephem.pnt, sizeof(struct ephpnt_t),
-			lightcrv->astephem.n);
+		cudaCalloc((void**)&lghtcrv->astephem.pnt, sizeof(struct ephpnt_t),
+			lghtcrv->astephem.n);
 	else
 		lghtcrv->astephem.pnt = (struct ephpnt_t *) calloc( lghtcrv->astephem.n,
         	sizeof( struct ephpnt_t));
-	/*=======================================================================
+	/*=======================================================================*/
 
   for (i=0; i<lghtcrv->astephem.n; i++) {
     rdcal2jd( fp, &lghtcrv->astephem.pnt[i].t);
@@ -2278,17 +2240,16 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
     lghtcrv->astephem.pnt[i].dist = getdouble( fp);
   }
 
-    Read the solar ephemeris
-
-  lghtcrv->solephem.n = getint( fp);  # of points in ephemeris
-  /*=======================================================================
+  /*  Read the solar ephemeris*/
+  lghtcrv->solephem.n = getint( fp); /* # of points in ephemeris*/
+  /*=========================================================================*/
 	if (CUDA)
-		cudaCalloc((void**)&lightcrv->solephem.pnt, sizeof(struct ephpnt_t),
-			lightcrv->solephem.n);
+		cudaCalloc((void**)&lghtcrv->solephem.pnt, sizeof(struct ephpnt_t),
+			lghtcrv->solephem.n);
 	else
 		lghtcrv->solephem.pnt = (struct ephpnt_t *) calloc( lghtcrv->solephem.n,
         	sizeof( struct ephpnt_t));
-	/*=======================================================================
+	/*=======================================================================*/
 
   for (i=0; i<lghtcrv->solephem.n; i++) {
     rdcal2jd( fp, &lghtcrv->solephem.pnt[i].t);
@@ -2297,55 +2258,71 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
     lghtcrv->solephem.pnt[i].dist = getdouble( fp);
   }
 
-    Get the number of epochs at which to calculate the model brightness:
+  /*  Get the number of epochs at which to calculate the model brightness:
           positive --> an explicit list of epochs follows
           zero     --> specification of evenly spaced epochs follows
-          negative --> use the same epochs as for the observations
+          negative --> use the same epochs as for the observations*/
 
   np = lghtcrv->ncalc_obsfile = getint( fp);
   if (np != 0)
     lghtcrv->jdstart = lghtcrv->jdstop = lghtcrv->jdinterval = -HUGENUMBER;
 
-    If the next lines explicitly or implicitly specify the calculation epochs,
+  /*  If the next lines explicitly or implicitly specify the calculation epochs,
       read them now and then generate the relevant quantities for each epoch
       (coordinate transformation matrices, POS spin components, solar phase
-      angles, solar azimuth angles in the POS)
-
+      angles, solar azimuth angles in the POS)*/
   if (np >= 0) {
     if (np > 0) {
-
-          We have an explicit list of calculated points
-
+        /*  We have an explicit list of calculated points*/
         lghtcrv->ncalc = np;
     } else {
-
-          Generate the list of calculated points from JD start/stop/interval
-
-        t1 = lghtcrv->jdstart    = getdouble( fp);   start time
-        t2 = lghtcrv->jdstop     = getdouble( fp);   stop time
-        dt = lghtcrv->jdinterval = getdouble( fp);   time step
+        /*  Generate the list of calculated points from JD start/stop/interval*/
+        t1 = lghtcrv->jdstart    = getdouble( fp);  /* start time */
+        t2 = lghtcrv->jdstop     = getdouble( fp);  /* stop time  */
+        dt = lghtcrv->jdinterval = getdouble( fp);  /* time step  */
         if (t2 < t1 || dt <= 0) {
           printf("ERROR in set %d calculation epochs: need t2 >= t1 and dt > 0\n", s);
           bailout("read_lghtcrv in read_dat.c\n");
         }
-        lghtcrv->ncalc = ((int)floor((t2 - t1)/dt)) + 1;   # points
+        lghtcrv->ncalc = ((int)floor((t2 - t1)/dt)) + 1;  /* # points*/
     }
-    lghtcrv->x0 = vector( 1, lghtcrv->ncalc);
-    lghtcrv->x = vector( 1, lghtcrv->ncalc);
-    lghtcrv->y = vector( 1, lghtcrv->ncalc);
-    lghtcrv->y2 = vector( 1, lghtcrv->ncalc);
-    lghtcrv->rotphase_calc = vector( 1, lghtcrv->ncalc);
-    lghtcrv->solar_phase = vector( 1, lghtcrv->ncalc);
-    lghtcrv->solar_azimuth = vector( 1, lghtcrv->ncalc);
+    int ncalc = lghtcrv->ncalc;
+    /* Allocate memory for CUDA and standard CPU code */
+    if (CUDA) {
+    	cudaCalloc((void**)&lghtcrv->x0, 			sizeof(double), ncalc);
+    	cudaCalloc((void**)&lghtcrv->x,  			sizeof(double), ncalc);
+    	cudaCalloc((void**)&lghtcrv->y,  			sizeof(double), ncalc);
+    	cudaCalloc((void**)&lghtcrv->y2, 			sizeof(double), ncalc);
+    	cudaCalloc((void**)&lghtcrv->rotphase_calc, sizeof(double), ncalc);
+    	cudaCalloc((void**)&lghtcrv->solar_phase,   sizeof(double), ncalc);
+    	cudaCalloc((void**)&lghtcrv->solar_azimuth, sizeof(double), ncalc);
 
-    /*=======================================================================
+    	lghtcrv->x0 		   -= 1;
+    	lghtcrv->x  		   -= 1;
+    	lghtcrv->y  		   -= 1;
+    	lghtcrv->y2 		   -= 1;
+    	lghtcrv->rotphase_calc -= 1;
+    	lghtcrv->solar_phase   -= 1;
+    	lghtcrv->solar_azimuth -= 1;
+    }
+    else {
+    	lghtcrv->x0 = vector( 1, lghtcrv->ncalc);
+    	lghtcrv->x = vector( 1, lghtcrv->ncalc);
+    	lghtcrv->y = vector( 1, lghtcrv->ncalc);
+    	lghtcrv->y2 = vector( 1, lghtcrv->ncalc);
+    	lghtcrv->rotphase_calc = vector( 1, lghtcrv->ncalc);
+    	lghtcrv->solar_phase = vector( 1, lghtcrv->ncalc);
+    	lghtcrv->solar_azimuth = vector( 1, lghtcrv->ncalc);
+    }
+
+    /*=======================================================================*/
 	if (CUDA)
-		cudaCalloc((void**)&lightcrv->rend, sizeof(struct crvrend_t),
-			lightcrv->ncalc+1);
+		cudaCalloc((void**)&lghtcrv->rend, sizeof(struct crvrend_t),
+			lghtcrv->ncalc+1);
 	else
 		lghtcrv->rend = (struct crvrend_t *) calloc( lghtcrv->ncalc+1,
         	sizeof( struct crvrend_t));
-	/*=======================================================================
+	/*=======================================================================*/
 
     if (np > 0) {
         for (i=1; i<=lghtcrv->ncalc; i++)
@@ -2367,7 +2344,7 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
                         lghtcrv->rend[i].oe, lghtcrv->rend[i].se,
                         lghtcrv->rend[i].orbspin,
                         &lghtcrv->solar_phase[i], &lghtcrv->solar_azimuth[i], 1);
-      if (par->perform_ltc) {                          apply light-time correction
+      if (par->perform_ltc) {                        /*  apply light-time correction*/
         lghtcrv->x[i] = lghtcrv->x0[i] - DAYSPERAU*dist;
         ephem2mat( lghtcrv->astephem, lghtcrv->solephem,
                    lghtcrv->x[i],
@@ -2378,12 +2355,11 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
     }
   }
 
-    Read smearing information
-
-  lghtcrv->nviews = getint( fp);  # views per point
-  lghtcrv->view_interval = getdouble( fp);  view interval (s)
-  lghtcrv->view_interval /= 86400;  convert to days
-  gettstr( fp, smearingstring);    smearing mode
+  /*  Read smearing information*/
+  lghtcrv->nviews = getint( fp); 			/* # views per point*/
+  lghtcrv->view_interval = getdouble( fp); 	/* view interval (s)*/
+  lghtcrv->view_interval /= 86400; 			/* convert to days*/
+  gettstr( fp, smearingstring);   			/* smearing mode*/
   if (!strcmp(smearingstring, "center")) {
       lghtcrv->smearing_mode = SMEAR_CENTER;
       lghtcrv->v0 = lghtcrv->nviews / 2;
@@ -2394,100 +2370,93 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
       bailout("read_lghtcrv in read_dat.c: can't do that smearing mode yet\n");
   }
 
-    Read the number of observed lightcurve points, the datafile name,
-      and the calibration factor for this lightcurve
-
+  /*  Read the number of observed lightcurve points, the datafile name,
+      and the calibration factor for this lightcurve*/
   lghtcrv->n = getint( fp);
   gettstr( fp, lghtcrv->name);
   readparam( fp, &lghtcrv->cal);
 
-    Read the relative weight for this lightcurve, compute degrees
-      of freedom contributed to this dataset, and compute weight sum
-
+  /*  Read the relative weight for this lightcurve, compute degrees
+      of freedom contributed to this dataset, and compute weight sum*/
   lghtcrv->weight = getdouble( fp);
   lghtcrv->dof = lghtcrv->weight * lghtcrv->n;
- *chi2_variance = 2 * lghtcrv->weight * lghtcrv->weight * lghtcrv->n;
+  *chi2_variance = 2 * lghtcrv->weight * lghtcrv->weight * lghtcrv->n;
   if (lghtcrv->cal.state == 'c')
-    lghtcrv->sum_opt_brightness_weights = lghtcrv->weight * lghtcrv->n;
+	  lghtcrv->sum_opt_brightness_weights = lghtcrv->weight * lghtcrv->n;
   else
-    lghtcrv->sum_opt_brightness_weights = 0.0;
+	  lghtcrv->sum_opt_brightness_weights = 0.0;
 
-    If this node handles this dataset, allocate
-      memory for quantities related to observation epochs
+  /* CUDA memory allocation and standard CPU allocation */
+  if (CUDA) {
+	  cudaCalloc((void**)&lghtcrv->t0, 			 sizeof(double), lghtcrv->n);
+	  cudaCalloc((void**)&lghtcrv->obs, 		 sizeof(double), lghtcrv->n);
+	  cudaCalloc((void**)&lghtcrv->fit, 		 sizeof(double), lghtcrv->n);
+	  cudaCalloc((void**)&lghtcrv->oneovervar, 	 sizeof(double), lghtcrv->n);
+	  cudaCalloc((void**)&lghtcrv->rotphase_obs, sizeof(double), lghtcrv->n);
+	  cudaCalloc((void**)&lghtcrv->t0, 			 sizeof(double), lghtcrv->n);
+	  cudaCalloc((void**)&lghtcrv->t, 			 sizeof(double*),lghtcrv->n);
 
-//  if (mpi_rank == mpi_setlist[s]) {
-    lghtcrv->t0 = vector( 1, lghtcrv->n);
-    lghtcrv->t = matrix( 1, lghtcrv->n, 0, lghtcrv->nviews-1);
-    lghtcrv->obs = vector( 1, lghtcrv->n);
-    lghtcrv->fit = vector( 1, lghtcrv->n);
-    lghtcrv->oneovervar = vector( 1, lghtcrv->n);
-    lghtcrv->rotphase_obs = vector( 1, lghtcrv->n);
-  //}
+	  /* Offset the outer loop of lghtcrv->t */
+	  lghtcrv->t -= 1;
 
-    If we are setting calculation epochs equal to the unique observation
-      epochs, create a vector to hold the raw observation epochs -- later
-      to be sorted so that repeated values can be skipped over.
+	  /* Do inner loop for double pointers */
+	  for (int j=0; j<lghtcrv->n; j++)
+		  cudaCalloc((void**)&lghtcrv->t, sizeof(double), lghtcrv->nviews);
+  }
+  else {
+	  lghtcrv->t0 = vector( 1, lghtcrv->n);
+	  lghtcrv->t = matrix( 1, lghtcrv->n, 0, lghtcrv->nviews-1);
+	  lghtcrv->obs = vector( 1, lghtcrv->n);
+	  lghtcrv->fit = vector( 1, lghtcrv->n);
+	  lghtcrv->oneovervar = vector( 1, lghtcrv->n);
+	  lghtcrv->rotphase_obs = vector( 1, lghtcrv->n); /* Initialize quantities related to spin impulses*/
+  }
 
+  /* If we are setting calculation epochs equal to the unique observation
+   * epochs, create a vector to hold the raw observation epochs - later to be
+   * sorted so that repeated values can be skipped over.*/
   if (np < 0)
-    obsepoch_raw = vector( 1, lghtcrv->n);
+	  obsepoch_raw = vector( 1, lghtcrv->n);
 
-    If this node handles this dataset, OR if we are setting the
-      calculation epochs equal to the unique observation epochs,
-      read the datafile for this lightcurve
-    Additional note:  this condition has been removed.
+  if (np < 0) {
+	  FOPEN( fin, lghtcrv->name, "r");
+	  i = 0;
+	  while (!feof(fin) && i < lghtcrv->n) {
+		  i++;
 
-//  if (mpi_rank == mpi_setlist[s] || np < 0) {
-  FOPEN( fin, lghtcrv->name, "r");
-  i = 0;
-  while (!feof(fin) && i < lghtcrv->n) {
-	  i++;
+		  /*  Read a single lightcurve point: epoch (JD), magnitude, rms error*/
+		  obsepoch = getdouble( fin);
+		  obsmag = getdouble( fin);
+		  obsmagerr = getdouble( fin);
 
-	    Read a single lightcurve point: epoch (JD), magnitude, rms error
+		  /*  Convert from magnitude to intensity (relative to solar intensity)*/
+		  obsintens = exp( -0.4 * LN10 * (obsmag - par->sun_appmag));
+		  obsintenserr = (0.4 * LN10 * obsmagerr) * obsintens;
 
-	  obsepoch = getdouble( fin);
-	  obsmag = getdouble( fin);
-	  obsmagerr = getdouble( fin);
+		  /*  Build up the vector containing the epochs (later to be sorted)*/
+		  if (np < 0)
+			  obsepoch_raw[i] = obsepoch;
 
-	    Convert from magnitude to intensity (relative to solar intensity)
+		  lghtcrv->t0[i] = obsepoch;
+		  lghtcrv->obs[i] = obsintens;
+		  lghtcrv->oneovervar[i] = 1.0/(obsintenserr*obsintenserr);   /* 1/variance*/
 
-	  obsintens = exp( -0.4 * LN10 * (obsmag - par->sun_appmag));
-	  obsintenserr = (0.4 * LN10 * obsmagerr) * obsintens;
+		  /*  Loop through all views contributing to this (smeared) observed point*/
+		  for (k=0; k<lghtcrv->nviews; k++) {
+			  /*  Compute the epoch of this view, uncorrected for light-travel time*/
+			  lghtcrv->t[i][k] = lghtcrv->t0[i] + (k - lghtcrv->v0) *
+					  lghtcrv->view_interval;
 
-	    Build up the vector containing the epochs (later to be sorted)
-
-	  if (np < 0)
-		  obsepoch_raw[i] = obsepoch;
-
-	    If this is the node which handles this dataset, get the
-          necessary observation-related quantities for this point
-	    Additional note:  condition removed.
-
-	  //	  if (mpi_rank == mpi_setlist[s]) {
-	  lghtcrv->t0[i] = obsepoch;
-	  lghtcrv->obs[i] = obsintens;
-	  lghtcrv->oneovervar[i] = 1.0/(obsintenserr*obsintenserr);    1/variance
-
-	    Loop through all views contributing to this (smeared) observed point
-
-	  for (k=0; k<lghtcrv->nviews; k++) {
-
-		    Compute the epoch of this view, uncorrected for light-travel time
-
-		  lghtcrv->t[i][k] = lghtcrv->t0[i]
-		                                     + (k - lghtcrv->v0)*lghtcrv->view_interval;
-
-		    Correct for one-way light-travel time if desired
-
-		  if (par->perform_ltc) {
-			  dist = ephem2mat( lghtcrv->astephem, lghtcrv->solephem,
-					  lghtcrv->t[i][k],
-					  oe, se, orbspin, &solar_phase, &solar_azimuth, 1);
-			  lghtcrv->t[i][k] -= DAYSPERAU*dist;
+			  /*  Correct for one-way light-travel time if desired*/
+			  if (par->perform_ltc) {
+				  dist = ephem2mat( lghtcrv->astephem, lghtcrv->solephem,
+						  lghtcrv->t[i][k],
+						  oe, se, orbspin, &solar_phase, &solar_azimuth, 1);
+				  lghtcrv->t[i][k] -= DAYSPERAU*dist;
+			  }
 		  }
 	  }
-	  //	  } // end if block
-  }
-  if (i != lghtcrv->n) {
+	  if (i != lghtcrv->n) {
 	  printf("ERROR: fix obs file: %d lightcurve pts, not %d, were read for dataset %d\n",
 			  i, lghtcrv->n, s);
 	  bailout("read_lghtcrv in read_dat.c\n");
@@ -2497,11 +2466,10 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
 	  bailout("read_lghtcrv in read_dat.c\n");
   }
   fclose( fin);
-  //  } // end if block
+  }
 
-    Sort the observation epochs, count how many unique observation epochs
-      there are, and create a vector containing only these sorted, unique epochs
-
+  /*  Sort the observation epochs, count how many unique observation epochs
+      there are, and create a vector containing only these sorted, unique epochs*/
   if (np < 0) {
     hpsort( lghtcrv->n, obsepoch_raw);
     nunique = 1;
@@ -2516,36 +2484,55 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
         obsepoch_unique[++k] = obsepoch_raw[i];
     free_vector( obsepoch_raw, 1, lghtcrv->n);
 
-      We now know how many unique observation epochs there are, so we can
+    /*  We now know how many unique observation epochs there are, so we can
         allocate memory for the various calculation-related arrays/vectors,
-        assign epochs, and (if specified) correct them for light-travel time.
-
+        assign epochs, and (if specified) correct them for light-travel time.*/
     lghtcrv->ncalc = nunique;
-    lghtcrv->x0 = vector( 1, lghtcrv->ncalc);
-    lghtcrv->x = vector( 1, lghtcrv->ncalc);
-    lghtcrv->y = vector( 1, lghtcrv->ncalc);
-    lghtcrv->y2 = vector( 1, lghtcrv->ncalc);
-    lghtcrv->rotphase_calc = vector( 1, lghtcrv->ncalc);
-    lghtcrv->solar_phase = vector( 1, lghtcrv->ncalc);
-    lghtcrv->solar_azimuth = vector( 1, lghtcrv->ncalc);
+    int ncalc = lghtcrv->ncalc;
+    if (CUDA) {
+    	cudaCalloc((void**)&lghtcrv->x0, 			sizeof(double), ncalc);
+    	cudaCalloc((void**)&lghtcrv->x,  			sizeof(double), ncalc);
+    	cudaCalloc((void**)&lghtcrv->y,  			sizeof(double), ncalc);
+    	cudaCalloc((void**)&lghtcrv->y2, 			sizeof(double), ncalc);
+    	cudaCalloc((void**)&lghtcrv->rotphase_calc, sizeof(double), ncalc);
+    	cudaCalloc((void**)&lghtcrv->solar_phase,   sizeof(double), ncalc);
+    	cudaCalloc((void**)&lghtcrv->solar_azimuth, sizeof(double), ncalc);
 
-    /*=======================================================================
+    	lghtcrv->x0 		   -= 1;
+    	lghtcrv->x  		   -= 1;
+    	lghtcrv->y  		   -= 1;
+    	lghtcrv->y2 		   -= 1;
+    	lghtcrv->rotphase_calc -= 1;
+    	lghtcrv->solar_phase   -= 1;
+    	lghtcrv->solar_azimuth -= 1;
+    }
+    else {
+    	lghtcrv->x0 = vector( 1, lghtcrv->ncalc);
+    	lghtcrv->x = vector( 1, lghtcrv->ncalc);
+    	lghtcrv->y = vector( 1, lghtcrv->ncalc);
+    	lghtcrv->y2 = vector( 1, lghtcrv->ncalc);
+    	lghtcrv->rotphase_calc = vector( 1, lghtcrv->ncalc);
+    	lghtcrv->solar_phase = vector( 1, lghtcrv->ncalc);
+    	lghtcrv->solar_azimuth = vector( 1, lghtcrv->ncalc);
+    }
+
+    /*=======================================================================*/
 	if (CUDA)
-		cudaCalloc((void**)&lightcrv->rend, sizeof(struct crvrend_t *),
-			lightcrv->ncalc+1);
+		cudaCalloc((void**)&lghtcrv->rend, sizeof(struct crvrend_t *),
+			lghtcrv->ncalc+1);
 	else
 		lghtcrv->rend = (struct crvrend_t *) calloc( lghtcrv->ncalc+1,
         	sizeof( struct crvrend_t));
-	/*=======================================================================
+	/*=======================================================================*/
 
     for (i=1; i<=lghtcrv->ncalc; i++) {
       lghtcrv->x[i] = lghtcrv->x0[i] = obsepoch_unique[i];
-      dist = ephem2mat( lghtcrv->astephem, lghtcrv->solephem,
-                        lghtcrv->x0[i],
-                        lghtcrv->rend[i].oe, lghtcrv->rend[i].se,
-                        lghtcrv->rend[i].orbspin,
-                        &lghtcrv->solar_phase[i], &lghtcrv->solar_azimuth[i], 1);
-      if (par->perform_ltc) {                         apply light-time correction
+      dist = ephem2mat(lghtcrv->astephem, lghtcrv->solephem,
+                       lghtcrv->x0[i],
+                       lghtcrv->rend[i].oe, lghtcrv->rend[i].se,
+                       lghtcrv->rend[i].orbspin,
+                       &lghtcrv->solar_phase[i],&lghtcrv->solar_azimuth[i],1);
+      if (par->perform_ltc) {                        /* apply light-time correction*/
         lghtcrv->x[i] = lghtcrv->x0[i] - DAYSPERAU*dist;
         ephem2mat( lghtcrv->astephem, lghtcrv->solephem,
                    lghtcrv->x[i],
@@ -2560,24 +2547,22 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
   printf("#     %s\n", lghtcrv->name);
   fflush(stdout);
 
-    Initialize quantities related to spin impulses
-
+  /*  Initialize quantities related to spin impulses*/
   for (i=1; i<=lghtcrv->ncalc; i++) {
     lghtcrv->rend[i].n_integrate = -999;
     for (n=0; n<MAXIMP+2; n++) {
       lghtcrv->rend[i].t_integrate[n] = -HUGENUMBER;
       for (j=0; j<=2; j++)
         lghtcrv->rend[i].impulse[n][j] = 0.0;
-    }
+    } /* Initialize quantities related to spin impulses*/
   }
 
-    If this node handles this dataset, check if the interpolations needed to obtain
+  /*  If this node handles this dataset, check if the interpolations needed to obtain
       observed lightcurve points from calculated lightcurve points (in the "calc_fits"
       routine) will actually involve extrapolations beyond the calculated points, and if
       so, give a warning.  This problem is most likely to arise when modeling smearing.
-    Additional note by Matt Engels:  condition has been removed from executing this block.
+    Additional note by Matt Engels:  condition has been removed from executing this block.*/
 
-//  if (mpi_rank == mpi_setlist[s]) {
     extrapolate_flag = 0;
     for (i=1; i<=lghtcrv->n; i++)
       for (k=0; k<lghtcrv->nviews; k++)
@@ -2591,10 +2576,9 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
       fprintf(stderr,"            outside the time span of calculated intensities\n");
       fprintf(stderr,"\n");
     }
-//  } // end if block
 
   return npar;
-}*/
+}
 
 
 void read_deldop_ascii(FILE *fin, struct deldop_t *deldop, int iframe,
@@ -2831,13 +2815,13 @@ void read_doppler_rdf(FILE *fin, struct doppler_t *doppler, int iframe, int idop
   if ( fits_close_file(fptr, &status) )
     fits_report_error(stderr, status); 
 }
-
+*/
 
 void read_poset_fits(char *filename, struct poset_t *poset, int iframe,
                                      int icol_use[2], int irow_use[2], int read_data)
 {
 
-    This routine is somewhat convoluted, since read_poset can't read the
+   /* This routine is somewhat convoluted, since read_poset can't read the
       pixel-weighting mask (if any) to vignette the image until it has read
       the image to figure out the raw dimensions, but it can't read the image
       until it's read the mask and is ready to vignette the image.
@@ -2847,7 +2831,7 @@ void read_poset_fits(char *filename, struct poset_t *poset, int iframe,
       read but not the pixel values.  Then it reads the mask (so that it can
       get the vignetted limits irow_use and icol_use), and finally it calls
       read_poset_fits a second time with read_data = 1 so that the pixel
-      values can be read in.
+      values can be read in.*/
 
   fitsfile *fptr;
   int j, k, jskip=0, kskip=0, status,  nfound, anynull;
@@ -2862,7 +2846,7 @@ void read_poset_fits(char *filename, struct poset_t *poset, int iframe,
   if ( fits_open_file(&fptr, filename, READONLY, &status) )
     fits_report_error(stderr, status); 
 
-    Check that this is a two-dimensional image
+  /*  Check that this is a two-dimensional image*/
 
   if ( fits_read_key_lng(fptr, "NAXIS", &naxis, NULL, &status) )
     fits_report_error(stderr, status); 
@@ -2870,26 +2854,25 @@ void read_poset_fits(char *filename, struct poset_t *poset, int iframe,
   if (naxis != 2)
     bailout("read_deldop_fits in read_dat.c: FITS file is not a 2-D image\n");
 
-    Get the raw image dimensions (i.e., before vignetting)
+  /*  Get the raw image dimensions (i.e., before vignetting)*/
 
   if ( fits_read_keys_lng(fptr, "NAXIS", 1, 2, naxes, &nfound, &status) )
     fits_report_error(stderr, status); 
 
-    If the data (pixel values) will be read, read them and vignette the image
+  /*  If the data (pixel values) will be read, read them and vignette the image*/
 
   if (read_data) {
       jskip = icol_use[0] - 1;
       kskip = irow_use[0] - 1;
 
-        Read pixels one at a time: each column within the first row, then each
+      /*  Read pixels one at a time: each column within the first row, then each
           column within the second row, etc.
 
           NOTE that we will store this array with the first index representing
           columns and the second index rows, because that's how shape's plane-of-sky
           renderings are set up: shape needs to resample POS renderings to get
           plane-of-sky fit images, and it can handle rotations of +/- northangle
-          when it resamples but it can't handle axis flipping.
-
+          when it resamples but it can't handle axis flipping. */
       for (k=1; k<=naxes[1]; k++)
         for (j=1; j<=naxes[0]; j++) {
           if ( fits_read_img(fptr, TFLOAT, fpixel++, nbuffer, &nullval,
@@ -2899,10 +2882,10 @@ void read_poset_fits(char *filename, struct poset_t *poset, int iframe,
             poset->frame[iframe].obs.b[j-jskip][k-kskip] = pixelvalue;
         }
   } else {
-      poset->frame[iframe].ncol = naxes[0];    read_poset may change this later
-      poset->frame[iframe].nrow = naxes[1];    read_poset may change this later
+      poset->frame[iframe].ncol = naxes[0];   /* read_poset may change this later */
+      poset->frame[iframe].nrow = naxes[1];   /* read_poset may change this later */
   }
 
   if ( fits_close_file(fptr, &status) )
     fits_report_error(stderr, status); 
-}*/
+}

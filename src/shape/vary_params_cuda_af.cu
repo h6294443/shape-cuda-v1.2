@@ -362,10 +362,6 @@ __global__ void posclr_af_krnl(struct pos_t **pos, int n, int nx, int nframes)
 		 * cos(scattering angle), reset the z coordinate (distance from COM towards
 		 * Earth) to a dummy value, and reset the body, component, and facet onto
 		 * which the pixel center projects to  dummy values                  */
-		if (f == 2 && frame_offset == 1000)
-			printf("\n");
-		//pos[f]->b[i][j] = pos[f]->cose[i][j] = 0.0;
-		//pos[f]->z[i][j] = -HUGENUMBER;
 		pos[f]->body[i][j] = pos[f]->comp[i][j] = pos[f]->f[i][j] = -1;
 
 		pos[f]->b_s[frame_offset] = pos[f]->cose_s[frame_offset] = 0.0;
@@ -381,8 +377,6 @@ __global__ void posclr_af_krnl(struct pos_t **pos, int n, int nx, int nframes)
 		 * component, and facet numbers as viewed from the sun, and the model's
 		 * maximum projected extent as viewed from the sun to dummy values    */
 		if (pos[f]->bistatic) {
-//			pos[f]->cosill[i][j] = 0.0;
-//			pos[f]->zill[i][j] = -HUGENUMBER;
 			pos[f]->bodyill[i][j] = pos[f]->compill[i][j] = pos[f]->fill[i][j] = -1;
 
 			pos[f]->cosill_s[frame_offset] = 0.0;
@@ -665,7 +659,7 @@ __host__ void vary_params_af( struct par_t *dpar, struct mod_t *dmod,
 	 * int nsets 				- ddat->nsets
 	 */
 
-	double orbit_offset[3] = {0.0, 0.0, 0.0};
+	float orbit_offset[3] = {0.0, 0.0, 0.0};
 	int c=0, f, s, i, compute_brightness, compute_zmax,
 			compute_cosdelta, n, ncalc, nx, lghtcrv_bistatic, nframes,
 			xlim[2], ylim[2], xspan, yspan, lghtcrv_n, *compute_xsec,
@@ -1036,17 +1030,11 @@ __host__ void vary_params_af( struct par_t *dpar, struct mod_t *dmod,
 	*rad_xsec = rd_xsec;
 	*opt_brightness = opt_brtns;
 	*cos_subradarlat = cs_sb_rdr_lat;
+
+	/* Free memory */
+	cudaFree(pos);
+	cudaFree(ndel);
+	cudaFree(ndop);
+	cudaFree(nThreads);
+	cudaFree(compute_xsec);
 }
-
-
-//__host__ int NearestPowerOf2(int n) {
-//	if (!n) return n; // (0 == 2^0)
-//
-//	int x = 1;
-//	while (x < n)
-//	{
-//		x <<= 1;
-//	}
-//	return x;
-//
-//}

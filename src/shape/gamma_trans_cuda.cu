@@ -18,3 +18,10 @@ __device__ int dev_gamma_trans(float *datum, double gamma)
   (*datum) = pow( (double)(*datum), 1/gamma);
   return 1;
 }
+__device__ int dev_gamma_trans_float(float *datum, float gamma)
+{
+  if ((*datum) <= 0.0)
+    return 0;
+  (*datum) = __powf( (*datum), 1/gamma);
+  return 1;
+}

@@ -359,23 +359,23 @@ __device__ struct pos_t *cf_pos;
 __device__ struct doppler_t *cf_doppler;
 __device__ struct dopfrm_t *cf_dop_frame;
 __device__ struct dopview_t *cf_dop_view0;
-
-__global__ void cf_get_global_frmsz_krnl(int *global_lim, int4 *xylim,
-		int nframes) {
-	/* nframes-threaded kernel */
-	int f = threadIdx.x;
-	if (f < nframes) {
-		/* Initialize global_lim 	 */
-		for (int i=0; i<4; i++)
-			global_lim[i] = 0;
-
-		/* Now calculate minimum for all frames */
-		atomicMin(&global_lim[0], xylim[f].w);
-		atomicMax(&global_lim[1], xylim[f].x);
-		atomicMin(&global_lim[2], xylim[f].y);
-		atomicMax(&global_lim[3], xylim[f].z);
-	}
-}
+//
+//__global__ void cf_get_global_frmsz_krnl(int *global_lim, int4 *xylim,
+//		int nframes) {
+//	/* nframes-threaded kernel */
+//	int f = threadIdx.x;
+//	if (f < nframes) {
+//		/* Initialize global_lim 	 */
+//		for (int i=0; i<4; i++)
+//			global_lim[i] = 0;
+//
+//		/* Now calculate minimum for all frames */
+//		atomicMin(&global_lim[0], xylim[f].w);
+//		atomicMax(&global_lim[1], xylim[f].x);
+//		atomicMin(&global_lim[2], xylim[f].y);
+//		atomicMax(&global_lim[3], xylim[f].z);
+//	}
+//}
 __global__ void cf_init_devpar_krnl(struct par_t *dpar, struct mod_t
 		*dmod, struct dat_t *ddat) {
 	/* Single-threaded kernel */
@@ -603,26 +603,17 @@ __global__ void cf_set_posbnd_krnl(struct par_t *dpar) {
 			dpar->posbnd_logfactor += cf_dop_frame->dof * cf_pos->posbnd_logfactor;
 			break;
 		}
-
 	}
 }
-__global__ void cf_get_exclude_seen_krnl(struct par_t *dpar,
-		struct mod_t *dmod,
-		struct pos_t **pos,
-		int4 *xylim,
-		int *global_lim,
-		int nframes		) {
-	/* nframes-threaded kernel */
-	int frm = threadIdx.x;
-	if (frm < nframes) {
-		if (threadIdx.x == 0)
-			cfaf_exclude_seen = dpar->exclude_seen;
+__global__ void cf_get_exclude_seen_krnl(struct par_t *dpar) {
+	/* single-threaded kernel */
 
-		xylim[frm].w = pos[frm]->xlim[0];
-		xylim[frm].x = pos[frm]->xlim[0];
-		xylim[frm].y = pos[frm]->xlim[0];
-		xylim[frm].z = pos[frm]->xlim[0];
-
+	if (threadIdx.x == 0) {
+		cf_exclude_seen = dpar->exclude_seen;
+		cf_xlim0 = cf_pos->xlim[0];
+		cf_xlim1 = cf_pos->xlim[0];
+		cf_ylim0 = cf_pos->xlim[0];
+		cf_ylim1 = cf_pos->xlim[0];
 	}
 }
 __global__ void cf_mark_pixels_seen_krnl(struct par_t *dpar,
@@ -754,43 +745,6 @@ __global__ void cf_gamma_trans_krnl(struct par_t *dpar, struct dat_t *ddat,
 		}
 	}
 }
-__global__ void cf_copy_fit_back_krnl(struct dat_t *ddat, float *fit, int s,
-		int f, int nThreads) {
-	/* Multi-threaded kernel */
-	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int idop;
-
-	if (offset < nThreads) {
-		switch (ddat->set[s].type) {
-		case DELAY:
-			int idel = offset % cf_ndel - 1;
-			idop = offset / cf_ndel - 1;
-			if (idel>=0 && idel <= cf_ndel && idop>=0 && idop<=cf_ndop) {
-				//			ddat->set[s].desc.deldop.frame[f].fit[idel][idop] = fit[offset];
-				ddat->set[s].desc.deldop.frame[f].fit_s[idop*cf_ndel+idel] = fit[offset];
-				//fit_copy[offset] = fit[offset];
-			}
-			if (idop == cf_ndop-2)
-				ddat->set[s].desc.deldop.frame[f].fit_s[(idop+1)*cf_ndel+idel] = 0.0;
-			if (idel == cf_ndel-2)
-				ddat->set[s].desc.deldop.frame[f].fit_s[idop*cf_ndel+idel+1] = 0.0;
-			break;
-		case DOPPLER:
-			idop = offset;
-			if (idop>=0 && idop<=cf_ndop)
-				ddat->set[s].desc.doppler.frame[f].fit[idop] = fit[offset];
-			break;
-		case POS:
-			printf("Write code for POS in vp_copy_fit_back_krnl in "
-					"vary_params_cuda");
-			break;
-		case LGHTCRV:
-			printf("Write code for LGTHCRV in vp_copy_fit_back_krnl in "
-					"vary_params_cuda");
-			break;
-		}
-	}
-}
 
 __host__ void calc_deldop_cuda(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int s)
@@ -866,7 +820,7 @@ __host__ void calc_deldop_cuda(struct par_t *dpar, struct mod_t *dmod,
 			}
 
 			/* Launch single-threaded kernel to get dpar->exclude_seen */
-			cf_get_exclude_seen_krnl<<<1,1>>>(dpar, dmod);
+			cf_get_exclude_seen_krnl<<<1,1>>>(dpar);
 			checkErrorAfterKernelLaunch("cf_get_exclude_seen_krnl (calc_fits_cuda)");
 			gpuErrchk(cudaMemcpyFromSymbol(&exclude_seen, cf_exclude_seen, sizeof(int),
 					0, cudaMemcpyDeviceToHost));
@@ -1028,7 +982,7 @@ __host__ void calc_doppler_cuda(struct par_t *dpar, struct mod_t *dmod,
 			}
 
 			/* Launch single-threaded kernel to get dpar->exclude_seen */
-			cf_get_exclude_seen_krnl<<<1,1>>>(dpar, dmod);
+			cf_get_exclude_seen_krnl<<<1,1>>>(dpar);
 			checkErrorAfterKernelLaunch("cf_get_exclude_seen_krnl (calc_fits_cuda)");
 			gpuErrchk(cudaMemcpyFromSymbol(&exclude_seen, cf_exclude_seen, sizeof(int),
 					0, cudaMemcpyDeviceToHost));

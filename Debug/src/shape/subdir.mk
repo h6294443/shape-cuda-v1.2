@@ -8,8 +8,10 @@ CU_SRCS += \
 ../src/shape/bestfit_CUDA.cu \
 ../src/shape/bsstep_cuda.cu \
 ../src/shape/calc_fits_cuda.cu \
+../src/shape/calc_fits_cuda_af.cu \
 ../src/shape/cel_cuda.cu \
 ../src/shape/chi2_cuda.cu \
+../src/shape/chi2_cuda_af.cu \
 ../src/shape/copy_to_device.cu \
 ../src/shape/debug_routines.cu \
 ../src/shape/deldopoffs_cuda.cu \
@@ -35,6 +37,7 @@ CU_SRCS += \
 ../src/shape/realize_mod_cuda.cu \
 ../src/shape/realize_photo_cuda.cu \
 ../src/shape/realize_spin_cuda.cu \
+../src/shape/realize_spin_cuda_af.cu \
 ../src/shape/realize_xyoff_cuda.cu \
 ../src/shape/reduction.cu \
 ../src/shape/show_deldoplim_cuda.cu \
@@ -112,11 +115,13 @@ OBJS += \
 ./src/shape/bsstep_cuda.o \
 ./src/shape/calc_fits.o \
 ./src/shape/calc_fits_cuda.o \
+./src/shape/calc_fits_cuda_af.o \
 ./src/shape/calc_orbit.o \
 ./src/shape/cel_cuda.o \
 ./src/shape/check_cuda.o \
 ./src/shape/chi2.o \
 ./src/shape/chi2_cuda.o \
+./src/shape/chi2_cuda_af.o \
 ./src/shape/convex_hull.o \
 ./src/shape/copy_to_device.o \
 ./src/shape/covar.o \
@@ -181,6 +186,7 @@ OBJS += \
 ./src/shape/realize_photo_cuda.o \
 ./src/shape/realize_spin.o \
 ./src/shape/realize_spin_cuda.o \
+./src/shape/realize_spin_cuda_af.o \
 ./src/shape/realize_xyoff.o \
 ./src/shape/realize_xyoff_cuda.o \
 ./src/shape/reduction.o \
@@ -206,8 +212,10 @@ CU_DEPS += \
 ./src/shape/bestfit_CUDA.d \
 ./src/shape/bsstep_cuda.d \
 ./src/shape/calc_fits_cuda.d \
+./src/shape/calc_fits_cuda_af.d \
 ./src/shape/cel_cuda.d \
 ./src/shape/chi2_cuda.d \
+./src/shape/chi2_cuda_af.d \
 ./src/shape/copy_to_device.d \
 ./src/shape/debug_routines.d \
 ./src/shape/deldopoffs_cuda.d \
@@ -233,6 +241,7 @@ CU_DEPS += \
 ./src/shape/realize_mod_cuda.d \
 ./src/shape/realize_photo_cuda.d \
 ./src/shape/realize_spin_cuda.d \
+./src/shape/realize_spin_cuda_af.d \
 ./src/shape/realize_xyoff_cuda.d \
 ./src/shape/reduction.d \
 ./src/shape/show_deldoplim_cuda.d \

@@ -261,10 +261,8 @@ double chi2( struct par_t *par, struct dat_t *dat, int list_breakdown)
       If we're not parallel processing, or if list_breakdown = 0, or if this
       is the root node, we loop through ALL datasets on this call to chi2.    */
 
-
 	set_min = 0;
 	set_max = dat->nsets - 1;
-
 
 	/*  Loop through all datasets, carry out chi-square computations,
       and provide screen and image output                            */
@@ -388,58 +386,6 @@ double chi2( struct par_t *par, struct dat_t *dat, int list_breakdown)
 		fflush(stdout);
 	}
 
-
-//	/* Start debug section */
-//	int idel, idop, off, ndel, ndop;
-//	FILE *fp_fit, *fp_obs, *fp_oov;
-//	char *filename_fit, *filename_obs, *filename_oov;
-//	filename_fit = "dbg_fit_std.csv";
-//	filename_obs = "dbg_obs_std.csv";
-//	filename_oov = "dbg_oov_std.csv";
-//
-//	printf("\n %sfile created",filename_fit);
-//	printf("\n\nFilename: %s",filename_fit);
-//	fp_fit = fopen(filename_fit, "w+");
-//	fp_obs = fopen(filename_obs, "w+");
-//	fp_oov = fopen(filename_oov, "w+");
-//
-//	fprintf(fp_fit, "idel/idop , ");
-//	fprintf(fp_obs, "idel/idop , ");
-//	fprintf(fp_oov, "idel/idop , ");
-//
-//	ndel = dat->set[0].desc.deldop.frame[0].ndel;
-//	ndop = dat->set[0].desc.deldop.frame[0].ndop;
-//	for (idel=1; idel<=ndel; idel++){
-//		fprintf(fp_fit,	"%i , ", idel);
-//		fprintf(fp_obs,	"%i , ", idel);
-//		fprintf(fp_oov, "%i , ", idel);
-//	}
-//
-//	/* The following loops write fit, obs, and oov to file */
-//	for (idop=1; idop<=ndop; idop++){
-//		fprintf(fp_fit,	"\n%i , ", idop);
-//		fprintf(fp_obs,	"\n%i , ", idop);
-//		fprintf(fp_oov, "\n%i , ", idop);
-//
-//		for (idel=1; idel<=ndel; idel++){
-//			off = (idop-1)*ndel + (idel-1);
-//			fprintf(fp_fit,	"%g , ", dat->set[0].desc.deldop.frame[0].fit[idel][idop]);
-//			fprintf(fp_obs,	"%g , ", dat->set[0].desc.deldop.frame[0].obs[idel][idop]);
-//			fprintf(fp_oov, "%g , ", dat->set[0].desc.deldop.frame[0].oneovervar[idel][idop]);
-//		}
-//	}
-//
-//	fclose(fp_fit);
-//	fclose(fp_obs);
-//	fclose(fp_oov);
-
-	/* End debug section */
-
-
-
-
-
-
 	return dat->chi2;
 }
 
@@ -489,18 +435,11 @@ double chi2_deldop( struct par_t *par, struct deldop_t *deldop, int list_breakdo
 
 		/*  Now add the contributions from power
         within the limits of the data frame.  */
-
-//		double sum_fit=0.0, sum_obs=0.0, sum_oov=0.0;
-
 		for (i=1; i<=ndel; i++)
 			for (j=1; j<=ndop; j++) {
 				o2 += obs[i][j]*obs[i][j]*oneovervar[i][j];
 				m2 += fit[i][j]*fit[i][j]*oneovervar[i][j];
 				om += fit[i][j]*obs[i][j]*oneovervar[i][j];
-//
-//				sum_fit += fit[i][j];
-//				sum_obs += obs[i][j];
-//				sum_oov += oneovervar[i][j];
 			}
 
 
@@ -520,7 +459,6 @@ double chi2_deldop( struct par_t *par, struct deldop_t *deldop, int list_breakdo
 		}
 
 		/*  Compute chi-square for this frame  */
-
 		calval = deldop->frame[f].cal.val;
 		err = weight*(o2 - 2*calval*om + calval*calval*m2);
 		deldop->frame[f].chi2 = err;
@@ -920,69 +858,7 @@ double chi2_doppler( struct par_t *par, struct doppler_t *doppler, int list_brea
 			}
 			fclose( fp);
 		}
-
-		/* Start debug section */
-		int debug = 0;
-
-		if (debug) {
-
-			int idel, idop, off;
-			FILE *fp_fit, *fp_obs, *fp_oov, *fp_ao2, *fp_am2, *fp_aom;
-			char *filename_fit, *filename_obs, *filename_oov, *filename_ao2, *filename_am2,
-			*filename_aom;
-			filename_fit = "dbg_fit_std.csv";
-//			filename_obs = "dbg_obs_std.csv";
-//			filename_oov = "dbg_oov_std.csv";
-//			filename_ao2 = "dbg_ao2_std.csv";
-//			filename_am2 = "dbg_am2_std.csv";
-//			filename_aom = "dbg_aom_std.csv";
-
-			printf("\n %sfile created",filename_fit);
-			printf("\n\nFilename: %s",filename_fit);
-			fp_fit = fopen(filename_fit, "w+");
-//			fp_obs = fopen(filename_obs, "w+");
-//			fp_oov = fopen(filename_oov, "w+");
-			//		fp_ao2 = fopen(filename_ao2, "w+");
-			//		fp_am2 = fopen(filename_am2, "w+");
-			//		fp_aom = fopen(filename_aom, "w+");
-
-			fprintf(fp_fit, "idop , ");
-//			fprintf(fp_obs, "idop , ");
-//			fprintf(fp_oov, "idop , ");
-			//		fprintf(fp_ao2, "idel/idop , ");
-			//		fprintf(fp_am2, "idel/idop , ");
-			//		fprintf(fp_aom, "idel/idop , ");
-
-			/* The following loops write fit, obs, and oov to file */
-			for (idop=1; idop<=ndop; idop++){
-				f = 0;
-				fprintf(fp_fit,	"\n%i , %g", idop, fit[idop]);
-//				fprintf(fp_obs,	"\n%i , %g", idop, obs[idop]);
-//				fprintf(fp_oov, "\n%i , %g", idop, oneovervar[idop]);
-				//			fprintf(fp_ao2,	"\n%i , %g", idop, atomo2[idop]);
-				//			fprintf(fp_am2,	"\n%i , %g", idop, atomm2[idop]);
-				//			fprintf(fp_aom, "\n%i , %g", idop, atomom[idop]);
-			}
-
-			fclose(fp_fit);
-//			fclose(fp_obs);
-//			fclose(fp_oov);
-			//		fclose(fp_ao2);
-			//		fclose(fp_am2);
-			//		fclose(fp_aom);
-
-
-			//bailout("files written");
-		}
-		/* End debug section */
-
 	}
-
-
-
-
-
-
 	return chi2_set;
 }
 

@@ -60,7 +60,7 @@ __host__ void realize_xyoff_cuda( struct dat_t *ddat)
 
 	/* Launch nset-threaded kernel */
 	THD.x = nsets;
-	realize_xyoff_cuda_krnl<<<BLK,THD>>>(ddat);
+	realize_xyoff_cuda_krnl<<<1,THD>>>(ddat);
 	checkErrorAfterKernelLaunch("realize_xyoff_cuda_krnl (realize_xyoff_cuda");
 
 }
