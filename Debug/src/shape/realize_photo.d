@@ -61,6 +61,15 @@ src/shape/realize_photo.o : ../src/shape/realize_photo.c \
     ../src/shape/../astro/astro.h \
     ../src/shape/../shape/shape2.h \
     /usr/include/ctype.h \
+    ../src/shape/../cfitsio/fitsio.h \
+    /usr/lib/gcc/x86_64-linux-gnu/5/include-fixed/limits.h \
+    /usr/lib/gcc/x86_64-linux-gnu/5/include-fixed/syslimits.h \
+    /usr/include/limits.h \
+    /usr/include/x86_64-linux-gnu/bits/posix1_lim.h \
+    /usr/include/x86_64-linux-gnu/bits/local_lim.h \
+    /usr/include/linux/limits.h \
+    /usr/include/x86_64-linux-gnu/bits/posix2_lim.h \
+    ../src/shape/../cfitsio/longnam.h \
     ../src/shape/const.h \
     ../src/shape/../shape/shape-cuda.h \
     /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/cuda.h \
@@ -72,13 +81,6 @@ src/shape/realize_photo.o : ../src/shape/realize_photo.c \
     /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/builtin_types.h \
     /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/device_types.h \
     /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/driver_types.h \
-    /usr/lib/gcc/x86_64-linux-gnu/5/include-fixed/limits.h \
-    /usr/lib/gcc/x86_64-linux-gnu/5/include-fixed/syslimits.h \
-    /usr/include/limits.h \
-    /usr/include/x86_64-linux-gnu/bits/posix1_lim.h \
-    /usr/include/x86_64-linux-gnu/bits/local_lim.h \
-    /usr/include/linux/limits.h \
-    /usr/include/x86_64-linux-gnu/bits/posix2_lim.h \
     /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/surface_types.h \
     /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/texture_types.h \
     /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/vector_types.h \

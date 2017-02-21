@@ -136,6 +136,8 @@ __host__ void realize_photo_cuda( struct par_t *dpar, struct mod_t *dmod,
         double radalb_factor, double optalb_factor, int albedo_mode);
 __host__ void realize_spin_cuda( struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int nsets);
+__host__ void realize_spin_cuda_af( struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat, int nsets);
 __host__ void realize_xyoff_cuda( struct dat_t *ddat);
 __host__ void show_deldoplim_cuda(struct dat_t *dat, struct dat_t *ddat);
 __host__ void vary_params_cuda(struct par_t *dpar, struct mod_t *dmod,
@@ -182,6 +184,8 @@ __device__ double dev_plgndr(int l,int m,double x);
 __device__ void dev_POSrect2(struct pos_t *pos, int src, float imin_dbl,
 		float imax_dbl, float jmin_dbl, float jmax_dbl);
 __device__ double dev_radlaw( struct photo_t *photo, int ilaw, double cosinc, int c, int f);
+__device__ void dev_realize_impulse(struct spin_t spin, double t,
+		double t_integrate[], double impulse[][3], int *n_integrate, int s, int f, int k);
 __device__ void dev_rzextr( int iest, double xest, double *yest, double *yz, double *dy);
 
 __device__ double radlaw_cuda(union radscat_t *radar, unsigned char *radtype,
@@ -192,8 +196,10 @@ __global__ void clrvect_af_krnl(struct dat_t *ddat, int s, int nframes,
 		int nThreads, int frame_size);
 __global__ void euler2mat_krnl( double m[3][3], double phi, double theta, double psi);
 __global__ void euler2mat_realize_mod_krnl(struct mod_t *dmod);
-
-
+__global__ void get_types_krnl(struct dat_t *ddat, unsigned char *dtype);
+__global__ void realize_angleoff_krnl(struct dat_t *ddat);
+__global__ void realize_omegaoff_krnl(struct dat_t *ddat);
+__global__ void update_spin_angle_krnl(struct mod_t *dmod);
 
 __host__ void dbg_print_fit(struct dat_t *ddat, int s, int f);
 void dbg_print_fit_host(struct dat_t *ddat, int s, int f);

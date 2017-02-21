@@ -131,6 +131,8 @@ src/nr/gammln_cuda.o : ../src/nr/gammln_cuda.cu \
     ../src/nr/../shape/../astro/astro.h \
     ../src/nr/../shape/../shape/shape2.h \
     /usr/include/ctype.h \
+    ../src/nr/../shape/../cfitsio/fitsio.h \
+    ../src/nr/../shape/../cfitsio/longnam.h \
     ../src/nr/../shape/const.h \
     ../src/nr/../shape/../shape/shape-cuda.h \
     /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/cuda.h \

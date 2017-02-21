@@ -37,6 +37,7 @@ CU_SRCS += \
 ../src/shape/realize_mod_cuda.cu \
 ../src/shape/realize_photo_cuda.cu \
 ../src/shape/realize_spin_cuda.cu \
+../src/shape/realize_spin_cuda_af.cu \
 ../src/shape/realize_xyoff_cuda.cu \
 ../src/shape/reduction.cu \
 ../src/shape/show_deldoplim_cuda.cu \
@@ -185,6 +186,7 @@ OBJS += \
 ./src/shape/realize_photo_cuda.o \
 ./src/shape/realize_spin.o \
 ./src/shape/realize_spin_cuda.o \
+./src/shape/realize_spin_cuda_af.o \
 ./src/shape/realize_xyoff.o \
 ./src/shape/realize_xyoff_cuda.o \
 ./src/shape/reduction.o \
@@ -239,6 +241,7 @@ CU_DEPS += \
 ./src/shape/realize_mod_cuda.d \
 ./src/shape/realize_photo_cuda.d \
 ./src/shape/realize_spin_cuda.d \
+./src/shape/realize_spin_cuda_af.d \
 ./src/shape/realize_xyoff_cuda.d \
 ./src/shape/reduction.d \
 ./src/shape/show_deldoplim_cuda.d \

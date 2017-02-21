@@ -376,7 +376,11 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 	if (call_vary_params)
 	{
 		realize_mod_cuda(dpar, dmod, type);
-		realize_spin_cuda(dpar, dmod, ddat, dat->nsets);
+		if (AF)
+			realize_spin_cuda_af(dpar, dmod, ddat, dat->nsets);
+		else
+			realize_spin_cuda(dpar, dmod, ddat, dat->nsets);
+
 		realize_photo_cuda(dpar, dmod, 1.0, 1.0, 0);  /* set R_save to R */
 
 		/* realize_delcor and realize_dopscale were called by read_dat */
@@ -598,8 +602,12 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 
 			if (newsize || newshape)
 				realize_mod_cuda(dpar, dmod, type);
-			if (newspin)
-				realize_spin_cuda(dpar, dmod, ddat, dat->nsets);
+			if (newspin) {
+				if (AF)
+					realize_spin_cuda_af(dpar, dmod, ddat, dat->nsets);
+				else
+					realize_spin_cuda(dpar, dmod, ddat, dat->nsets);
+			}
 			if ((newsize && vary_alb_size) || ((newshape ||
 					newspin) && vary_alb_shapespin))
 				realize_photo_cuda(dpar, dmod, 1.0, 1.0, 1);  /* set R to R_save */
@@ -915,8 +923,12 @@ __host__ double objective_cuda( double x)
 
 	if (newsize || newshape)
 		realize_mod_cuda(sdev_par, sdev_mod, type);
-	if (newspin)
-		realize_spin_cuda(sdev_par, sdev_mod, sdev_dat, sdat->nsets);
+	if (newspin) {
+		if (AF)
+			realize_spin_cuda_af(sdev_par, sdev_mod, sdev_dat, sdat->nsets);
+		else
+			realize_spin_cuda(sdev_par, sdev_mod, sdev_dat, sdat->nsets);	}
+
 	if ((newsize && vary_alb_size) || ((newshape || newspin) && vary_alb_shapespin))
 		realize_photo_cuda(sdev_par, sdev_mod, 1.0, 1.0, 1);  /* set R to R_save */
 	if ((newsize && vary_delcor0_size) || ((newshape || newspin) && vary_delcor0_shapespin))

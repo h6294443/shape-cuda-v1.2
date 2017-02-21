@@ -131,6 +131,8 @@ src/shape/pos2doppler-cuda.o : ../src/shape/pos2doppler-cuda.cu \
     ../src/shape/../shape/../astro/astro.h \
     ../src/shape/../shape/../shape/shape2.h \
     /usr/include/ctype.h \
+    ../src/shape/../shape/../cfitsio/fitsio.h \
+    ../src/shape/../shape/../cfitsio/longnam.h \
     ../src/shape/../shape/const.h \
     ../src/shape/../shape/../shape/shape-cuda.h \
     /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/cuda.h \

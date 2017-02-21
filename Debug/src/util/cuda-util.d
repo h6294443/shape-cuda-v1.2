@@ -131,6 +131,8 @@ src/util/cuda-util.o : ../src/util/cuda-util.cu \
     ../src/util/../shape/../astro/astro.h \
     ../src/util/../shape/../shape/shape2.h \
     /usr/include/ctype.h \
+    ../src/util/../shape/../cfitsio/fitsio.h \
+    ../src/util/../shape/../cfitsio/longnam.h \
     ../src/util/../shape/const.h \
     ../src/util/../shape/../shape/shape-cuda.h \
     /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/cuda.h \

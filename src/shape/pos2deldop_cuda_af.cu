@@ -817,7 +817,7 @@ __host__ void pos2deldop_cuda_af_free(int *idel0, int *idop0, int *ndel,
 	cudaFree(deldopshift);
 	cudaFree(global_lim);
 	cudaFree(deldoplim);
-	cudaFree(fit_overflow);
+	//cudaFree(fit_overflow);
 }
 
 __host__ int pos2deldop_cuda_af(struct par_t *dpar, struct mod_t *dmod,
@@ -914,8 +914,7 @@ __host__ int pos2deldop_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 			ndop, set, nframes, fit_overflow);
 	checkErrorAfterKernelLaunch("pos2deldop_overflow_af_krnl");
 	deviceSyncAfterKernelLaunch("pos2deldop_overflow_af_krnl");
-	gpuErrchk(
-			cudaMemcpyFromSymbol(&hbadradar, af_badradar, sizeof(int), 0,
+	gpuErrchk(cudaMemcpyFromSymbol(&hbadradar, af_badradar, sizeof(int), 0,
 					cudaMemcpyDeviceToHost));
 
 	/* Start debug */
