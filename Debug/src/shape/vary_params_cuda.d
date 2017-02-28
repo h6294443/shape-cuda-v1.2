@@ -129,8 +129,11 @@ src/shape/vary_params_cuda.o : ../src/shape/vary_params_cuda.cu \
     ../src/shape/../macros/func.h \
     ../src/shape/../util/util.h \
     ../src/shape/../astro/astro.h \
+    ../src/shape/../pgm/pgm.h \
     ../src/shape/../shape/shape2.h \
     /usr/include/ctype.h \
+    /home/matt/cfitsio/fitsio.h \
+    /home/matt/cfitsio/longnam.h \
     ../src/shape/const.h \
     ../src/shape/../shape/shape-cuda.h \
     /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/cuda.h \

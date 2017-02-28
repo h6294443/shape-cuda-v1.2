@@ -377,7 +377,7 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 	{
 		realize_mod_cuda(dpar, dmod, type);
 		if (AF)
-			realize_spin_cuda_af(dpar, dmod, ddat, dat->nsets);
+			realize_spin_cuda(dpar, dmod, ddat, dat->nsets);
 		else
 			realize_spin_cuda(dpar, dmod, ddat, dat->nsets);
 
@@ -604,7 +604,7 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 				realize_mod_cuda(dpar, dmod, type);
 			if (newspin) {
 				if (AF)
-					realize_spin_cuda_af(dpar, dmod, ddat, dat->nsets);
+					realize_spin_cuda(dpar, dmod, ddat, dat->nsets);
 				else
 					realize_spin_cuda(dpar, dmod, ddat, dat->nsets);
 			}
@@ -925,7 +925,7 @@ __host__ double objective_cuda( double x)
 		realize_mod_cuda(sdev_par, sdev_mod, type);
 	if (newspin) {
 		if (AF)
-			realize_spin_cuda_af(sdev_par, sdev_mod, sdev_dat, sdat->nsets);
+			realize_spin_cuda(sdev_par, sdev_mod, sdev_dat, sdat->nsets);
 		else
 			realize_spin_cuda(sdev_par, sdev_mod, sdev_dat, sdat->nsets);	}
 

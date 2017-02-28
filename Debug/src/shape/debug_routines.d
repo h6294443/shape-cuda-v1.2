@@ -129,8 +129,11 @@ src/shape/debug_routines.o : ../src/shape/debug_routines.cu \
     ../src/shape/../shape/../macros/func.h \
     ../src/shape/../shape/../util/util.h \
     ../src/shape/../shape/../astro/astro.h \
+    ../src/shape/../shape/../pgm/pgm.h \
     ../src/shape/../shape/../shape/shape2.h \
     /usr/include/ctype.h \
+    /home/matt/cfitsio/fitsio.h \
+    /home/matt/cfitsio/longnam.h \
     ../src/shape/../shape/const.h \
     ../src/shape/../shape/../shape/shape-cuda.h \
     /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/cuda.h \

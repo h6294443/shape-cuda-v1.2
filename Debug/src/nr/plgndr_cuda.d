@@ -129,8 +129,11 @@ src/nr/plgndr_cuda.o : ../src/nr/plgndr_cuda.cu \
     ../src/nr/../shape/../macros/func.h \
     ../src/nr/../shape/../util/util.h \
     ../src/nr/../shape/../astro/astro.h \
+    ../src/nr/../shape/../pgm/pgm.h \
     ../src/nr/../shape/../shape/shape2.h \
     /usr/include/ctype.h \
+    /home/matt/cfitsio/fitsio.h \
+    /home/matt/cfitsio/longnam.h \
     ../src/nr/../shape/const.h \
     ../src/nr/../shape/../shape/shape-cuda.h \
     /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/cuda.h \
