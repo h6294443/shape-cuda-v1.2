@@ -30,6 +30,7 @@ C_SRCS += \
 ../src/util/matinv.c \
 ../src/util/mmmul.c \
 ../src/util/mtrnsps.c \
+../src/util/nomoredata.c \
 ../src/util/normalize.c \
 ../src/util/readline.c \
 ../src/util/resampim.c \
@@ -64,6 +65,7 @@ OBJS += \
 ./src/util/matinv.o \
 ./src/util/mmmul.o \
 ./src/util/mtrnsps.o \
+./src/util/nomoredata.o \
 ./src/util/normalize.o \
 ./src/util/readline.o \
 ./src/util/resampim.o \
@@ -100,6 +102,7 @@ C_DEPS += \
 ./src/util/matinv.d \
 ./src/util/mmmul.d \
 ./src/util/mtrnsps.d \
+./src/util/nomoredata.d \
 ./src/util/normalize.d \
 ./src/util/readline.d \
 ./src/util/resampim.d \
@@ -114,16 +117,16 @@ C_DEPS += \
 src/util/%.o: ../src/util/%.c
 	@echo 'Building file: $<'
 	@echo 'Invoking: NVCC Compiler'
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 -gencode arch=compute_35,code=sm_35 -m64 -odir "src/util" -M -o "$(@:%.o=%.d)" "$<"
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --compile -m64  -x c -o  "$@" "$<"
+	/usr/local/cuda-8.0/bin/nvcc -I/home/matt/git/cfitsio -G -g -lineinfo -pg -O0 -gencode arch=compute_35,code=sm_35 -m64 -odir "src/util" -M -o "$(@:%.o=%.d)" "$<"
+	/usr/local/cuda-8.0/bin/nvcc -I/home/matt/git/cfitsio -G -g -lineinfo -pg -O0 --compile -m64  -x c -o  "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
 src/util/%.o: ../src/util/%.cu
 	@echo 'Building file: $<'
 	@echo 'Invoking: NVCC Compiler'
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 -gencode arch=compute_35,code=sm_35 -m64 -odir "src/util" -M -o "$(@:%.o=%.d)" "$<"
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --compile --relocatable-device-code=true -gencode arch=compute_35,code=compute_35 -gencode arch=compute_35,code=sm_35 -m64  -x cu -o  "$@" "$<"
+	/usr/local/cuda-8.0/bin/nvcc -I/home/matt/git/cfitsio -G -g -lineinfo -pg -O0 -gencode arch=compute_35,code=sm_35 -m64 -odir "src/util" -M -o "$(@:%.o=%.d)" "$<"
+	/usr/local/cuda-8.0/bin/nvcc -I/home/matt/git/cfitsio -G -g -lineinfo -pg -O0 --compile --relocatable-device-code=true -gencode arch=compute_35,code=compute_35 -gencode arch=compute_35,code=sm_35 -m64  -x cu -o  "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 

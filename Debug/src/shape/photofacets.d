@@ -61,7 +61,7 @@ src/shape/photofacets.o : ../src/shape/photofacets.c \
     ../src/shape/../astro/astro.h \
     ../src/shape/../shape/shape2.h \
     /usr/include/ctype.h \
-    ../src/shape/../cfitsio/fitsio.h \
+    /home/matt/git/cfitsio/../cfitsio/fitsio.h \
     /usr/lib/gcc/x86_64-linux-gnu/5/include-fixed/limits.h \
     /usr/lib/gcc/x86_64-linux-gnu/5/include-fixed/syslimits.h \
     /usr/include/limits.h \
@@ -69,7 +69,7 @@ src/shape/photofacets.o : ../src/shape/photofacets.c \
     /usr/include/x86_64-linux-gnu/bits/local_lim.h \
     /usr/include/linux/limits.h \
     /usr/include/x86_64-linux-gnu/bits/posix2_lim.h \
-    ../src/shape/../cfitsio/longnam.h \
+    /home/matt/git/cfitsio/../cfitsio/longnam.h \
     ../src/shape/const.h \
     ../src/shape/../shape/shape-cuda.h \
     /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/cuda.h \

@@ -126,16 +126,16 @@ C_DEPS += \
 src/nr/%.o: ../src/nr/%.c
 	@echo 'Building file: $<'
 	@echo 'Invoking: NVCC Compiler'
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 -gencode arch=compute_35,code=sm_35 -m64 -odir "src/nr" -M -o "$(@:%.o=%.d)" "$<"
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --compile -m64  -x c -o  "$@" "$<"
+	/usr/local/cuda-8.0/bin/nvcc -I/home/matt/git/cfitsio -G -g -lineinfo -pg -O0 -gencode arch=compute_35,code=sm_35 -m64 -odir "src/nr" -M -o "$(@:%.o=%.d)" "$<"
+	/usr/local/cuda-8.0/bin/nvcc -I/home/matt/git/cfitsio -G -g -lineinfo -pg -O0 --compile -m64  -x c -o  "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
 src/nr/%.o: ../src/nr/%.cu
 	@echo 'Building file: $<'
 	@echo 'Invoking: NVCC Compiler'
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 -gencode arch=compute_35,code=sm_35 -m64 -odir "src/nr" -M -o "$(@:%.o=%.d)" "$<"
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --compile --relocatable-device-code=true -gencode arch=compute_35,code=compute_35 -gencode arch=compute_35,code=sm_35 -m64  -x cu -o  "$@" "$<"
+	/usr/local/cuda-8.0/bin/nvcc -I/home/matt/git/cfitsio -G -g -lineinfo -pg -O0 -gencode arch=compute_35,code=sm_35 -m64 -odir "src/nr" -M -o "$(@:%.o=%.d)" "$<"
+	/usr/local/cuda-8.0/bin/nvcc -I/home/matt/git/cfitsio -G -g -lineinfo -pg -O0 --compile --relocatable-device-code=true -gencode arch=compute_35,code=compute_35 -gencode arch=compute_35,code=sm_35 -m64  -x cu -o  "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 

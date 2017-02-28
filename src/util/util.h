@@ -94,7 +94,7 @@ void swapbuf_ulong(unsigned long *buf, int nvals);
 void swapbuf_float(float *buf, int nvals);
 void swapbuf_double(double *buf, int nvals);
 void swapbuf_ldouble(long double *buf, int nvals);
-//int nomoredata( FILE *fp);
+int nomoredata( FILE *fp);
 int countdata( FILE *fp);
 void tempname(char *outname, int maxSize, char *prefix, char *suffix);
 void timestring(char *outstring, int maxSize, char *formatstring);

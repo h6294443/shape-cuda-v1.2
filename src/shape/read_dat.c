@@ -254,18 +254,18 @@ void read_deldop_binary(FILE *fin, struct deldop_t *deldop, int iframe,
 		int idel_use[2], int idop_use[2],  int swap_bytes);
 void read_deldop_rdf(FILE *fin, struct deldop_t *deldop, int iframe,
 		int idel_use[2], int idop_use[2],  int swap_bytes);
-//void read_deldop_fits(char *filename, struct deldop_t *deldop, int iframe,
-//                                      int idel_use[2], int idop_use[2]);
+void read_deldop_fits(char *filename, struct deldop_t *deldop, int iframe,
+        int idel_use[2], int idop_use[2]);
 void read_doppler_ascii(FILE *fin, struct doppler_t *doppler, int iframe,
 		int idop_use[2]);
 void read_doppler_binary(FILE *fin, struct doppler_t *doppler, int iframe,
 		int idop_use[2], int swap_bytes);
 void read_doppler_rdf(FILE *fin, struct doppler_t *doppler, int iframe,
 		int idop_use[2], int swap_bytes);
-/* void read_doppler_fits(char *filename, struct doppler_t *doppler, int iframe,
-                                       int idop_use[2]); */
+ void read_doppler_fits(char *filename, struct doppler_t *doppler, int iframe,
+        int idop_use[2]);
 void read_poset_fits(char *filename, struct poset_t *poset, int iframe,
-                                     int irow_use[2], int icol_use[2], int read_data);
+        int irow_use[2], int icol_use[2], int read_data);
 
 
 int read_dat( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
@@ -2656,12 +2656,11 @@ void read_deldop_rdf(FILE *fin, struct deldop_t *deldop, int iframe,
 		}
 }
 
-/*
 void read_deldop_fits(char *filename, struct deldop_t *deldop, int iframe,
                                       int idel_use[2], int idop_use[2])
 {
-   shamelessly adapted from cfitsio's readimage() in cookbook.c
-  fitsfile *fptr;
+  /* shamelessly adapted from cfitsio's readimage() in cookbook.c
+*/  fitsfile *fptr;
   int j, k, jskip, kskip, status,  nfound, anynull;
   long naxis, naxes[2];
   long fpixel = 1;
@@ -2702,8 +2701,6 @@ void read_deldop_fits(char *filename, struct deldop_t *deldop, int iframe,
   if ( fits_close_file(fptr, &status) )
     fits_report_error(stderr, status); 
 }
- */
-
 
 void read_doppler_ascii(FILE *fin, struct doppler_t *doppler, int iframe, int idop_use[2])
 {
@@ -2774,10 +2771,10 @@ void read_doppler_rdf(FILE *fin, struct doppler_t *doppler, int iframe, int idop
 }
 
 
-/*void read_doppler_fits(char *filename, struct doppler_t *doppler, int iframe, int idop_use[2])
+void read_doppler_fits(char *filename, struct doppler_t *doppler, int iframe, int idop_use[2])
 {
-   shamelessly adapted from cfitsio's readimage() in cookbook.c
-  fitsfile *fptr;
+  /* shamelessly adapted from cfitsio's readimage() in cookbook.c*/
+	fitsfile *fptr;
   int k, kskip, status, anynull;
   long naxis, naxes;
   long fspecbin = 1;
@@ -2815,7 +2812,6 @@ void read_doppler_rdf(FILE *fin, struct doppler_t *doppler, int iframe, int idop
   if ( fits_close_file(fptr, &status) )
     fits_report_error(stderr, status); 
 }
-*/
 
 void read_poset_fits(char *filename, struct poset_t *poset, int iframe,
                                      int icol_use[2], int irow_use[2], int read_data)

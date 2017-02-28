@@ -28,6 +28,7 @@ Top-level header file for shape-cuda - adapted from head.h in v2.10.0 of shape.
 #include "../shape/shape2.h"
 #include <ctype.h>
 #include "../cfitsio/fitsio.h"
+//#include <fitsio.h>
 #include "const.h"
 //#include "mpi_vars.h"
 #include "../shape/shape-cuda.h"

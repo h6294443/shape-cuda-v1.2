@@ -132,6 +132,8 @@ src/astro/ hapke_cuda.o : ../src/astro/ hapke_cuda.cu \
     ../src/astro/../shape/../astro/astro.h \
     ../src/astro/../shape/../shape/shape2.h \
     /usr/include/ctype.h \
+    /home/matt/git/cfitsio/../cfitsio/fitsio.h \
+    /home/matt/git/cfitsio/../cfitsio/longnam.h \
     ../src/astro/../shape/const.h \
     ../src/astro/../shape/../shape/shape-cuda.h \
     /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/cuda.h \
