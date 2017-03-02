@@ -59,7 +59,9 @@ src/shape/deldopoffs.o : ../src/shape/deldopoffs.c \
     ../src/shape/../macros/func.h \
     ../src/shape/../util/util.h \
     ../src/shape/../astro/astro.h \
+    ../src/shape/../pgm/pgm.h \
     ../src/shape/../shape/shape2.h \
+    ../src/shape/../shape/const.h \
     /usr/include/ctype.h \
     /home/matt/git/cfitsio/../cfitsio/fitsio.h \
     /usr/lib/gcc/x86_64-linux-gnu/5/include-fixed/limits.h \

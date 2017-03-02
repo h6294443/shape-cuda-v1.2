@@ -736,14 +736,14 @@ int read_deldop( FILE *fp, struct par_t *par, struct deldop_t *deldop,
 		lowcase(buffer);
 		is_rdf = !is_binary && !is_fits && (strstr(buffer, "type") != NULL);
 
-		/*if (is_fits)
-    	read_deldop_fits(fullname, deldop, i, idel_use, idop_use);
-    else */if (is_rdf)
-    	read_deldop_rdf(fin, deldop, i, idel_use, idop_use, swap_bytes);
-    else if (is_binary)
-    	read_deldop_binary(fin, deldop, i, idel_use, idop_use, swap_bytes);
-    else
-    	read_deldop_ascii(fin, deldop, i, idel_use, idop_use);
+		if (is_fits)
+			read_deldop_fits(fullname, deldop, i, idel_use, idop_use);
+		else if (is_rdf)
+			read_deldop_rdf(fin, deldop, i, idel_use, idop_use, swap_bytes);
+		else if (is_binary)
+			read_deldop_binary(fin, deldop, i, idel_use, idop_use, swap_bytes);
+		else
+			read_deldop_ascii(fin, deldop, i, idel_use, idop_use);
 
     /*  Get variance for each pixel;
           apply gamma, speckle, and pixel weighting if desired*/

@@ -130,6 +130,7 @@ src/astro/ hapke_cuda.o : ../src/astro/ hapke_cuda.cu \
     ../src/astro/../shape/../macros/func.h \
     ../src/astro/../shape/../util/util.h \
     ../src/astro/../shape/../astro/astro.h \
+    ../src/astro/../shape/../pgm/pgm.h \
     ../src/astro/../shape/../shape/shape2.h \
     /usr/include/ctype.h \
     /home/matt/git/cfitsio/../cfitsio/fitsio.h \

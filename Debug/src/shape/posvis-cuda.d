@@ -129,7 +129,9 @@ src/shape/posvis-cuda.o : ../src/shape/posvis-cuda.cu \
     ../src/shape/../shape/../macros/func.h \
     ../src/shape/../shape/../util/util.h \
     ../src/shape/../shape/../astro/astro.h \
+    ../src/shape/../shape/../pgm/pgm.h \
     ../src/shape/../shape/../shape/shape2.h \
+    ../src/shape/../shape/../shape/const.h \
     /usr/include/ctype.h \
     /home/matt/git/cfitsio/../cfitsio/fitsio.h \
     /home/matt/git/cfitsio/../cfitsio/longnam.h \

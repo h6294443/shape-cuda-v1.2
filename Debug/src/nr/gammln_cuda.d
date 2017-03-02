@@ -129,7 +129,9 @@ src/nr/gammln_cuda.o : ../src/nr/gammln_cuda.cu \
     ../src/nr/../shape/../macros/func.h \
     ../src/nr/../shape/../util/util.h \
     ../src/nr/../shape/../astro/astro.h \
+    ../src/nr/../shape/../pgm/pgm.h \
     ../src/nr/../shape/../shape/shape2.h \
+    ../src/nr/../shape/../shape/const.h \
     /usr/include/ctype.h \
     /home/matt/git/cfitsio/../cfitsio/fitsio.h \
     /home/matt/git/cfitsio/../cfitsio/longnam.h \

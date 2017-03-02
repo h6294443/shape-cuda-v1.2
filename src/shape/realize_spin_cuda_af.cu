@@ -126,6 +126,7 @@ __global__ void realize_spin_deldop_af_krnl(
 	/* nframes-threaded kernel */
 	int j, k, frm = threadIdx.x;
 	if (frm < nframes) {
+
 		/* Loop through views */
 		for (k=0; k<nviews; k++) {
 			dev_realize_impulse(dmod->spin,
@@ -236,12 +237,19 @@ __global__ void realize_spin_lghtcrv_af_krnl(
 			ddat->set[s].desc.lghtcrv.rend[i].intspin[j];
 	}
 }
+__global__ void update_spin_angle_af_krnl(struct mod_t *dmod)
+{
+	int j = blockIdx.x * blockDim.x + threadIdx.x;
 
+	if(j < 3) {
+		dmod->spin.angle[j].val = rsaf_anglesave[j];
+		dmod->spin.omega[j].val = rsaf_omegasave[j];
+	}
+}
 __host__ void realize_spin_cuda_af( struct par_t *dpar, struct mod_t *dmod, struct dat_t *ddat, int nsets)
 {
 
-	int nframes, nviews;
-	int s, f, k;
+	int s, nframes, nviews;
 	unsigned char *dtype;
 	dim3 nsetsBLK, nsetsTHD, BLK, THD;
 
@@ -331,6 +339,7 @@ __host__ void realize_spin_cuda_af( struct par_t *dpar, struct mod_t *dmod, stru
 			 * at the (light-time corrected) epoch of each view.            */
 			/* Apply dataset's spin offsets (also in body coordinates)
 			 * to the intrinsic spin vector of this view.                    */
+			THD.x = nframes;
 			realize_spin_deldop_af_krnl<<<1,THD>>>(dmod, ddat, dpar, s,
 					nframes, nviews);
 			checkErrorAfterKernelLaunch("realize_impulse_deldop_af_krnl");
@@ -369,7 +378,7 @@ __host__ void realize_spin_cuda_af( struct par_t *dpar, struct mod_t *dmod, stru
 			gpuErrchk(cudaMemcpyFromSymbol(&nframes, rsaf_nframes, sizeof(int),
 					0, cudaMemcpyDeviceToHost));
 
-			int i, ncalc;
+			int ncalc;
 			ncalc = nframes;
 
 			/* Deal with spin impulses */
@@ -389,7 +398,7 @@ __host__ void realize_spin_cuda_af( struct par_t *dpar, struct mod_t *dmod, stru
 
 		/* Final kernel launch in realize_spin_cuda */
 		THD.x = 3;
-		update_spin_angle_krnl<<<BLK,THD>>>(dmod);
+		update_spin_angle_af_krnl<<<BLK,THD>>>(dmod);
 		checkErrorAfterKernelLaunch("update_spin_angle_krnl, line 476");
 	}
 	cudaFree(dtype);

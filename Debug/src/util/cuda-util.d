@@ -129,7 +129,9 @@ src/util/cuda-util.o : ../src/util/cuda-util.cu \
     ../src/util/../shape/../macros/func.h \
     ../src/util/../shape/../util/util.h \
     ../src/util/../shape/../astro/astro.h \
+    ../src/util/../shape/../pgm/pgm.h \
     ../src/util/../shape/../shape/shape2.h \
+    ../src/util/../shape/../shape/const.h \
     /usr/include/ctype.h \
     /home/matt/git/cfitsio/../cfitsio/fitsio.h \
     /home/matt/git/cfitsio/../cfitsio/longnam.h \

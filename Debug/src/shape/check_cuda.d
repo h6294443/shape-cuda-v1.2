@@ -59,7 +59,9 @@ src/shape/check_cuda.o : ../src/shape/check_cuda.c \
     ../src/shape/../shape/../macros/func.h \
     ../src/shape/../shape/../util/util.h \
     ../src/shape/../shape/../astro/astro.h \
+    ../src/shape/../shape/../pgm/pgm.h \
     ../src/shape/../shape/../shape/shape2.h \
+    ../src/shape/../shape/../shape/const.h \
     /usr/include/ctype.h \
     /home/matt/git/cfitsio/../cfitsio/fitsio.h \
     /usr/lib/gcc/x86_64-linux-gnu/5/include-fixed/limits.h \

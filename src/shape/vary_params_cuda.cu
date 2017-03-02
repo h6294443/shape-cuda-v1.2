@@ -160,12 +160,18 @@ __global__ void get_compute_flags_krnl(struct par_t *dpar, struct dat_t *ddat,
 			dndop = ddat->set[s].desc.doppler.frame[f].ndop;
 			break;
 		case LGHTCRV:
-			dcompute_brightness = (dpar->vary_optalb != VARY_NONE
-					&& ddat->set[s].desc.lghtcrv.cal.state == 'c');
 			vp_pos = &ddat->set[s].desc.lghtcrv.rend[f].pos;
 			dlghtcrv_bistatic = vp_pos->bistatic;
 			dlghtcrv_n = ddat->set[s].desc.lghtcrv.n;
 		}
+	}
+}
+__global__ void get_lghtcrv_cb_krnl(struct par_t *dpar, struct dat_t *ddat,
+		int s) {
+	/* Single-threaded kernel */
+	if (threadIdx.x == 0) {
+		dcompute_brightness = (dpar->vary_optalb != VARY_NONE
+				&& ddat->set[s].desc.lghtcrv.cal.state == 'c');
 	}
 }
 __global__ void get_vary_params_nframes_krnl(struct dat_t *ddat, int s) {
@@ -204,9 +210,9 @@ __global__ void set_ae_oe_bistatic_krnl(struct dat_t *ddat, int s,
 			vp_pos->oe[i][j] =	ddat->set[s].desc.doppler.frame[f].view[ddat->set[s].desc.doppler.v0].oe[i][j];
 			break;
 		case LGHTCRV:
-			vp_pos->ae[i][j] = ddat->set[s].desc.lghtcrv.rend[i].ae[i][j];
-			vp_pos->oe[i][j] = ddat->set[s].desc.lghtcrv.rend[i].oe[i][j];
-			vp_pos->se[i][j] = ddat->set[s].desc.lghtcrv.rend[i].se[i][j];
+			vp_pos->ae[i][j] = ddat->set[s].desc.lghtcrv.rend[f].ae[i][j];
+			vp_pos->oe[i][j] = ddat->set[s].desc.lghtcrv.rend[f].oe[i][j];
+			vp_pos->se[i][j] = ddat->set[s].desc.lghtcrv.rend[f].se[i][j];
 		}
 		/* The following is a single-thread task */
 		if (threadIdx.x == 0)
@@ -755,9 +761,6 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 					posvis_cuda_2(dpar, dmod, ddat, orbit_offset,s,f,
 							0, 0, c);
 
-					int debug = 0;
-					if (debug)
-						dbg_print_pos_cose_s(ddat, s, f, 75);
 					/* Zero out the fit delay-Doppler image and call pos2deldop
 					 * to create the fit image by mapping power from the plane
 					 * of sky to delay-Doppler space.    				      *
@@ -812,76 +815,82 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 			}
 			break;
 		case DOPPLER:
-//			/* Get nframes */
-//			get_vary_params_nframes_krnl<<<1,1>>>(ddat, s);
-//			checkErrorAfterKernelLaunch ("get_data_type_krnl, line ");
-//			gpuErrchk(cudaMemcpyFromSymbol(&nframes, vary_params_dnframes,
-//					sizeof(vary_params_dnframes), 0, cudaMemcpyDeviceToHost));
-//
-//			for (f=0; f<nframes; f++) {
-//				/* Launch single-thread kernel to get our compute flags first */
-//				get_compute_flags_krnl<<<1,1>>>(dpar, ddat, s, f);
-//				checkErrorAfterKernelLaunch("doppler_get_compute_flags, line ");
-//				gpuErrchk(cudaMemcpyFromSymbol(&compute_xsec, dcompute_xsec,
-//						sizeof(dcompute_xsec), 0, cudaMemcpyDeviceToHost));
-//				gpuErrchk(cudaMemcpyFromSymbol(&compute_cosdelta, dcompute_cosdelta,
-//						sizeof(dcompute_cosdelta), 0, cudaMemcpyDeviceToHost));
-//				gpuErrchk(cudaMemcpyFromSymbol(&weight, dweight,
-//						sizeof(dweight), 0, cudaMemcpyDeviceToHost));
-//				gpuErrchk(cudaMemcpyFromSymbol(&ndop, dndop,
-//						sizeof(dndop), 0, cudaMemcpyDeviceToHost));
-//
-//				if (compute_xsec) {
-//					/* Launch 9-threaded kernel to set up ae[3][3] and oe[3][3]
-//					 * and also set the bistatic flag 		 */
-//					THD.x = 9;
-//					set_ae_oe_bistatic_krnl<<<BLK,THD>>>(ddat, s, f);
-//					checkErrorAfterKernelLaunch("deldop_set_ae_oe_bistatic_krnl, line ");
-////					pos = ddat->set[s].desc.doppler.frame[f].pos;
-////					doppler = ddat->set[s].desc.doppler;
-//
-//					/* Need to get pos->n for kernel launch first */
-//					get_pos_n_krnl<<<1,1>>>();
-//					checkErrorAfterKernelLaunch("get_deldop_pos_n_krnl, line ");
-//					gpuErrchk(cudaMemcpyFromSymbol(&pos_n, dpos_n, sizeof(dpos_n),
-//							0, cudaMemcpyDeviceToHost));
-//
-//					/* Configure & launch posclr_krnl to initialize POS view */
-//					BLK.x = floor((maxThreadsPerBlock - 1 + (2*pos_n+1)*(2*pos_n+1)) /
-//							maxThreadsPerBlock);
-//					THD.x = maxThreadsPerBlock; // Thread block dimensions
-//					nx = 2*pos_n + 1;
-//					posclr_krnl<<<BLK,THD>>>(pos_n, nx);
-//					checkErrorAfterKernelLaunch("posclr_krnl, line ");
-//
-//					/* Determine which POS pixels cover the target  */
-//					posvis_cuda_2(dpar,dmod,ddat,orbit_offset,s,f,0,0,c);
-//
-//					/* Zero out the fit Doppler spectrum, then call pos2doppler to create the fit
-//					 * spectrum by mapping power from the plane of the sky to Doppler space.      */
-//					BLK.x = floor((maxThreadsPerBlock - 1 + ndop) / maxThreadsPerBlock);
-//					doppler_clrvect_krnl<<<BLK,THD>>>(ddat, s, f);
-//					checkErrorAfterKernelLaunch("doppler_clrvect_krnl, line ");
-//
-//					pos2doppler_cuda_2(dpar,dmod,ddat,0.0,0.0,0.0,0,s,f,0);
-//
-//					/* Compute cross section */
-//					float xsec=0.0;
-//					xsec = compute_doppler_xsec(ddat, ndop, s, f);
-//					compute_xsec_final_krnl<<<1,1>>>(ddat, xsec, s, f);
-//					checkErrorAfterKernelLaunch("compute_xsec_final_krnl (Doppler)");
-//				}
-//				if (compute_cosdelta) {
-//					/* Launch single-thread kernel to compute sum_cos_subradarlat */
-//					compute_cosdelta_krnl<<<1,1>>>(ddat, s, f);
-//					checkErrorAfterKernelLaunch("doppler_compute_cosdelta_krnl, line ");
-//				}
-//			}
+			/* Get nframes */
+			get_vary_params_nframes_krnl<<<1,1>>>(ddat, s);
+			checkErrorAfterKernelLaunch ("get_data_type_krnl, line ");
+			gpuErrchk(cudaMemcpyFromSymbol(&nframes, vary_params_dnframes,
+					sizeof(vary_params_dnframes), 0, cudaMemcpyDeviceToHost));
+
+			for (f=0; f<nframes; f++) {
+				/* Launch single-thread kernel to get our compute flags first */
+				get_compute_flags_krnl<<<1,1>>>(dpar, ddat, s, f);
+				checkErrorAfterKernelLaunch("doppler_get_compute_flags, line ");
+				gpuErrchk(cudaMemcpyFromSymbol(&compute_xsec, dcompute_xsec,
+						sizeof(dcompute_xsec), 0, cudaMemcpyDeviceToHost));
+				gpuErrchk(cudaMemcpyFromSymbol(&compute_cosdelta, dcompute_cosdelta,
+						sizeof(dcompute_cosdelta), 0, cudaMemcpyDeviceToHost));
+				gpuErrchk(cudaMemcpyFromSymbol(&weight, dweight,
+						sizeof(dweight), 0, cudaMemcpyDeviceToHost));
+				gpuErrchk(cudaMemcpyFromSymbol(&ndop, dndop,
+						sizeof(dndop), 0, cudaMemcpyDeviceToHost));
+
+				if (compute_xsec) {
+					/* Launch 9-threaded kernel to set up ae[3][3] and oe[3][3]
+					 * and also set the bistatic flag 		 */
+					THD.x = 9;
+					set_ae_oe_bistatic_krnl<<<BLK,THD>>>(ddat, s, f);
+					checkErrorAfterKernelLaunch("deldop_set_ae_oe_bistatic_krnl, line ");
+					//					pos = ddat->set[s].desc.doppler.frame[f].pos;
+					//					doppler = ddat->set[s].desc.doppler;
+
+					/* Need to get pos->n for kernel launch first */
+					get_pos_n_krnl<<<1,1>>>();
+					checkErrorAfterKernelLaunch("get_deldop_pos_n_krnl, line ");
+					gpuErrchk(cudaMemcpyFromSymbol(&pos_n, dpos_n, sizeof(dpos_n),
+							0, cudaMemcpyDeviceToHost));
+
+					/* Configure & launch posclr_krnl to initialize POS view */
+					BLK.x = floor((maxThreadsPerBlock - 1 + (2*pos_n+1)*(2*pos_n+1)) /
+							maxThreadsPerBlock);
+					THD.x = maxThreadsPerBlock; // Thread block dimensions
+					nx = 2*pos_n + 1;
+					posclr_krnl<<<BLK,THD>>>(pos_n, nx);
+					checkErrorAfterKernelLaunch("posclr_krnl, line ");
+
+					/* Determine which POS pixels cover the target  */
+					posvis_cuda_2(dpar,dmod,ddat,orbit_offset,s,f,0,0,c);
+
+					/* Zero out the fit Doppler spectrum, then call pos2doppler to create the fit
+					 * spectrum by mapping power from the plane of the sky to Doppler space.      */
+					BLK.x = floor((maxThreadsPerBlock - 1 + ndop) / maxThreadsPerBlock);
+					doppler_clrvect_krnl<<<BLK,THD>>>(ddat, s, f);
+					checkErrorAfterKernelLaunch("doppler_clrvect_krnl, line ");
+
+					pos2doppler_cuda_2(dpar,dmod,ddat,0.0,0.0,0.0,0,s,f,0);
+
+					/* Compute cross section */
+					float xsec=0.0;
+					xsec = compute_doppler_xsec(ddat, ndop, s, f);
+					compute_xsec_final_krnl<<<1,1>>>(ddat, xsec, s, f);
+					checkErrorAfterKernelLaunch("compute_xsec_final_krnl (Doppler)");
+				}
+				if (compute_cosdelta) {
+					/* Launch single-thread kernel to compute sum_cos_subradarlat */
+					compute_cosdelta_krnl<<<1,1>>>(ddat, s, f);
+					checkErrorAfterKernelLaunch("doppler_compute_cosdelta_krnl, line ");
+				}
+			}
 			break;
 		case POS:
 			break;
 		case LGHTCRV:
 //			lghtcrv = &dat->set[s].desc.lghtcrv;
+
+			/* Figure out the compute_brightness flag first */
+			get_lghtcrv_cb_krnl<<<1,1>>>(dpar, ddat, s);
+			checkErrorAfterKernelLaunch("get_lghtcrv_cb_krnl");
+			gpuErrchk(cudaMemcpyFromSymbol(&compute_brightness, dcompute_brightness,
+					0, cudaMemcpyDeviceToHost));
 
 			if (compute_brightness) {
 				/* Launch single-thread kernel to get lghtcrv parameters */
@@ -900,8 +909,6 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 					/* Launch single-thread kernel to get our compute flags first */
 					get_compute_flags_krnl<<<1,1>>>(dpar, ddat, s, i);
 					checkErrorAfterKernelLaunch("get_compute_flags_krnl, line ");
-					gpuErrchk(cudaMemcpyFromSymbol(&compute_brightness, dcompute_brightness,
-								sizeof(dcompute_brightness), 0, cudaMemcpyDeviceToHost));
 					gpuErrchk(cudaMemcpyFromSymbol(&lghtcrv_bistatic, dlghtcrv_bistatic,
 									sizeof(lghtcrv_bistatic), 0, cudaMemcpyDeviceToHost));
 
@@ -939,30 +946,28 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 //						for (c=0; c<mod->shape.ncomp; c++)
 						posvis_cuda_2(dpar,dmod,ddat,orbit_offset,s,i,1,0,c);
 
-						/* Identify and mask out shadowed POS pixels */
-						/* Must first copy xlim & ylim */
-						vp_get_xylims_krnl<<<1,1>>>(dmod, ddat, s, i);
-						checkErrorAfterKernelLaunch("vp_get_xylims_krnl, line ");
-						gpuErrchk(cudaMemcpyFromSymbol(&xlim[0], vp_xlim0,
-								sizeof(xlim[0]), 0, cudaMemcpyDeviceToHost));
-						gpuErrchk(cudaMemcpyFromSymbol(&xlim[1], vp_xlim1,
-								sizeof(xlim[1]), 0, cudaMemcpyDeviceToHost));
-						gpuErrchk(cudaMemcpyFromSymbol(&ylim[0], vp_ylim0,
-								sizeof(ylim[0]), 0, cudaMemcpyDeviceToHost));
-						gpuErrchk(cudaMemcpyFromSymbol(&ylim[1], vp_ylim1,
-								sizeof(ylim[1]), 0, cudaMemcpyDeviceToHost));
-
-						/* Now calculate how many threads and blocks are needed */
-						xspan = xlim[1]-xlim[0] + 1;
-						yspan = ylim[1]-ylim[0] + 1;
-//						if (xlim[0]<0)	xspan += 1;
-//						if (ylim[0]<1)	yspan += 1;
-						nThreads = xspan*yspan;
-
-						/* Configure and launch */
-						BLK.x = floor((maxThreadsPerBlock - 1 + nThreads) /
-								maxThreadsPerBlock);
-						THD.x = maxThreadsPerBlock; // Thread block dimensions
+//						/* Identify and mask out shadowed POS pixels */
+//						/* Must first copy xlim & ylim */
+//						vp_get_xylims_krnl<<<1,1>>>(dmod, ddat, s, i);
+//						checkErrorAfterKernelLaunch("vp_get_xylims_krnl, line ");
+//						gpuErrchk(cudaMemcpyFromSymbol(&xlim[0], vp_xlim0,
+//								sizeof(xlim[0]), 0, cudaMemcpyDeviceToHost));
+//						gpuErrchk(cudaMemcpyFromSymbol(&xlim[1], vp_xlim1,
+//								sizeof(xlim[1]), 0, cudaMemcpyDeviceToHost));
+//						gpuErrchk(cudaMemcpyFromSymbol(&ylim[0], vp_ylim0,
+//								sizeof(ylim[0]), 0, cudaMemcpyDeviceToHost));
+//						gpuErrchk(cudaMemcpyFromSymbol(&ylim[1], vp_ylim1,
+//								sizeof(ylim[1]), 0, cudaMemcpyDeviceToHost));
+//
+//						/* Now calculate how many threads and blocks are needed */
+						xspan = 2*pos_n + 1;
+//						yspan = ylim[1]-ylim[0] + 1;
+						nThreads = xspan*xspan;
+//
+//						/* Configure and launch */
+//						BLK.x = floor((maxThreadsPerBlock - 1 + nThreads) /
+//								maxThreadsPerBlock);
+//						THD.x = maxThreadsPerBlock; // Thread block dimensions
 						posmask_krnl<<<BLK,THD>>>(dpar, nThreads, xspan);
 						checkErrorAfterKernelLaunch("posmask_krnl, line ");
 					}

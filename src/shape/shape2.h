@@ -409,6 +409,7 @@ Modified 2003 April 3 by CM:
 *****************************************************************************************/
 
 #include <stdio.h>
+#include "const.h"
 /*****************************************************************************************
                                 DEFINITION OF struct par_t
 *****************************************************************************************/
@@ -1131,6 +1132,7 @@ struct deldopfrm_t {
   double **map_fit;             /* fit image needed for the map action */
   double **map_pos;             /* POS image needed for the map action */
   double **map_facet_power;     /* array of facet contributions needed for the map action */
+  float fit_overflow[MAXOVERFLOW][MAXOVERFLOW];	/* for CUDA AF use */
 };
 
 /* Structure deldop_t describes a delay-Doppler data set. */
