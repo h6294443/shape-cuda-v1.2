@@ -343,12 +343,11 @@ __host__ void calc_deldop_cuda(struct par_t *dpar, struct mod_t *dmod,
 __host__ void calc_doppler_cuda(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int s);
 //__host__ void calc_poset_cuda( struct par_t *par, struct mod_t *mod, int s);
-//__host__ void calc_lghtcrv_cuda(struct par_t *par, struct mod_t *mod, struct
-//		lghtcrv_t *lghtcrv, int s);
+__host__ void calc_lghtcrv_cuda(struct par_t *par, struct mod_t *mod, int s);
 
 __device__ int cf_nf, cf_nsets, cf_nframes, cf_nviews, cf_ndel, cf_ndop,
 			   cf_v0_index, cf_pos_n, cf_exclude_seen, cf_xlim0, cf_xlim1,
-			   cf_ylim0, cf_ylim1;
+			   cf_ylim0, cf_ylim1, cf_n, cf_ncalc;
 __device__ unsigned char cf_type;
 __device__ float cf_overflow_o2_store, cf_overflow_m2_store, cf_overflow_xsec_store,
 		cf_overflow_delmean_store, cf_overflow_dopmean_store;
@@ -359,23 +358,8 @@ __device__ struct pos_t *cf_pos;
 __device__ struct doppler_t *cf_doppler;
 __device__ struct dopfrm_t *cf_dop_frame;
 __device__ struct dopview_t *cf_dop_view0;
-//
-//__global__ void cf_get_global_frmsz_krnl(int *global_lim, int4 *xylim,
-//		int nframes) {
-//	/* nframes-threaded kernel */
-//	int f = threadIdx.x;
-//	if (f < nframes) {
-//		/* Initialize global_lim 	 */
-//		for (int i=0; i<4; i++)
-//			global_lim[i] = 0;
-//
-//		/* Now calculate minimum for all frames */
-//		atomicMin(&global_lim[0], xylim[f].w);
-//		atomicMax(&global_lim[1], xylim[f].x);
-//		atomicMin(&global_lim[2], xylim[f].y);
-//		atomicMax(&global_lim[3], xylim[f].z);
-//	}
-//}
+__device__ struct lghtcrv_t *cf_lghtcrv;
+__device__ struct crvrend_t *cf_rend;
 __global__ void cf_init_devpar_krnl(struct par_t *dpar, struct mod_t
 		*dmod, struct dat_t *ddat) {
 	/* Single-threaded kernel */
@@ -490,7 +474,7 @@ __global__ void cf_get_frames_krnl(struct dat_t *ddat, int s) {
 			cf_nframes = ddat->set[s].desc.poset.nframes;
 			break;
 		case LGHTCRV:
-			cf_nframes = ddat->set[s].desc.lghtcrv.ncalc;
+			cf_ncalc = ddat->set[s].desc.lghtcrv.ncalc;
 			break;
 		}
 
@@ -519,6 +503,12 @@ __global__ void cf_set_shortcuts_krnl(struct dat_t *ddat, int s, int f) {
 			cf_ndop		 = cf_dop_frame->ndop;
 			cf_pos		 = &cf_dop_frame->pos;
 			break;
+		case LGHTCRV:
+			cf_lghtcrv = &ddat->set[s].desc.lghtcrv;
+			cf_rend = &cf_lghtcrv->rend[f];
+			cf_pos = &cf_rend->pos;
+			cf_n = cf_lghtcrv->n;
+			break;
 		}
 		cf_overflow_o2_store = 0.0;
 		cf_overflow_m2_store = 0.0;
@@ -543,8 +533,11 @@ __global__ void cf_set_pos_ae_krnl(int v) {
 			cf_pos->ae[i][j] = cf_dop_frame->view[v].ae[i][j];
 			cf_pos->oe[i][j] = cf_dop_frame->view[v].oe[i][j];
 			break;
+		case LGHTCRV:
+			cf_pos->ae[i][j] = cf_rend->ae[i][j];
+			cf_pos->oe[i][j] = cf_rend->oe[i][j];
+			cf_pos->se[i][j] = cf_rend->se[i][j];
 		}
-
 		/* Single-thread task */
 		if (offset == 0)
 			cf_pos->bistatic = 0;
@@ -557,7 +550,7 @@ __global__ void cf_posclr_krnl(int n, int nx)
 	int i = (offset % nx) - n;
 	int j = (offset / nx) - n;
 
-	if (offset < (2*cf_pos->n+1)*(2*cf_pos->n+1)) {
+	if (offset < (nx*nx)) {
 		/* For each POS pixel, zero out the optical brightness (b) and
 		 * cos(scattering angle), reset the z coordinate (distance from COM towards
 		 * Earth) to a dummy value, and reset the body, component, and facet onto
@@ -906,7 +899,6 @@ __host__ void calc_deldop_cuda(struct par_t *dpar, struct mod_t *dmod,
 	}  /* end loop over frames */
 }
 
-
 __host__ void calc_doppler_cuda(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int s)
 {
@@ -916,7 +908,7 @@ __host__ void calc_doppler_cuda(struct par_t *dpar, struct mod_t *dmod,
 		nviews, nframes, nx, f, v, v2;
 	dim3 BLK,THD;
 
-	/* Get # of frames for this deldop */
+	/* Get # of frames for this doppler frame */
 	cf_get_frames_krnl<<<1,1>>>(ddat, s);
 	checkErrorAfterKernelLaunch("cf_get_nframes_krnl (calc_deldop_cuda)");
 	gpuErrchk(cudaMemcpyFromSymbol(&nframes, cf_nframes, sizeof(int),
@@ -934,7 +926,7 @@ __host__ void calc_doppler_cuda(struct par_t *dpar, struct mod_t *dmod,
 				0, cudaMemcpyDeviceToHost));
 
 		/* First allocate the fit array */
-		cudaCalloc((void**)&fit, sizeof(float), ndop);
+		//cudaCalloc((void**)&fit, sizeof(float), ndop);
 
 		/* If smearing is being modeled, initialize variables that
 		 * will be used to sum results calculated for individual views.  */
@@ -1070,7 +1062,6 @@ __host__ void calc_doppler_cuda(struct par_t *dpar, struct mod_t *dmod,
 		}
 	}  /* end loop over frames */
 }
-
 
 //void calc_poset( struct par_t *par, struct mod_t *mod, struct poset_t *poset,
 //		int s)
@@ -1257,149 +1248,132 @@ __host__ void calc_doppler_cuda(struct par_t *dpar, struct mod_t *dmod,
 //}
 //
 //
-//void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtcrv,
-//		int s)
-//{
-//	const char *monthName[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-//			"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-//	double orbit_offset[3] = {0.0, 0.0, 0.0};
-//
-//	FILE *fpopt;
-//	char tempstring[MAXLEN], name[MAXLEN];
-//	int year, mon, day, hour, min, sec, n, ncalc, c, i, i_mid, j, k, l, facetnum,
-//	n_cross360, n_projectedpixels, n_shadowedpixels, x, y, v;
-//	double epoch_mid, epoch_diff_min, epoch_diff, w[3], spin_colat, spin_azim, oa[3][3],
-//	rotphase, sa[3][3], to_sun[3], to_sun_lat, to_sun_long, pab[3], pab_lat,
-//	pab_long, intensityfactor, phi, theta, psi, intspin_body[3], posbnd_logfactor,
-//	projected_area, lambertdisk_intensity, interp;
-//	double **to_earth, *to_earth_lat, *to_earth_long, *rotphase_unwrapped;
-//	struct crvrend_t *rend;
-//	struct pos_t *pos;
-//
-//	/*  Initialize variables to avoid compilation warning  */
-//
-//	i_mid = 0;
-//	epoch_mid = epoch_diff = epoch_diff_min = 0.0;
-//	n_cross360 = 0;
-//	to_earth = NULL;
-//	to_earth_lat = to_earth_long = rotphase_unwrapped = NULL;
-//
-//	/*  Initialize variables dealing with bad models  */
-//
-//	posbnd_logfactor = 0.0;
-//
-//	/*  Get n, the number of observed points for this lightcurve,
-//      and ncalc, the number of epochs at which model lightcurve
-//      brightnesses are to be computed                            */
-//
-//	n = lghtcrv->n;
-//	ncalc = lghtcrv->ncalc;
-//
-//	/*  Calculate the model lightcurve values at each of the user-specified
-//      epochs x[i], with i=1,2,...,ncalc; these may or may not be the same as the
-//      epochs t[i] (i=1,2,...,n) at which actual lightcurve observations were made.  */
-//
-//	for (i=1; i<=ncalc; i++) {
-//
-//		rend = &lghtcrv->rend[i];
-//		pos = &rend->pos;
-//
-//		for (j=0; j<=2; j++)
-//			for (k=0; k<=2; k++) {
-//				pos->ae[j][k] = rend->ae[j][k];
-//				pos->oe[j][k] = rend->oe[j][k];
-//				pos->se[j][k] = rend->se[j][k];
-//			}
-//		pos->bistatic = 1;
-//
-//		/*  Initialize the plane-of-sky view  */
-//
-//		posclr( pos);
-//
-//		/*  Call routine posvis to get the facet number, scattering angle,
-//        incidence angle, and distance toward Earth at the center of
-//        each POS pixel; set the posbnd parameter to 1 if any portion
-//        of the model extends beyond the POS frame limits.              */
-//
-//		for (c=0; c<mod->shape.ncomp; c++)
-//			if (posvis( &mod->shape.comp[c].real, orbit_offset, pos,
-//					(int) par->pos_smooth, 0, 0, c)) {
-//				par->posbnd = 1;
-//				if (pos->bistatic)
-//					posbnd_logfactor += 0.5 * pos->posbnd_logfactor;
-//				else
-//					posbnd_logfactor += pos->posbnd_logfactor;
-//			}
-//
-//		/*  Now view the model from the source (sun) and get the facet number
-//        and distance toward the source of each pixel in this projected view;
-//        use this information to determine which POS pixels are shadowed       */
-//
-//		if (pos->bistatic) {
-//			for (c=0; c<mod->shape.ncomp; c++)
-//				if (posvis( &mod->shape.comp[c].real, orbit_offset, pos,
-//						0, 1, 0, c)) {
-//					par->posbnd = 1;
-//					posbnd_logfactor += 0.5 * pos->posbnd_logfactor;
-//				}
-//
-//			/*  Identify and mask out shadowed POS pixels  */
-//
-//			posmask( pos, par->mask_tol);
-//		}
-//
-//		/*  Go through all POS pixels which are visible and unshadowed with
-//        sufficiently low scattering and incidence angles, and mark the facets
-//        which project onto their centers as having been "seen" at least once   */
-//
-//		if (s != par->exclude_seen) {
-//			for (k=pos->xlim[0]; k<=pos->xlim[1]; k++)
-//				for (l=pos->ylim[0]; l<=pos->ylim[1]; l++) {
-//					if ((pos->cose[k][l] > par->mincosine_seen)
-//							&& (pos->cosi[k][l] > par->mincosine_seen)
-//							&& (pos->f[k][l] >= 0)) {
-//						facetnum = pos->f[k][l];
-//						c = pos->comp[k][l];
-//						mod->shape.comp[c].real.f[facetnum].seen = 1;
-//					}
-//				}
-//		}
-//
-//		/*  Compute the model brightness for this model lightcurve point  */
-//
-//		intensityfactor = pow( pos->km_per_pixel/AU, 2.0);
-//		lghtcrv->y[i] = apply_photo( mod, lghtcrv->ioptlaw, lghtcrv->solar_phase[i],
-//				intensityfactor, pos, 0);
-//
-//		/*  Finished with this calculated lightcurve point  */
-//
-//	}
-//
-//	/*  Now that we have calculated the model lightcurve brightnesses y at each
-//      of the epochs x, we use cubic spline interpolation (Numerical Recipes
-//      routines spline and splint) to get model lightcurve brightness fit[i]
-//      at each OBSERVATION epoch t[i], with i=1,2,...,n.  This will allow us
-//      (in routine chi2) to compare model to data (fit[i] to obs[i]) to get
-//      chi-square.  Note that vector y2 contains the second derivatives of
-//      the interpolating function at the calculation epochs x.
-//
-//      Smearing is handled by interpolating the brightness at the time t of
-//      each individual view and then taking the mean of all views that
-//      correspond to a given observed lightcurve point.                         */
-//
-//	spline( lghtcrv->x, lghtcrv->y, ncalc, 2.0e30, 2.0e30, lghtcrv->y2);
-//	for (i=1; i<=n; i++) {
-//		lghtcrv->fit[i] = 0.0;
-//		for (v=0; v<lghtcrv->nviews; v++) {
-//			splint( lghtcrv->x, lghtcrv->y, lghtcrv->y2, ncalc,
-//					lghtcrv->t[i][v], &interp);
-//			lghtcrv->fit[i] += interp;
-//		}
-//		lghtcrv->fit[i] /= lghtcrv->nviews;
-//	}
-//
-//	/*  Deal with flags for model that extends beyond the POS frame  */
-//
-//	par->posbnd_logfactor += lghtcrv->dof * (posbnd_logfactor/ncalc);
-//
-//}
+void calc_lghtcrv( struct par_t *dpar, struct mod_t *dmod, struct dat_t *ddat, int s)
+{
+	float3 orbit_offset;
+	orbit_offset.x = orbit_offset.y = orbit_offset.z = 0.0;
+
+	int n, ncalc, c, i, j, k, l, facetnum, x, y, v;
+	double w[3], oa[3][3], sa[3][3], intensityfactor, posbnd_logfactor, interp;
+
+	/*  Initialize variables dealing with bad models  */
+	posbnd_logfactor = 0.0;
+
+	/* Get n (# of observed points for this lightcurve), and ncalc (# of epochs
+	 * at which model lightcurve brightnesses are to be computed            */
+	cf_get_frames_krnl<<<1,1>>>(ddat, s);
+	checkErrorAfterKernelLaunch("cf_get_frames_krnl (calc_lghtcrv_cuda)");
+	gpuErrchk(cudaMemcpyFromSymbol(&ncalc, cf_ncalc, sizeof(int),
+			0, cudaMemcpyDeviceToHost));
+
+	/* Calculate model lightcurve values at each user-specified epochs x[i],
+	 * with i=1,2,...,ncalc; these may/may not be the same as epochs t[i]
+	 * (i=1,2,...,n) at which actual lightcurve observations were made.  */
+
+	for (i=1; i<=ncalc; i++) {
+		/* Set lghtcrv, rend, and pos */
+		cf_set_shortcuts_krnl<<<1,1>>>(ddat, s, i);
+		checkErrorAfterKernelLaunch("cf_deldop_1st_krnl (calc_deldop_cuda)");
+
+
+
+
+		for (j=0; j<=2; j++)
+			for (k=0; k<=2; k++) {
+				pos->ae[j][k] = rend->ae[j][k];
+				pos->oe[j][k] = rend->oe[j][k];
+				pos->se[j][k] = rend->se[j][k];
+			}
+		pos->bistatic = 1;
+
+		/*  Initialize the plane-of-sky view  */
+
+		posclr( pos);
+
+		/*  Call routine posvis to get the facet number, scattering angle,
+        incidence angle, and distance toward Earth at the center of
+        each POS pixel; set the posbnd parameter to 1 if any portion
+        of the model extends beyond the POS frame limits.              */
+
+		for (c=0; c<mod->shape.ncomp; c++)
+			if (posvis( &mod->shape.comp[c].real, orbit_offset, pos,
+					(int) par->pos_smooth, 0, 0, c)) {
+				par->posbnd = 1;
+				if (pos->bistatic)
+					posbnd_logfactor += 0.5 * pos->posbnd_logfactor;
+				else
+					posbnd_logfactor += pos->posbnd_logfactor;
+			}
+
+		/*  Now view the model from the source (sun) and get the facet number
+        and distance toward the source of each pixel in this projected view;
+        use this information to determine which POS pixels are shadowed       */
+
+		if (pos->bistatic) {
+			for (c=0; c<mod->shape.ncomp; c++)
+				if (posvis( &mod->shape.comp[c].real, orbit_offset, pos,
+						0, 1, 0, c)) {
+					par->posbnd = 1;
+					posbnd_logfactor += 0.5 * pos->posbnd_logfactor;
+				}
+
+			/*  Identify and mask out shadowed POS pixels  */
+
+			posmask( pos, par->mask_tol);
+		}
+
+		/*  Go through all POS pixels which are visible and unshadowed with
+        sufficiently low scattering and incidence angles, and mark the facets
+        which project onto their centers as having been "seen" at least once   */
+
+		if (s != par->exclude_seen) {
+			for (k=pos->xlim[0]; k<=pos->xlim[1]; k++)
+				for (l=pos->ylim[0]; l<=pos->ylim[1]; l++) {
+					if ((pos->cose[k][l] > par->mincosine_seen)
+							&& (pos->cosi[k][l] > par->mincosine_seen)
+							&& (pos->f[k][l] >= 0)) {
+						facetnum = pos->f[k][l];
+						c = pos->comp[k][l];
+						mod->shape.comp[c].real.f[facetnum].seen = 1;
+					}
+				}
+		}
+
+		/*  Compute the model brightness for this model lightcurve point  */
+
+		intensityfactor = pow( pos->km_per_pixel/AU, 2.0);
+		lghtcrv->y[i] = apply_photo( mod, lghtcrv->ioptlaw, lghtcrv->solar_phase[i],
+				intensityfactor, pos, 0);
+
+		/*  Finished with this calculated lightcurve point  */
+
+	}
+
+	/*  Now that we have calculated the model lightcurve brightnesses y at each
+      of the epochs x, we use cubic spline interpolation (Numerical Recipes
+      routines spline and splint) to get model lightcurve brightness fit[i]
+      at each OBSERVATION epoch t[i], with i=1,2,...,n.  This will allow us
+      (in routine chi2) to compare model to data (fit[i] to obs[i]) to get
+      chi-square.  Note that vector y2 contains the second derivatives of
+      the interpolating function at the calculation epochs x.
+
+      Smearing is handled by interpolating the brightness at the time t of
+      each individual view and then taking the mean of all views that
+      correspond to a given observed lightcurve point.                         */
+
+	spline( lghtcrv->x, lghtcrv->y, ncalc, 2.0e30, 2.0e30, lghtcrv->y2);
+	for (i=1; i<=n; i++) {
+		lghtcrv->fit[i] = 0.0;
+		for (v=0; v<lghtcrv->nviews; v++) {
+			splint( lghtcrv->x, lghtcrv->y, lghtcrv->y2, ncalc,
+					lghtcrv->t[i][v], &interp);
+			lghtcrv->fit[i] += interp;
+		}
+		lghtcrv->fit[i] /= lghtcrv->nviews;
+	}
+
+	/*  Deal with flags for model that extends beyond the POS frame  */
+
+	par->posbnd_logfactor += lghtcrv->dof * (posbnd_logfactor/ncalc);
+
+}

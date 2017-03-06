@@ -1213,6 +1213,7 @@ struct dopfrm_t {
   double *map_fit;              /* fit spectrum needed for the map action */
   double **map_pos;             /* POS image needed for the map action */
   double **map_facet_power;     /* array of facet contributions needed for the map action */
+  float fit_overflow[MAXOVERFLOW];	/* For CUDA use in pos2doppler */
 };
 
 /* Structure doppler_t describes a Doppler data set. */

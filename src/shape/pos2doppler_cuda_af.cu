@@ -305,7 +305,7 @@ __global__ void pos2doppler_pixel_af_krnl(
 		double orbit_xoff, double orbit_yoff,
 		float2 *axay, float2 *doplim, float2 *xyincr, float4 *dop,
 		int *ndop, int *idop0, int *global_lim,
-		float *dopshift, float *fit_overflow[MAXBINS]) {
+		float *dopshift) {
 	/* Multi-threaded kernel */
 	int total_offset = blockIdx.x * blockDim.x + threadIdx.x;
 	int offset = total_offset % frame_size;
@@ -378,7 +378,7 @@ __global__ void pos2doppler_pixel_af_krnl(
 				if (!afdop_any_overflow) {
 					afdop_any_overflow = 1;
 					for (j=0; j<MAXOVERFLOW; j++)
-						fit_overflow[frm][j] = 0.0;  // To-Do:  This might need attention.
+						frame[frm]->fit_overflow[j] = 0.0;  // To-Do:  This might need attention.
 
 					/* Center the COM in the overflow spectrum: bin [idop] in
 					 * the fit frame corresponds to bin [idop+idop0] in the
@@ -499,7 +499,7 @@ __global__ void pos2doppler_pixel_af_krnl(
 				for (idop=idop1; idop<=idop2; idop++) {
 					k = MIN( idop - idop_min, MAXBINS);
 					fit_contribution = amp * dop_contribution[k];
-					fit_overflow[frm][idop+idop0[frm]] += fit_contribution;  // might need atomics
+					frame[frm]->fit_overflow[idop+idop0[frm]] += fit_contribution;  // might need atomics
 					if (dpar->action == MAP && dpar->map_mode == MAPMODE_DELDOP)
 						if (idop >= dpar->map_doplim[0] && idop <= dpar->map_doplim[1]) {
 							frame[frm]->map_pos[x][y] += fit_contribution;
@@ -517,7 +517,7 @@ __global__ void pos2doppler_pixel_af_krnl(
 }
 __global__ void pos2doppler_finish_krnl(struct par_t *dpar, struct dat_t *ddat,
 		struct dopfrm_t **frame, float4 *dop, float2 *doplim, float *dopshift,
-		float *fit_overflow[MAXBINS], int *idop0, int *ndop, int set, int nframes) {
+		int *idop0, int *ndop, int set, int nframes) {
 	/* Single-threaded kernel */
 	int frm = threadIdx.x;
 	int j, j1, j2;
@@ -552,13 +552,15 @@ __global__ void pos2doppler_finish_krnl(struct par_t *dpar, struct dat_t *ddat,
 			j1 = MAX(frame[frm]->idoplim[0] + idop0[frm], 0);
 			j2 = MIN(frame[frm]->idoplim[1] + idop0[frm], MAXOVERFLOW - 1);
 			for (j=j1; j<=j2; j++) {
-				if (fit_overflow[frm][j] != 0.0) {
+				if (frame[frm]->fit_overflow[j] != 0.0) {
 					if (dpar->speckle)
-						variance = sdev_sq + lookfact*fit_overflow[frm][j]*fit_overflow[frm][j];
+						variance = sdev_sq + lookfact*frame[frm]->fit_overflow[j]*
+								frame[frm]->fit_overflow[j];
 					frame[frm]->overflow_o2 += 1.0;
-					frame[frm]->overflow_m2 += fit_overflow[frm][j]*fit_overflow[frm][j]/variance;
-					frame[frm]->overflow_xsec += fit_overflow[frm][j];
-					frame[frm]->overflow_dopmean += (j - idop0[frm])*fit_overflow[frm][j];
+					frame[frm]->overflow_m2 += frame[frm]->fit_overflow[j]*
+							frame[frm]->fit_overflow[j]/variance;
+					frame[frm]->overflow_xsec += frame[frm]->fit_overflow[j];
+					frame[frm]->overflow_dopmean += (j - idop0[frm])*frame[frm]->fit_overflow[j];
 				}
 			}
 			if (frame[frm]->overflow_xsec != 0.0)
@@ -592,7 +594,7 @@ __host__ int pos2doppler_cuda_af( struct par_t *dpar, struct mod_t *dmod,
 	dim3 BLK, THD;
 	struct dopfrm_t **frame;
 	struct pos_t **pos;
-	float *dopshift, *fit_overflow[MAXOVERFLOW];
+	float *dopshift;
 	float2 *doplim, *axay, *xyincr;
 	float3 *w;
 	float4 *dop;
@@ -610,7 +612,6 @@ __host__ int pos2doppler_cuda_af( struct par_t *dpar, struct mod_t *dmod,
 	cudaCalloc((void**)&global_lim,	 sizeof(int), 			        4);
 	cudaCalloc((void**)&idop0,	   	 sizeof(int), 			  nframes);
 	cudaCalloc((void**)&ndop,	   	 sizeof(int), 			  nframes);
-	cudaCalloc((void**)&fit_overflow,sizeof(float*), 		  nframes);
 
 	/* Launch nframes-threaded initialization kernel */
 	THD.x = nframes;
@@ -637,13 +638,13 @@ __host__ int pos2doppler_cuda_af( struct par_t *dpar, struct mod_t *dmod,
 
 	pos2doppler_pixel_af_krnl<<<BLK,THD>>>(dpar, dmod, ddat, pos, frame, xspan,
 			set, nframes, frmsz, nThreads, body, orbit_xoff, orbit_yoff,
-			axay, doplim, xyincr, dop, ndop, idop0, global_lim, dopshift, fit_overflow);
+			axay, doplim, xyincr, dop, ndop, idop0, global_lim, dopshift);
 	checkErrorAfterKernelLaunch("pos2doppler_pixel_af_krnl");
 
 	THD.x = nframes;
 	/* Launch the single-thread kernel to finish up Doppler calculations */
 	pos2doppler_finish_krnl<<<1,THD.x>>>(dpar, ddat, frame, dop, doplim,
-			dopshift, fit_overflow, idop0, ndop, set, nframes);
+			dopshift, idop0, ndop, set, nframes);
 	checkErrorAfterKernelLaunch("pos2doppler_finish_krnl, line ");
 	gpuErrchk(cudaMemcpyFromSymbol(&badradar, afdop_badradar, sizeof(badradar),
 			0, cudaMemcpyDeviceToHost));
@@ -663,7 +664,6 @@ __host__ int pos2doppler_cuda_af( struct par_t *dpar, struct mod_t *dmod,
 	cudaFree(xylim);
 	cudaFree(global_lim);
 	cudaFree(idop0);
-//	cudaFree(fit_overflow);
 
 	return badradar;
 }

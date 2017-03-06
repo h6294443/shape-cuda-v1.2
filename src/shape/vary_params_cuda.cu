@@ -610,44 +610,6 @@ __global__ void lghtcrv_splint_krnl(struct dat_t *ddat, int set)
 		*y=a*ya[klo] + b*ya[khi] + ((a*a*a-a) * y2a[klo] + (b*b*b-b) * y2a[khi]) * (h*h) /6.0;
 	}
 }
-__global__ void vp_copy_fit_back_krnl(struct dat_t *ddat, float *fit, int s,
-		int f, int nThreads) {
-	/* Multi-threaded kernel */
-	/* Deprecated and for debug use only */
-	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int idop;
-
-	if (offset < nThreads) {
-		switch (ddat->set[s].type) {
-		case DELAY:
-			int idel = offset % dndel - 1;
-			idop = offset / dndel - 1;
-			if (idel>=0 && idel <= dndel && idop>=0 && idop<=dndop) {
-				//			ddat->set[s].desc.deldop.frame[f].fit[idel][idop] = fit[offset];
-				ddat->set[s].desc.deldop.frame[f].fit_s[idop*dndel+idel] = fit[offset];
-				//fit_copy[offset] = fit[offset];
-			}
-			if (idop == dndop-2)
-				ddat->set[s].desc.deldop.frame[f].fit_s[(idop+1)*dndel+idel] = 0.0;
-			if (idel == dndel-2)
-				ddat->set[s].desc.deldop.frame[f].fit_s[idop*dndel+idel+1] = 0.0;
-			break;
-		case DOPPLER:
-			idop = offset;
-			if (idop>=0 && idop<=dndop)
-				ddat->set[s].desc.doppler.frame[f].fit[idop] = fit[offset];
-			break;
-		case POS:
-			printf("Write code for POS in vp_copy_fit_back_krnl in "
-					"vary_params_cuda");
-			break;
-		case LGHTCRV:
-			printf("Write code for LGTHCRV in vp_copy_fit_back_krnl in "
-					"vary_params_cuda");
-			break;
-		}
-	}
-}
 __global__ void vp_set_four_parameters_krnl(struct dat_t *ddat) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
@@ -686,13 +648,12 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 	double orbit_offset[3] = {0.0, 0.0, 0.0};
 	int c=0, f, s, i, compute_xsec, compute_brightness, compute_zmax,
 			compute_cosdelta, n, ncalc, pos_n, nx, lghtcrv_bistatic, nframes,
-			xlim[2], ylim[2], xspan, yspan, lghtcrv_n;
+			xlim[2], ylim[2], xspan, lghtcrv_n;
 	double weight;
 	dim3 BLK,THD;
 	unsigned char type;
-	int ndel, ndop, nThreads, mTpB = maxThreadsPerBlock, redsz;
+	int ndel, ndop, nThreads;
 
-	int debug = 0;
 	/*  Initialize variables  */
 	vp_init_vars<<<1,1>>>();
 	checkErrorAfterKernelLaunch("vp_init_krnl, line ");
@@ -707,7 +668,6 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 
 		switch (type) {
 		case DELAY:
-
 			/* Get nframes */
 			get_vary_params_nframes_krnl<<<1,1>>>(ddat, s);
 			checkErrorAfterKernelLaunch ("get_data_type_krnl, line ");
@@ -715,7 +675,6 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 				sizeof(vary_params_dnframes), 0, cudaMemcpyDeviceToHost));
 
 			for (f=0; f<nframes; f++) {
-
 				/* Get the compute_zmax and compute x_sec flags in a single-
 				 * threaded kernel */
 				get_compute_flags_krnl<<<1,1>>>(dpar, ddat, s, f);
@@ -840,8 +799,6 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 					THD.x = 9;
 					set_ae_oe_bistatic_krnl<<<BLK,THD>>>(ddat, s, f);
 					checkErrorAfterKernelLaunch("deldop_set_ae_oe_bistatic_krnl, line ");
-					//					pos = ddat->set[s].desc.doppler.frame[f].pos;
-					//					doppler = ddat->set[s].desc.doppler;
 
 					/* Need to get pos->n for kernel launch first */
 					get_pos_n_krnl<<<1,1>>>();
@@ -884,8 +841,6 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 		case POS:
 			break;
 		case LGHTCRV:
-//			lghtcrv = &dat->set[s].desc.lghtcrv;
-
 			/* Figure out the compute_brightness flag first */
 			get_lghtcrv_cb_krnl<<<1,1>>>(dpar, ddat, s);
 			checkErrorAfterKernelLaunch("get_lghtcrv_cb_krnl");
@@ -927,11 +882,11 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 							sizeof(lghtcrv_n), 0, cudaMemcpyDeviceToHost));
 
 					/* Configure & launch posclr_krnl to initialize POS view */
-					BLK.x = floor((maxThreadsPerBlock - 1 + (2*pos_n+1)*(2*pos_n+1)) /
-							maxThreadsPerBlock);
-					THD.x = maxThreadsPerBlock; // Thread block dimensions
-					nx = 2*pos_n + 1;
-					posclr_krnl<<<BLK,THD>>>(pos_n, nx);
+					xspan = 2*pos_n+1;
+					nThreads = xspan*xspan;
+					BLK.x = floor((maxThreadsPerBlock-1 + nThreads)/maxThreadsPerBlock);
+					THD.x = maxThreadsPerBlock;
+					posclr_krnl<<<BLK,THD>>>(pos_n, xspan);
 					checkErrorAfterKernelLaunch("posclr_krnl, line ");
 
 					/* Determine which POS pixels cover the target */
@@ -946,39 +901,13 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 //						for (c=0; c<mod->shape.ncomp; c++)
 						posvis_cuda_2(dpar,dmod,ddat,orbit_offset,s,i,1,0,c);
 
-//						/* Identify and mask out shadowed POS pixels */
-//						/* Must first copy xlim & ylim */
-//						vp_get_xylims_krnl<<<1,1>>>(dmod, ddat, s, i);
-//						checkErrorAfterKernelLaunch("vp_get_xylims_krnl, line ");
-//						gpuErrchk(cudaMemcpyFromSymbol(&xlim[0], vp_xlim0,
-//								sizeof(xlim[0]), 0, cudaMemcpyDeviceToHost));
-//						gpuErrchk(cudaMemcpyFromSymbol(&xlim[1], vp_xlim1,
-//								sizeof(xlim[1]), 0, cudaMemcpyDeviceToHost));
-//						gpuErrchk(cudaMemcpyFromSymbol(&ylim[0], vp_ylim0,
-//								sizeof(ylim[0]), 0, cudaMemcpyDeviceToHost));
-//						gpuErrchk(cudaMemcpyFromSymbol(&ylim[1], vp_ylim1,
-//								sizeof(ylim[1]), 0, cudaMemcpyDeviceToHost));
-//
-//						/* Now calculate how many threads and blocks are needed */
-						xspan = 2*pos_n + 1;
-//						yspan = ylim[1]-ylim[0] + 1;
-						nThreads = xspan*xspan;
-//
-//						/* Configure and launch */
-//						BLK.x = floor((maxThreadsPerBlock - 1 + nThreads) /
-//								maxThreadsPerBlock);
-//						THD.x = maxThreadsPerBlock; // Thread block dimensions
+						/* Launch parameters still same as before for posclr */
 						posmask_krnl<<<BLK,THD>>>(dpar, nThreads, xspan);
 						checkErrorAfterKernelLaunch("posmask_krnl, line ");
 					}
-
 					/* Compute model brightness for this lightcurve point */
 					/* lghtcrv->y[ncalc]: calculated points for interpolation,
 					 * ncalc-points total 					 */
-					/* To-Do:  Write a dynamic parallelism kernel that launches
-					 * an ncalc-threaded kernel which then launch npixel-threaded
-					 * kernels of some iteration of apply_photo				 */
-
 					lghtcrv_y = apply_photo_cuda(dmod, ddat, 0, s, i);
 
 					/* Now launch a kernel to copy it over to the actual lghtcrv */

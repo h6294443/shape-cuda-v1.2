@@ -190,27 +190,31 @@ __global__ void posvis_facet_af_krnl(struct pos_t **pos, int src, int body,
 	if ((f < frame_size) && (frm < nframes)) {
 
 		/* Take care of what was previously in init kernel */
-		dev_mtrnsps(oa, pos[frm]->ae);
-		pn = pos[frm]->n;
+		//if (f == 0) {
+			dev_mtrnsps(oa, pos[frm]->ae);
+			pn = pos[frm]->n;
 
-		if (src) {
-			/* We're viewing the model from the sun: at the center of each pixel
-			 * in the projected view, we want cos(incidence angle), distance from
-			 * the COM towards the sun, and the facet number.                */
-			dev_mmmul(oa, pos[frm]->se, oa); /* oa takes ast into sun coords           */
-		} else {
-			/* We're viewing the model from Earth: at the center of each POS pixel
-			 * we want cos(scattering angle), distance from the COM towards Earth,
-			 * and the facet number.  For bistatic situations (lightcurves) we also
+			if (src) {
+				/* We're viewing the model from the sun: at the center of each pixel
+				 * in the projected view, we want cos(incidence angle), distance from
+				 * the COM towards the sun, and the facet number.                */
+				dev_mmmul(oa, pos[frm]->se, oa); /* oa takes ast into sun coords           */
+			} else {
+				/* We're viewing the model from Earth: at the center of each POS pixel
+				 * we want cos(scattering angle), distance from the COM towards Earth,
+				 * and the facet number.  For bistatic situations (lightcurves) we also
 					 want cos(incidence angle) and the unit vector towards the source.     */
-			dev_mmmul(oa, pos[frm]->oe, oa); /* oa takes ast into obs coords */
-			if (pos[frm]->bistatic) {
-				usrc[0] = usrc[1] = 0.0; /* unit vector towards source */
-				usrc[2] = 1.0;
-				dev_cotrans3(usrc, pos[frm]->se, usrc, -1);
-				dev_cotrans3(usrc, pos[frm]->oe, usrc, 1); /* in observer coordinates */
+				dev_mmmul(oa, pos[frm]->oe, oa); /* oa takes ast into obs coords */
+				if (pos[frm]->bistatic) {
+					usrc[0] = usrc[1] = 0.0; /* unit vector towards source */
+					usrc[2] = 1.0;
+					dev_cotrans3(usrc, pos[frm]->se, usrc, -1);
+					dev_cotrans3(usrc, pos[frm]->oe, usrc, 1); /* in observer coordinates */
+				}
 			}
-		}
+//		}
+//		__syncthreads();
+
 		fidx.x = _verts->f[f].v[0];
 		fidx.y = _verts->f[f].v[1];
 		fidx.z = _verts->f[f].v[2];
