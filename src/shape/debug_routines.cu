@@ -129,9 +129,8 @@ __host__ void dbg_print_fit(struct dat_t *ddat, int s, int f) {
 	double *fit;
 	dim3 BLK,THD;
 
-	filename_fit = "dbg_fit_cuda.csv";
+	filename_fit = "doppler_fit_cuda.csv";
 	printf("\n %sfile created",filename_fit);
-	printf("\n\nFilename: %s",filename_fit);
 
 	/* Launch 1st debug kernel to get ndop and xlim/ylim	 */
 	dbg_print_fit_krnl1<<<1,1>>>(ddat, s, f);
@@ -207,9 +206,8 @@ __host__ void dbg_print_deldop_fit(struct dat_t *ddat, int s, int f) {
 	double *fit_dd;
 	dim3 BLK,THD;
 
-	filename_fit = "dbg_fit_cuda.csv";
+	filename_fit = "deldop_fit_cuda.csv";
 	printf("\n %sfile created",filename_fit);
-	printf("\n\nFilename: %s",filename_fit);
 
 	/* Launch 1st debug kernel to get ndop and xlim/ylim	 */
 	dbg_print_fit_krnl1<<<1,1>>>(ddat, s, f);

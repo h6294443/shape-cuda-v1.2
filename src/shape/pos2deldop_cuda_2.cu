@@ -384,11 +384,6 @@ __global__ void pos2deldop_pixel_krnl(struct par_t *dpar, struct mod_t
 			atomicMin(&frame->idoplim[0], idop_min);
 			atomicMax(&frame->idoplim[1], idop_max);
 
-//			frame->idellim[0] = min(frame->idellim[0], idel_min);
-//			frame->idellim[1] = max(frame->idellim[1], idel_max);
-//			frame->idoplim[0] = min(frame->idoplim[0], idop_min);
-//			frame->idoplim[1] = max(frame->idoplim[1], idop_max);
-
 			/*  Update the model's floating-point delay-Doppler limits, as determined prior to convolution
 			 *  with the delay and Doppler response functions. At this point in the code, dellim and doplim
 			 *  are pairs of floating-point row and column numbers which apply to POS pixel centers; when
@@ -398,11 +393,6 @@ __global__ void pos2deldop_pixel_krnl(struct par_t *dpar, struct mod_t
 			atomicMaxf(&dellim[1], (float)delPOS);
 			atomicMinf(&doplim[0], (float)dopPOS);
 			atomicMaxf(&doplim[1], (float)dopPOS);
-
-//			dellim[0] = min(dellim[0], (float)delPOS);
-//			dellim[0] = max(dellim[1], (float)delPOS);
-//			dellim[0] = min(doplim[0], (float)dopPOS);
-//			dellim[0] = max(doplim[1], (float)dopPOS);
 
 			/*  Check whether or not all delay-Doppler pixels which will receive power from this POS pixel
 			 *  fall within the data frame; if not, initialize the "overflow" image if necessary.         */

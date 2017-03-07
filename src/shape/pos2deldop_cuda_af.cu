@@ -364,8 +364,7 @@ __global__ void pos2deldop_pixel_af_krnl(struct par_t *dpar, struct mod_t *dmod,
 		int xspan, int body, double orbit_xoff, double orbit_yoff,
 		int set, int frame_size, int total_size, int nframes, int *global_lim,
 		float2 *deldopshift, float2 *axay, float4 *dop, float4 *deldoplim,
-		int *ndel, int *ndop, int *idel0, int *idop0, float2 *xyincr,
-		float *fit_overflow[MAXBINS][MAXBINS]) {
+		int *ndel, int *ndop, int *idel0, int *idop0, float2 *xyincr) {
 	/* nThreads-threaded kernel */
 
 	/*  Loop through all POS pixels within the rectangular plane-of-sky region spanned by the
@@ -445,9 +444,11 @@ __global__ void pos2deldop_pixel_af_krnl(struct par_t *dpar, struct mod_t *dmod,
 				if (!af_any_overflow) {
 					//atomicExch(&any_overflow, 1);
 					af_any_overflow = 1;
+					/* The following is commented out because fit_overflow has been
+					 * cudaCalloc'd, so it was initialized to zero				 */
 					for (i = 0; i < MAXOVERFLOW; i++)
 						for (j = 0; j < MAXOVERFLOW; j++)
-							fit_overflow[frm][i][j] = 0.0;
+							frame[frm]->fit_overflow[i][j] = 0.0;
 
 					/*  Center the COM in the overflow image:
 					 pixel [idel][idop] in the fit frame corresponds to
@@ -661,7 +662,7 @@ __global__ void pos2deldop_pixel_af_krnl(struct par_t *dpar, struct mod_t *dmod,
 						fit_contribution = amp
 								* del_contribution[idel - idel_min]
 								* dop_contribution[k];
-						fit_overflow[frm][idel + idel0[frm]][idop + idop0[frm]] +=
+						frame[frm]->fit_overflow[idel+idel0[frm]][idop+idop0[frm]] +=
 								fit_contribution;
 						if (dpar->action == MAP
 								&& dpar->map_mode == MAPMODE_DELDOP)
@@ -688,8 +689,7 @@ __global__ void pos2deldop_pixel_af_krnl(struct par_t *dpar, struct mod_t *dmod,
 }
 __global__ void pos2deldop_deldoplim_af_krnl(struct dat_t *ddat,
 		struct deldopfrm_t **frame, float4 *deldoplim, float2 *deldopshift,
-		float4 *dop, int set, int nframes,
-		float *fit_overflow[MAXBINS][MAXBINS]) {
+		float4 *dop, int set, int nframes) {
 	/* nframes-threaded kernel */
 	int frm = threadIdx.x;
 	if (frm < nframes) {
@@ -714,8 +714,7 @@ __global__ void pos2deldop_deldoplim_af_krnl(struct dat_t *ddat,
 }
 __global__ void pos2deldop_overflow_af_krnl(struct par_t *dpar,
 		struct deldopfrm_t **frame, int *idel0, int *idop0, int *ndel,
-		int *ndop, int set, int nframes,
-		float *fit_overflow[MAXBINS][MAXBINS]) {
+		int *ndop, int set, int nframes) {
 	/* nframes-threaded kernel */
 	int frm = threadIdx.x;
 	int i, i1, i2, j, j1, j2;
@@ -743,19 +742,19 @@ __global__ void pos2deldop_overflow_af_krnl(struct par_t *dpar,
 			j2 = MIN(frame[frm]->idoplim[1] + idop0[frm], MAXOVERFLOW - 1);
 			for (i = i1; i <= i2; i++)
 				for (j = j1; j <= j2; j++) {
-					if (fit_overflow[frm][i][j] != 0.0) {
+					if (frame[frm]->fit_overflow[i][j] != 0.0) {
 						if (dpar->speckle)
 							variance = sdev_sq
-									+ lookfact * fit_overflow[frm][i][j]
-											* fit_overflow[frm][i][j];
+									+ lookfact * frame[frm]->fit_overflow[i][j]
+											* frame[frm]->fit_overflow[i][j];
 						frame[frm]->overflow_o2 += 1.0;
-						frame[frm]->overflow_m2 += fit_overflow[frm][i][j]
-								* fit_overflow[frm][i][j] / variance;
-						frame[frm]->overflow_xsec += fit_overflow[frm][i][j];
+						frame[frm]->overflow_m2 += frame[frm]->fit_overflow[i][j]
+								* frame[frm]->fit_overflow[i][j] / variance;
+						frame[frm]->overflow_xsec += frame[frm]->fit_overflow[i][j];
 						frame[frm]->overflow_delmean += (i - idel0[frm])
-								* fit_overflow[frm][i][j];
+								* frame[frm]->fit_overflow[i][j];
 						frame[frm]->overflow_dopmean += (j - idop0[frm])
-								* fit_overflow[frm][i][j];
+								* frame[frm]->fit_overflow[i][j];
 					}
 				}
 			if (frame[frm]->overflow_xsec != 0.0) {
@@ -802,7 +801,7 @@ __host__ void pos2deldop_cuda_af_free(int *idel0, int *idop0, int *ndel,
 		float2 *axay, float2 *xyincr, float4 *dop,
 		float2 *deldopshift,
 		int4 *xylim, int *global_lim,
-		float4 *deldoplim, float *fit_overflow[MAXBINS][MAXBINS]) {
+		float4 *deldoplim) {
 
 	cudaFree(idel0);
 	cudaFree(idop0);
@@ -817,12 +816,19 @@ __host__ void pos2deldop_cuda_af_free(int *idel0, int *idop0, int *ndel,
 	cudaFree(deldopshift);
 	cudaFree(global_lim);
 	cudaFree(deldoplim);
-	//cudaFree(fit_overflow);
 }
 
-__host__ int pos2deldop_cuda_af(struct par_t *dpar, struct mod_t *dmod,
-		struct dat_t *ddat, double orbit_xoff, double orbit_yoff,
-		double orbit_dopoff, int body, int set, int nframes, int v) {
+__host__ int pos2deldop_cuda_af(
+		struct par_t *dpar,
+		struct mod_t *dmod,
+		struct dat_t *ddat,
+		double orbit_xoff,
+		double orbit_yoff,
+		double orbit_dopoff,
+		int body,
+		int set,
+		int nframes,
+		int v) {
 	int xspan, yspan, nThreads, frmsz, hbadradar;
 	dim3 BLK, THD;
 
@@ -847,10 +853,9 @@ __host__ int pos2deldop_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 	int4 *xylim;
 	struct deldopfrm_t **frame;
 	struct pos_t **pos;
+	float2 *axay, *xyincr, *deldopshift;
 	float3  *w;
 	float4 *deldoplim, *dop;
-	float *fit_overflow[MAXBINS][MAXBINS];
-	float2 *axay, *xyincr, *deldopshift;
 
 	cudaCalloc((void**)&idel0, sizeof(int), nframes);
 	cudaCalloc((void**)&idop0, sizeof(int), nframes);
@@ -865,7 +870,6 @@ __host__ int pos2deldop_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 	cudaCalloc((void**)&xylim, sizeof(int4), nframes);
 	cudaCalloc((void**)&deldoplim, sizeof(float4), nframes);
 	cudaCalloc((void**)&dop, sizeof(float4), nframes);
-	cudaCalloc((void**)&fit_overflow, sizeof(float**), nframes);
 	cudaCalloc((void**)&global_lim, sizeof(int), 4);
 
 	/* Launch nframes-threaded initialization kernel */
@@ -896,7 +900,7 @@ __host__ int pos2deldop_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 	pos2deldop_pixel_af_krnl<<<BLK,THD>>>(dpar, dmod, ddat, pos, frame, xspan,
 			body, orbit_xoff, orbit_yoff, set, frmsz, nThreads,
 			nframes, global_lim, deldopshift, axay, dop, deldoplim, ndel, ndop, idel0,
-			idop0, xyincr, fit_overflow);
+			idop0, xyincr);
 	checkErrorAfterKernelLaunch("pos2deldop_pixel_af_krnl");
 
 	/* Now copy the dellim[2] and doplim[2] device variables back to the original
@@ -904,14 +908,14 @@ __host__ int pos2deldop_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 	 * able to do atomic operations in the pixel kernel preceding this kernel.  */
 	THD.x = nframes;
 	pos2deldop_deldoplim_af_krnl<<<1,THD>>>(ddat, frame, deldoplim, deldopshift,
-			dop, set, nframes, fit_overflow);
+			dop, set, nframes);
 	checkErrorAfterKernelLaunch("pos2deldop_deldoplim_af_krnl");
 
 	/* Launch a single-threaded kernel to calclate the overflow contributions to
 	 * chi squared.  This could be split into one single-thread kernel and one
 	 * (i2-i1)*(j2-j1)-threaded kernel   */
 	pos2deldop_overflow_af_krnl<<<1,THD>>>(dpar, frame, idel0, idop0, ndel,
-			ndop, set, nframes, fit_overflow);
+			ndop, set, nframes);
 	checkErrorAfterKernelLaunch("pos2deldop_overflow_af_krnl");
 	deviceSyncAfterKernelLaunch("pos2deldop_overflow_af_krnl");
 	gpuErrchk(cudaMemcpyFromSymbol(&hbadradar, af_badradar, sizeof(int), 0,
@@ -936,7 +940,6 @@ __host__ int pos2deldop_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 	cudaFree(deldopshift);
 	cudaFree(xylim);
 	cudaFree(deldoplim);
-//  cudaFree(fit_overflow);
 	cudaFree(global_lim);
 	return hbadradar;
 }

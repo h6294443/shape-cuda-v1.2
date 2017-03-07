@@ -377,7 +377,7 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 	{
 		realize_mod_cuda(dpar, dmod, type);
 		if (AF)
-			realize_spin_cuda(dpar, dmod, ddat, dat->nsets);
+			realize_spin_cuda_af(dpar, dmod, ddat, dat->nsets);
 		else
 			realize_spin_cuda(dpar, dmod, ddat, dat->nsets);
 
@@ -393,7 +393,8 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 					&deldop_zmax_save, &rad_xsec_save, &opt_brightness_save,
 					&cos_subradarlat_save, dat->nsets);
 	}
-
+	printf("rad_xsec: %f\n", rad_xsec_save);
+	printf("deldop_zmax: %f\n", (float)deldop_zmax_save);
 	/* Point hotparam to a dummy variable (dummyval) rather than to a model pa-
 	 * rameter; then call objective(0.0) to set dummy variable = 0.0, realize
 	 * the initial model, calculate the fits, return initial model's objective
@@ -604,7 +605,7 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 				realize_mod_cuda(dpar, dmod, type);
 			if (newspin) {
 				if (AF)
-					realize_spin_cuda(dpar, dmod, ddat, dat->nsets);
+					realize_spin_cuda_af(dpar, dmod, ddat, dat->nsets);
 				else
 					realize_spin_cuda(dpar, dmod, ddat, dat->nsets);
 			}
@@ -925,7 +926,7 @@ __host__ double objective_cuda( double x)
 		realize_mod_cuda(sdev_par, sdev_mod, type);
 	if (newspin) {
 		if (AF)
-			realize_spin_cuda(sdev_par, sdev_mod, sdev_dat, sdat->nsets);
+			realize_spin_cuda_af(sdev_par, sdev_mod, sdev_dat, sdat->nsets);
 		else
 			realize_spin_cuda(sdev_par, sdev_mod, sdev_dat, sdat->nsets);	}
 
@@ -980,19 +981,6 @@ __host__ double objective_cuda( double x)
 		calc_fits_cuda(sdev_par, sdev_mod, sdev_dat);
 		err = chi2_cuda(sdev_par, sdev_dat, 0);
 	}
-
-	int debug = 0;
-	if (debug) {
-		dbg_print_deldop_fit(sdev_dat, 0, 0);
-		dbg_print_deldop_fit(sdev_dat, 0, 1);
-		dbg_print_deldop_fit(sdev_dat, 0, 2);
-		dbg_print_deldop_fit(sdev_dat, 0, 3);
-		dbg_print_fit(sdev_dat, 1, 0);
-		dbg_print_fit(sdev_dat, 1, 1);
-		dbg_print_fit(sdev_dat, 1, 2);
-		dbg_print_fit(sdev_dat, 1, 3);
-	}
-
 
 	/* Divide chi-square by DOF to get reduced chi-square.    */
 	err /= sdat->dof;
