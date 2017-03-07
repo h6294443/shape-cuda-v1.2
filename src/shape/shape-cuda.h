@@ -197,6 +197,7 @@ __global__ void clrvect_af_krnl(struct dat_t *ddat, int s, int nframes,
 __global__ void euler2mat_krnl( double m[3][3], double phi, double theta, double psi);
 __global__ void euler2mat_realize_mod_krnl(struct mod_t *dmod);
 __global__ void get_types_krnl(struct dat_t *ddat, unsigned char *dtype);
+__global__ void posmask_universal_krnl(struct par_t *dpar, struct pos_t *pos, int nThreads, int xspan);
 __global__ void realize_angleoff_krnl(struct dat_t *ddat);
 __global__ void realize_omegaoff_krnl(struct dat_t *ddat);
 __global__ void update_spin_angle_krnl(struct mod_t *dmod);

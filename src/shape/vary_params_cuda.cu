@@ -159,11 +159,23 @@ __global__ void get_compute_flags_krnl(struct par_t *dpar, struct dat_t *ddat,
 			dweight = ddat->set[s].desc.doppler.frame[f].weight;
 			dndop = ddat->set[s].desc.doppler.frame[f].ndop;
 			break;
-		case LGHTCRV:
-			vp_pos = &ddat->set[s].desc.lghtcrv.rend[f].pos;
-			dlghtcrv_bistatic = vp_pos->bistatic;
-			dlghtcrv_n = ddat->set[s].desc.lghtcrv.n;
+//		case LGHTCRV:
+//			vp_pos = &ddat->set[s].desc.lghtcrv.rend[f].pos;
+//			dlghtcrv_bistatic = vp_pos->bistatic;
+//			dlghtcrv_n = ddat->set[s].desc.lghtcrv.n;
+//			break;
 		}
+	}
+}
+__global__ void lghtcrv_set_pos_krnl(struct dat_t *ddat,
+		struct pos_t *pos, int s, int f) {
+	/* Single-threaded kernel */
+	if (threadIdx.x == 0) {
+		vp_pos = &ddat->set[s].desc.lghtcrv.rend[f].pos; /* Backup - delete this later */
+		pos = &ddat->set[s].desc.lghtcrv.rend[f].pos;
+		dlghtcrv_bistatic = pos->bistatic;
+		dlghtcrv_n = ddat->set[s].desc.lghtcrv.n;
+
 	}
 }
 __global__ void get_lghtcrv_cb_krnl(struct par_t *dpar, struct dat_t *ddat,
@@ -508,6 +520,118 @@ __global__ void posmask_krnl(struct par_t *dpar, int nThreads, int xspan)
 		}
 	}
 }
+__global__ void posmask_universal_krnl(struct par_t *dpar, struct pos_t *pos, int nThreads, int xspan)
+{
+	/* multi-threaded kernel */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int n = pos->n;
+	int i = offset % xspan - n;
+	int j = offset / xspan - n;
+	double tol = dpar->mask_tol;
+	int im, jm, i1, j1, i2, j2, i_sign, j_sign;
+	double xk[3], so[3][3], pixels_per_km, i0_dbl, j0_dbl, zill, t, u, bignum;
+
+	if (offset == 0){
+		bignum = 0.99*HUGENUMBER;  /* z = -HUGENUMBER for blank-sky pixels */
+
+		dev_mtrnsps( so, pos->oe);
+		dev_mmmul( so, pos->se, so);    /* so takes obs into src coords */
+		pixels_per_km = 1/pos->km_per_pixel;
+	}
+	__syncthreads();
+
+	/*  Loop through all POS pixels  */
+	if (offset < nThreads) {
+		if (pos->cose_s[offset] != 0.0) {     /* if there's something there */
+			xk[0] = i*pos->km_per_pixel;     /* calculate 3D position */
+			xk[1] = j*pos->km_per_pixel;
+			xk[2] = pos->z_s[offset];
+
+			/* Given the observer coordinates x of of POS pixel (i,j), find
+			 * which pixel (im,jm) this corresponds to in the projected view as
+			 * seen from the source (sun)             */
+
+			dev_cotrans2( xk, so, xk, 1);           /* go into source coordinates */
+			i0_dbl = xk[0]*pixels_per_km;     /* unrounded (double precision) */
+			j0_dbl = xk[1]*pixels_per_km;
+			im = dev_vp_iround( i0_dbl);            /* center of nearest pixel in mask */
+			jm = dev_vp_iround( j0_dbl);
+
+			/* If center of projected pixel "seen" from source (as determined
+			 * by routine posvis) lies within the boundaries of the mask,
+			 * projects onto model rather than onto blank space, and represents
+			 * a body, component, and facet different from those seen in the
+			 * POS, calculate distance from mask pixel to source and compare to
+			 * distance from POS pixel to source.                             */
+
+			if (fabs(i0_dbl) < n && fabs(j0_dbl) < n
+					&& pos->zill[im][jm] > -bignum
+					&&(pos->f[i][j]    != pos->fill[im][jm]    ||
+							pos->comp[i][j] != pos->compill[im][jm] ||
+							pos->body[i][j] != pos->bodyill[im][jm]    )) {
+
+				/* Rather than using distance towards source of CENTER of mask
+				 * pixel, use bilinear interpolation to get distance towards
+				 * source where the line between source and POS pixel's center
+				 * intersects the mask pixel.                                */
+				i1 = (int) floor( i0_dbl);
+				j1 = (int) floor( j0_dbl);
+
+				if (pos->zill[i1][j1] > -bignum && pos->zill[i1+1][j1] > -bignum &&
+					pos->zill[i1][j1+1] > -bignum && pos->zill[i1+1][j1+1] > -bignum) {
+
+					/* Do standard bilinear interpolation: None of the four
+					 * surrounding "grid square" pixels in the mask is
+					 * blank sky                           */
+					t = i0_dbl - i1;
+					u = j0_dbl - j1;
+					zill = (1 - t)*(1 - u)*pos->zill[i1][j1]
+                               + t*(1 - u)*pos->zill[i1+1][j1]
+                                     + t*u*pos->zill[i1+1][j1+1]
+	                           + (1 - t)*u*pos->zill[i1][j1+1];
+				} else {
+
+					/* The following code block is a kludge: One or more of the
+					 * four surrounding "grid square" pixels in mask is blank
+					 * sky, so standard bilinear interpolation won't work.  */
+					zill = pos->zill[im][jm];
+
+					i_sign = (i0_dbl >= im) ? 1 : -1;
+					i2 = im + i_sign;
+					if (abs(i2) <= n && pos->zill[i2][jm] > -bignum) {
+						zill += fabs(i0_dbl - im)  *
+								(pos->zill[i2][jm] - pos->zill[im][jm]);
+					} else {
+						i2 = im - i_sign;
+						if (abs(i2) <= n && pos->zill[i2][jm] > -bignum)
+							zill -= fabs(i0_dbl - im)
+							* (pos->zill[i2][jm] - pos->zill[im][jm]);
+					}
+
+					j_sign = (j0_dbl >= jm) ? 1 : -1;
+					j2 = jm + j_sign;
+					if (abs(j2) <= n && pos->zill[im][j2] > -bignum) {
+						zill += fabs(j0_dbl - jm)
+                          * (pos->zill[im][j2] - pos->zill[im][jm]);
+					} else {
+						j2 = jm - j_sign;
+						if (abs(j2) <= n && pos->zill[im][j2] > -bignum)
+							zill -= fabs(j0_dbl - jm)
+							* (pos->zill[im][j2] - pos->zill[im][jm]);
+					}
+				}
+
+				/* If interpolated point within mask pixel is at least tol km
+				 * closer to source than is the center of POS pixel, the facet
+				 * represented by the mask pixel is shadowing the POS pixel:
+				 * represent this by setting
+				 * 		cos(scattering angle) = 0.0 for the POS pixel.      */
+				if (zill - xk[2] > tol)
+					pos->cose_s[offset] = 0.0;
+			}
+		}
+	}
+}
 __global__ void lghtcrv_copy_y_krnl(struct dat_t *ddat, double host_value,
 		int set, int i) {
 	/* Single-threaded kernel */
@@ -653,6 +777,7 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 	dim3 BLK,THD;
 	unsigned char type;
 	int ndel, ndop, nThreads;
+	struct pos_t *pos;	/* Experimental for lghtcrv use and reuse */
 
 	/*  Initialize variables  */
 	vp_init_vars<<<1,1>>>();
@@ -861,9 +986,9 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 
 				for (i=1; i<=ncalc; i++) {
 
-					/* Launch single-thread kernel to get our compute flags first */
-					get_compute_flags_krnl<<<1,1>>>(dpar, ddat, s, i);
-					checkErrorAfterKernelLaunch("get_compute_flags_krnl, line ");
+					/* Launch kernel to get compute flags and set pos */
+					lghtcrv_set_pos_krnl<<<1,1>>>(ddat, pos, s, i)
+					checkErrorAfterKernelLaunch("lghtcrv_set_pos_krnl");
 					gpuErrchk(cudaMemcpyFromSymbol(&lghtcrv_bistatic, dlghtcrv_bistatic,
 									sizeof(lghtcrv_bistatic), 0, cudaMemcpyDeviceToHost));
 
@@ -902,8 +1027,9 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 						posvis_cuda_2(dpar,dmod,ddat,orbit_offset,s,i,1,0,c);
 
 						/* Launch parameters still same as before for posclr */
-						posmask_krnl<<<BLK,THD>>>(dpar, nThreads, xspan);
-						checkErrorAfterKernelLaunch("posmask_krnl, line ");
+						posmask_universal_krnl<<<BLK,THD>>>(dpar, pos, nThreads, xspan);
+						//posmask_krnl<<<BLK,THD>>>(dpar, nThreads, xspan);
+						checkErrorAfterKernelLaunch("posmask_universal_krnl (vary_params_cuda.cu)");
 					}
 					/* Compute model brightness for this lightcurve point */
 					/* lghtcrv->y[ncalc]: calculated points for interpolation,
