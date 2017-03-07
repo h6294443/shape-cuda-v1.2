@@ -100,17 +100,17 @@ __device__ float vpzmax, sum_deldop_zmax, sum_rad_xsec,	sum_opt_brightness,
 __device__ struct pos_t *vp_pos;
 
 __host__ int NearestPowerOf2(int n);
-__device__ static float atomicMaxf(float* address, float val)
-{
-	int* address_as_i = (int*) address;
-	int old = *address_as_i, assumed;
-	do {
-		assumed = old;
-		old = ::atomicCAS(address_as_i, assumed,
-				__float_as_int(::fmaxf(val, __int_as_float(assumed))));
-	} while (assumed != old);
-	return __int_as_float(old);
-}
+//__device__ static float atomicMaxf(float* address, float val)
+//{
+//	int* address_as_i = (int*) address;
+//	int old = *address_as_i, assumed;
+//	do {
+//		assumed = old;
+//		old = ::atomicCAS(address_as_i, assumed,
+//				__float_as_int(::fmaxf(val, __int_as_float(assumed))));
+//	} while (assumed != old);
+//	return __int_as_float(old);
+//}
 __device__ int dev_vp_iround(double x)
 {
   if (x < 0.0)
@@ -987,7 +987,7 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 				for (i=1; i<=ncalc; i++) {
 
 					/* Launch kernel to get compute flags and set pos */
-					lghtcrv_set_pos_krnl<<<1,1>>>(ddat, pos, s, i)
+					lghtcrv_set_pos_krnl<<<1,1>>>(ddat, pos, s, i);
 					checkErrorAfterKernelLaunch("lghtcrv_set_pos_krnl");
 					gpuErrchk(cudaMemcpyFromSymbol(&lghtcrv_bistatic, dlghtcrv_bistatic,
 									sizeof(lghtcrv_bistatic), 0, cudaMemcpyDeviceToHost));

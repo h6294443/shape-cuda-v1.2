@@ -29,9 +29,7 @@
 								<option id="nvcc.compiler.pic.1311743432" name="Position Independent Code (-fPIC)" superClass="nvcc.compiler.pic"/>
 								<option id="nvcc.compiler.option.lineinfo.793014053" name="Generate line-number information for device code (-lineinfo)" superClass="nvcc.compiler.option.lineinfo" value="true" valueType="boolean"/>
 								<option id="nvcc.compiler.option.gprof.543407613" name="Generate gprof information (-pg)" superClass="nvcc.compiler.option.gprof" value="true" valueType="boolean"/>
-								<option id="nvcc.compiler.include.paths.2081294068" name="Include paths (-I)" superClass="nvcc.compiler.include.paths" valueType="includePath">
-									<listOptionValue builtIn="false" value="/home/matt/git/cfitsio"/>
-								</option>
+								<option id="nvcc.compiler.include.paths.2081294068" name="Include paths (-I)" superClass="nvcc.compiler.include.paths" valueType="includePath"/>
 								<inputType id="nvcc.compiler.input.cu.1491867805" superClass="nvcc.compiler.input.cu"/>
 								<inputType id="nvcc.compiler.input.cpp.910565664" superClass="nvcc.compiler.input.cpp"/>
 								<inputType id="nvcc.compiler.input.c.1083285283" superClass="nvcc.compiler.input.c"/>

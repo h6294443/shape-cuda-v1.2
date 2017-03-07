@@ -343,7 +343,8 @@ __host__ void calc_deldop_cuda(struct par_t *dpar, struct mod_t *dmod,
 __host__ void calc_doppler_cuda(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int s);
 //__host__ void calc_poset_cuda( struct par_t *par, struct mod_t *mod, int s);
-__host__ void calc_lghtcrv_cuda(struct par_t *par, struct mod_t *mod, int s);
+__host__ void calc_lghtcrv_cuda(struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat, int s);
 
 __device__ int cf_nf, cf_nsets, cf_nframes, cf_nviews, cf_ndel, cf_ndop,
 			   cf_v0_index, cf_pos_n, cf_exclude_seen, cf_xlim0, cf_xlim1,
@@ -352,7 +353,7 @@ __device__ unsigned char cf_type;
 __device__ float cf_overflow_o2_store, cf_overflow_m2_store, cf_overflow_xsec_store,
 		cf_overflow_delmean_store, cf_overflow_dopmean_store;
 __device__ __managed__ double lghtcrv_posbnd_logfactor;
-__device__ double pos_km_p_pxl;
+__device__ double cf_km_p_pxl;
 __device__ struct deldop_t *cf_deldop;
 __device__ struct deldopfrm_t *cf_del_frame;
 __device__ struct deldopview_t *cf_del_view0;
@@ -362,6 +363,25 @@ __device__ struct dopfrm_t *cf_dop_frame;
 __device__ struct dopview_t *cf_dop_view0;
 __device__ struct lghtcrv_t *cf_lghtcrv;
 __device__ struct crvrend_t *cf_rend;
+__device__ void dev_splint(double *xa,double *ya,double *y2a,int n,double x,double *y)
+{
+	int klo,khi,k;
+	double h,b,a;
+
+	klo = 1;
+	khi = n;
+	while (khi-klo > 1) {
+		k = (khi+klo) >> 1;
+		if (xa[k] > x) 	khi=k;
+		else klo = k;
+	}
+	h = xa[khi] - xa[klo];
+	if (h == 0.0) 	printf("Bad XA input to routine SPLINT");
+	a = (xa[khi] - x) / h;
+	b = (x - xa[klo]) / h;
+	*y = a * ya[klo] + b * ya[khi] + ((a*a*a-a) * y2a[klo] + (b*b*b-b) *
+			y2a[khi]) * (h*h)/6.0;
+}
 __global__ void cf_init_devpar_krnl(struct par_t *dpar, struct mod_t
 		*dmod, struct dat_t *ddat) {
 	/* Single-threaded kernel */
@@ -447,8 +467,7 @@ __host__ void calc_fits_cuda(struct par_t *dpar, struct mod_t *dmod,
 //			calc_poset_cuda(dpar, dmod, s);
 			break;
 		case LGHTCRV:
-			printf("Write calc_lghtcrv_cuda!");
-//			calc_lghtcrv_cuda(dpar, dmod, s);
+			calc_lghtcrv_cuda(dpar, dmod, ddat, s);
 			break;
 		default:
 			printf("calc_fits_cuda.c: can't handle this type yet\n");
@@ -538,6 +557,82 @@ __global__ void cf_set_lghtcrv_shortcuts_krnl(struct dat_t *ddat,
 		cf_overflow_dopmean_store = 0.0;
 	}
 }
+__global__ void cf_spline_lghtcrv_krnl(double yp1, double ypn) {
+	/* ncalc-threaded kernel */
+	int k, i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+	double p, qn, sig, un;
+	int n = cf_ncalc;
+	extern __shared__ double u[];
+
+	/* Single-threaded task first */
+	if (i == 1) {
+		if (yp1 > 0.99e30)
+			cf_lghtcrv->y2[1] = u[1] = 0.0;
+		else {
+			cf_lghtcrv->y2[1] = -0.5;
+			u[1] = (3.0 / (cf_lghtcrv->x[2] - cf_lghtcrv->x[1])) *
+				   ((cf_lghtcrv->y[2] - cf_lghtcrv->y[1]) /
+				    (cf_lghtcrv->x[2] - cf_lghtcrv->x[1]) - yp1);
+		}
+	}
+	__syncthreads();
+
+	if ((i > 1) && (i <= n)) {
+		sig = (cf_lghtcrv->x[i] - cf_lghtcrv->x[i-1]) /
+				(cf_lghtcrv->x[i+1] - cf_lghtcrv->x[i-1]);
+		p = sig * cf_lghtcrv->y2[i-1] + 2.0;
+		cf_lghtcrv->y2[i] = (sig - 1.0) / p;
+		u[i] = (cf_lghtcrv->y[i+1]-cf_lghtcrv->y[i]) / (cf_lghtcrv->x[i+1] -
+				cf_lghtcrv->x[i]) - (cf_lghtcrv->y[i]-cf_lghtcrv->y[i-1]) /
+				(cf_lghtcrv->x[i]-cf_lghtcrv->x[i-1]);
+		u[i] = (6.0 *u[i] / (cf_lghtcrv->x[i+1] - cf_lghtcrv->x[i-1]) -
+				sig * u[i-1]) / p;
+	}
+	__syncthreads();
+
+	/* Another single-threaded task */
+	if (i == 1) {
+		if (ypn > 0.99e30)
+			qn = un = 0.0;
+		else {
+			qn = 0.5;
+			un = (3.0 / (cf_lghtcrv->x[n] - cf_lghtcrv->x[n-1])) * (ypn -
+				 (cf_lghtcrv->y[n] - cf_lghtcrv->y[n-1]) /
+				 (cf_lghtcrv->x[n]-cf_lghtcrv->x[n-1]));
+		}
+		cf_lghtcrv->y2[n]=(un - qn * u[n-1]) /
+				(qn * cf_lghtcrv->y2[n-1] + 1.0);
+
+		for (k=n-1; k>=1; k--)
+			cf_lghtcrv->y2[k] = cf_lghtcrv->y2[k] * cf_lghtcrv->y2[k+1] + u[k];
+	}
+	__syncthreads();
+}
+__global__ void cf_splint_lghtcrv_krnl(struct par_t *dpar) {
+	/* ncalc-threaded kernel */
+	int v, i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+	double interp;
+
+	if ((i >= 1) && (i <= cf_ncalc)) {
+
+		cf_lghtcrv->fit[i] = 0.0;
+
+		for (v=0; v<cf_lghtcrv->nviews; v++) {
+			dev_splint(cf_lghtcrv->x, cf_lghtcrv->y, cf_lghtcrv->y2, cf_ncalc,
+					cf_lghtcrv->t[i][v], &interp);
+			cf_lghtcrv->fit[i] += interp;
+		}
+		cf_lghtcrv->fit[i] /= cf_lghtcrv->nviews;
+	}
+	__syncthreads();
+
+	/* Single-threaded task: */
+	if (i == 1) {
+		/* Deal with flags for model that extends beyond the POS frame  */
+		dpar->posbnd_logfactor += cf_lghtcrv->dof *
+				(lghtcrv_posbnd_logfactor/cf_ncalc);
+	}
+}
 __global__ void cf_set_pos_ae_krnl(int v) {
 	/* 9-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
@@ -621,9 +716,9 @@ __global__ void cf_set_posbnd_krnl(struct par_t *dpar) {
 		case LGHTCRV:
 			cf_bistatic = cf_pos->bistatic;
 			if (cf_pos->bistatic)
-				lghtcrv_posbnd_logfactor += 0.5 * pos->posbnd_logfactor;
+				lghtcrv_posbnd_logfactor += 0.5 * cf_pos->posbnd_logfactor;
 			else
-				lghtcrv_posbnd_logfactor += pos->posbnd_logfactor;
+				lghtcrv_posbnd_logfactor += cf_pos->posbnd_logfactor;
 			break;
 		}
 	}
@@ -663,7 +758,6 @@ __global__ void cf_compute_and_set_lghtcrv_brightness_krnl(double brightness_tem
 		cf_lghtcrv->y[i] = brightness_temp;
 	}
 }
-
 __global__ void cf_set_badradar_krnl(struct par_t *dpar) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
@@ -941,7 +1035,7 @@ __host__ void calc_doppler_cuda(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int s)
 {
 	double orbit_offset[3] = {0.0, 0.0, 0.0};
-	float *fit, *fit_store;
+	float *fit_store;
 	int ndop, v0_index, pos_n, xlim0, xlim1, ylim0, ylim1, exclude_seen,
 		nviews, nframes, nx, f, v, v2;
 	dim3 BLK,THD;
@@ -965,11 +1059,10 @@ __host__ void calc_doppler_cuda(struct par_t *dpar, struct mod_t *dmod,
 
 		/* If smearing is being modeled, initialize variables that
 		 * will be used to sum results calculated for individual views.  */
-		if (nviews > 1) {
+		if (nviews > 1)
 			/* Allocate fit_store as a single pointer, originally a double
 			 * pointer. This also initializes the entire array to zero. */
 			cudaCalloc((void**)&fit_store, sizeof(float), ndop);
-		}
 
 		/* Loop over all views for this (smeared) frame, going in an order that
 		 * ends with the view corresponding to the epoch listed for this frame
@@ -1284,10 +1377,9 @@ __host__ void calc_doppler_cuda(struct par_t *dpar, struct mod_t *dmod,
 //
 __host__ void calc_lghtcrv_cuda( struct par_t *dpar, struct mod_t *dmod, struct dat_t *ddat, int s)
 {
-	double orbit_offset = {0.0, 0.0, 0.0};
-	int n, ncalc, c=0, i, j, k, l, facetnum, x, y, v, pos_n, xspan, yspan, nThreads,
+	int ncalc, c=0, i, pos_n, xspan, yspan, nThreads,
 			bistatic, exclude_seen, xlim[2], ylim[2];
-	double w[3], oa[3][3], sa[3][3], interp, km_p_pxl, brightness_temp;
+	double km_p_pxl, brightness_temp, orbit_offset[3] = {0.0, 0.0, 0.0};
 
 	dim3 BLK,THD;
 	struct pos_t *pos;
@@ -1377,9 +1469,8 @@ __host__ void calc_lghtcrv_cuda( struct par_t *dpar, struct mod_t *dmod, struct 
 		nThreads = xspan * yspan;
 
 		if (s != exclude_seen) {
-			BLK.x = floor((maxThreadsPerBlock - 1 + nThreads) /
-					maxThreadsPerBlock);
-			THD.x = maxThreadsPerBlock; // Thread block dimensions
+			BLK.x = floor((maxThreadsPerBlock-1+nThreads)/maxThreadsPerBlock);
+			THD.x = maxThreadsPerBlock;
 			cf_mark_pixels_seen_krnl<<<BLK,THD>>>(dpar, dmod,
 					nThreads, xspan);
 			checkErrorAfterKernelLaunch("cf_mark_pixels_krnl (calc_lghtcrv_cuda)");
@@ -1388,7 +1479,7 @@ __host__ void calc_lghtcrv_cuda( struct par_t *dpar, struct mod_t *dmod, struct 
 		/* Compute the model brightness for this model lightcurve point  */
 		brightness_temp = apply_photo_cuda(dmod, ddat, 0, s, i);
 		cf_compute_and_set_lghtcrv_brightness_krnl<<<1,1>>>(brightness_temp, i);
-		checkErrorAfterKernelLaunch("compute_and_set_lghtcrv_brightness_krnl");
+		checkErrorAfterKernelLaunch("cf_compute_and_set_lghtcrv_brightness_krnl");
 	}
 
 	/* Now that we have calculated the model lightcurve brightnesses y at each
@@ -1401,20 +1492,25 @@ __host__ void calc_lghtcrv_cuda( struct par_t *dpar, struct mod_t *dmod, struct 
 	 * by interpolating the brightness at the time t of each individual view
 	 * and then taking the mean of all views that correspond to a given
 	 * observed lightcurve point.                         */
+	/* Configure and launch an ncalc-threaded kernel that performs what NR
+	 * function spline does.  Original call:
+	 *
+	 * spline( lghtcrv->x, lghtcrv->y, ncalc, 2.0e30, 2.0e30, lghtcrv->y2);
+	 */
 
-	spline( lghtcrv->x, lghtcrv->y, ncalc, 2.0e30, 2.0e30, lghtcrv->y2);
-	for (i=1; i<=n; i++) {
-		lghtcrv->fit[i] = 0.0;
-		for (v=0; v<lghtcrv->nviews; v++) {
-			splint( lghtcrv->x, lghtcrv->y, lghtcrv->y2, ncalc,
-					lghtcrv->t[i][v], &interp);
-			lghtcrv->fit[i] += interp;
-		}
-		lghtcrv->fit[i] /= lghtcrv->nviews;
-	}
+	nThreads = ncalc;
+	int sh_size = ncalc * sizeof(double);
+	BLK.x = floor((maxThreadsPerBlock-1+nThreads)/maxThreadsPerBlock);
+	THD.x = maxThreadsPerBlock;
+	cf_spline_lghtcrv_krnl<<<BLK,THD,sh_size>>>(2.0e30, 2.0e30);
+	checkErrorAfterKernelLaunch("cf_spline_lghtcrv_krnl");
 
-	/*  Deal with flags for model that extends beyond the POS frame  */
-
-	par->posbnd_logfactor += lghtcrv->dof * (posbnd_logfactor/ncalc);
-
+	/* Launch another ncalc-threaded kernel to do the following:
+	 * 	- set each fit[i] = 0
+	 * 	- loop through all views and splint
+	 * 	- add interp to fit[i]
+	 * 	- divide final fit[i] over nviews
+	 */
+	cf_splint_lghtcrv_krnl<<<BLK,THD>>>(dpar);
+	checkErrorAfterKernelLaunch("cf_splint_lghtcrv_krnl");
 }
