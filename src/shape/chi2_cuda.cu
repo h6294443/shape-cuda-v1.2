@@ -355,19 +355,6 @@ __global__ void c2_deldop_add_o2_krnl(struct par_t *dpar, struct
 	}
 	__syncthreads();
 }
-__global__ void c2_deldop_dbg_krnl(struct par_t *dpar, struct dat_t *ddat,
-		int s, int f) {
-	/* ndel*ndop-threaded kernel */
-	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-
-	if (offset < (c2_ndel*c2_ndop)) {
-		atomicAdd(&dbg_sum_fit, (float)c2_deldop->frame[f].fit_s[offset]);
-//		atomicAdd(&dbg_sum_obs, (float)c2_deldop->frame[f].obs_s[offset]);
-//		atomicAdd(&dbg_sum_oov, (float)c2_deldop->frame[f].oneovervar_s[offset]);
-		atomicAdd(&c2_occ1, 1);
-	}
-}
-
 __global__ void c2_deldop_add_o2_serial_krnl(struct par_t *dpar,
 		struct dat_t *ddat, int s, int f) {
 	/* Single threaded kernel for debugging */
@@ -393,7 +380,6 @@ __global__ void c2_deldop_add_o2_serial_krnl(struct par_t *dpar,
 	}
 	__syncthreads();
 }
-
 __global__ void c2_add_deldop_contributions_krnl(struct par_t *dpar, struct
 		dat_t *ddat, int s, int f) {
 	/* Single-threaded kernel */
@@ -442,7 +428,6 @@ __global__ void c2_add_deldop_contributions_krnl(struct par_t *dpar, struct
 		}
 	}
 }
-
 __global__ void c2_add_doppler_contributions_serial_krnl(struct par_t *dpar,
 		struct dat_t *ddat, int s, int f) {
 	/* Single-threaded kernel */
@@ -546,30 +531,6 @@ __global__ void c2_set_chi2_krnl(struct dat_t *ddat, double chi2, int s) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0)
 		ddat->set[s].chi2 = chi2;
-}
-__global__ void c2_dbg3_krnl(struct dat_t *ddat, double **obs, double **oov,
-		float *fit, int s, int f) {
-	/* ndel*ndop-threaded kernel */
-	int off = blockIdx.x * blockDim.x + threadIdx.x;
-	int idel = off % c2_ndel + 1;
-	int idop = off / c2_ndel + 1;
-	if (off < (c2_ndel*c2_ndop)) {
-		fit[off] = ddat->set[s].desc.deldop.frame[f].fit_s[off];
-		obs[idel][idop] = ddat->set[s].desc.deldop.frame[f].obs[idel][idop];
-		oov[idel][idop] = ddat->set[s].desc.deldop.frame[f].oneovervar[idel][idop];
-	}
-	__syncthreads();
-}
-__global__ void c2_dbg4_krnl(double *obs, double *oov,	double *fit, int f) {
-	/* ndel*ndop-threaded kernel */
-	int off = blockIdx.x * blockDim.x + threadIdx.x;
-	int idop = off + 1;
-	if (off < c2_ndop) {
-		fit[idop] = c2_doppler->frame[f].fit_s[idop];
-		obs[idop] = c2_doppler->frame[f].obs[idop];
-		oov[idop] = c2_doppler->frame[f].oneovervar[idop];
-	}
-	__syncthreads();
 }
 __global__ void c2_get_prntflgs_krnl(struct par_t *dpar, struct dat_t *ddat) {
 	/* Single-threaded kernel */
@@ -853,7 +814,6 @@ __host__ double chi2_doppler_cuda(struct par_t *dpar, struct dat_t *ddat, int s,
 	return chi2_set;
 }
 
-
 //__host__ double chi2_poset_cuda(struct par_t *dpar, struct poset_t *poset,
 //		int s, double *chi2_all_poset, double *chi2_fit0_poset,
 //		double *dof_fit0_poset)
@@ -917,44 +877,44 @@ __host__ double chi2_doppler_cuda(struct par_t *dpar, struct dat_t *ddat, int s,
 //
 //	return chi2_set;
 //}
-//
-//
-//__host__ double chi2_lghtcrv_cuda(struct par_t *dpar, struct lghtcrv_t *lghtcrv,
-//		int s, double *chi2_all_lghtcrv)
-//{
-//	int i, n, ncalc;
-//	double chi2_set, err, o2, m2, om, calval, weight, dof, obsmag, fitmag, obsmagerr;
-//
-//	n = lghtcrv->n;
-//	ncalc = lghtcrv->ncalc;
-//
-//	/*  Compute contributions to chi-square  */
-//
-//	o2 = m2 = om = 0.0;
-//	for (i=1; i<=n; i++) {
-//		o2 += lghtcrv->obs[i] * lghtcrv->obs[i] * lghtcrv->oneovervar[i];
-//		m2 += lghtcrv->fit[i] * lghtcrv->fit[i] * lghtcrv->oneovervar[i];
-//		om += lghtcrv->fit[i] * lghtcrv->obs[i] * lghtcrv->oneovervar[i];
-//	}
-//
-//	/*  If this lightcurve's calibration factor is allowed to float,
-//      set it to minimize chi-square, the sum over all points of
-//      { (obs - calfact*fit)^2 / variance }.                         */
-//dpar
-//	if (lghtcrv->cal.state == 'f') {
-//		if (om > 0.0)
-//			lghtcrv->cal.val = om/m2;
-//		else
-//			lghtcrv->cal.val = TINYCALFACT;
-//	}
-//
-//	/*  Compute chi-square for dataset  */
-//
-//	calval = lghtcrv->cal.val;
-//	weight = lghtcrv->weight;
-//	dof = lghtcrv->dof;
-//	err = weight*(o2 - 2*calval*om + calval*calval*m2);
-//	chi2_set = err;
-//
-//	return chi2_set;
-//}
+
+
+__host__ double chi2_lghtcrv_cuda(struct par_t *dpar, struct lghtcrv_t *lghtcrv,
+		int s, double *chi2_all_lghtcrv)
+{
+	int i, n, ncalc;
+	double chi2_set, err, o2, m2, om, calval, weight, dof, obsmag, fitmag, obsmagerr;
+
+	n = lghtcrv->n;
+	ncalc = lghtcrv->ncalc;
+
+	/*  Compute contributions to chi-square  */
+
+	o2 = m2 = om = 0.0;
+	for (i=1; i<=n; i++) {
+		o2 += lghtcrv->obs[i] * lghtcrv->obs[i] * lghtcrv->oneovervar[i];
+		m2 += lghtcrv->fit[i] * lghtcrv->fit[i] * lghtcrv->oneovervar[i];
+		om += lghtcrv->fit[i] * lghtcrv->obs[i] * lghtcrv->oneovervar[i];
+	}
+
+	/*  If this lightcurve's calibration factor is allowed to float,
+      set it to minimize chi-square, the sum over all points of
+      { (obs - calfact*fit)^2 / variance }.                         */
+
+	if (lghtcrv->cal.state == 'f') {
+		if (om > 0.0)
+			lghtcrv->cal.val = om/m2;
+		else
+			lghtcrv->cal.val = TINYCALFACT;
+	}
+
+	/*  Compute chi-square for dataset  */
+
+	calval = lghtcrv->cal.val;
+	weight = lghtcrv->weight;
+	dof = lghtcrv->dof;
+	err = weight*(o2 - 2*calval*om + calval*calval*m2);
+	chi2_set = err;
+
+	return chi2_set;
+}

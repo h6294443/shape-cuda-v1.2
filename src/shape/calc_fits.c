@@ -1858,7 +1858,6 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 			/*  End of screen and disk output for write action  */
 
 		}
-
 		/*  Finished with this calculated lightcurve point  */
 
 	}

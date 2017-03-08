@@ -97,18 +97,18 @@ __device__ double vps_deldop_zmax, vps_rad_xsec, vps_opt_brightness,
 __device__ float vpszmax, vpssum_deldop_zmax, vpssum_rad_xsec,	vpssum_opt_brightness,
 	vpssum_cos_subradarlat, vpsdeldop_cross_section, vpsdoppler_cross_section;
 
-__host__ int NearestPowerOf2(int n);
-__device__ static float atomicMaxf(float* address, float val)
-{
-	int* address_as_i = (int*) address;
-	int old = *address_as_i, assumed;
-	do {
-		assumed = old;
-		old = ::atomicCAS(address_as_i, assumed,
-				__float_as_int(::fmaxf(val, __int_as_float(assumed))));
-	} while (assumed != old);
-	return __int_as_float(old);
-}
+//__host__ int NearestPowerOf2(int n);
+//__device__ static float atomicMaxf(float* address, float val)
+//{
+//	int* address_as_i = (int*) address;
+//	int old = *address_as_i, assumed;
+//	do {
+//		assumed = old;
+//		old = ::atomicCAS(address_as_i, assumed,
+//				__float_as_int(::fmaxf(val, __int_as_float(assumed))));
+//	} while (assumed != old);
+//	return __int_as_float(old);
+//}
 __device__ int dev_vp_iround_af(double x)
 {
   if (x < 0.0)
@@ -660,19 +660,19 @@ __host__ void vary_params_af( struct par_t *dpar, struct mod_t *dmod,
 	 */
 
 	float orbit_offset[3] = {0.0, 0.0, 0.0};
-	int c=0, f, s, i, compute_brightness, compute_zmax,
+	int c=0, s, compute_brightness, compute_zmax,
 			compute_cosdelta, n, ncalc, nx, lghtcrv_bistatic, nframes,
-			xlim[2], ylim[2], xspan, yspan, lghtcrv_n, *compute_xsec,
+			xlim[2], ylim[2], xspan, lghtcrv_n, *compute_xsec,
 			compute_xsec_all;
 
 	dim3 BLK,THD;
 	unsigned char type;
-	int *nThreads, nThreadsTotal=0, mTpB = maxThreadsPerBlock, redsz, size;
+	int *nThreads, nThreadsTotal=0;
 
 	struct pos_t **pos;
 	int *ndel, *ndop;
-	double *weight;
-	float zmax, xsec_set;
+	//double *weight;
+	float zmax;
 
 	/*  Initialize variables  */
 	vp_init_vars_af_krnl<<<1,1>>>(dpar);

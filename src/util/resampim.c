@@ -61,7 +61,7 @@ Modified 2005 January 18 by CM:
 #include "basic.h"
 #include "../nr/nr.h"
 #include "../util/util.h"
-#include "../macros/func.h""
+#include "../macros/func.h"
 
 #define NONE 0
 #define NEAREST 1
