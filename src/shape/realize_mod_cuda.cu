@@ -496,7 +496,25 @@ __global__ void set_optical_params_krnl(struct par_t *dpar, struct mod_t *dmod)
 				harmonic_scatlaw = 1;
 	}
 }
-__global__ void calc_vertex_nrmls_krnl(struct par_t *dpar, struct mod_t *dmod)
+__global__ void dbg_vertex_nrmls_krnl(struct mod_t *dmod, int *nafnas) {
+	/* nv-threaded kernel */
+	int v = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (v == 0) {
+		nafnas[0] = 0;
+		nafnas[1] = 0;
+	}
+	__syncthreads();
+
+	if (v < dmod->shape.comp[0].real.nv) {
+		atomicMax(&nafnas[0], dmod->shape.comp[0].real.v[v].naf);
+		atomicMax(&nafnas[1], dmod->shape.comp[0].real.v[v].nas);
+//		dmod->shape.comp[0].real.f[f].n[0] = 0.0;
+//		dmod->shape.comp[0].real.f[f].n[1] = 0.0;
+//		dmod->shape.comp[0].real.f[f].n[2] = 0.0;
+	}
+}
+__global__ void calc_vertex_nrmls_krnl(struct mod_t *dmod)
 {
 	/* nv-threaded kernel */
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -507,8 +525,13 @@ __global__ void calc_vertex_nrmls_krnl(struct par_t *dpar, struct mod_t *dmod)
 		naf = dmod->shape.comp[0].real.v[i].naf;
 		for (j=0; j<naf; j++) {
 			f = dmod->shape.comp[0].real.v[i].af[j];
-			for (k=0; k<=2; k++)
-				n[k] += dmod->shape.comp[0].real.f[f].n[k];
+			n[0] += dmod->shape.comp[0].real.f[f].n[0];
+			n[1] += dmod->shape.comp[0].real.f[f].n[1];
+			n[2] += dmod->shape.comp[0].real.f[f].n[2];
+			//for (k=0; k<=2; k++) {
+			//	n[k] += dmod->shape.comp[0].real.f[f].n[k];
+//				printf("f[%i].n[%i]: %g\n", f, k, dmod->shape.comp[0].real.f[f].n[k]);
+			//}
 		}
 		dev_normalize( n);
 		for (k=0; k<=2; k++)
@@ -712,8 +735,18 @@ __host__ void realize_coordinates_cuda( struct par_t *dpar, struct mod_t *dmod, 
 
 	/* Calculate vertex normals for this component as normalized sums of the
 	 * facet normals for all facets attached to each vertex     */
-	calc_vertex_nrmls_krnl<<<nvBLK,nvTHD>>>(dpar, dmod);
+///
+//	int *nafnas;
+//	cudaCalloc((void**)&nafnas, sizeof(int), 2);
+
+//	dbg_vertex_nrmls_krnl<<<nvBLK,nvTHD>>>(dmod, nafnas);
+	calc_vertex_nrmls_krnl<<<nvBLK,nvTHD>>>(dmod);
 	checkErrorAfterKernelLaunch("calc_vertex_nrmls, line 667");
+//	deviceSyncAfterKernelLaunch("dbg");
+//	printf("max naf: %i\n", nafnas[0]);
+//	printf("max nas: %i\n", nafnas[1]);
+//	printf("\n");
+
 }
 /*.....................................................................................*/
 

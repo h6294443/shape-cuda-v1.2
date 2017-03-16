@@ -88,7 +88,13 @@ __device__ void dev_mmmul( double x[3][3], double y[3][3], double z[3][3])
 	  x[i][j] = t[i][j];
 }
 
-
+__device__ int dev_vp_iround(double x)
+{
+  if (x < 0.0)
+    return ((int)(x - 0.5));
+  else
+    return ((int)(x + 0.5));
+}
 void mtrnsps_cuda( double *a, double b[3][3])
 {
 	double t[3][3];

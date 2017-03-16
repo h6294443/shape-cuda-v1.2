@@ -14,7 +14,7 @@ int DYNPROC = 0;		/* Flag whether to use dynamic processing or not */
 int STREAMS = 0;		/* Flag whether to use streams or not */
 int GPU = 1;			/* Which GPU will run code */
 int POSVIS_SEPARATE = 0;/* Flag to calculate xlim/ylim separately */
-int AF = 1;				/* Flag whether to process all frames in set simultaneously */
+int AF = 0;				/* Flag whether to process all frames in set simultaneously */
 
 int main(int argc, char *argv[])
  {
@@ -45,8 +45,6 @@ int main(int argc, char *argv[])
 	/* Read the par file, get the action, and make sure actions other than
 	 * "fit" do NOT use parallel processing  */
 	read_par( argv[1], &par);
-	if (par.action != FIT)
-		bailout("shape-cuda can currently handle only the 'fit' action.\n");
 
 	/*  Record the names of the mod and obs files  */
 	if (par.action == ORBIT) {
@@ -139,6 +137,7 @@ int main(int argc, char *argv[])
 		par.nfpar += read_mod( &par, &mod);
 		par.nfpar += read_dat( &par, &mod, &dat);
 		mkparlist( &par, &mod, &dat);
+
 		/* Make CUDA device copies of par, mod, dat (these copies reside
 		 * in device memory and are inaccessible by the host (CPU) code */
 		if (CUDA) {

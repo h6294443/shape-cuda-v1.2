@@ -170,6 +170,7 @@ __device__ double dev_hapke( double cosi, double cose, double phase,
         double w, double h, double B0, double g, double theta);
 __device__ void dev_inteuler( struct spin_t spin, double t[], double impulse[][3], int n,
 		double w[3], double m[3][3], unsigned char pa, unsigned char method, double int_abstol);
+__device__ int dev_vp_iround(double x);
 __device__ void dev_mat2euler( double m[3][3], double *phi, double *theta, double *psi);
 __device__ void dev_mmid( double *y, double *dydx, int nvar1, double xs, double htot,
 		int nstep, double *yout, void (*dev_derivs)( double, double *, double *));
@@ -202,6 +203,8 @@ __global__ void realize_angleoff_krnl(struct dat_t *ddat);
 __global__ void realize_omegaoff_krnl(struct dat_t *ddat);
 __global__ void update_spin_angle_krnl(struct mod_t *dmod);
 
+__global__ void dbg_vertex_nrmls_krnl(struct mod_t *dmod, int *nafnas);
+
 __host__ void dbg_print_fit(struct dat_t *ddat, int s, int f);
 void dbg_print_fit_host(struct dat_t *ddat, int s, int f);
 __host__ void dbg_print_deldop_fit(struct dat_t *ddat, int s, int f);
@@ -223,3 +226,10 @@ __host__ void dbg_print_pos_z(struct dat_t *ddat, int set, int frm, int n);
 __host__ void dbg_print_pos_cose_s(struct dat_t *ddat, int set, int frm, int n);
 __host__ void dbg_print_pos_z_af(struct dat_t *ddat, int set, int n);
 __host__ void dbg_print_cose_af(struct dat_t *ddat, int set, int n);
+__host__ void dbg_print_array1D_dbl(double *data, int size, int offset, char *filename);
+__host__ void dbg_print_lghtcrv_arrays(struct dat_t *ddat, int set, int n, char *filename);
+__host__ void dbg_print_lghtcrv_arrays_host(struct lghtcrv_t *lghtcrv, int set, int n, char *filename);
+__host__ void dbg_print_lghtcrv_xyy2(struct dat_t *ddat, int set, int ncalc, char *filename);
+__host__ void dbg_print_lghtcrv_xyy2_host(struct lghtcrv_t *lghtcrv, int set, int ncalc, char *filename);
+__host__ void dbg_print_lghtcrv_pos_arrays(struct dat_t *ddat, int set, int f, int npixels, int n);
+__host__ void dbg_print_lghtcrv_pos_arrays_host(struct lghtcrv_t *lghtcrv, int f, int set);

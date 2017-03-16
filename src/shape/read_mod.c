@@ -374,10 +374,11 @@ int read_shape( FILE *fp, struct par_t *par, struct mod_t *mod)
 			* If it is not enabled, allocate via the standard C call.				 */
 
 			if (CUDA) 
-				cudaCalloc((void**)&mod->shape.comp[i].desc.ver.v, sizeof(struct vertex_t *), nv);
+				cudaCalloc((void**)&mod->shape.comp[i].desc.ver.v,
+						sizeof(struct vertex_t), nv);
 			else 
 				mod->shape.comp[i].desc.ver.v = (struct vertex_t *)
-                                        		calloc( nv, sizeof( struct vertex_t));
+						calloc( nv, sizeof( struct vertex_t));
 			/*=======================================================================*/
 			
 			for (j=0; j<=2; j++)
@@ -466,7 +467,6 @@ int read_shape( FILE *fp, struct par_t *par, struct mod_t *mod)
 	}
 	return nfpar;
 }
-
 
 int read_photo( FILE *fp, struct par_t *par, struct mod_t *mod)
 {
@@ -1872,7 +1872,6 @@ int read_photo( FILE *fp, struct par_t *par, struct mod_t *mod)
 	return nfpar;
 }
 
-
 int read_spin( FILE *fp, struct mod_t *mod)
 {
 	char str[MAXLEN];
@@ -2408,30 +2407,77 @@ void setupvertices( struct vertices_t *vt)
 {
 	int f, s, v, *nas, *naf;
 
+	int maxnas=0, maxnaf=0;
+
+	/* Create temp vectors for the # of attached sides and # of attached facets
+	 * for each vertex.  Length of the temp vectors is [nv]	 */
 	nas = ivector( 0, vt->nv);     /* number of sides  attached to each vertex */
 	naf = ivector( 0, vt->nv);     /* number of facets attached to each vertex */
 
+	/* Step through each vertex & initialize each vertex' naf and nas to zero */
 	for (v=0; v<vt->nv; v++)
 		vt->v[v].naf = vt->v[v].nas = 0;
+
+	/* Step through each side and increase nas for both vertices that make up
+	 * the side */
 	for (s=0; s<vt->ns; s++) {
 		++vt->v[vt->s[s].v[0]].nas;
 		++vt->v[vt->s[s].v[1]].nas;
 	}
+
+	/* Step through each vertex */
 	for (v=0; v<vt->nv; v++) {
+
+		/* Set vertex' naf number equal to the nas calculated in previous loop */
 		vt->v[v].naf = vt->v[v].nas;
-		//vt->v[v].as = ivector( 0, vt->v[v].nas-1);   /* list of sides  attached to each vertex */
-		//vt->v[v].af = ivector( 0, vt->v[v].naf-1);   /* list of facets attached to each vertex */
+
+		/* Create a vector each for attached facets and attached sides for
+		 * each vertex */
+		if (CUDA) {
+			cudaCalloc((void**)&vt->v[v].as, sizeof(int), vt->v[v].nas);
+			cudaCalloc((void**)&vt->v[v].af, sizeof(int), vt->v[v].naf);
+		} else {
+			vt->v[v].as = ivector( 0, vt->v[v].nas-1);   /* list of sides  attached to each vertex */
+			vt->v[v].af = ivector( 0, vt->v[v].naf-1);   /* list of facets attached to each vertex */
+		}
+
+		/* Copy each vertex' nas and naf figures into the nas and naf vectors
+		 * created at the beginning of this function for temporary storage	 */
 		nas[v] = vt->v[v].nas;
 		naf[v] = vt->v[v].naf;
+
+		maxnas = MAX(maxnas, vt->v[v].nas);
+		maxnaf = MAX(maxnaf, vt->v[v].naf);
+
+		/* Now reset each vertex' naf and nas figures to zero */
 		vt->v[v].nas = vt->v[v].naf = 0;
 	}
+
+	/* Step through each side and fill in the list of attached sides and # of
+	 * attached sides for each sides two vertices */
 	for (s=0; s<vt->ns; s++) {
+		/* vt->v[x].as[y] = s */
+		/* x = vt->s[s].v[0]   - int index of 1st vertex of current side
+		 * y = vt->v[x].nas++  - the # of attached sides, increase after read
+		 * 	 		 */
 		vt->v[vt->s[s].v[0]].as[vt->v[vt->s[s].v[0]].nas++] = s;
 		vt->v[vt->s[s].v[1]].as[vt->v[vt->s[s].v[1]].nas++] = s;
 	}
+
+	/* Step through each facet and fill in the list of attached facets and # of
+	 * attached facets for each of the three vertices that make up each facet*/
 	for (f=0; f<vt->nf; f++)
 		for (v=0; v<=2; v++)
+			/* vt->v[x].af[y] = f
+			 *
+			 * x = vt->f[f].v[v] - int index of vertex v attached to facet
+			 * y = vt->v[x]  	 - # of att. facets, increase after read
+			 * */
 			vt->v[vt->f[f].v[v]].af[vt->v[vt->f[f].v[v]].naf++] = f;
+
+	/* Step through each vertex and compare the just calculated nas and naf
+	 * for each vertex against the naf and nas arrays copied earlier from
+	 * vt, which was then reset and recalculated.*/
 	for (v=0; v<vt->nv; v++) {
 		if (nas[v] != vt->v[v].nas) {
 			printf("%d != %d\n", nas[v], vt->v[v].nas);
@@ -2441,6 +2487,8 @@ void setupvertices( struct vertices_t *vt)
 			printf("%d != %d\n", naf[v], vt->v[v].naf);
 			fflush(stdout);
 		}
+		maxnas = MAX(maxnas, vt->v[v].nas);
+		maxnaf = MAX(maxnaf, vt->v[v].naf);
 	}
 
 	free_ivector( nas, 0, vt->nv);

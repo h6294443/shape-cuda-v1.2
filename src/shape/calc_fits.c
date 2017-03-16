@@ -1645,6 +1645,9 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 					posbnd_logfactor += pos->posbnd_logfactor;
 			}
 
+		/* Start debug */
+//			dbg_print_lghtcrv_pos_arrays_host(lghtcrv, 22, s);
+
 		/*  Now view the model from the source (sun) and get the facet number
         and distance toward the source of each pixel in this projected view;
         use this information to determine which POS pixels are shadowed       */
@@ -1679,11 +1682,16 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 				}
 		}
 
+//		/* Start debug */
+//		dbg_print_lghtcrv_pos_arrays_host(lghtcrv, i, s);
+
 		/*  Compute the model brightness for this model lightcurve point  */
 
 		intensityfactor = pow( pos->km_per_pixel/AU, 2.0);
 		lghtcrv->y[i] = apply_photo( mod, lghtcrv->ioptlaw, lghtcrv->solar_phase[i],
 				intensityfactor, pos, 0);
+
+//		dbg_print_lghtcrv_xyy2_host(lghtcrv, s, ncalc, "xyy2_arrays_CPU.csv");
 
 		/*  Carry out screen and disk output for the write action  */
 
@@ -1884,7 +1892,7 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 		}
 		lghtcrv->fit[i] /= lghtcrv->nviews;
 	}
-
+//	dbg_print_lghtcrv_xyy2_host(lghtcrv, s, ncalc, "xyy2_arrays_CPU.csv");
 	/*  Deal with flags for model that extends beyond the POS frame  */
 
 	par->posbnd_logfactor += lghtcrv->dof * (posbnd_logfactor/ncalc);

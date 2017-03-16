@@ -251,20 +251,18 @@ static unsigned char type;
 static  double hotparamval;
 double objective_cuda(double x);
 
-__device__ static unsigned char bf_baddiam, bf_badphoto, bf_posbnd, bf_badposet,
-								bf_badradar, bf_baddopscale;
 __device__ double bf_hotparamval, bf_dummyval;
 __device__ int bf_partype;
 
-__global__ void bf_get_flags_krnl(struct par_t *dpar) {
+__global__ void bf_get_flags_krnl(struct par_t *dpar, unsigned char *flags) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
-		bf_baddiam  	= dpar->baddiam;
-		bf_badphoto 	= dpar->badphoto;
-		bf_posbnd  	 	= dpar->posbnd;
-		bf_badposet 	= dpar->badposet;
-		bf_badradar 	= dpar->badradar;
-		bf_baddopscale 	= dpar->baddopscale;
+		flags[0] = dpar->baddiam;
+		flags[1] = dpar->badphoto;
+		flags[2] = dpar->posbnd;
+		flags[3] = dpar->badposet;
+		flags[4] = dpar->badradar;
+		flags[5] = dpar->baddopscale;
 	}
 }
 __global__ void bf_set_hotparam_initial_krnl() {
@@ -297,6 +295,13 @@ __global__ void bf_set_hotparam_val_krnl(double newvalue) {
 		bf_hotparamval = newvalue;
 	}
 }
+__global__ void dbg_check_naf_single(struct mod_t *dmod) {
+	/* Single-threaded kernel */
+	if (threadIdx.x == 0) {
+		printf("v[64].naf: %i\n", dmod->shape.comp[0].real.v[64].naf);
+		printf("v[64].nas: %i\n", dmod->shape.comp[0].real.v[64].nas);
+	}
+}
 
 __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, struct par_t *par, struct mod_t *mod,
@@ -307,9 +312,9 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 	long pid_long;
 	pid_t pid;
 	double beginerr, enderr, ax, bx, cx, obja, objb, objc, xmin,
-	final_chi2, final_redchi2, dummyval, dummyval2, dummyval3, dummyval4,
+	final_chi2, final_redchi2, dummyval2, dummyval3, dummyval4,
 	delta_delcor0, dopscale_factor, radalb_factor, optalb_factor;
-	unsigned char hbaddiam, hbadphoto, hposbnd, hbadposet, hbadradar, hbaddopscale;
+	unsigned char *flags;
 	dim3 THD, BLK;
 
 	/* Get the hostname of host machine and the PID */
@@ -325,6 +330,7 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 	gpuErrchk(cudaMemcpy(sdev_mod, &mod, sizeof(struct mod_t), cudaMemcpyHostToDevice));
 	gpuErrchk(cudaMalloc((void**)&sdev_dat, sizeof(struct dat_t)));
 	gpuErrchk(cudaMemcpy(sdev_dat, &dat, sizeof(struct dat_t), cudaMemcpyHostToDevice));
+	cudaCalloc((void**)&flags, sizeof(unsigned char), 7);
 
 	/* Initialize static global pointers used by objective(x) below
       to be compatible with "Numerical Recipes in C" routines       */
@@ -359,11 +365,11 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 	type = mod->shape.comp[0].type;
 
 	/* Allocate memory for pointers, steps, and tolerances  */
-	cudaCalloc((void**)&fparstep,   sizeof(double), par->nfpar);
+	cudaCalloc((void**)&fparstep,   sizeof(double),   par->nfpar);
 	cudaCalloc((void**)&fpartol,    sizeof(double), par->nfpar);
 	cudaCalloc((void**)&fparabstol, sizeof(double), par->nfpar);
-	cudaCalloc((void**)&fpartype,   sizeof(int),	par->nfpar);
-	cudaCalloc((void**)&fpntr,		sizeof(double*),par->nfpar);
+	cudaCalloc((void**)&fpartype,   sizeof(int), par->nfpar);
+	cudaCalloc((void**)&fpntr,		sizeof(double*), par->nfpar);
 	for (i=0; i<par->nfpar; i++)
 		cudaCalloc((void**)&fpntr[i], sizeof(double), 1);
 
@@ -376,21 +382,20 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 	if (call_vary_params)
 	{
 		realize_mod_cuda(dpar, dmod, type);
-		if (AF)
-			realize_spin_cuda_af(dpar, dmod, ddat, dat->nsets);
-		else
-			realize_spin_cuda(dpar, dmod, ddat, dat->nsets);
+
+		if (AF)		realize_spin_cuda_af(dpar, dmod, ddat, dat->nsets);
+		else		realize_spin_cuda(dpar, dmod, ddat, dat->nsets);
 
 		realize_photo_cuda(dpar, dmod, 1.0, 1.0, 0);  /* set R_save to R */
 
 		/* realize_delcor and realize_dopscale were called by read_dat */
 		if (AF)
-			vary_params_af(dpar, dmod, ddat, par->action,
-					&deldop_zmax_save, &rad_xsec_save, &opt_brightness_save,
+			vary_params_af(dpar, dmod, ddat, par->action, &deldop_zmax_save,
+					&rad_xsec_save, &opt_brightness_save,
 					&cos_subradarlat_save, dat->nsets);
 		else
-			vary_params_cuda(dpar, dmod, ddat, par->action,
-					&deldop_zmax_save, &rad_xsec_save, &opt_brightness_save,
+			vary_params_cuda(dpar, dmod, ddat, par->action,	&deldop_zmax_save,
+					&rad_xsec_save, &opt_brightness_save,
 					&cos_subradarlat_save, dat->nsets);
 	}
 	printf("rad_xsec: %f\n", rad_xsec_save);
@@ -407,28 +412,24 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 	printf("%4d %8.6f to begin", 0, enderr);
 
 	/* Launch single-thread kernel to retrieve flags in dev_par */
-	bf_get_flags_krnl<<<1,1>>>(dpar);
-	checkErrorAfterKernelLaunch("bf_get_flags_krnl, line ");
-	gpuErrchk(cudaMemcpyFromSymbol(&hbaddiam, bf_baddiam, sizeof(hbaddiam),
-			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&hbadphoto, bf_badphoto, sizeof(hbaddiam),
-			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&hposbnd, bf_posbnd, sizeof(hbaddiam),
-			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&hbadposet, bf_badposet, sizeof(hbaddiam),
-			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&hbadradar, bf_badradar, sizeof(hbaddiam),
-			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&hbaddopscale, bf_baddopscale, sizeof(hbaddiam),
-			0, cudaMemcpyDeviceToHost));
+	/*		flags[0] = dpar->baddiam;
+			flags[1] = dpar->badphoto;
+			flags[2] = dpar->posbnd;
+			flags[3] = dpar->badposet;
+			flags[4] = dpar->badradar;
+			flags[5] = dpar->baddopscale;*/
+
+	bf_get_flags_krnl<<<1,1>>>(dpar, flags);
+	checkErrorAfterKernelLaunch("bf_get_flags_krnl");
+	deviceSyncAfterKernelLaunch("bf_get_flags_krnl");
 
 	/* Now act on the flags just retrieved from dev_par */
-	if (hbaddiam)			printf("  (BAD DIAMS)");
-	if (hbadphoto)			printf("  (BAD PHOTO bestfit top)");
-	if (hposbnd)			printf("  (BAD POS)");
-	if (hbadposet)			printf("  (BAD POSET)");
-	if (hbadradar)			printf("  (BAD RADAR)");
-	if (hbaddopscale)		printf("  (BAD DOPSCALE)");		printf("\n");
+	if (flags[0])		printf("  (BAD DIAMS)");
+	if (flags[1])		printf("  (BAD PHOTO)");
+	if (flags[2])		printf("  (BAD POS)");
+	if (flags[3])		printf("  (BAD POSET)");
+	if (flags[4])		printf("  (BAD RADAR)");
+	if (flags[5])		printf("  (BAD DOPSCALE)");		printf("\n");
 	fflush(stdout);
 
 	/* Display the region within each delay-Doppler or Doppler frame that, ac-
@@ -456,35 +457,22 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 		printf("# iteration %d %f", ++iter, beginerr);
 
 		/* Launch single-thread kernel to retrieve flags in dev_par */
-		bf_get_flags_krnl<<<1,1>>>(dpar);
-		checkErrorAfterKernelLaunch("bf_get_flags_krnl, line ");
-		gpuErrchk(cudaMemcpyFromSymbol(&hbaddiam, bf_baddiam, sizeof(hbaddiam),
-				0, cudaMemcpyDeviceToHost));
-		gpuErrchk(cudaMemcpyFromSymbol(&hbadphoto, bf_badphoto, sizeof(hbaddiam),
-				0, cudaMemcpyDeviceToHost));
-		gpuErrchk(cudaMemcpyFromSymbol(&hposbnd, bf_posbnd, sizeof(hbaddiam),
-				0, cudaMemcpyDeviceToHost));
-		gpuErrchk(cudaMemcpyFromSymbol(&hbadposet, bf_badposet, sizeof(hbaddiam),
-				0, cudaMemcpyDeviceToHost));
-		gpuErrchk(cudaMemcpyFromSymbol(&hbadradar, bf_badradar, sizeof(hbaddiam),
-				0, cudaMemcpyDeviceToHost));
-		gpuErrchk(cudaMemcpyFromSymbol(&hbaddopscale, bf_baddopscale, sizeof(hbaddiam),
-				0, cudaMemcpyDeviceToHost));
+		bf_get_flags_krnl<<<1,1>>>(dpar, flags);
+		checkErrorAfterKernelLaunch("bf_get_flags_krnl");
+		deviceSyncAfterKernelLaunch("bf_get_flags_krnl");
 
 		/* Now act on the flags just retrieved from dev_par */
-		if (hbaddiam)			printf("  (BAD DIAMS)");
-		if (hbadphoto)			printf("  (BAD PHOTO bestfit middle)");
-		if (hposbnd)			printf("  (BAD POS)");
-		if (hbadposet)			printf("  (BAD POSET)");
-		if (hbadradar)			printf("  (BAD RADAR)");
-		if (hbaddopscale)		printf("  (BAD DOPSCALE)");		printf("\n");
+		if (flags[0])		printf("  (BAD DIAMS)");
+		if (flags[1])		printf("  (BAD PHOTO)");
+		if (flags[2])		printf("  (BAD POS)");
+		if (flags[3])		printf("  (BAD POSET)");
+		if (flags[4])		printf("  (BAD RADAR)");
+		if (flags[5])		printf("  (BAD DOPSCALE)");		printf("\n");
 		fflush(stdout);
 
 		/* Show breakdown of chi-square by data type    */
-		if (AF)
-			chi2_cuda_af(dpar,ddat,1,dat->nsets);
-		else
-			chi2_cuda(dpar, ddat, 1);
+		if (AF)		chi2_cuda_af(dpar,ddat,1,dat->nsets);
+		else		chi2_cuda(dpar, ddat, 1);
 
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % par->npar_update;
@@ -513,10 +501,9 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 			 * changed value of the size parameter, in case the first call to
 			 * objective displays reduced chi-square and the penalty functions.  */
 			if (par->avoid_badpos && partype == SIZEPAR) {
-				bf_get_flags_krnl<<<1,1>>>(dpar);
-				checkErrorAfterKernelLaunch("bf_get_flags_krnl, line ");
-				gpuErrchk(cudaMemcpyFromSymbol(&hposbnd, bf_posbnd, sizeof(hbaddiam),
-						0, cudaMemcpyDeviceToHost));
+				bf_get_flags_krnl<<<1,1>>>(dpar, flags);
+				checkErrorAfterKernelLaunch("bf_get_flags_krnl");
+				deviceSyncAfterKernelLaunch("bf_get_flags_krnl");
 
 				/* Get value of (*hotparam) */
 				bf_get_hotparam_val_krnl<<<1,1>>>();
@@ -524,15 +511,14 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 				gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
 						sizeof(double),	0, cudaMemcpyDeviceToHost));
 
-				while (hposbnd) {
+				while (flags[2]) {
 					objective_cuda(hotparamval);
 
-					bf_get_flags_krnl<<<1,1>>>(dpar);
-					checkErrorAfterKernelLaunch("bf_get_flags_krnl, line ");
-					gpuErrchk(cudaMemcpyFromSymbol(&hposbnd, bf_posbnd, sizeof(hbaddiam),
-							0, cudaMemcpyDeviceToHost));
+					bf_get_flags_krnl<<<1,1>>>(dpar, flags);
+					checkErrorAfterKernelLaunch("bf_get_flags_krnl");
+					deviceSyncAfterKernelLaunch("bf_get_flags_krnl");
 
-					if (hposbnd) {
+					if (flags[2]) {
 						/* Set the value pointed to by hotparam to 0.95 of its
 						 * previous value */
 						bf_mult_hotparam_val_krnl<<<1,1>>>(0.95);
@@ -604,10 +590,8 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 			if (newsize || newshape)
 				realize_mod_cuda(dpar, dmod, type);
 			if (newspin) {
-				if (AF)
-					realize_spin_cuda_af(dpar, dmod, ddat, dat->nsets);
-				else
-					realize_spin_cuda(dpar, dmod, ddat, dat->nsets);
+				if (AF)		realize_spin_cuda_af(dpar, dmod, ddat, dat->nsets);
+				else		realize_spin_cuda(dpar, dmod, ddat, dat->nsets);
 			}
 			if ((newsize && vary_alb_size) || ((newshape ||
 					newspin) && vary_alb_shapespin))
@@ -694,29 +678,18 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 				objective_cuda(hotparamval);//(*hotparam);
 
 			/* Launch single-thread kernel to retrieve flags in dev_par */
-			bf_get_flags_krnl<<<1,1>>>(dpar);
-			checkErrorAfterKernelLaunch("bf_get_flags_krnl, line ");
-			gpuErrchk(cudaMemcpyFromSymbol(&hbaddiam, bf_baddiam, sizeof(hbaddiam),
-					0, cudaMemcpyDeviceToHost));
-			gpuErrchk(cudaMemcpyFromSymbol(&hbadphoto, bf_badphoto, sizeof(hbaddiam),
-					0, cudaMemcpyDeviceToHost));
-			gpuErrchk(cudaMemcpyFromSymbol(&hposbnd, bf_posbnd, sizeof(hbaddiam),
-					0, cudaMemcpyDeviceToHost));
-			gpuErrchk(cudaMemcpyFromSymbol(&hbadposet, bf_badposet, sizeof(hbaddiam),
-					0, cudaMemcpyDeviceToHost));
-			gpuErrchk(cudaMemcpyFromSymbol(&hbadradar, bf_badradar, sizeof(hbaddiam),
-					0, cudaMemcpyDeviceToHost));
-			gpuErrchk(cudaMemcpyFromSymbol(&hbaddopscale, bf_baddopscale, sizeof(hbaddiam),
-					0, cudaMemcpyDeviceToHost));
+			bf_get_flags_krnl<<<1,1>>>(dpar, flags);
+			checkErrorAfterKernelLaunch("bf_get_flags_krnl");
+			deviceSyncAfterKernelLaunch("bf_get_flags_krnl");
 
 			/* Display the objective function after each parameter adjustment.  */
 			printf("%4d %8.6f %d", p, enderr, iround(par->fpartype[p]));
-			if (hbaddiam)		printf("  (BAD DIAMS)");
-			if (hbadphoto)		printf("  (BAD PHOTO bottom)");
-			if (hposbnd)		printf("  (BAD POS)");
-			if (hbadposet)		printf("  (BAD POSET)");
-			if (hbadradar)		printf("  (BAD RADAR)");
-			if (hbaddopscale)	printf("  (BAD DOPSCALE)");
+			if (flags[0])		printf("  (BAD DIAMS)");
+			if (flags[1])		printf("  (BAD PHOTO)");
+			if (flags[2])		printf("  (BAD POS)");
+			if (flags[3])		printf("  (BAD POSET)");
+			if (flags[4])		printf("  (BAD RADAR)");
+			if (flags[5])		printf("  (BAD DOPSCALE)");
 			printf("\n");
 			fflush(stdout);
 
@@ -733,14 +706,13 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 			if (++cntr >= par->npar_update) {
 				cntr = 0;
 				showvals = 1;
-				if (AF)
+				if (AF) {
 					calc_fits_cuda_af(dpar, dmod, ddat);
-				else
-					calc_fits_cuda(dpar, dmod, ddat);
-				if (AF)
 					chi2_cuda_af(dpar, ddat, 0, dat->nsets);
-				else
+				} else {
+					calc_fits_cuda(dpar, dmod, ddat);
 					chi2_cuda(dpar, ddat, 0);
+				}
 				//write_mod( par, mod);
 				//write_dat( par, dat);
 			}
@@ -783,8 +755,8 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 				keep_iterating = 1;
 			first_fitpar = 0;     /* for all iterations after the first iteration */
 
-		} else if (par->term_badmodel && (hposbnd || hbadphoto || hbaddiam ||
-				hbadposet || hbadradar	|| hbaddopscale) ) {
+		} else if (par->term_badmodel && (flags[0] || flags[1] || flags[2] ||
+				flags[3] || flags[4] || flags[5]) ) {
 
 			/* Just completed a full iteration, stop iterating because "term_
 			 * badmodel" parameter is turned on and model has a fatal flaw: it
@@ -808,33 +780,20 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 
 	/* Show final values of reduced chi-square, individual penalty functions,
 	 * and the objective function  */
-	if (AF)
-		final_chi2 = chi2_cuda_af(dpar, ddat, 1, dat->nsets);
-	else
-		final_chi2 = chi2_cuda(dpar, ddat, 1);
+	if (AF)		final_chi2 = chi2_cuda_af(dpar, ddat, 1, dat->nsets);
+	else		final_chi2 = chi2_cuda(dpar, ddat, 1);
 	final_redchi2 = final_chi2/dat->dof;
 	printf("# search completed\n");
 
 	/* Launch single-thread kernel to get these final flags from dev->par:
 	 * pen.n, baddiam, badphoto, posbnd, badposet, badradar, baddopscale */
 	/* Launch single-thread kernel to retrieve flags in dev_par */
-	bf_get_flags_krnl<<<1,1>>>(dpar);
-	checkErrorAfterKernelLaunch("bf_get_flags_krnl, line ");
-	gpuErrchk(cudaMemcpyFromSymbol(&hbaddiam, bf_baddiam, sizeof(hbaddiam),
-			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&hbadphoto, bf_badphoto, sizeof(hbaddiam),
-			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&hposbnd, bf_posbnd, sizeof(hbaddiam),
-			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&hbadposet, bf_badposet, sizeof(hbaddiam),
-			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&hbadradar, bf_badradar, sizeof(hbaddiam),
-			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&hbaddopscale, bf_baddopscale, sizeof(hbaddiam),
-			0, cudaMemcpyDeviceToHost));
+	bf_get_flags_krnl<<<1,1>>>(dpar, flags);
+	checkErrorAfterKernelLaunch("bf_get_flags_krnl");
+	deviceSyncAfterKernelLaunch("bf_get_flags_krnl");
 
-	if (par->pen.n > 0 || hbaddiam || hbadphoto || hposbnd	|| hbadposet || hbadradar
-			|| hbaddopscale) {
+	if (par->pen.n > 0 || flags[0] || flags[1] || flags[2]	|| flags[3] ||
+			flags[4] || flags[5]) {
 		printf("#\n");
 		printf("# %15s %e\n", "reduced chi2", final_redchi2);
 		if (par->pen.n > 0) {
@@ -842,24 +801,24 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 			penalties_cuda(dpar, dmod, ddat);
 			par->showstate = 0;
 		}
-		if (hbaddiam)
+		if (flags[0])
 			printf("# objective func multiplied by %.1f: illegal ellipsoid diameters\n",
 					baddiam_factor);
-		if (hbadphoto)
+		if (flags[1])
 			printf("# objective func multiplied by %.1f: illegal photometric parameters\n",
 					badphoto_factor);
-		if (hposbnd)
+		if (flags[2])
 			printf("# objective func multiplied by %.1f: model extends beyond POS frame\n",
 					posbnd_factor);
-		if (hbadposet)
+		if (flags[3])
 			printf("# objective func multiplied by %.1f: "
 					"model extends beyond plane-of-sky fit image\n",
 					badposet_factor);
-		if (hbadradar)
+		if (flags[4])
 			printf("# objective func multiplied by %.1f: "
 					"model is too wide in delay-Doppler space to construct fit image\n",
 					badradar_factor);
-		if (hbaddopscale)
+		if (flags[5])
 			printf("# objective func multiplied by %.1f: illegal Doppler scaling factors\n",
 					baddopscale_factor);
 		printf("# ----------------------------\n");
@@ -880,6 +839,7 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod,
 	cudaFree(fparabstol);
 	cudaFree(fpartype);
 	cudaFree(fpntr);
+	cudaFree(flags);
 	cudaDeviceReset();
 	return enderr;
 }
