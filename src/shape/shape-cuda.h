@@ -20,25 +20,30 @@
     	gpuErrchk(cudaMallocManaged(A, B*C, cudaMemAttachGlobal)); \
 		gpuErrchk(cudaMemset(*A, 0, B*C)); \
     } while (0)
+
 #define MAXIMP 10
 
-extern int CUDA;	/* Flag whether to use CUDA or not*/
-extern int STREAMS;	/* Flag whether to use streams or not */
-extern int GPU;		/* Which GPU will be used */
-extern int DYNPROC;  /* Flag wether to use dynamic processing or not */
-extern int POSVIS_SEPARATE;	/* Flag wether to use separate xlim/ylim calculation */
-extern int AF;		/* Flag wether to process all frames in a set at once */
+/* Flags */
+extern int CUDA;			/* Use CUDA 									*/
+extern int STREAMS;			/* Use CUDA streams 							*/
+extern int GPU;				/* Which GPU to use 							*/
+extern int DYNPROC; 		/* Use dynamic processing (launch child kernels)*/
+extern int POSVIS_SEPARATE;	/* Use separate xlim/ylim calculation 			*/
+extern int AF;				/* Process all frames in a set at once 			*/
+extern int TIMING;			/* Time execution of certain kernels 			*/
+
+
 extern int maxThreadsPerBlock;
 extern struct par_t *dev_par;
 extern struct mod_t *dev_mod;
 extern struct dat_t *dev_dat;
-extern float *dfit, *ddfit;		// pointers for doppler fit and delay doppler fit
+extern float *dfit, *ddfit;		/* pointers for doppler fit and delay doppler fit */
 
-extern double *fparstep;		// par->fparstep
-extern double *fpartol;			// par->partol
-extern double *fparabstol;		// par->fparabstol
-extern double **fpntr;			// par->pntr
-extern int *fpartype;			// par->fpartype
+extern double *fparstep;		/* par->fparstep 	*/
+extern double *fpartol;			/* par->partol 		*/
+extern double *fparabstol;		/* par->fparabstol 	*/
+extern double **fpntr;			/* par->pntr 		*/
+extern int *fpartype;			/* par->fpartype	*/
 
 void CUDACount();
 void allocate_CUDA_structs(struct par_t par, struct mod_t mod, struct dat_t dat);
@@ -49,8 +54,6 @@ void mmmul_cuda( double *x, double y[3][3], double *z);
 void mtrnsps_cuda( double *a, double b[3][3]);
 void pickGPU(int gpuid);
 
-
-
 int posvis_cuda( struct vertices_t *verts, double orbit_offset[3], struct pos_t *pos,
 		int smooth, int src, int body, int comp);
 int pos2deldop_cuda(struct par_t *par, struct photo_t *photo, double orbit_xoff,
@@ -59,7 +62,6 @@ int pos2deldop_cuda(struct par_t *par, struct photo_t *photo, double orbit_xoff,
 int pos2doppler_cuda( struct par_t *par, struct photo_t *photo,
         double orbit_xoff, double orbit_yoff, double orbit_dopoff,
         struct doppler_t *doppler, int body, int set, int frm, int v);
-
 
 __host__ double apply_photo_cuda(struct mod_t *dmod, struct dat_t *ddat,
 		int body, int set, int frm);
@@ -114,18 +116,29 @@ __host__ int pos2deldop_cuda_2(struct par_t *dpar, struct mod_t *dmod,
 __host__ int pos2deldop_cuda_af(struct par_t *dpar, struct mod_t *dmod, struct
 		dat_t *ddat, double orbit_xoff, double orbit_yoff, double
 		orbit_dopoff, int body, int set, int nframes, int v);
+__host__ int pos2deldop_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat, struct pos_t **pos, int *ndel, int *ndop,
+		double orbit_xoff, double orbit_yoff, double orbit_dopoff,
+		int body, int set, int nframes,	int v, cudaStream_t *p2d_stream);
 __host__ int pos2doppler_cuda_2( struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, double orbit_xoff, double orbit_yoff, double
 		orbit_dopoff, int body, int set, int frm, int v);
 __host__ int pos2doppler_cuda_af( struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, double orbit_xoff, double orbit_yoff, double
 		orbit_dopoff, int body, int set, int nframes, int v);
+__host__ int pos2doppler_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat, struct pos_t **pos, double orbit_xoff, double
+		orbit_yoff, double orbit_dopoff, int *ndop, int body, int set,
+		int nframes, int v,	cudaStream_t *pds_stream);
 __host__ int posvis_cuda_2(struct par_t *dpar, struct mod_t *dmod, struct
 		dat_t *ddat, double orbit_offset[3], int set, int frame, int src,
 		int body, int comp);
 __host__ int posvis_af(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, float orbit_offset[3], int set, int nframes,
 		int src, int body, int comp);
+__host__ int posvis_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat, double orbit_offset[3], int set, int nframes,
+		int src, int body, int comp, int *outndarr, cudaStream_t *posvis_stream);
 __host__ void realize_delcor_cuda(struct dat_t *ddat, double delta_delcor0,
 		int delcor0_mode, int nsets);
 __host__ void realize_dopscale_cuda(struct par_t *dpar, struct dat_t *ddat,
@@ -138,6 +151,8 @@ __host__ void realize_spin_cuda( struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int nsets);
 __host__ void realize_spin_cuda_af( struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int nsets);
+__host__ void realize_spin_cuda_streams( struct par_t *dpar,
+		struct mod_t *dmod, struct dat_t *ddat, int nsets);
 __host__ void realize_xyoff_cuda( struct dat_t *ddat);
 __host__ void show_deldoplim_cuda(struct dat_t *dat, struct dat_t *ddat);
 __host__ void vary_params_cuda(struct par_t *dpar, struct mod_t *dmod,
@@ -145,6 +160,9 @@ __host__ void vary_params_cuda(struct par_t *dpar, struct mod_t *dmod,
 		double *rad_xsec, double *opt_brightness, double *cos_subradarlat,
 		int nsets);
 __host__ void vary_params_af( struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat, int action, double *deldop_zmax, double
+		*rad_xsec, double *opt_brightness, double *cos_subradarlat, int nsets);
+__host__ void vary_params_cuda_streams( struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int action, double *deldop_zmax, double
 		*rad_xsec, double *opt_brightness, double *cos_subradarlat, int nsets);
 
@@ -157,8 +175,11 @@ __device__ void dev_cotrans2( double y[3], double a[3][3], double x[3], int dir)
 __device__ void dev_cotrans3(double y[3], double a[3][3], double x[3],
 		int dir);
 __device__ void dev_cotrans4(float3 *y, double a[3][3], double x[3], int dir, int f);
+__device__ void dev_cotrans5(double3 *y, double a[3][3], double3 *x, int dir);
+__device__ void dev_cotrans6(double y[3], double3 *a, double x[3], int dir, int f);
 __device__ double dev_cross( double z[3], double x[3], double y[3]);
 __device__ double dev_dot( double x[3], double y[3]);
+__device__ double dev_dot2( double x[3], double3 *y);
 __device__ void dev_euler2mat( double m[3][3], double phi, double theta, double psi);
 __device__ void dev_facmom( double fv0[3], double fv1[3], double fv2[3], double fn[3],
         double *dv, double dvr[3], double dI[3][3]);
@@ -175,7 +196,9 @@ __device__ void dev_mat2euler( double m[3][3], double *phi, double *theta, doubl
 __device__ void dev_mmid( double *y, double *dydx, int nvar1, double xs, double htot,
 		int nstep, double *yout, void (*dev_derivs)( double, double *, double *));
 __device__ void dev_mmmul(double x[3][3], double y[3][3], double z[3][3]);
+__device__ void dev_mmmul2(double3 *x, double y[3][3], double3 *z, int f);
 __device__ void dev_mtrnsps( double a[3][3], double b[3][3]);
+__device__ void dev_mtrnsps2(double3 *a, double b[3][3], int f);
 __device__ double dev_normalize(double *u);
 __device__ void dev_odeint( double *ystart, int nvar, double x1, double x2, double eps,
 	double h1, double hmin, int *nok, int *nbad, void (*derivs)(double,double *,double *),
@@ -185,24 +208,23 @@ __device__ double dev_plgndr(int l,int m,double x);
 __device__ void dev_POSrect2(struct pos_t *pos, int src, float imin_dbl,
 		float imax_dbl, float jmin_dbl, float jmax_dbl);
 __device__ double dev_radlaw( struct photo_t *photo, int ilaw, double cosinc, int c, int f);
-__device__ void dev_realize_impulse(struct spin_t spin, double t,
-		double t_integrate[], double impulse[][3], int *n_integrate, int s, int f, int k);
+__device__ void dev_realize_impulse(struct spin_t spin, double t,double t_integrate[], double impulse[][3], int *n_integrate, int s, int f, int k);
 __device__ void dev_rzextr( int iest, double xest, double *yest, double *yz, double *dy);
-
 __device__ double radlaw_cuda(union radscat_t *radar, unsigned char *radtype,
 		int ilaw, double cosinc, int c, int f);
 
+__global__ void cf_init_seen_flags_krnl(struct mod_t *dmod, int nf);
+__global__ void cf_set_final_pars_krnl(struct par_t *dpar, struct dat_t *ddat);
 __global__ void clrvect_krnl(struct dat_t *ddat, int s, int f, int nThreads);
-__global__ void clrvect_af_krnl(struct dat_t *ddat, int s, int nframes,
-		int nThreads, int frame_size);
+__global__ void clrvect_af_krnl(struct dat_t *ddat, int s, int nframes,	int nThreads, int frame_size);
 __global__ void euler2mat_krnl( double m[3][3], double phi, double theta, double psi);
 __global__ void euler2mat_realize_mod_krnl(struct mod_t *dmod);
 __global__ void get_types_krnl(struct dat_t *ddat, unsigned char *dtype);
+__global__ void posclr_streams_krnl(struct pos_t **pos, int *posn, int f);
 __global__ void posmask_universal_krnl(struct par_t *dpar, struct pos_t *pos, int nThreads, int xspan);
 __global__ void realize_angleoff_krnl(struct dat_t *ddat);
 __global__ void realize_omegaoff_krnl(struct dat_t *ddat);
 __global__ void update_spin_angle_krnl(struct mod_t *dmod);
-
 __global__ void dbg_vertex_nrmls_krnl(struct mod_t *dmod, int *nafnas);
 
 __host__ void dbg_print_fit(struct dat_t *ddat, int s, int f);

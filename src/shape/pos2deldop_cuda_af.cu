@@ -359,12 +359,30 @@ __global__ void pos2deldop_get_global_frmsz_krnl(int *global_lim, int4 *xylim,
 		atomicMax(&global_lim[3], xylim[f].z);
 	}
 }
-__global__ void pos2deldop_pixel_af_krnl(struct par_t *dpar, struct mod_t *dmod,
-		struct dat_t *ddat, struct pos_t **pos, struct deldopfrm_t **frame,
-		int xspan, int body, double orbit_xoff, double orbit_yoff,
-		int set, int frame_size, int total_size, int nframes, int *global_lim,
-		float2 *deldopshift, float2 *axay, float4 *dop, float4 *deldoplim,
-		int *ndel, int *ndop, int *idel0, int *idop0, float2 *xyincr) {
+__global__ void pos2deldop_pixel_af_krnl(
+		struct par_t *dpar,
+		struct mod_t *dmod,
+		struct dat_t *ddat,
+		struct pos_t **pos,
+		struct deldopfrm_t **frame,
+		int xspan,
+		int body,
+		double orbit_xoff,
+		double orbit_yoff,
+		int set,
+		int frame_size,
+		int total_size,
+		int nframes,
+		int *global_lim,
+		float2 *deldopshift,
+		float2 *axay,
+		float4 *dop,
+		float4 *deldoplim,
+		int *ndel,
+		int *ndop,
+		int *idel0,
+		int *idop0,
+		float2 *xyincr) {
 	/* nThreads-threaded kernel */
 
 	/*  Loop through all POS pixels within the rectangular plane-of-sky region spanned by the

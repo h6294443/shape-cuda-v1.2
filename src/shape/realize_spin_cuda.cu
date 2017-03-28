@@ -37,8 +37,7 @@ extern "C" {
 
 __device__ int dnframes, dnviews;
 __device__ double anglesave[3], omegasave[3];
-__device__ void dev_realize_impulse(struct spin_t spin, double t,
-		double t_integrate[], double impulse[][3], int *n_integrate, int s, int f, int k);
+
 __global__ void get_types_krnl(struct dat_t *ddat, unsigned char *dtype) {
 	/* nsets-threaded kernel */
 	int s = blockIdx.x * blockDim.x + threadIdx.x;

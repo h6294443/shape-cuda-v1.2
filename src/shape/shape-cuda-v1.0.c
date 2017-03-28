@@ -9,12 +9,13 @@
  */
 #include "../shape/head.h"
 
-int CUDA = 1;			/* Flag whether to use CUDA or run CPU code */
-int DYNPROC = 0;		/* Flag whether to use dynamic processing or not */
-int STREAMS = 0;		/* Flag whether to use streams or not */
-int GPU = 1;			/* Which GPU will run code */
-int POSVIS_SEPARATE = 0;/* Flag to calculate xlim/ylim separately */
-int AF = 0;				/* Flag whether to process all frames in set simultaneously */
+int CUDA = 1;			/* Use CUDA code or run CPU code 		*/
+int DYNPROC = 0;		/* Use dynamic processing        		*/
+int STREAMS = 1;		/* Use CUDA streams						*/
+int GPU = 1;			/* Which GPU will run code 				*/
+int POSVIS_SEPARATE = 0;/* Calculate xlim/ylim separately 		*/
+int AF = 0;				/* Process all frames in a set at once	*/
+int TIMING = 0;			/* Time certain kernel executions 		*/
 
 int main(int argc, char *argv[])
  {
@@ -22,7 +23,8 @@ int main(int argc, char *argv[])
 	/* Check available CUDA devices, if any, before proceeding */
 	CUDACount();
 	maxThreadsPerBlock /= 4.0;
-	/*	Declare variables */
+
+	/* Declare variables */
 	char progname[MAXLEN], errormessage[MAXLEN], localtimestring[MAXLEN];
 	char *slashptr;
 	struct par_t par;					// the parameter structure
@@ -32,7 +34,8 @@ int main(int argc, char *argv[])
 	struct par_t *dev_par;
 	struct mod_t *dev_mod;
 	struct dat_t *dev_dat;
-	/*  Get program name (minus the path)  */
+
+	/* Get program name (minus the path)  */
 	slashptr = strrchr(argv[0], '/');
 	if (slashptr)
 		strcpy(progname, slashptr+1);
@@ -141,13 +144,16 @@ int main(int argc, char *argv[])
 		/* Make CUDA device copies of par, mod, dat (these copies reside
 		 * in device memory and are inaccessible by the host (CPU) code */
 		if (CUDA) {
-			gpuErrchk(cudaMalloc((void**)&dev_par, sizeof(struct par_t)));
+//			gpuErrchk(cudaMalloc((void**)&dev_par, sizeof(struct par_t)));
+			gpuErrchk(cudaMallocManaged((void**)&dev_par, sizeof(struct par_t), cudaMemAttachGlobal));
 			gpuErrchk(cudaMemcpy(dev_par, &par, sizeof(struct par_t), cudaMemcpyHostToDevice));
 
-			gpuErrchk(cudaMalloc((void**)&dev_mod, sizeof(struct mod_t)));
+//			gpuErrchk(cudaMalloc((void**)&dev_mod, sizeof(struct mod_t)));
+			gpuErrchk(cudaMallocManaged((void**)&dev_mod, sizeof(struct mod_t), cudaMemAttachGlobal));
 			gpuErrchk(cudaMemcpy(dev_mod, &mod, sizeof(struct mod_t), cudaMemcpyHostToDevice));
 
-			gpuErrchk(cudaMalloc((void**)&dev_dat, sizeof(struct dat_t)));
+//			gpuErrchk(cudaMalloc((void**)&dev_dat, sizeof(struct dat_t)));
+			gpuErrchk(cudaMallocManaged((void**)&dev_dat, sizeof(struct dat_t), cudaMemAttachGlobal));
 			gpuErrchk(cudaMemcpy(dev_dat, &dat, sizeof(struct dat_t), cudaMemcpyHostToDevice));
 
 			bestfit_CUDA(dev_par,dev_mod,dev_dat, &par, &mod, &dat);

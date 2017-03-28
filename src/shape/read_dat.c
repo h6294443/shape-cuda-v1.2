@@ -1339,7 +1339,7 @@ void set_up_pos( struct par_t *par, struct dat_t *dat)
 }
 void set_up_pos_cuda( struct par_t *par, struct dat_t *dat)
 {
-	int s, f, i, n, size, npx;
+	int s, f, i, j, n, size, npx;
 
 	/*  Allocate memory for a plane-of-sky rendering for the data as a whole;
       as discussed below, if pos_scope = "global" then this will be the
@@ -1430,7 +1430,7 @@ void set_up_pos_cuda( struct par_t *par, struct dat_t *dat)
       If pos_scope = "local" then each data frame or lightcurve point gets its own
       pos_t structure in memory, so the POS images and associated variables persist
       rather than being overwritten by other frames/points.                            */
-	if (AF)	par->pos_scope = LOCAL;
+	if (AF || STREAMS)	par->pos_scope = LOCAL;
 	switch (par->pos_scope) {
 	case GLOBAL:
 		for (s=0; s<dat->nsets; s++) {
@@ -1776,18 +1776,18 @@ void set_up_pos_cuda( struct par_t *par, struct dat_t *dat)
 					npx = (2*n+1)*(2*n+1);
 
 					/* First allocate the outer loop with cuda managed memory */
-					cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.b,
-							sizeof(double), (2*n+1));
-					cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosi,
-							sizeof(double), (2*n+1));
-					cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cose,
-							sizeof(double), (2*n+1));
-					cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.z,
-							sizeof(double), (2*n+1));
-					cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosill,
-							sizeof(double), (2*n+1));
-					cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.zill,
-							sizeof(double), (2*n+1));
+//					cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.b,
+//							sizeof(double), (2*n+1));
+//					cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosi,
+//							sizeof(double), (2*n+1));
+//					cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cose,
+//							sizeof(double), (2*n+1));
+//					cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.z,
+//							sizeof(double), (2*n+1));
+//					cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosill,
+//							sizeof(double), (2*n+1));
+//					cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.zill,
+//							sizeof(double), (2*n+1));
 					cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.body,
 							sizeof(int), 	(2*n+1));
 					cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.comp,
@@ -1815,12 +1815,12 @@ void set_up_pos_cuda( struct par_t *par, struct dat_t *dat)
 							sizeof(float), npx);
 
 					/* Offset indexing for these double pointers */
-					dat->set[s].desc.lghtcrv.rend[i].pos.b 			-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.cosi 		-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.cose 		-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.z 			-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.cosill 	-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.zill 		-= -n;
+//					dat->set[s].desc.lghtcrv.rend[i].pos.b 			-= -n;
+//					dat->set[s].desc.lghtcrv.rend[i].pos.cosi 		-= -n;
+//					dat->set[s].desc.lghtcrv.rend[i].pos.cose 		-= -n;
+//					dat->set[s].desc.lghtcrv.rend[i].pos.z 			-= -n;
+//					dat->set[s].desc.lghtcrv.rend[i].pos.cosill 	-= -n;
+//					dat->set[s].desc.lghtcrv.rend[i].pos.zill 		-= -n;
 					dat->set[s].desc.lghtcrv.rend[i].pos.body 		-= -n;
 					dat->set[s].desc.lghtcrv.rend[i].pos.comp 		-= -n;
 					dat->set[s].desc.lghtcrv.rend[i].pos.f 			-= -n;
@@ -1828,46 +1828,46 @@ void set_up_pos_cuda( struct par_t *par, struct dat_t *dat)
 					dat->set[s].desc.lghtcrv.rend[i].pos.compill	-= -n;
 					dat->set[s].desc.lghtcrv.rend[i].pos.fill 		-= -n;
 
-					for (i=-n; i<=n; i++) {
+					for (j=-n; j<=n; j++) {
 						/* First allocate the outer loop with cuda managed memory */
-						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.b[i],
-								sizeof(double), (2*n+1));
-						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosi[i],
-								sizeof(double), (2*n+1));
-						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cose[i],
-								sizeof(double), (2*n+1));
-						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.z[i],
-								sizeof(double), (2*n+1));
-						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosill[i],
-								sizeof(double), (2*n+1));
-						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.zill[i],
-								sizeof(double), (2*n+1));
-						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.body[i],
+//						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.b[j],
+//								sizeof(double), (2*n+1));
+//						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosi[j],
+//								sizeof(double), (2*n+1));
+//						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cose[j],
+//								sizeof(double), (2*n+1));
+//						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.z[j],
+//								sizeof(double), (2*n+1));
+//						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosill[j],
+//								sizeof(double), (2*n+1));
+//						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.zill[j],
+//								sizeof(double), (2*n+1));
+						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.body[j],
 								sizeof(int), 	(2*n+1));
-						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.comp[i],
+						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.comp[j],
 								sizeof(int), 	(2*n+1));
-						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.f[i],
+						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.f[j],
 								sizeof(int), 	(2*n+1));
-						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.bodyill[i],
+						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.bodyill[j],
 								sizeof(int), 	(2*n+1));
-						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.compill[i],
+						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.compill[j],
 								sizeof(int), 	(2*n+1));
-						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.fill[i],
+						cudaCalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.fill[j],
 								sizeof(int),	(2*n+1));
 
 						/* Now offset indexing for the inner loop */
-						dat->set[s].desc.lghtcrv.rend[i].pos.b[i] 		-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.cosi[i]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.cose[i] 	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.z[i] 		-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.cosill[i] 	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.zill[i]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.body[i]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.comp[i]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.f[i] 		-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.bodyill[i]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.compill[i]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.fill[i]	-= -n;
+//						dat->set[s].desc.lghtcrv.rend[i].pos.b[j] 		-= -n;
+//						dat->set[s].desc.lghtcrv.rend[i].pos.cosi[j]	-= -n;
+//						dat->set[s].desc.lghtcrv.rend[i].pos.cose[j] 	-= -n;
+//						dat->set[s].desc.lghtcrv.rend[i].pos.z[j] 		-= -n;
+//						dat->set[s].desc.lghtcrv.rend[i].pos.cosill[j] 	-= -n;
+//						dat->set[s].desc.lghtcrv.rend[i].pos.zill[j]	-= -n;
+						dat->set[s].desc.lghtcrv.rend[i].pos.body[j]	-= -n;
+						dat->set[s].desc.lghtcrv.rend[i].pos.comp[j]	-= -n;
+						dat->set[s].desc.lghtcrv.rend[i].pos.f[j] 		-= -n;
+						dat->set[s].desc.lghtcrv.rend[i].pos.bodyill[j]	-= -n;
+						dat->set[s].desc.lghtcrv.rend[i].pos.compill[j]	-= -n;
+						dat->set[s].desc.lghtcrv.rend[i].pos.fill[j]	-= -n;
 					}
 				}
 				break;
@@ -2303,7 +2303,7 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
 		if (CUDA) {
 			cudaCalloc((void**)&lghtcrv->rend, sizeof(struct crvrend_t),
 					lghtcrv->ncalc+1);
-			lghtcrv->rend -= 1;
+		//	lghtcrv->rend -= 1;
 		}
 		else
 			lghtcrv->rend = (struct crvrend_t *) calloc( lghtcrv->ncalc+1,
@@ -2508,9 +2508,9 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
 
 		/*=======================================================================*/
 		if (CUDA) {
-			cudaCalloc((void**)&lghtcrv->rend, sizeof(struct crvrend_t *),
+			cudaCalloc((void**)&lghtcrv->rend, sizeof(struct crvrend_t),
 					lghtcrv->ncalc+1);
-			lghtcrv->rend -= 1;
+		//	lghtcrv->rend -= 1;
 		} else
 			lghtcrv->rend = (struct crvrend_t *) calloc( lghtcrv->ncalc+1,
 					sizeof( struct crvrend_t));

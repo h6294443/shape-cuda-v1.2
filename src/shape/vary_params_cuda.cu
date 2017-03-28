@@ -272,13 +272,13 @@ __global__ void compute_xsec_final_krnl(struct dat_t *ddat, float frm_xsec,
 			deldop_cross_section = __double2float_rd(ddat->set[s].desc.deldop.frame[f].overflow_xsec);
 			deldop_cross_section += frm_xsec; // fit is the end result of parallel reduction
 			deldop_cross_section *= ddat->set[s].desc.deldop.frame[f].cal.val;
-			sum_rad_xsec += deldop_cross_section*dweight;
+			sum_rad_xsec += deldop_cross_section*ddat->set[s].desc.deldop.frame[f].weight;
 			break;
 		case DOPPLER:
 			doppler_cross_section = __double2float_rd(ddat->set[s].desc.doppler.frame[f].overflow_xsec);
 			doppler_cross_section += frm_xsec;
 			doppler_cross_section *= ddat->set[s].desc.doppler.frame[f].cal.val;
-			sum_rad_xsec += doppler_cross_section*dweight;
+			sum_rad_xsec += doppler_cross_section*ddat->set[s].desc.doppler.frame[f].weight;
 
 			break;
 		}
@@ -329,8 +329,8 @@ __global__ void posclr_krnl(int n, int nx)
 		 * cos(scattering angle), reset the z coordinate (distance from COM towards
 		 * Earth) to a dummy value, and reset the body, component, and facet onto
 		 * which the pixel center projects to  dummy values                  */
-		vp_pos->b[i][j] = vp_pos->cose[i][j] = 0.0;
-		vp_pos->z[i][j] = -HUGENUMBER;
+//		vp_pos->b[i][j] = vp_pos->cose[i][j] = 0.0;
+//		vp_pos->z[i][j] = -HUGENUMBER;
 		vp_pos->body[i][j] = vp_pos->comp[i][j] = vp_pos->f[i][j] = -1;
 
 		vp_pos->b_s[offset] = vp_pos->cose_s[offset] = 0.0;
@@ -1002,7 +1002,11 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 
 					/* Determine which POS pixels cover the target */
 //					for (c=0; c<mod->shape.ncomp; c++)
-					posvis_cuda_2(dpar, dmod, ddat, orbit_offset,s,i, 0, 0, c);
+					if (STREAMS)
+						printf("in vary params_cuda, fix this (lightcurve posvis call");
+					//	posvis_cuda_streams(dpar, dmod, ddat, orbit_offset,s,i, 0, 0, c);
+					else
+						posvis_cuda_2(dpar, dmod, ddat, orbit_offset,s,i, 0, 0, c);
 
 				 /* Now view the model from the source (sun) and get the facet
 				  * number and distance toward the source of each pixel in this

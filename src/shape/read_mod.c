@@ -336,10 +336,10 @@ int read_shape( FILE *fp, struct par_t *par, struct mod_t *mod)
 					cudaCalloc((void**)&mod->shape.comp[i].desc.har.b[j], sizeof(struct param_t *), j + 1);
 				}
 				else {				
-				mod->shape.comp[i].desc.har.a[j] = (struct param_t *)
-					calloc( j+1, sizeof( struct param_t));
-				mod->shape.comp[i].desc.har.b[j] = (struct param_t *)
-					calloc( j+1, sizeof( struct param_t));
+					mod->shape.comp[i].desc.har.a[j] = (struct param_t *)
+							calloc( j+1, sizeof( struct param_t));
+					mod->shape.comp[i].desc.har.b[j] = (struct param_t *)
+							calloc( j+1, sizeof( struct param_t));
 				}
 				/*=======================================================================*/
 
@@ -449,15 +449,18 @@ int read_shape( FILE *fp, struct par_t *par, struct mod_t *mod)
 			* If it is not enabled, allocate via the standard C call.				 */
 
 			if (CUDA)
-				cudaCalloc((void**)&mod->shape.comp[i].desc.ver.f, sizeof(struct facet_t *), nf);
+				cudaCalloc((void**)&mod->shape.comp[i].desc.ver.f, sizeof(struct facet_t), nf);
 			else
 				mod->shape.comp[i].desc.ver.f = (struct facet_t *)
 				calloc(nf, sizeof(struct facet_t));
 			/*=======================================================================*/
 						
 			for (j=0; j<nf; j++)
-				for (k=0; k<=2; k++)
+				for (k=0; k<=2; k++) {
+					if (j==157)
+						printf("\n");
 					mod->shape.comp[i].desc.ver.f[j].v[k] = getint( fp);
+				}
 			fflush(stdout);
 		}
 

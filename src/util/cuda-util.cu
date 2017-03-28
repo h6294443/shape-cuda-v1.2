@@ -55,7 +55,6 @@ void cotrans_cuda(double y[3], double a[3][3], double x[3], int dir)
 	for (i=0;i<=2;i++)
 		y[i] = t[i];
 }
-
 void mmmul_cuda( double *x, double y[3][3], double *z)
 {
 	double t[3][3];
@@ -71,7 +70,6 @@ void mmmul_cuda( double *x, double y[3][3], double *z)
 		for (j=0;j<=2;j++)
 			x[i*3+j] = t[i][j];
 }
-
 __device__ void dev_mmmul( double x[3][3], double y[3][3], double z[3][3])
 {
   double t[3][3];
@@ -87,7 +85,37 @@ __device__ void dev_mmmul( double x[3][3], double y[3][3], double z[3][3])
 	for (j=0;j<=2;j++)
 	  x[i][j] = t[i][j];
 }
+__device__ void dev_mmmul2(double3 *x, double y[3][3], double3 *z, int frm)
+{ /* This version turns the original double x[3][3] and double z[3][3] into
+   * double3 pointers with nframes entries.  Selection is made via f  */
+	double t[3][3];
+	int i, f;
+	f = 3*frm;
 
+	for (i=0; i<=2; i++) {
+
+		t[i][0] = 0.0;
+		t[i][0] += y[i][0] * z[f+0].x;
+		t[i][0] += y[i][1] * z[f+1].x;
+		t[i][0] += y[i][2] * z[f+2].x;
+
+		t[i][1] = 0.0;
+		t[i][1] += y[i][0] * z[f+0].y;
+		t[i][1] += y[i][1] * z[f+1].y;
+		t[i][1] += y[i][2] * z[f+2].y;
+
+		t[i][2] = 0.0;
+		t[i][2] += y[i][0] * z[f+0].z;
+		t[i][2] += y[i][1] * z[f+1].z;
+		t[i][2] += y[i][2] * z[f+2].z;
+	}
+
+	for (i=0; i<=2; i++) {
+		x[f+i].x = t[i][0];
+		x[f+i].y = t[i][1];
+		x[f+i].z = t[i][2];
+	}
+}
 __device__ int dev_vp_iround(double x)
 {
   if (x < 0.0)
@@ -108,7 +136,6 @@ void mtrnsps_cuda( double *a, double b[3][3])
 			a[i*3+j] = t[i][j];
 	//a[i][j] = t[i][j];
 }
-
 void checkErrorAfterKernelLaunch(char *location) {
 	cudaError_t cudaStatus;
 	cudaStatus = cudaGetLastError();
@@ -116,7 +143,6 @@ void checkErrorAfterKernelLaunch(char *location) {
 		fprintf(stderr, "Kernel launch failed in %s: %s\n", location, cudaGetErrorString(cudaStatus));
 	}
 }
-
 void deviceSyncAfterKernelLaunch(char *location) {
 	// cudaDeviceSynchronize waits for the kernel to finish, and returns
 	// any errors encountered during the launch.
@@ -125,12 +151,15 @@ void deviceSyncAfterKernelLaunch(char *location) {
 	if (cudaStatus != cudaSuccess)
 		fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching the kernel in %s.\n", cudaStatus, location);
 }
-
 __device__ double dev_dot( double x[3], double y[3])
 {
 	return x[0]*y[0]+x[1]*y[1]+x[2]*y[2];
 }
-
+__device__ double dev_dot2( double x[3], double3 *y)
+{
+	/* This version replaces double y[3] with a double3 *y */
+	return x[0]*y->x+x[1]*y->y+x[2]*y->z;
+}
 __device__ double dev_normalize(double *u)
 {
 	int i;
@@ -146,7 +175,6 @@ __device__ double dev_normalize(double *u)
 	}
 	return norm;
 }
-
 __device__ void dev_cotrans1( double y[3], double *a, double x[3], int dir)
 {
 	double t[3];
@@ -187,6 +215,26 @@ __device__ void dev_cotrans2( double y[3], double a[3][3], double x[3], int dir)
 	for (i=0;i<=2;i++)
 		y[i] = t[i];
 }
+__device__ void dev_cotrans3(double y[3], double a[3][3], double x[3],
+		int dir) {
+	double t[3];
+	int i, j;
+
+	if (dir == 1)
+		for (i = 0; i <= 2; i++) {
+			t[i] = 0.0;
+			for (j = 0; j <= 2; j++)
+				t[i] += a[i][j] * x[j];
+		}
+	if (dir == (-1))
+		for (i = 0; i <= 2; i++) {
+			t[i] = 0.0;
+			for (j = 0; j <= 2; j++)
+				t[i] += a[j][i] * x[j];
+		}
+	for (i = 0; i <= 2; i++)
+		y[i] = t[i];
+}
 __device__ void dev_cotrans4(float3 *y, double a[3][3], double x[3], int dir, int f)
 {
 	double t[3];
@@ -208,10 +256,76 @@ __device__ void dev_cotrans4(float3 *y, double a[3][3], double x[3], int dir, in
 	y[f].y = t[1];
 	y[f].z = t[2];
 }
+__device__ void dev_cotrans5(double3 *y, double a[3][3], double3 *x,
+		int dir) {
+	/* This version replaces double y[3] and double x[3] with double3 y and double3 x */
+	double t[3];
+	int i;
+
+	if (dir == 1)
+		for (i = 0; i <= 2; i++) {
+			t[i] = 0.0;
+			t[i] += a[i][0] * x->x;
+			t[i] += a[i][1] * x->y;
+			t[i] += a[i][2] * x->z;
+		}
+
+	if (dir == (-1))
+		for (i = 0; i <= 2; i++) {
+			t[i] = 0.0;
+			t[i] += a[0][i] * x->x;
+			t[i] += a[1][i] * x->y;
+			t[i] += a[2][i] * x->z;
+		}
+
+	y->x = t[0];
+	y->y = t[1];
+	y->z = t[2];
+}
+__device__ void dev_cotrans6(double y[3], double3 *a, double x[3], int dir, int frm) {
+	/* This version replaces double a[3][3] with a double3 pointers of lenght
+	 * nframes, selected with 'f'	 */
+	double t[3];
+	int i, j, f;
+	f = frm*3;
+
+	if (dir == 1)
+		for (i = 0; i <= 2; i++) {
+			t[i] = 0.0;
+			t[i] += a[f+i].x * x[0];
+			t[i] += a[f+i].y * x[1];
+			t[i] += a[f+i].z * x[2];
+		}
+
+	if (dir == (-1)) {
+
+		t[0] = 0.0;
+		for (j=0; j<=2; j++) {
+			t[0] += a[f+j].x * x[j];
+			t[0] += a[f+j].x * x[j];
+			t[0] += a[f+j].x * x[j];
+		}
+		t[1] = 0.0;
+		for (j=0; j<=2; j++) {
+			t[1] += a[f+j].y * x[j];
+			t[1] += a[f+j].y * x[j];
+			t[1] += a[f+j].y * x[j];
+		}
+		t[2] = 0.0;
+		for (j=0; j<=2; j++) {
+			t[2] += a[f+j].z * x[j];
+			t[2] += a[f+j].z * x[j];
+			t[2] += a[f+j].z * x[j];
+		}
+	}
+
+	for (i = 0; i <= 2; i++)
+		y[i] = t[i];
+}
 __device__ void dev_mtrnsps( double a[3][3], double b[3][3])
 {
-  double t[3][3];
-  int i, j;
+	double t[3][3];
+	int i, j;
 
   for (i=0;i<=2;i++)
 	for (j=0;j<=2;j++)
@@ -219,6 +333,30 @@ __device__ void dev_mtrnsps( double a[3][3], double b[3][3])
   for (i=0;i<=2;i++)
 	for (j=0;j<=2;j++)
 	  a[i][j] = t[i][j];
+}
+__device__ void dev_mtrnsps2(double3 *a, double b[3][3], int frm)
+{	/* This version splits the double a[3][3] of the original function into
+	 * three separate double3 vector variables. b[3][3] remains unchanged. */
+  double t[3][3];
+  int i, j, f;
+  f = frm *3;
+
+  for (i=0;i<=2;i++)
+	  for (j=0;j<=2;j++)
+		  t[i][j] = b[j][i];
+
+  a[f+0].x = t[0][0];
+  a[f+0].y = t[0][1];
+  a[f+0].z = t[0][2];
+  a[f+1].x = t[1][0];
+  a[f+1].y = t[1][1];
+  a[f+1].z = t[1][2];
+  a[f+2].x = t[2][0];
+  a[f+2].y = t[2][1];
+  a[f+2].z = t[2][2];
+
+
+
 }
 __device__ double radlaw_cuda(union radscat_t *radar, unsigned char *radtype,
 		int ilaw, double cosinc, int c, int f)

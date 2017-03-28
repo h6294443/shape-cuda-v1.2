@@ -485,6 +485,11 @@ __global__ void c2_lghtcrv_add_o2_krnl(double *dof_chi2set) {
 	float temp;
 	double dof;
 
+	if (i==1)
+		o2 = m2 = om = 0.0;
+
+	__syncthreads();
+
 	if ((i>=1) && (i<=c2_lghtcrv->n)) {
 		/* Add contributions from power within frame limits */
 
@@ -878,7 +883,7 @@ __host__ double chi2_lghtcrv_cuda(struct par_t *dpar, struct dat_t *ddat,
 		int s, int list_breakdown, double *chi2_all_lghtcrv)
 {
 	int n;
-	double *dof_chi2set;
+	double *dof_chi2set, chi2;
 	dim3 BLK,THD;
 
 	cudaCalloc((void**)&dof_chi2set, sizeof(double), 2);
@@ -897,12 +902,12 @@ __host__ double chi2_lghtcrv_cuda(struct par_t *dpar, struct dat_t *ddat,
 	deviceSyncAfterKernelLaunch("c2_lghtcrv_add_o2_krnl");
 
 
-	dbg_print_lghtcrv_arrays(ddat, s, n, "cuda_lghtcrv_arrays.csv");
+//	dbg_print_lghtcrv_arrays(ddat, s, n, "cuda_lghtcrv_arrays.csv");
 
 	if (list_breakdown)
 		*chi2_all_lghtcrv += dof_chi2set[1];
 
-
-
-	return dof_chi2set[1];
+	chi2 = dof_chi2set[1];
+	cudaFree(dof_chi2set);
+	return chi2;
 }

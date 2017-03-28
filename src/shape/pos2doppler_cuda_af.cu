@@ -523,7 +523,7 @@ __global__ void pos2doppler_finish_krnl(struct par_t *dpar, struct dat_t *ddat,
 	int j, j1, j2;
 	double lookfact, sdev_sq, variance, dopfactor;
 
-	if (threadIdx.x ==0) {
+	if (threadIdx.x <nframes) {
 		/* Copy float device variable over to the frame->doplim   */
 		frame[frm]->doplim[0] = doplim[frm].x;
 		frame[frm]->doplim[1] = doplim[frm].y;
