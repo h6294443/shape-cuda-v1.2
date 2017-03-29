@@ -773,6 +773,7 @@ __global__ void cf_add_fit_store_doppler_af_krnl2(
 		atomicAdd(&overflow[0], (float)frame[frm]->overflow_o2);
 		atomicAdd(&overflow[1], (float)frame[frm]->overflow_m2);
 		atomicAdd(&overflow[2], (float)frame[frm]->overflow_xsec);
+		atomicAdd(&overflow[3], (float)frame[frm]->overflow_dopmean);
 	}
 }
 __global__ void cf_finish_fit_store_af_krnl(

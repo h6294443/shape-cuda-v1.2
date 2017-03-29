@@ -116,10 +116,10 @@ __host__ int pos2deldop_cuda_2(struct par_t *dpar, struct mod_t *dmod,
 __host__ int pos2deldop_cuda_af(struct par_t *dpar, struct mod_t *dmod, struct
 		dat_t *ddat, double orbit_xoff, double orbit_yoff, double
 		orbit_dopoff, int body, int set, int nframes, int v);
-__host__ int pos2deldop_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
-		struct dat_t *ddat, struct pos_t **pos, int *ndel, int *ndop,
-		double orbit_xoff, double orbit_yoff, double orbit_dopoff,
-		int body, int set, int nframes,	int v, cudaStream_t *p2d_stream);
+__host__ int pos2deldop_cuda_streams(struct par_t *dpar, struct mod_t *dmod, struct
+		dat_t *ddat, struct pos_t **pos, int *ndel, int *ndop, double orbit_xoff,
+		double orbit_yoff, double orbit_dopoff, int body, int set, int nframes,
+		int v, int *badradararr, cudaStream_t *p2d_stream);
 __host__ int pos2doppler_cuda_2( struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, double orbit_xoff, double orbit_yoff, double
 		orbit_dopoff, int body, int set, int frm, int v);
