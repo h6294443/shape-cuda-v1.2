@@ -436,6 +436,11 @@ __host__ int posvis_af(struct par_t *dpar, struct mod_t *dmod,
 	struct pos_t **pos;
 	float4 *ijminmax_overall;
 	float3 orbit_offs;
+	cudaEvent_t start, stop;
+	float milliseconds;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+
 	orbit_offs.x = orbit_offset[0];
 	orbit_offs.y = orbit_offset[1];
 	orbit_offs.z = orbit_offset[2];
@@ -461,8 +466,19 @@ __host__ int posvis_af(struct par_t *dpar, struct mod_t *dmod,
 	BLK.x = floor((maxThreadsPerBlock - 1 + nThreads) / maxThreadsPerBlock);
 	THD.x = maxThreadsPerBlock;
 
+	if (TIMING)	cudaEventRecord(start);
+
 	posvis_facet_af_krnl<<<BLK,THD>>>(pos, src,body,comp, orbit_offs,
 			nThreads, nf, nframes, ijminmax_overall);
+
+	if (TIMING) {
+		cudaEventRecord(stop);
+		cudaEventSynchronize(stop);
+		milliseconds = 0;
+		cudaEventElapsedTime(&milliseconds, start, stop);
+		printf("%i facets in posvis_cuda_2 in %3.3f ms.\n", nf, milliseconds);
+	}
+
 	checkErrorAfterKernelLaunch("posvis_facet_af_krnl");
 	deviceSyncAfterKernelLaunch("posvis_facet_af_krnl");
 	gpuErrchk(cudaMemcpyFromSymbol(&outbnd, pvsoutbnd, sizeof(outbnd), 0,

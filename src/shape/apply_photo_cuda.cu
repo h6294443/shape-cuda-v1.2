@@ -80,28 +80,34 @@ extern "C" {
 __device__ struct pos_t *ap_pos;
 __device__ unsigned char *ap_type;
 __device__ int ap_ilaw, ap_posn;
+__device__ int4 ap_xylim;
 __device__ double phasefunc, scale_lommsee, scale_lambert, intensityfactor, phase;
 __device__ float sum;
 
 __global__ void ap_get_pos_krnl(struct dat_t *ddat, struct mod_t *dmod,
-		int set, int frm) {
+		int set, int frm, unsigned char *type) {
 	/* Single-thread kernel */
 	if (threadIdx.x == 0) {
 		ap_pos = &ddat->set[set].desc.lghtcrv.rend[frm].pos;
 		ap_ilaw = ddat->set[set].desc.lghtcrv.ioptlaw;
-		ap_type = &dmod->photo.opttype[ap_ilaw];
+		//ap_type = &dmod->photo.opttype[ap_ilaw];
+		type[0] = dmod->photo.opttype[ap_ilaw];
 		ap_posn = ap_pos->n;
 		sum = 0.0;
 		intensityfactor = (ap_pos->km_per_pixel/AU) * (ap_pos->km_per_pixel/AU);
 		phase = ddat->set[set].desc.lghtcrv.solar_phase[frm];
+		ap_xylim.w = ap_pos->xlim[0];
+		ap_xylim.x = ap_pos->xlim[1];
+		ap_xylim.y = ap_pos->ylim[0];
+		ap_xylim.z = ap_pos->ylim[1];
 	}
 }
 __global__ void ap_lambertlaw_krnl(struct mod_t *dmod, int nThreads,
-		int body) {
+		int body, int2 span) {
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int i = offset % (2*ap_posn + 1) - ap_posn;
-	int j = offset / (2*ap_posn + 1) - ap_posn;
+	int i = offset % span.x + ap_xylim.w;
+	int j = offset / span.x + ap_xylim.y;
 	double scale;
 	float b;
 
@@ -116,11 +122,11 @@ __global__ void ap_lambertlaw_krnl(struct mod_t *dmod, int nThreads,
 		}
 	}
 }
-__global__ void ap_harmlambert_krnl(struct mod_t *dmod, int nThreads, int body) {
+__global__ void ap_harmlambert_krnl(struct mod_t *dmod, int nThreads, int body, int2 span) {
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int i = offset % (2*ap_posn + 1) - ap_posn;
-	int j = offset / (2*ap_posn + 1) - ap_posn;
+	int i = offset % span.x + ap_xylim.w;
+	int j = offset / span.x + ap_xylim.y;
 	int c, f;
 	double scale;
 	float b;
@@ -138,11 +144,11 @@ __global__ void ap_harmlambert_krnl(struct mod_t *dmod, int nThreads, int body) 
 		}
 	}
 }
-__global__ void ap_inholambert_krnl(struct mod_t *dmod, int nThreads, int body) {
+__global__ void ap_inholambert_krnl(struct mod_t *dmod, int nThreads, int body, int2 span) {
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int i = offset % (2*ap_posn + 1) - ap_posn;
-	int j = offset / (2*ap_posn + 1) - ap_posn;
+	int i = offset % span.x + ap_xylim.w;
+	int j = offset / span.x + ap_xylim.y;
 	int c, f;
 	double scale;
 	float b;
@@ -160,11 +166,11 @@ __global__ void ap_inholambert_krnl(struct mod_t *dmod, int nThreads, int body) 
 		}
 	}
 }
-__global__ void ap_lommel_krnl(struct mod_t *dmod, int nThreads, int body) {
+__global__ void ap_lommel_krnl(struct mod_t *dmod, int nThreads, int body, int2 span) {
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int i = offset % (2*ap_posn + 1) - ap_posn;
-	int j = offset / (2*ap_posn + 1) - ap_posn;
+	int i = offset % span.x + ap_xylim.w;
+	int j = offset / span.x + ap_xylim.y;
 	double scale;
 	float b;
 
@@ -179,11 +185,11 @@ __global__ void ap_lommel_krnl(struct mod_t *dmod, int nThreads, int body) {
 		}
 	}
 }
-__global__ void ap_harmlommel_krnl(struct mod_t *dmod, int nThreads, int body) {
+__global__ void ap_harmlommel_krnl(struct mod_t *dmod, int nThreads, int body, int2 span) {
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int i = offset % (2*ap_posn + 1) - ap_posn;
-	int j = offset / (2*ap_posn + 1) - ap_posn;
+	int i = offset % span.x + ap_xylim.w;
+	int j = offset / span.x + ap_xylim.y;
 	int c, f;
 	double scale;
 	float b;
@@ -201,11 +207,11 @@ __global__ void ap_harmlommel_krnl(struct mod_t *dmod, int nThreads, int body) {
 		}
 	}
 }
-__global__ void ap_inholommel_krnl(struct mod_t *dmod, int nThreads, int body) {
+__global__ void ap_inholommel_krnl(struct mod_t *dmod, int nThreads, int body, int2 span) {
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int i = offset % (2*ap_posn + 1) - ap_posn;
-	int j = offset / (2*ap_posn + 1) - ap_posn;
+	int i = offset % span.x + ap_xylim.w;
+	int j = offset / span.x + ap_xylim.y;
 	int c, f;
 	double scale;
 	float b;
@@ -223,11 +229,11 @@ __global__ void ap_inholommel_krnl(struct mod_t *dmod, int nThreads, int body) {
 		}
 	}
 }
-__global__ void ap_geometrical_krnl(struct mod_t *dmod, int nThreads, int body) {
+__global__ void ap_geometrical_krnl(struct mod_t *dmod, int nThreads, int body, int2 span) {
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int i = offset % (2*ap_posn + 1) - ap_posn;
-	int j = offset / (2*ap_posn + 1) - ap_posn;
+	int i = offset % span.x + ap_xylim.w;
+	int j = offset / span.x + ap_xylim.y;
 	float b;
 
 	if (offset < nThreads) {
@@ -239,11 +245,11 @@ __global__ void ap_geometrical_krnl(struct mod_t *dmod, int nThreads, int body) 
 		}
 	}
 }
-__global__ void ap_hapke_krnl(struct mod_t *dmod, int nThreads, int body) {
+__global__ void ap_hapke_krnl(struct mod_t *dmod, int nThreads, int body, int2 span) {
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int i = offset % (2*ap_posn + 1) - ap_posn;
-	int j = offset / (2*ap_posn + 1) - ap_posn;
+	int i = offset % span.x + ap_xylim.w;
+	int j = offset / span.x + ap_xylim.y;
 	float b;
 
 	if (offset < nThreads) {
@@ -263,11 +269,11 @@ __global__ void ap_hapke_krnl(struct mod_t *dmod, int nThreads, int body) {
 		}
 	}
 }
-__global__ void ap_harmhapke_krnl(struct mod_t *dmod, int nThreads, int body) {
+__global__ void ap_harmhapke_krnl(struct mod_t *dmod, int nThreads, int body, int2 span) {
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int i = offset % (2*ap_posn + 1) - ap_posn;
-	int j = offset / (2*ap_posn + 1) - ap_posn;
+	int i = offset % span.x + ap_xylim.w;
+	int j = offset / span.x + ap_xylim.y;
 	int c, f;
 	float b;
 
@@ -290,11 +296,11 @@ __global__ void ap_harmhapke_krnl(struct mod_t *dmod, int nThreads, int body) {
 		}
 	}
 }
-__global__ void ap_inhohapke_krnl(struct mod_t *dmod, int nThreads, int body) {
+__global__ void ap_inhohapke_krnl(struct mod_t *dmod, int nThreads, int body, int2 span) {
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int i = offset % (2*ap_posn + 1) - ap_posn;
-	int j = offset / (2*ap_posn + 1) - ap_posn;
+	int i = offset % span.x + ap_xylim.w;
+	int j = offset / span.x + ap_xylim.y;
 	int c, f;
 	float b;
 
@@ -330,29 +336,30 @@ __global__ void ap_kaas_init_krnl(struct mod_t *dmod) {
 			   * phasefunc * dmod->photo.optical[ap_ilaw].kaas.R.val/PIE;
 	}
 }
-__global__ void ap_kaas_krnl(struct mod_t *dmod, int nThreads, int body) {
+__global__ void ap_kaas_krnl(struct mod_t *dmod, int nThreads, int body, int2 span) {
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int i = offset % (2*ap_posn + 1) - ap_posn;
-	int j = offset / (2*ap_posn + 1) - ap_posn;
-	float b;
+	int i = offset % span.x + ap_xylim.w;
+	int j = offset / span.x + ap_xylim.y;
+	int n = ap_pos->n;
+	int pos_spn = 2*n+1;
+	int pxa = (j+n)*pos_spn + (i+n);
 
 	if (offset < nThreads) {
-		if (ap_pos->cose[i][j] > 0.0 && ap_pos->cosi[i][j] > 0.0
+		if (ap_pos->cose_s[pxa] > 0.0 && ap_pos->cosi_s[pxa] > 0.0
 		 && ap_pos->body[i][j] == body) {
-			ap_pos->b[i][j] = intensityfactor * ap_pos->cosi[i][j]
-			    *(scale_lommsee / (ap_pos->cosi[i][j] + ap_pos->cose[i][j])
+			ap_pos->b_s[pxa] = intensityfactor * ap_pos->cosi_s[pxa]
+			    *(scale_lommsee / (ap_pos->cosi_s[pxa] + ap_pos->cose_s[pxa])
 			    + scale_lambert);
-			b = __double2float_rd(ap_pos->b[i][j]);
-			atomicAdd(&sum, b);
+			atomicAdd(&sum, ap_pos->b_s[pxa]);
 		}
 	}
 }
-__global__ void ap_harmkaas_krnl(struct mod_t *dmod, int nThreads, int body) {
+__global__ void ap_harmkaas_krnl(struct mod_t *dmod, int nThreads, int body, int2 span) {
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int i = offset % (2*ap_posn + 1) - ap_posn;
-	int j = offset / (2*ap_posn + 1) - ap_posn;
+	int i = offset % span.x + ap_xylim.w;
+		int j = offset / span.x + ap_xylim.y;
 	int c, f;
 	float b;
 
@@ -377,11 +384,11 @@ __global__ void ap_harmkaas_krnl(struct mod_t *dmod, int nThreads, int body) {
 		}
 	}
 }
-__global__ void ap_inhokaas_krnl(struct mod_t *dmod, int nThreads, int body) {
+__global__ void ap_inhokaas_krnl(struct mod_t *dmod, int nThreads, int body, int2 span) {
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int i = offset % (2*ap_posn + 1) - ap_posn;
-	int j = offset / (2*ap_posn + 1) - ap_posn;
+	int i = offset % span.x + ap_xylim.w;
+		int j = offset / span.x + ap_xylim.y;
 	int c, f;
 	float b;
 
@@ -411,80 +418,88 @@ __global__ void ap_get_sum_krnl() {
 	 * follow with copying the variable out  */
 	if (threadIdx.x == 0)
 		if (sum == 0)
-			printf("\nsum =0!\n");
+			sum = TINY; //printf("\nsum =0!\n");
 }
+
 __host__ double apply_photo_cuda(struct mod_t *dmod, struct dat_t *ddat, int body,
 		int set, int frm)
 {
 	unsigned char *type;
-	int ilaw, n, xspan, nThreads;
+	int n, nThreads;
 	float hsum;
 	dim3 BLK, THD;
+	int4 xylim;
+	int2 span;
 
+	cudaCalloc((void**)&type, sizeof(unsigned char), 2);
 	/* Launch single-thread kernel to assign pos address and get type */
-	ap_get_pos_krnl<<<1,1>>>(ddat, dmod, set, frm);
-	checkErrorAfterKernelLaunch("ap_get_pos_krnl, line ");
-	gpuErrchk(cudaMemcpyFromSymbol(&type, ap_type, sizeof(type), 0,
-			cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&ilaw, ap_ilaw, sizeof(ilaw), 0,
-			cudaMemcpyDeviceToHost));
+	ap_get_pos_krnl<<<1,1>>>(ddat, dmod, set, frm, type);
+	checkErrorAfterKernelLaunch("ap_get_pos_krnl");
+	deviceSyncAfterKernelLaunch("ap_get_pos_krnl");
+
+//	gpuErrchk(cudaMemcpyFromSymbol(&ilaw, ap_ilaw, sizeof(ilaw), 0,
+//			cudaMemcpyDeviceToHost));
 	gpuErrchk(cudaMemcpyFromSymbol(&n, ap_posn,	sizeof(n), 0,
 			cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpyFromSymbol(&xylim, ap_xylim, sizeof(int4), 0,
+			cudaMemcpyDeviceToHost));
+
 	/* Calculate launch parameters for the pixel kernels */
-	xspan = 2*n+1;
-	nThreads = xspan*xspan;
-	BLK.x = floor((maxThreadsPerBlock - 1 + nThreads)/maxThreadsPerBlock);
+	span.x = xylim.x - xylim.w + 1;
+	span.y = xylim.z - xylim.y + 1;
+	nThreads = span.x * span.y;
+ 	BLK.x = floor((maxThreadsPerBlock-1+nThreads)/maxThreadsPerBlock);
 	THD.x = maxThreadsPerBlock; // Thread block dimensions
 
-	switch (ilaw) {
+	switch (type[0]) {
 	case LAMBERTLAW:
 		/* Launch Lambert Law kernel */
-		ap_lambertlaw_krnl<<<BLK,THD>>>(dmod, nThreads, body);
+		ap_lambertlaw_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
 		checkErrorAfterKernelLaunch("ap_lambertlaw_krnl, line ");
 		break;
 	case HARMLAMBERT:
 		/* Launch the HarmLambert kernel */
-		ap_harmlambert_krnl<<<BLK,THD>>>(dmod, nThreads, body);
+		ap_harmlambert_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
 		checkErrorAfterKernelLaunch("ap_harmlambert_krnl, line ");
 		break;
 	case INHOLAMBERT:
 		/* Launch the Inhomogeneous Lambert kernel */
-		ap_inholambert_krnl<<<BLK,THD>>>(dmod, nThreads, body);
+		ap_inholambert_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
 		checkErrorAfterKernelLaunch("ap_inholambert_krnl, line ");
 		break;
 	case LOMMEL:
 		/* Launch the Lommel kernel */
-		ap_lommel_krnl<<<BLK,THD>>>(dmod, nThreads, body);
+		ap_lommel_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
 		checkErrorAfterKernelLaunch("ap_lommel_krnl, line ");
 		break;
 	case HARMLOMMEL:
 		/* Launch the HarmLommel kernel */
-		ap_harmlommel_krnl<<<BLK,THD>>>(dmod, nThreads, body);
+		ap_harmlommel_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
 		checkErrorAfterKernelLaunch("ap_harmlommel_krnl, line ");
 		break;
 	case INHOLOMMEL:
 		/* Launch the Inhomogeneous Lommel kernel */
-		ap_harmlommel_krnl<<<BLK,THD>>>(dmod, nThreads, body);
+		ap_harmlommel_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
 		checkErrorAfterKernelLaunch("ap_inholommel_krnl, line ");
       break;
   case GEOMETRICAL:
 	  /* Launch the Geometrical law kernel */
-	  ap_geometrical_krnl<<<BLK,THD>>>(dmod, nThreads, body);
+	  ap_geometrical_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
 	  checkErrorAfterKernelLaunch("ap_geometrical_krnl, line ");
 	  break;
   case HAPKE:
 	  /* Launch the Hapke kernel */
-	  ap_hapke_krnl<<<BLK,THD>>>(dmod, nThreads, body);
+	  ap_hapke_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
 	  checkErrorAfterKernelLaunch("ap_hapke_krnl, line ");
       break;
   case HARMHAPKE:
 	  /* Launch the HarmHapke kernel */
-	  ap_harmhapke_krnl<<<BLK,THD>>>(dmod, nThreads, body);
+	  ap_harmhapke_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
 	  checkErrorAfterKernelLaunch("ap_harmhapke_krnl, line ");
       break;
   case INHOHAPKE:
 	  /* Launch the Inhomogeneous Hapke kernel */
-	  ap_inhohapke_krnl<<<BLK,THD>>>(dmod, nThreads, body);
+	  ap_inhohapke_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
 	  checkErrorAfterKernelLaunch("ap_inhohapke_krnl, line ");
 	  break;
   case KAASALAINEN:
@@ -493,17 +508,17 @@ __host__ double apply_photo_cuda(struct mod_t *dmod, struct dat_t *ddat, int bod
 	  checkErrorAfterKernelLaunch("ap_kaas_init_krnl, line ");
 
 	  /* Launch the main Kaasalainen kernel */
-	  ap_kaas_krnl<<<BLK,THD>>>(dmod, nThreads, body);
+	  ap_kaas_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
 	  checkErrorAfterKernelLaunch("ap_kaas_krnl, line ");
       break;
   case HARMKAAS:
 	  /* Launch the HarmKaas kernel */
-	  ap_harmkaas_krnl<<<BLK,THD>>>(dmod, nThreads, body);
+	  ap_harmkaas_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
 	  checkErrorAfterKernelLaunch("ap_harmkaas_krnl, line ");
 	  break;
   case INHOKAAS:
 	  /* Launch the HarmKaas kernel */
-	  ap_inhokaas_krnl<<<BLK,THD>>>(dmod, nThreads, body);
+	  ap_inhokaas_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
 	  checkErrorAfterKernelLaunch("ap_inhokaas_krnl, line ");
 	  break;
   case NOLAW:
@@ -520,7 +535,7 @@ __host__ double apply_photo_cuda(struct mod_t *dmod, struct dat_t *ddat, int bod
 			cudaMemcpyDeviceToHost));
 	if (hsum == 0.0)
 		hsum = TINY;
-
+	//cudaFree(type);
 	return (double)hsum;
 }
 

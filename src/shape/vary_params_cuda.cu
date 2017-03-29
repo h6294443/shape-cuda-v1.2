@@ -99,25 +99,8 @@ __device__ float vpzmax, sum_deldop_zmax, sum_rad_xsec,	sum_opt_brightness,
 				sum_cos_subradarlat, deldop_cross_section, doppler_cross_section;
 __device__ struct pos_t *vp_pos;
 
-__host__ int NearestPowerOf2(int n);
-//__device__ static float atomicMaxf(float* address, float val)
-//{
-//	int* address_as_i = (int*) address;
-//	int old = *address_as_i, assumed;
-//	do {
-//		assumed = old;
-//		old = ::atomicCAS(address_as_i, assumed,
-//				__float_as_int(::fmaxf(val, __int_as_float(assumed))));
-//	} while (assumed != old);
-//	return __int_as_float(old);
-//}
-__device__ int dev_vp_iround(double x)
-{
-  if (x < 0.0)
-    return ((int)(x - 0.5));
-  else
-    return ((int)(x + 0.5));
-}
+//__host__ int NearestPowerOf2(int n);
+
 __global__ void vp_init_vars() {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
@@ -167,13 +150,11 @@ __global__ void get_compute_flags_krnl(struct par_t *dpar, struct dat_t *ddat,
 		}
 	}
 }
-__global__ void lghtcrv_set_pos_krnl(struct dat_t *ddat,
-		struct pos_t *pos, int s, int f) {
+__global__ void lghtcrv_set_pos_krnl(struct dat_t *ddat, int s, int f) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
 		vp_pos = &ddat->set[s].desc.lghtcrv.rend[f].pos; /* Backup - delete this later */
-		pos = &ddat->set[s].desc.lghtcrv.rend[f].pos;
-		dlghtcrv_bistatic = pos->bistatic;
+		dlghtcrv_bistatic = vp_pos->bistatic;
 		dlghtcrv_n = ddat->set[s].desc.lghtcrv.n;
 
 	}
@@ -227,8 +208,12 @@ __global__ void set_ae_oe_bistatic_krnl(struct dat_t *ddat, int s,
 			vp_pos->se[i][j] = ddat->set[s].desc.lghtcrv.rend[f].se[i][j];
 		}
 		/* The following is a single-thread task */
-		if (threadIdx.x == 0)
-			vp_pos->bistatic = 0;
+		if (threadIdx.x == 0) {
+			if (ddat->set[s].type == LGHTCRV)
+				vp_pos->bistatic = 1;
+			else
+				vp_pos->bistatic = 0;
+		}
 	}
 }
 __global__ void get_pos_n_krnl()
@@ -287,13 +272,13 @@ __global__ void compute_xsec_final_krnl(struct dat_t *ddat, float frm_xsec,
 			deldop_cross_section = __double2float_rd(ddat->set[s].desc.deldop.frame[f].overflow_xsec);
 			deldop_cross_section += frm_xsec; // fit is the end result of parallel reduction
 			deldop_cross_section *= ddat->set[s].desc.deldop.frame[f].cal.val;
-			sum_rad_xsec += deldop_cross_section*dweight;
+			sum_rad_xsec += deldop_cross_section*ddat->set[s].desc.deldop.frame[f].weight;
 			break;
 		case DOPPLER:
 			doppler_cross_section = __double2float_rd(ddat->set[s].desc.doppler.frame[f].overflow_xsec);
 			doppler_cross_section += frm_xsec;
 			doppler_cross_section *= ddat->set[s].desc.doppler.frame[f].cal.val;
-			sum_rad_xsec += doppler_cross_section*dweight;
+			sum_rad_xsec += doppler_cross_section*ddat->set[s].desc.doppler.frame[f].weight;
 
 			break;
 		}
@@ -344,8 +329,8 @@ __global__ void posclr_krnl(int n, int nx)
 		 * cos(scattering angle), reset the z coordinate (distance from COM towards
 		 * Earth) to a dummy value, and reset the body, component, and facet onto
 		 * which the pixel center projects to  dummy values                  */
-		vp_pos->b[i][j] = vp_pos->cose[i][j] = 0.0;
-		vp_pos->z[i][j] = -HUGENUMBER;
+//		vp_pos->b[i][j] = vp_pos->cose[i][j] = 0.0;
+//		vp_pos->z[i][j] = -HUGENUMBER;
 		vp_pos->body[i][j] = vp_pos->comp[i][j] = vp_pos->f[i][j] = -1;
 
 		vp_pos->b_s[offset] = vp_pos->cose_s[offset] = 0.0;
@@ -520,7 +505,8 @@ __global__ void posmask_krnl(struct par_t *dpar, int nThreads, int xspan)
 		}
 	}
 }
-__global__ void posmask_universal_krnl(struct par_t *dpar, struct pos_t *pos, int nThreads, int xspan)
+__global__ void posmask_universal_krnl(struct par_t *dpar, struct pos_t *pos,
+		int nThreads, int xspan)
 {
 	/* multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
@@ -567,8 +553,8 @@ __global__ void posmask_universal_krnl(struct par_t *dpar, struct pos_t *pos, in
 			if (fabs(i0_dbl) < n && fabs(j0_dbl) < n
 					&& pos->zill[im][jm] > -bignum
 					&&(pos->f[i][j]    != pos->fill[im][jm]    ||
-							pos->comp[i][j] != pos->compill[im][jm] ||
-							pos->body[i][j] != pos->bodyill[im][jm]    )) {
+					   pos->comp[i][j] != pos->compill[im][jm] ||
+					   pos->body[i][j] != pos->bodyill[im][jm]    )) {
 
 				/* Rather than using distance towards source of CENTER of mask
 				 * pixel, use bilinear interpolation to get distance towards
@@ -970,7 +956,7 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 			get_lghtcrv_cb_krnl<<<1,1>>>(dpar, ddat, s);
 			checkErrorAfterKernelLaunch("get_lghtcrv_cb_krnl");
 			gpuErrchk(cudaMemcpyFromSymbol(&compute_brightness, dcompute_brightness,
-					0, cudaMemcpyDeviceToHost));
+					sizeof(int), 0, cudaMemcpyDeviceToHost));
 
 			if (compute_brightness) {
 				/* Launch single-thread kernel to get lghtcrv parameters */
@@ -987,10 +973,12 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 				for (i=1; i<=ncalc; i++) {
 
 					/* Launch kernel to get compute flags and set pos */
-					lghtcrv_set_pos_krnl<<<1,1>>>(ddat, pos, s, i);
+					lghtcrv_set_pos_krnl<<<1,1>>>(ddat, s, i);
 					checkErrorAfterKernelLaunch("lghtcrv_set_pos_krnl");
 					gpuErrchk(cudaMemcpyFromSymbol(&lghtcrv_bistatic, dlghtcrv_bistatic,
 									sizeof(lghtcrv_bistatic), 0, cudaMemcpyDeviceToHost));
+					gpuErrchk(cudaMemcpyFromSymbol(&lghtcrv_n, dlghtcrv_n,
+							sizeof(lghtcrv_n), 0, cudaMemcpyDeviceToHost));
 
 					/* Launch 9-threaded kernel to set up ae[3][3] and oe[3][3]
 					 * and also set the bistatic flag 		 */
@@ -1003,8 +991,6 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 					checkErrorAfterKernelLaunch("get_lghtcrv_pos_n_krnl, line ");
 					gpuErrchk(cudaMemcpyFromSymbol(&pos_n, dpos_n, sizeof(dpos_n),
 							0, cudaMemcpyDeviceToHost));
-					gpuErrchk(cudaMemcpyFromSymbol(&lghtcrv_n, dlghtcrv_n,
-							sizeof(lghtcrv_n), 0, cudaMemcpyDeviceToHost));
 
 					/* Configure & launch posclr_krnl to initialize POS view */
 					xspan = 2*pos_n+1;
@@ -1016,7 +1002,11 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 
 					/* Determine which POS pixels cover the target */
 //					for (c=0; c<mod->shape.ncomp; c++)
-					posvis_cuda_2(dpar, dmod, ddat, orbit_offset,s,i, 0, 0, c);
+					if (STREAMS)
+						printf("in vary params_cuda, fix this (lightcurve posvis call");
+					//	posvis_cuda_streams(dpar, dmod, ddat, orbit_offset,s,i, 0, 0, c);
+					else
+						posvis_cuda_2(dpar, dmod, ddat, orbit_offset,s,i, 0, 0, c);
 
 				 /* Now view the model from the source (sun) and get the facet
 				  * number and distance toward the source of each pixel in this
@@ -1027,9 +1017,9 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 						posvis_cuda_2(dpar,dmod,ddat,orbit_offset,s,i,1,0,c);
 
 						/* Launch parameters still same as before for posclr */
-						posmask_universal_krnl<<<BLK,THD>>>(dpar, pos, nThreads, xspan);
-						//posmask_krnl<<<BLK,THD>>>(dpar, nThreads, xspan);
-						checkErrorAfterKernelLaunch("posmask_universal_krnl (vary_params_cuda.cu)");
+						//posmask_universal_krnl<<<BLK,THD>>>(dpar, nThreads, xspan);
+						posmask_krnl<<<BLK,THD>>>(dpar, nThreads, xspan);
+						checkErrorAfterKernelLaunch("posmask_krnl (vary_params_cuda.cu)");
 					}
 					/* Compute model brightness for this lightcurve point */
 					/* lghtcrv->y[ncalc]: calculated points for interpolation,
@@ -1097,15 +1087,3 @@ __host__ void vary_params_cuda( struct par_t *dpar, struct mod_t *dmod,
 	*cos_subradarlat = cs_sb_rdr_lat;
 	}
 
-
-__host__ int NearestPowerOf2(int n) {
-	if (!n) return n; // (0 == 2^0)
-
-	int x = 1;
-	while (x < n)
-	{
-		x <<= 1;
-	}
-	return x;
-
-}

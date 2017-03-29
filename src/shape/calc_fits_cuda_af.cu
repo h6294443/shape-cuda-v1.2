@@ -376,15 +376,15 @@ __global__ void cf_get_set_type_af_krnl(struct dat_t *ddat, int s) {
 	if (threadIdx.x == 0)
 		cfaf_type = ddat->set[s].type;
 }
-__global__ void cf_set_final_pars_af_krnl(struct par_t *dpar, struct
-		dat_t *ddat) {
-	/* Single-threaded kernel */
-	if (threadIdx.x == 0) {
-		dpar->posbnd_logfactor /= ddat->dof;
-		dpar->badposet_logfactor /= ddat->dof_poset;
-		dpar->badradar_logfactor /= (ddat->dof_deldop + ddat->dof_doppler);
-	}
-}
+//__global__ void cf_set_final_pars_af_krnl(struct par_t *dpar, struct
+//		dat_t *ddat) {
+//	/* Single-threaded kernel */
+//	if (threadIdx.x == 0) {
+//		dpar->posbnd_logfactor /= ddat->dof;
+//		dpar->badposet_logfactor /= ddat->dof_poset;
+//		dpar->badradar_logfactor /= (ddat->dof_deldop + ddat->dof_doppler);
+//	}
+//}
 
 __host__ void calc_fits_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat)
@@ -443,7 +443,7 @@ __host__ void calc_fits_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 	}
 	/* Complete calculations of values that will be used during a fit to
 	 * increase the objective function for models with bad properties   */
-	cf_set_final_pars_af_krnl<<<1,1>>>(dpar, ddat);
+	cf_set_final_pars_krnl<<<1,1>>>(dpar, ddat);
 	checkErrorAfterKernelLaunch("cf_set_final_pars_af_krnl");
 }
 
@@ -773,6 +773,7 @@ __global__ void cf_add_fit_store_doppler_af_krnl2(
 		atomicAdd(&overflow[0], (float)frame[frm]->overflow_o2);
 		atomicAdd(&overflow[1], (float)frame[frm]->overflow_m2);
 		atomicAdd(&overflow[2], (float)frame[frm]->overflow_xsec);
+		atomicAdd(&overflow[3], (float)frame[frm]->overflow_dopmean);
 	}
 }
 __global__ void cf_finish_fit_store_af_krnl(

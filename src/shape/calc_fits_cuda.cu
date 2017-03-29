@@ -363,6 +363,38 @@ __device__ struct dopfrm_t *cf_dop_frame;
 __device__ struct dopview_t *cf_dop_view0;
 __device__ struct lghtcrv_t *cf_lghtcrv;
 __device__ struct crvrend_t *cf_rend;
+__device__ void dev_spline(double *x,double *y,int n,double yp1,double ypn,double *y2, double *u)
+{
+	int i,k;
+	double p,qn,sig,un;
+
+	if (yp1 > 0.99e30)
+		y2[1]=u[1]=0.0;
+	else {
+		y2[1] = -0.5;
+		u[1] = (3.0 / (x[2]-x[1])) * ((y[2]-y[1]) / (x[2]-x[1])-yp1);
+	}
+
+	for (i=2;i<=n-1;i++) {
+		sig = (x[i]-x[i-1]) / (x[i+1]-x[i-1]);
+		p = sig * y2[i-1] + 2.0;
+		y2[i] = (sig-1.0) / p;
+		u[i] = (y[i+1]-y[i]) / (x[i+1]-x[i]) - (y[i]-y[i-1]) / (x[i]-x[i-1]);
+		u[i] = (6.0 * u[i]/(x[i+1]-x[i-1]) - sig * u[i-1]) / p;
+	}
+
+	if (ypn > 0.99e30)
+		qn=un=0.0;
+	else {
+		qn=0.5;
+		un=(3.0/(x[n]-x[n-1]))*(ypn-(y[n]-y[n-1])/(x[n]-x[n-1]));
+	}
+	y2[n]=(un-qn*u[n-1])/(qn*y2[n-1]+1.0);
+
+	for (k=n-1;k>=1;k--)
+		y2[k]=y2[k]*y2[k+1]+u[k];
+
+}
 __device__ void dev_splint(double *xa,double *ya,double *y2a,int n,double x,double *y)
 {
 	int klo,khi,k;
@@ -396,11 +428,11 @@ __global__ void cf_init_devpar_krnl(struct par_t *dpar, struct mod_t
 		cf_nsets = ddat->nsets;
 	}
 }
-__global__ void cf_init_seen_flags_krnl(struct mod_t *dmod) {
+__global__ void cf_init_seen_flags_krnl(struct mod_t *dmod, int nf) {
 	/* nf-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
 
-	if (f < cf_nf)
+	if (f < nf)
 		dmod->shape.comp[0].real.f[f].seen = 0;
 }
 __global__ void cf_get_set_type_krnl(struct dat_t *ddat, int s) {
@@ -443,7 +475,7 @@ __host__ void calc_fits_cuda(struct par_t *dpar, struct mod_t *dmod,
 	//for (c=0; c<mod->shape.ncomp; c++)
 	BLK.x = floor((maxThreadsPerBlock - 1 + nf)/maxThreadsPerBlock);
 	THD.x = maxThreadsPerBlock;
-	cf_init_seen_flags_krnl<<<BLK,THD>>>(dmod);
+	cf_init_seen_flags_krnl<<<BLK,THD>>>(dmod, nf);
 	checkErrorAfterKernelLaunch("cf_init_seen_flags_krnl (calc_fits_cuda)");
 
 	/* Calculate the fits for each dataset in turn  */
@@ -496,9 +528,9 @@ __global__ void cf_get_frames_krnl(struct dat_t *ddat, int s) {
 			break;
 		case LGHTCRV:
 			cf_ncalc = ddat->set[s].desc.lghtcrv.ncalc;
+			cf_lghtcrv = &ddat->set[s].desc.lghtcrv;
 			break;
 		}
-
 	}
 }
 __global__ void cf_set_shortcuts_krnl(struct dat_t *ddat, int s, int f) {
@@ -525,10 +557,10 @@ __global__ void cf_set_shortcuts_krnl(struct dat_t *ddat, int s, int f) {
 			cf_pos		 = &cf_dop_frame->pos;
 			break;
 		case LGHTCRV:
-			cf_lghtcrv = &ddat->set[s].desc.lghtcrv;
 			cf_rend = &cf_lghtcrv->rend[f];
 			cf_pos = &cf_rend->pos;
 			cf_n = cf_lghtcrv->n;
+			cf_km_p_pxl = cf_pos->km_per_pixel;
 			break;
 		}
 		cf_overflow_o2_store = 0.0;
@@ -557,12 +589,11 @@ __global__ void cf_set_lghtcrv_shortcuts_krnl(struct dat_t *ddat,
 		cf_overflow_dopmean_store = 0.0;
 	}
 }
-__global__ void cf_spline_lghtcrv_krnl(double yp1, double ypn) {
+__global__ void cf_spline_lghtcrv_krnl(double yp1, double ypn, double *u) {
 	/* ncalc-threaded kernel */
 	int k, i = blockIdx.x * blockDim.x + threadIdx.x + 1;
 	double p, qn, sig, un;
 	int n = cf_ncalc;
-	extern __shared__ double u[];
 
 	/* Single-threaded task first */
 	if (i == 1) {
@@ -577,14 +608,18 @@ __global__ void cf_spline_lghtcrv_krnl(double yp1, double ypn) {
 	}
 	__syncthreads();
 
-	if ((i > 1) && (i <= n)) {
-		sig = (cf_lghtcrv->x[i] - cf_lghtcrv->x[i-1]) /
-				(cf_lghtcrv->x[i+1] - cf_lghtcrv->x[i-1]);
+	if ((i > 1) && (i <= (n-1))) {
+		sig = (cf_lghtcrv->x[i]   - cf_lghtcrv->x[i-1]) /
+			  (cf_lghtcrv->x[i+1] - cf_lghtcrv->x[i-1]);
+
 		p = sig * cf_lghtcrv->y2[i-1] + 2.0;
+
 		cf_lghtcrv->y2[i] = (sig - 1.0) / p;
-		u[i] = (cf_lghtcrv->y[i+1]-cf_lghtcrv->y[i]) / (cf_lghtcrv->x[i+1] -
-				cf_lghtcrv->x[i]) - (cf_lghtcrv->y[i]-cf_lghtcrv->y[i-1]) /
-				(cf_lghtcrv->x[i]-cf_lghtcrv->x[i-1]);
+
+		u[i] = (cf_lghtcrv->y[i+1] - cf_lghtcrv->y[i]) / (cf_lghtcrv->x[i+1] -
+				cf_lghtcrv->x[i]) - (cf_lghtcrv->y[i]  -  cf_lghtcrv->y[i-1]) /
+		   	   (cf_lghtcrv->x[i]  -  cf_lghtcrv->x[i-1]);
+
 		u[i] = (6.0 *u[i] / (cf_lghtcrv->x[i+1] - cf_lghtcrv->x[i-1]) -
 				sig * u[i-1]) / p;
 	}
@@ -597,8 +632,8 @@ __global__ void cf_spline_lghtcrv_krnl(double yp1, double ypn) {
 		else {
 			qn = 0.5;
 			un = (3.0 / (cf_lghtcrv->x[n] - cf_lghtcrv->x[n-1])) * (ypn -
-				 (cf_lghtcrv->y[n] - cf_lghtcrv->y[n-1]) /
-				 (cf_lghtcrv->x[n]-cf_lghtcrv->x[n-1]));
+						(cf_lghtcrv->y[n] - cf_lghtcrv->y[n-1]) /
+						(cf_lghtcrv->x[n] - cf_lghtcrv->x[n-1]));
 		}
 		cf_lghtcrv->y2[n]=(un - qn * u[n-1]) /
 				(qn * cf_lghtcrv->y2[n-1] + 1.0);
@@ -608,12 +643,18 @@ __global__ void cf_spline_lghtcrv_krnl(double yp1, double ypn) {
 	}
 	__syncthreads();
 }
+__global__ void cf_spline_lghtcrv_serial_krnl(double *u) {
+	/* single-threaded kernel */
+	if (threadIdx.x == 0)
+		dev_spline( cf_lghtcrv->x, cf_lghtcrv->y, cf_ncalc, 2.0e30, 2.0e30, cf_lghtcrv->y2, u);
+
+}
 __global__ void cf_splint_lghtcrv_krnl(struct par_t *dpar) {
 	/* ncalc-threaded kernel */
 	int v, i = blockIdx.x * blockDim.x + threadIdx.x + 1;
 	double interp;
 
-	if ((i >= 1) && (i <= cf_ncalc)) {
+	if ((i >= 1) && (i <= cf_lghtcrv->n)) {
 
 		cf_lghtcrv->fit[i] = 0.0;
 
@@ -656,7 +697,12 @@ __global__ void cf_set_pos_ae_krnl(int v) {
 		}
 		/* Single-thread task */
 		if (offset == 0) {
-			cf_pos->bistatic = 0;
+			if ((cf_type == LGHTCRV) || (cf_type == POS))
+				cf_pos->bistatic = 1;
+			else
+				cf_pos->bistatic = 0;
+
+			cf_bistatic = cf_pos->bistatic;
 			cf_pos_n = cf_pos->n;
 		}
 	}
@@ -696,6 +742,7 @@ __global__ void cf_posclr_krnl(int n, int nx)
 
 			cf_pos->cosill_s[offset] = 0.0;
 			cf_pos->zill_s[offset] = 0.0;
+			cf_pos->cosi_s[offset] = 0.0;
 
 			cf_pos->xlim2[0] = cf_pos->ylim2[0] =  n;
 			cf_pos->xlim2[1] = cf_pos->ylim2[1] = -n;
@@ -729,9 +776,9 @@ __global__ void cf_get_exclude_seen_krnl(struct par_t *dpar) {
 	if (threadIdx.x == 0) {
 		cf_exclude_seen = dpar->exclude_seen;
 		cf_xlim0 = cf_pos->xlim[0];
-		cf_xlim1 = cf_pos->xlim[0];
-		cf_ylim0 = cf_pos->xlim[0];
-		cf_ylim1 = cf_pos->xlim[0];
+		cf_xlim1 = cf_pos->xlim[1];
+		cf_ylim0 = cf_pos->ylim[0];
+		cf_ylim1 = cf_pos->ylim[1];
 	}
 }
 __global__ void cf_mark_pixels_seen_krnl(struct par_t *dpar,
@@ -867,6 +914,123 @@ __global__ void cf_gamma_trans_krnl(struct par_t *dpar, struct dat_t *ddat,
 				break;
 			}
 
+		}
+	}
+}
+__global__ void cf_posmask_krnl(struct par_t *dpar, int nThreads, int xspan)
+{
+	/* multi-threaded kernel */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int n = cf_pos_n;
+	int i = offset % xspan - n;
+	int j = offset / xspan - n;
+	double tol = dpar->mask_tol;
+	int im, jm, i1, j1, i2, j2, i_sign, j_sign;
+	double xk[3], so[3][3], pixels_per_km, i0_dbl, j0_dbl, zill, t, u, bignum;
+
+	if (offset == 0){
+		bignum = 0.99*HUGENUMBER;  /* z = -HUGENUMBER for blank-sky pixels */
+
+		dev_mtrnsps( so, cf_pos->oe);
+		dev_mmmul( so, cf_pos->se, so);    /* so takes obs into src coords */
+		pixels_per_km = 1/cf_pos->km_per_pixel;
+	}
+	__syncthreads();
+
+	/*  Loop through all POS pixels  */
+	if (offset < nThreads) {
+		//	n = cf_pos->n;
+		//	for (i=(-n); i<=n; i++) {               /* for each pixel in the */
+		//		for (j=(-n); j<=n; j++) {             /* observer's view */
+		if (cf_pos->cose_s[offset] != 0.0) {     /* if there's something there */
+			xk[0] = i*cf_pos->km_per_pixel;     /* calculate 3D position */
+			xk[1] = j*cf_pos->km_per_pixel;
+			xk[2] = cf_pos->z_s[offset];
+
+			/* Given the observer coordinates x of of POS pixel (i,j), find
+			 * which pixel (im,jm) this corresponds to in the projected view as
+			 * seen from the source (sun)             */
+
+			dev_cotrans2( xk, so, xk, 1);           /* go into source coordinates */
+			i0_dbl = xk[0]*pixels_per_km;     /* unrounded (double precision) */
+			j0_dbl = xk[1]*pixels_per_km;
+			im = dev_vp_iround( i0_dbl);            /* center of nearest pixel in mask */
+			jm = dev_vp_iround( j0_dbl);
+
+			/* If center of projected pixel "seen" from source (as determined
+			 * by routine posvis) lies within the boundaries of the mask,
+			 * projects onto model rather than onto blank space, and represents
+			 * a body, component, and facet different from those seen in the
+			 * POS, calculate distance from mask pixel to source and compare to
+			 * distance from POS pixel to source.                             */
+
+			if (fabs(i0_dbl) < n && fabs(j0_dbl) < n
+					&& cf_pos->zill[im][jm] > -bignum
+					&& (cf_pos->f[i][j]    != cf_pos->fill[im][jm]    ||
+							cf_pos->comp[i][j] != cf_pos->compill[im][jm] ||
+							cf_pos->body[i][j] != cf_pos->bodyill[im][jm]    )) {
+
+				/* Rather than using distance towards source of CENTER of mask
+				 * pixel, use bilinear interpolation to get distance towards
+				 * source where the line between source and POS pixel's center
+				 * intersects the mask pixel.                                */
+				i1 = (int) floor( i0_dbl);
+				j1 = (int) floor( j0_dbl);
+
+				if (cf_pos->zill[i1][j1]     > -bignum &&
+						cf_pos->zill[i1+1][j1]   > -bignum &&
+						cf_pos->zill[i1][j1+1]   > -bignum &&
+						cf_pos->zill[i1+1][j1+1] > -bignum    ) {
+
+					/* Do standard bilinear interpolation: None of the four
+					 * surrounding "grid square" pixels in the mask is
+					 * blank sky                           */
+					t = i0_dbl - i1;
+					u = j0_dbl - j1;
+					zill = (1 - t)*(1 - u)*cf_pos->zill[i1][j1]
+                               + t*(1 - u)*cf_pos->zill[i1+1][j1]
+                                     + t*u*cf_pos->zill[i1+1][j1+1]
+	                           + (1 - t)*u*cf_pos->zill[i1][j1+1];
+				} else {
+
+					/* The following code block is a kludge: One or more of the
+					 * four surrounding "grid square" pixels in mask is blank
+					 * sky, so standard bilinear interpolation won't work.  */
+					zill = cf_pos->zill[im][jm];
+
+					i_sign = (i0_dbl >= im) ? 1 : -1;
+					i2 = im + i_sign;
+					if (abs(i2) <= n && cf_pos->zill[i2][jm] > -bignum) {
+						zill += fabs(i0_dbl - im)
+           				  * (cf_pos->zill[i2][jm] - cf_pos->zill[im][jm]);
+					} else {
+						i2 = im - i_sign;
+						if (abs(i2) <= n && cf_pos->zill[i2][jm] > -bignum)
+							zill -= fabs(i0_dbl - im)
+							* (cf_pos->zill[i2][jm] - cf_pos->zill[im][jm]);
+					}
+
+					j_sign = (j0_dbl >= jm) ? 1 : -1;
+					j2 = jm + j_sign;
+					if (abs(j2) <= n && cf_pos->zill[im][j2] > -bignum) {
+						zill += fabs(j0_dbl - jm)
+                          * (cf_pos->zill[im][j2] - cf_pos->zill[im][jm]);
+					} else {
+						j2 = jm - j_sign;
+						if (abs(j2) <= n && cf_pos->zill[im][j2] > -bignum)
+							zill -= fabs(j0_dbl - jm)
+							* (cf_pos->zill[im][j2] - cf_pos->zill[im][jm]);
+					}
+				}
+
+				/* If interpolated point within mask pixel is at least tol km
+				 * closer to source than is the center of POS pixel, the facet
+				 * represented by the mask pixel is shadowing the POS pixel:
+				 * represent this by setting
+				 * 		cos(scattering angle) = 0.0 for the POS pixel.      */
+				if (zill - xk[2] > tol)
+					cf_pos->cose_s[offset] = 0.0;
+			}
 		}
 	}
 }
@@ -1377,12 +1541,13 @@ __host__ void calc_doppler_cuda(struct par_t *dpar, struct mod_t *dmod,
 //
 __host__ void calc_lghtcrv_cuda( struct par_t *dpar, struct mod_t *dmod, struct dat_t *ddat, int s)
 {
-	int ncalc, c=0, i, pos_n, xspan, yspan, nThreads,
+	int ncalc, c=0, i, pos_n, n, xspan, yspan, nThreads,
 			bistatic, exclude_seen, xlim[2], ylim[2];
 	double km_p_pxl, brightness_temp, orbit_offset[3] = {0.0, 0.0, 0.0};
 
 	dim3 BLK,THD;
-	struct pos_t *pos;
+//	struct pos_t *pos;
+//	cudaCalloc((void**)&pos, sizeof(struct pos_t), 1);
 
 	/* Get n (# of observed points for this lightcurve), and ncalc (# of epochs
 	 * at which model lightcurve brightnesses are to be computed            */
@@ -1395,11 +1560,17 @@ __host__ void calc_lghtcrv_cuda( struct par_t *dpar, struct mod_t *dmod, struct 
 	 * with i=1,2,...,ncalc; these may/may not be the same as epochs t[i]
 	 * (i=1,2,...,n) at which actual lightcurve observations were made.  */
 
+	/* Problem description:  cf_lghtcrv->rend[i=8].oe for set 2 changes between i=1 and i=2
+	 * it should stay at small numbers (<1.0), but the change prompts an identity matrix like
+	 * pattern of 1,1; 2,2; 3,3 being equal to lghtcrv->x[i] = 2447670.5833
+	 */
 	for (i=1; i<=ncalc; i++) {
 		/* Set lghtcrv, rend, and pos */
-		cf_set_lghtcrv_shortcuts_krnl<<<1,1>>>(ddat, pos, s, i);
+		cf_set_shortcuts_krnl<<<1,1>>>(ddat, s, i);
 		checkErrorAfterKernelLaunch("cf_set_lghtcrv_shortcuts_krnl");
 		gpuErrchk(cudaMemcpyFromSymbol(&km_p_pxl, cf_km_p_pxl, sizeof(double),
+				0, cudaMemcpyDeviceToHost));
+		gpuErrchk(cudaMemcpyFromSymbol(&n, cf_n, sizeof(int),
 				0, cudaMemcpyDeviceToHost));
 
 		/* Launch 9-threaded kernel to set pos->ae,pos->oe,pos->bistatic.*/
@@ -1427,9 +1598,16 @@ __host__ void calc_lghtcrv_cuda( struct par_t *dpar, struct mod_t *dmod, struct 
 			 * dpar->posbnd_logfactor */
 			cf_set_posbnd_krnl<<<1,1>>>(dpar);
 			checkErrorAfterKernelLaunch("cf_set_posbnd_krnl (calc_lghtcrv_cuda)");
-			gpuErrchk(cudaMemcpyFromSymbol(&bistatic, cf_bistatic, sizeof(int),
-					0, cudaMemcpyDeviceToHost));
 		}
+		gpuErrchk(cudaMemcpyFromSymbol(&bistatic, cf_bistatic, sizeof(int),
+				0, cudaMemcpyDeviceToHost));
+
+//		if ((s==2)) {
+//			nThreads = (2*pos_n+1)*(2*pos_n+1);
+//			dbg_print_lghtcrv_pos_arrays(ddat, s, i, nThreads, pos_n);
+//			printf("\n");
+//		}
+
 
 		/* Now view model from source (sun) and get facet number and distance
 		 * toward source of each pixel in this projected view; use this
@@ -1442,10 +1620,9 @@ __host__ void calc_lghtcrv_cuda( struct par_t *dpar, struct mod_t *dmod, struct 
 			}
 
 			/* Identify and mask out shadowed POS pixels  */
-			posmask_universal_krnl<<<BLK,THD>>>(dpar, pos, nThreads, xspan);
-			checkErrorAfterKernelLaunch("posmask_universal_krnl (vary_params_cuda.cu)");
+			cf_posmask_krnl<<<BLK,THD>>>(dpar, nThreads, xspan);
+			checkErrorAfterKernelLaunch("cf_posmask_krnl");
 		}
-
 		/* Go through all visible and unshadowed POS pixels with low enough
 		 * scattering and incidence angles, and mark facets which project onto
 		 * their centers as having been "seen" at least once   */
@@ -1482,6 +1659,14 @@ __host__ void calc_lghtcrv_cuda( struct par_t *dpar, struct mod_t *dmod, struct 
 		checkErrorAfterKernelLaunch("cf_compute_and_set_lghtcrv_brightness_krnl");
 	}
 
+
+//	xspan = 2*pos_n + 1;
+//	nThreads = xspan * xspan;
+//	BLK.x = floor((maxThreadsPerBlock-1+nThreads)/maxThreadsPerBlock);
+//	THD.x = maxThreadsPerBlock;
+//	dbg_print_lghtcrv_pos_arrays(ddat, s, 22, nThreads, pos_n);
+
+
 	/* Now that we have calculated the model lightcurve brightnesses y at each
 	 * of the epochs x, we use cubic spline interpolation (Numerical Recipes
 	 * routines spline and splint) to get model lightcurve brightness fit[i] at
@@ -1499,18 +1684,30 @@ __host__ void calc_lghtcrv_cuda( struct par_t *dpar, struct mod_t *dmod, struct 
 	 */
 
 	nThreads = ncalc;
-	int sh_size = ncalc * sizeof(double);
-	BLK.x = floor((maxThreadsPerBlock-1+nThreads)/maxThreadsPerBlock);
-	THD.x = maxThreadsPerBlock;
-	cf_spline_lghtcrv_krnl<<<BLK,THD,sh_size>>>(2.0e30, 2.0e30);
+	double *u;
+	cudaCalloc((void**)&u, sizeof(double), ncalc);
+	int threads = 128;
+	BLK.x = floor((threads-1+nThreads)/threads);
+	THD.x = threads;
+	//cf_spline_lghtcrv_krnl<<<BLK,THD>>>(2.0e30, 2.0e30, u);
+	cf_spline_lghtcrv_serial_krnl<<<1,1>>>(u);
 	checkErrorAfterKernelLaunch("cf_spline_lghtcrv_krnl");
 
-	/* Launch another ncalc-threaded kernel to do the following:
+	/* Start debug */
+	/* Pull out lghtcrv->x, lghtcrv->y, lghtcrv->y2 (all of length ncalc) */
+	//dbg_print_lghtcrv_xyy2(ddat, s, ncalc, "xyy2_arrays_CUDA.csv");
+
+
+	/* Launch n-threaded kernel to do the following:
 	 * 	- set each fit[i] = 0
 	 * 	- loop through all views and splint
 	 * 	- add interp to fit[i]
 	 * 	- divide final fit[i] over nviews
 	 */
+	BLK.x = floor((threads-1+n)/threads);
+	THD.x = threads;
 	cf_splint_lghtcrv_krnl<<<BLK,THD>>>(dpar);
 	checkErrorAfterKernelLaunch("cf_splint_lghtcrv_krnl");
+
+	cudaFree(u);
 }

@@ -178,7 +178,6 @@ struct SharedMemory<double>
     - only works for power-of-2 arrays
 */
 
-
 /*
     This version adds multiple elements per thread sequentially.  This reduces the overall
     cost of the algorithm while keeping the work complexity O(n) and the step complexity O(log n).
@@ -302,7 +301,6 @@ reduce6(T *g_idata, T *g_odata, unsigned int n)
     // write result for this block to global mem
     if (tid == 0) g_odata[blockIdx.x] = mySum;
 }
-
 
 /*
     This version adds multiple elements per thread sequentially.  This reduces the overall
@@ -1969,6 +1967,85 @@ __host__ float compute_pos_zmax(struct dat_t *ddat, int size,
 	cudaFree(d_idata);
 	return zmax;
 }
+//__host__ float compute_pos_zmax_streams(struct dat_t *ddat, int size,
+//		int set, int nframes) {
+//	/* Function calculates the zmax in a pos->z array with Nvidia's reduction
+//	 * sample code (simplified and adapted for use with shape). This version
+//	 * uses cudaStreams to process all frames concurrently.  	 */
+//
+//	int s;						// array size
+//	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
+//	int maxBlocks = 2048;		// max # of blocks per grid
+//	int whichKernel = 6;		// id of reduction kernel
+//	int numBlocks = 0;			// initialize numBlocks
+//	int numThreads = 0;			// initialize numThreads
+//	float zmax = 0.0;			// radar cross section; return value
+//	float *d_odata;				// temp. float array for reduction output
+//	float *d_idata; 			// temp. float arrays for reduction input
+//	float *h_odata;				// the host output array
+//	float2 xblock_ythread;		// used for return value of getNumBlocksAndThreads
+//
+//	dim3 BLK,THD;
+//	BLK.x = floor((maxThreadsPerBlock - 1 + size)/maxThreadsPerBlock);
+//	THD.x = maxThreadsPerBlock; // Thread block dimensions
+//
+//	cudaStream_t zmax_stream[nframes];
+//
+//
+//	/* Allocate memory for d_idata, then set that pointer equal to the right
+//	 * data set and frame to the right deldop fit array	 */
+//	cudaCalloc((void**)&d_idata, sizeof(float), size);
+//
+//	set_idata_zmax_krnl<<<BLK,THD>>>(ddat, d_idata, set, frm, size);
+//	checkErrorAfterKernelLaunch("set_idata_zmax_krnl in compute_zmax");
+//
+//	/* Find number of blocks & threads needed for reduction call */
+//	xblock_ythread = getNumBlocksAndThreads(size, maxBlocks, maxThreads);
+//	numBlocks = xblock_ythread.x;
+//	numThreads = xblock_ythread.y;
+//
+//	/* Allocate memory for d_odata and d_odata2 with enough elements to hold
+//	 * the reduction of each block during the first call */
+//	cudaCalloc((void**)&d_odata,  sizeof(float), numBlocks);
+//	h_odata = (float *) malloc(numBlocks*sizeof(float));
+//
+//	/* Call maxz for first time */
+//	maxz<float>(size, numThreads, numBlocks, whichKernel, d_idata, d_odata);
+//	checkErrorAfterKernelLaunch("maxz<float> in compute_zmax");
+//
+//	/* Reset d_idata for later use as buffer */
+//	cudaMemset(d_idata, 0, size*sizeof(float));
+//
+//	/* Now sum partial block sums on GPU, using the maxz6<> kernel */
+//	s = numBlocks;
+//
+//	while (s > 1)
+//	{
+//		int threads = 0, blocks = 0;
+//		xblock_ythread = getNumBlocksAndThreads(s, maxBlocks, maxThreads);
+//		blocks = xblock_ythread.x;
+//		threads = xblock_ythread.y;
+//
+//		/* Copy the first d_odata back into d_idata2  */
+//		cudaMemcpy(d_idata, d_odata, s*sizeof(float), cudaMemcpyDeviceToDevice);
+//
+//		maxz<float>(s, threads, blocks, whichKernel, d_idata, d_odata);
+//
+//		if (whichKernel < 3)
+//			s = (s + threads - 1) / threads;
+//		else
+//			s = (s + (threads*2-1)) / (threads*2);
+//		if (s > 1)
+//			printf("s is bigger than one");
+//	}
+//
+//	gpuErrchk(cudaMemcpy(h_odata, d_odata, 2*sizeof(float), cudaMemcpyDeviceToHost));
+//	zmax = h_odata[0];
+//	free(h_odata);
+//	cudaFree(d_odata);
+//	cudaFree(d_idata);
+//	return zmax;
+//}
 __host__ float compute_pos_zmax_all_frames(struct dat_t *ddat, int frame_size, int set, int nframes) {
 	/* Function calculates the zmax per frame and then the final zmax for the set.
 	 * Code assumes that frame_size is the same for all frames in set */

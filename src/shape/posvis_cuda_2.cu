@@ -82,26 +82,28 @@ __device__ int **bod, **cmp, **fac, posvis_nf, doutbnd, smooth, psvs_n;
 __device__ struct pos_t *pos;
 __device__ struct vertices_t *verts;
 
-__device__ void dev_cotrans3(double y[3], double a[3][3], double x[3],
-		int dir) {
-	double t[3];
-	int i, j;
+__device__ int dbg_pxl_occ=0;
 
-	if (dir == 1)
-		for (i = 0; i <= 2; i++) {
-			t[i] = 0.0;
-			for (j = 0; j <= 2; j++)
-				t[i] += a[i][j] * x[j];
-		}
-	if (dir == (-1))
-		for (i = 0; i <= 2; i++) {
-			t[i] = 0.0;
-			for (j = 0; j <= 2; j++)
-				t[i] += a[j][i] * x[j];
-		}
-	for (i = 0; i <= 2; i++)
-		y[i] = t[i];
-}
+//__device__ void dev_cotrans3(double y[3], double a[3][3], double x[3],
+//		int dir) {
+//	double t[3];
+//	int i, j;
+//
+//	if (dir == 1)
+//		for (i = 0; i <= 2; i++) {
+//			t[i] = 0.0;
+//			for (j = 0; j <= 2; j++)
+//				t[i] += a[i][j] * x[j];
+//		}
+//	if (dir == (-1))
+//		for (i = 0; i <= 2; i++) {
+//			t[i] = 0.0;
+//			for (j = 0; j <= 2; j++)
+//				t[i] += a[j][i] * x[j];
+//		}
+//	for (i = 0; i <= 2; i++)
+//		y[i] = t[i];
+//}
 /* Note that the following two custom atomic functions are declared in each
  * file they are needed .  As static __device__ functions, this is the only
  * way to handle them. */
@@ -165,6 +167,19 @@ __device__ void dev_POSrect2(struct pos_t *pos, int src, float imin_dbl,
 		atomicMin(&pos->ylim[0], jmin);
 		atomicMax(&pos->ylim[1], jmax);
 	}
+
+	/* The below code is for debugging use only. It drops the use of atomics.*/
+//	if (src) {
+//		pos->xlim2[0] = min(pos->xlim2[0], imin);
+//		pos->xlim2[1] = max(pos->xlim2[1], imax);
+//		pos->ylim2[0] = min(pos->ylim2[0], jmin);
+//		pos->ylim2[1] = max(pos->ylim2[1], jmax);
+//	} else {
+//		pos->xlim[0] = min(pos->xlim[0], imin);
+//		pos->xlim[1] = max(pos->xlim[1], imax);
+//		pos->ylim[0] = min(pos->ylim[0], jmin);
+//		pos->ylim[1] = max(pos->ylim[1], jmax);
+//	}
 
 }
 __global__ void posvis_init_krnl(struct par_t *dpar, struct mod_t *dmod,
@@ -235,16 +250,17 @@ __global__ void posvis_init_krnl(struct par_t *dpar, struct mod_t *dmod,
 		posvis_nf = verts->nf;
 		smooth = dpar->pos_smooth;
 		psvs_n = pos->n;
+
+		dbg_pxl_occ = 0;
 	}
 }
 __global__ void posvis_fct_pxl_krnl(int i1, int i2, int j1, int j2,
 		double v0x, double v0y, double v0z, double v1x, double v1y, double v1z,
 		double v2x, double v2y, double v2z, double nx, double ny, double nz,
-		/*float *zzf, float *cosaf, float *cosbf,*/
 		int src, int body, int comp, int f, int fvx, int fvy, int fvz) {
+
 	/* Multi-threaded kernel to be launched from facet kernel */
 	int ispan = i2-i1+1;		int jspan = j2-j1+1;
-	//if (i1 < 0)	ispan += 1;	if (j1 < 0)	jspan += 1;
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
 	int npixels = ispan*jspan;
 
@@ -485,6 +501,11 @@ __global__ void posvis_facet_krnl(int src, int body, int comp) {
 	double n[3], v0[3], v1[3], v2[3], x[3], s, t, z, den;
 	float imin_dbl, imax_dbl, jmin_dbl, jmax_dbl;
 	int f_v0, f_v1, f_v2;
+	__shared__ int posn, span;
+	__shared__ float km_per_pixel;
+	posn = pos->n;
+	span = 2*posn+1;
+	km_per_pixel = (float)pos->km_per_pixel;
 
 	if (f < posvis_nf) {
 
@@ -519,13 +540,13 @@ __global__ void posvis_facet_krnl(int src, int body, int comp) {
 			/* Find rectangular region (in POS pixels) containing the projected
 			 * facet - use floats in case model has illegal parameters and the
 			 * pixel numbers exceed the limits for valid integers                         */
-			imin_dbl = floor(MIN(v0[0],MIN(v1[0],v2[0])) / pos->km_per_pixel
+			imin_dbl = floor(MIN(v0[0],MIN(v1[0],v2[0])) / km_per_pixel
 							- SMALLVAL + 0.5);
-			imax_dbl = floor(MAX(v0[0],MAX(v1[0],v2[0])) / pos->km_per_pixel
+			imax_dbl = floor(MAX(v0[0],MAX(v1[0],v2[0])) / km_per_pixel
 							+ SMALLVAL + 0.5);
-			jmin_dbl = floor(MIN(v0[1],MIN(v1[1],v2[1])) / pos->km_per_pixel
+			jmin_dbl = floor(MIN(v0[1],MIN(v1[1],v2[1])) / km_per_pixel
 							- SMALLVAL + 0.5);
-			jmax_dbl = floor(MAX(v0[1],MAX(v1[1],v2[1])) / pos->km_per_pixel
+			jmax_dbl = floor(MAX(v0[1],MAX(v1[1],v2[1])) / km_per_pixel
 							+ SMALLVAL + 0.5);
 			imin = (imin_dbl < INT_MIN) ? INT_MIN : (int) imin_dbl;
 			imax = (imax_dbl > INT_MAX) ? INT_MAX : (int) imax_dbl;
@@ -533,19 +554,19 @@ __global__ void posvis_facet_krnl(int src, int body, int comp) {
 			jmax = (jmax_dbl > INT_MAX) ? INT_MAX : (int) jmax_dbl;
 
 			/*  Set the outbnd flag if the facet extends beyond the POS window  */
-			if ((imin < (-pos->n)) || (imax > pos->n) || (jmin < (-pos->n))
-					|| (jmax > pos->n))
+			if ((imin < (-posn)) || (imax > posn) || (jmin < (-posn))
+					|| (jmax > posn))
 				doutbnd = 1;
 
 			/* Figure out if facet projects at least partly within POS window;
 			 * if it does, look at each "contained" POS pixel and get the
 			 * z-coordinate and cos(scattering angle)           */
-			i1 = MAX(imin, -pos->n);
-			i2 = MIN(imax, pos->n);
-			j1 = MAX(jmin, -pos->n);
-			j2 = MIN(jmax, pos->n);
+			i1 = MAX(imin, -posn);
+			i2 = MIN(imax, posn);
+			j1 = MAX(jmin, -posn);
+			j2 = MIN(jmax, posn);
 
-			if (i1 > pos->n || i2 < -pos->n || j1 > pos->n || j2 < -pos->n) {
+			if (i1 > posn || i2 < -posn || j1 > posn || j2 < -posn) {
 
 				/* Facet is entirely outside the POS frame: just keep track of
 				 * changed POS region     */
@@ -556,12 +577,14 @@ __global__ void posvis_facet_krnl(int src, int body, int comp) {
 				 * pixels whose centers project onto this facet  */
 				int pxa;	// pixel address in 1D float array zzf etc
 				for (i = i1; i <= i2; i++) {
-					x[0] = i * pos->km_per_pixel;
+
+					x[0] = i * km_per_pixel;
 					for (j = j1; j <= j2; j++) {
-						x[1] = j * pos->km_per_pixel;
+
+						x[1] = j * km_per_pixel;
 
 						/* Calculate the pixel address for 1D arrays */
-						pxa = (j+pos->n)*(2*pos->n+1)+(i+pos->n);
+						pxa = (j+posn)*span + (i+posn);
 
 						/* Compute parameters s(x,y) and t(x,y) which define a
 						 * facet's surface as
@@ -604,7 +627,7 @@ __global__ void posvis_facet_krnl(int src, int body, int comp) {
 
 //								if ((z > zz[i][j]) || (fac[i][j] < 0)) {
 								if (old < z || fac[i][j] < 0) {
-
+atomicAdd(&dbg_pxl_occ, 1);
 									/* Next line assigns distance of POS pixel
 									 * center from COM towards Earth; that is,
 									 * by changing zz,it changes pos->z or
@@ -643,10 +666,6 @@ __global__ void posvis_facet_krnl(int src, int body, int comp) {
 												cosa[pxa] = 0.0;
 										}
 									}
-
-									/*  Keep track of the changed POS region  */
-//									dev_POSrect2(pos, src, (double) i,
-//											(double) i, (double) j, (double) j);
 
 									/* Next lines change pos->body/bodyill,
 									 * pos->comp/compill, pos->f/fill          */
@@ -902,8 +921,13 @@ __global__ void posvis_set_logfactor_sep_krnl(float *minmax_overall) {
 __host__ int posvis_cuda_2(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, double horbit_offset[3], int set, int frame,
 		int src, int body, int comp) {
-	int nf, outbnd, npixels, n;
+	int nf, outbnd, n;
 	dim3 BLK,THD;
+	cudaEvent_t start, stop;
+	float milliseconds;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+	int dbg_occ = 0;
 
 	/* The xxxxflt arrays below are for the parallel reduction to find xlim
 	 * and ylim for each frame's POS. The minmax_overall array keeps the
@@ -926,23 +950,13 @@ __host__ int posvis_cuda_2(struct par_t *dpar, struct mod_t *dmod,
 		cudaCalloc((void**)&imaxflt, 		sizeof(float), nf);
 		cudaCalloc((void**)&jminflt, 		sizeof(float), nf);
 		cudaCalloc((void**)&jmaxflt, 		sizeof(float), nf);
-//		gpuErrchk(cudaHostAlloc((void**)&minmax_overall, sizeof(float)*4,
-//				cudaHostAllocWriteCombined | cudaHostAllocMapped));
-//		gpuErrchk(cudaHostAlloc((void**)&iminflt, sizeof(float)*nf,
-//				cudaHostAllocWriteCombined | cudaHostAllocMapped));
-//		gpuErrchk(cudaHostAlloc((void**)&imaxflt, sizeof(float)*nf,
-//				cudaHostAllocWriteCombined | cudaHostAllocMapped));
-//		gpuErrchk(cudaHostAlloc((void**)&jminflt, sizeof(float)*nf,
-//				cudaHostAllocWriteCombined | cudaHostAllocMapped));
-//		gpuErrchk(cudaHostAlloc((void**)&jmaxflt, sizeof(float)*nf,
-//				cudaHostAllocWriteCombined | cudaHostAllocMapped));
 	}
 
 	/* Configure and launch the facet kernel. Which kernel gets launched
 	 * depends on flags DynProc (dynamic processing) and POSVIS_SEPARATE
 	 * (xlim and ylim get calculated via a separate parallel reduction in an
 	 * additional kernel after the facet kernel) */
-	npixels = (2*n+1)*(2*n+1);
+	//npixels = (2*n+1)*(2*n+1);
 	BLK.x = floor((maxThreadsPerBlock - 1 + nf) / maxThreadsPerBlock);
 	THD.x = maxThreadsPerBlock;
 	if (!DYNPROC) {
@@ -971,12 +985,26 @@ __host__ int posvis_cuda_2(struct par_t *dpar, struct mod_t *dmod,
 			cudaFree(minmax_overall);
 		}
 		else {
-		/* Configure and launch the non-dynamic processing facet kernel for
-		 * Nvidia GPUs w/Compute Capability of less than 3.5 (slower) */
-		posvis_facet_krnl<<<BLK,THD>>>(src, body, comp);
-		checkErrorAfterKernelLaunch("posvis_facet_krnl, line ");
-		gpuErrchk(cudaMemcpyFromSymbol(&outbnd, doutbnd, sizeof(outbnd), 0,
-				cudaMemcpyDeviceToHost));
+
+			if (TIMING)	cudaEventRecord(start);
+
+			/* Launch the non-dynamic processing facet kernel for
+			 * Nvidia GPUs w/Compute Capability of less than 3.5 (slower) */
+			posvis_facet_krnl<<<BLK,THD>>>(src, body, comp);
+
+			if (TIMING) {
+				cudaEventRecord(stop);
+				cudaEventSynchronize(stop);
+				milliseconds = 0;
+				cudaEventElapsedTime(&milliseconds, start, stop);
+				gpuErrchk(cudaMemcpyFromSymbol(&dbg_occ, dbg_pxl_occ, sizeof(int), 0,
+								cudaMemcpyDeviceToHost));
+				printf("%i facets in posvis_facet_krnl completed in %3.3f ms with %i occurrences.\n", nf, milliseconds, dbg_occ);
+			}
+
+			checkErrorAfterKernelLaunch("posvis_facet_krnl, line ");
+			gpuErrchk(cudaMemcpyFromSymbol(&outbnd, doutbnd, sizeof(outbnd), 0,
+					cudaMemcpyDeviceToHost));
 		}
 	}
 	if (DYNPROC) {

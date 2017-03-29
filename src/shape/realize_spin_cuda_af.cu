@@ -38,9 +38,6 @@ extern "C" {
 __device__ int rsaf_nframes, rsaf_nviews;
 __device__ double rsaf_anglesave[3], rsaf_omegasave[3];
 
-__device__ void dev_realize_impulse(struct spin_t spin, double t,
-		double t_integrate[], double impulse[][3], int *n_integrate, int s, int f, int k);
-
 __global__ void add_offsets_to_euler_af_krnl(struct mod_t *dmod, struct dat_t *ddat, int s)
 {
 	/* Three thread-kernel */

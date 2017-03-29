@@ -9,6 +9,7 @@ CU_SRCS += \
 ../src/shape/bsstep_cuda.cu \
 ../src/shape/calc_fits_cuda.cu \
 ../src/shape/calc_fits_cuda_af.cu \
+../src/shape/calc_fits_cuda_streams.cu \
 ../src/shape/cel_cuda.cu \
 ../src/shape/chi2_cuda.cu \
 ../src/shape/chi2_cuda_af.cu \
@@ -26,23 +27,28 @@ CU_SRCS += \
 ../src/shape/pos2deldop_cuda.cu \
 ../src/shape/pos2deldop_cuda_2.cu \
 ../src/shape/pos2deldop_cuda_af.cu \
+../src/shape/pos2deldop_cuda_streams.cu \
 ../src/shape/pos2doppler-cuda.cu \
 ../src/shape/pos2doppler_cuda_2.cu \
 ../src/shape/pos2doppler_cuda_af.cu \
+../src/shape/pos2doppler_cuda_streams.cu \
 ../src/shape/posvis_cuda.cu \
 ../src/shape/posvis_cuda_2.cu \
 ../src/shape/posvis_cuda_af.cu \
+../src/shape/posvis_cuda_streams.cu \
 ../src/shape/realize_delcor_cuda.cu \
 ../src/shape/realize_dopscale_cuda.cu \
 ../src/shape/realize_mod_cuda.cu \
 ../src/shape/realize_photo_cuda.cu \
 ../src/shape/realize_spin_cuda.cu \
 ../src/shape/realize_spin_cuda_af.cu \
+../src/shape/realize_spin_cuda_streams.cu \
 ../src/shape/realize_xyoff_cuda.cu \
 ../src/shape/reduction.cu \
 ../src/shape/show_deldoplim_cuda.cu \
 ../src/shape/vary_params_cuda.cu \
-../src/shape/vary_params_cuda_af.cu 
+../src/shape/vary_params_cuda_af.cu \
+../src/shape/vary_params_cuda_streams.cu 
 
 C_SRCS += \
 ../src/shape/apply_photo.c \
@@ -116,6 +122,7 @@ OBJS += \
 ./src/shape/calc_fits.o \
 ./src/shape/calc_fits_cuda.o \
 ./src/shape/calc_fits_cuda_af.o \
+./src/shape/calc_fits_cuda_streams.o \
 ./src/shape/calc_orbit.o \
 ./src/shape/cel_cuda.o \
 ./src/shape/check_cuda.o \
@@ -158,16 +165,19 @@ OBJS += \
 ./src/shape/pos2deldop_cuda.o \
 ./src/shape/pos2deldop_cuda_2.o \
 ./src/shape/pos2deldop_cuda_af.o \
+./src/shape/pos2deldop_cuda_streams.o \
 ./src/shape/pos2doppler-cuda.o \
 ./src/shape/pos2doppler.o \
 ./src/shape/pos2doppler_cuda_2.o \
 ./src/shape/pos2doppler_cuda_af.o \
+./src/shape/pos2doppler_cuda_streams.o \
 ./src/shape/posclr.o \
 ./src/shape/posmask.o \
 ./src/shape/posvis.o \
 ./src/shape/posvis_cuda.o \
 ./src/shape/posvis_cuda_2.o \
 ./src/shape/posvis_cuda_af.o \
+./src/shape/posvis_cuda_streams.o \
 ./src/shape/proj_area.o \
 ./src/shape/radlaw.o \
 ./src/shape/rayfacint.o \
@@ -187,6 +197,7 @@ OBJS += \
 ./src/shape/realize_spin.o \
 ./src/shape/realize_spin_cuda.o \
 ./src/shape/realize_spin_cuda_af.o \
+./src/shape/realize_spin_cuda_streams.o \
 ./src/shape/realize_xyoff.o \
 ./src/shape/realize_xyoff_cuda.o \
 ./src/shape/reduction.o \
@@ -201,6 +212,7 @@ OBJS += \
 ./src/shape/vary_params.o \
 ./src/shape/vary_params_cuda.o \
 ./src/shape/vary_params_cuda_af.o \
+./src/shape/vary_params_cuda_streams.o \
 ./src/shape/view_mod.o \
 ./src/shape/write_dat.o \
 ./src/shape/write_mod.o \
@@ -213,6 +225,7 @@ CU_DEPS += \
 ./src/shape/bsstep_cuda.d \
 ./src/shape/calc_fits_cuda.d \
 ./src/shape/calc_fits_cuda_af.d \
+./src/shape/calc_fits_cuda_streams.d \
 ./src/shape/cel_cuda.d \
 ./src/shape/chi2_cuda.d \
 ./src/shape/chi2_cuda_af.d \
@@ -230,23 +243,28 @@ CU_DEPS += \
 ./src/shape/pos2deldop_cuda.d \
 ./src/shape/pos2deldop_cuda_2.d \
 ./src/shape/pos2deldop_cuda_af.d \
+./src/shape/pos2deldop_cuda_streams.d \
 ./src/shape/pos2doppler-cuda.d \
 ./src/shape/pos2doppler_cuda_2.d \
 ./src/shape/pos2doppler_cuda_af.d \
+./src/shape/pos2doppler_cuda_streams.d \
 ./src/shape/posvis_cuda.d \
 ./src/shape/posvis_cuda_2.d \
 ./src/shape/posvis_cuda_af.d \
+./src/shape/posvis_cuda_streams.d \
 ./src/shape/realize_delcor_cuda.d \
 ./src/shape/realize_dopscale_cuda.d \
 ./src/shape/realize_mod_cuda.d \
 ./src/shape/realize_photo_cuda.d \
 ./src/shape/realize_spin_cuda.d \
 ./src/shape/realize_spin_cuda_af.d \
+./src/shape/realize_spin_cuda_streams.d \
 ./src/shape/realize_xyoff_cuda.d \
 ./src/shape/reduction.d \
 ./src/shape/show_deldoplim_cuda.d \
 ./src/shape/vary_params_cuda.d \
-./src/shape/vary_params_cuda_af.d 
+./src/shape/vary_params_cuda_af.d \
+./src/shape/vary_params_cuda_streams.d 
 
 C_DEPS += \
 ./src/shape/apply_photo.d \

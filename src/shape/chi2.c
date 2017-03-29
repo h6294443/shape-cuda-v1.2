@@ -1146,6 +1146,8 @@ double chi2_lghtcrv( struct par_t *par, struct lghtcrv_t *lghtcrv, int list_brea
 		om += lghtcrv->fit[i] * lghtcrv->obs[i] * lghtcrv->oneovervar[i];
 	}
 
+//	dbg_print_lghtcrv_arrays_host(lghtcrv, s, n, "std_lghtcrv_arrays.csv");
+
 	/*  If this lightcurve's calibration factor is allowed to float,
       set it to minimize chi-square, the sum over all points of
       { (obs - calfact*fit)^2 / variance }.                         */

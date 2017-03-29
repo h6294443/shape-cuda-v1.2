@@ -1053,6 +1053,8 @@ __host__ void mkparlist_cuda(struct par_t *dpar, struct mod_t *dmod,
 	gpuErrchk(cudaMemcpyFromSymbol(&nsets, mpl_nsets, sizeof(int), 0,
 			cudaMemcpyDeviceToHost));
 
+	deviceSyncAfterKernelLaunch("");
+
 	/* Shape parameters - single component only */
 	//for (i=0; i<dmod->shape.ncomp; i++) { /* read each component */
 	/* Launch first parameter kernel */

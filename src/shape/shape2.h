@@ -725,9 +725,9 @@ struct vertex_t {
   double x[3];                  /* coordinates */
   double n[3];                  /* normal at vertex */
   int naf;                      /* # of attached facets */
-  int af[7];                      /* list of attached facets */
+  int *af;                      /* list of attached facets */
   int nas;                      /* # of attached sides */
-  int as[7];                      /* list of attached sides */
+  int *as;                      /* list of attached sides */
   unsigned char act;            /* is vertex active or not? */
   double **afactor;             /* multiples "a" coefficients for harmonic realizations */
   double **bfactor;             /* multiples "b" coefficients for harmonic realizations */

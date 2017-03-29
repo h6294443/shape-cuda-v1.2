@@ -37,8 +37,7 @@ extern "C" {
 
 __device__ int dnframes, dnviews;
 __device__ double anglesave[3], omegasave[3];
-__device__ void dev_realize_impulse(struct spin_t spin, double t,
-		double t_integrate[], double impulse[][3], int *n_integrate, int s, int f, int k);
+
 __global__ void get_types_krnl(struct dat_t *ddat, unsigned char *dtype) {
 	/* nsets-threaded kernel */
 	int s = blockIdx.x * blockDim.x + threadIdx.x;
@@ -49,12 +48,13 @@ __global__ void get_types_krnl(struct dat_t *ddat, unsigned char *dtype) {
 }
 __global__ void realize_angleoff_krnl(struct dat_t *ddat)
 {
-	/* Multi-threaded kernel - # of datasets nsets */
+	/* Single-threaded kernel - # of datasets nsets */
 	/* Kernel implements the '=' state for each component of the angle offse */
-	int s = blockIdx.x * blockDim.x + threadIdx.x;
-	int j, s_angleoff;
+	//int s = blockIdx.x * blockDim.x + threadIdx.x;
 
-	if (s < ddat->nsets) {
+	int j, s_angleoff, s;
+
+	if (threadIdx.x == 0) {
 		for (j=0; j<=2; j++) {
 
 			/* If a dataset has state '=' for component j of the angle offset, go back-
@@ -64,12 +64,14 @@ __global__ void realize_angleoff_krnl(struct dat_t *ddat)
 
 			s_angleoff = -1;
 
-			if (ddat->set[s].angleoff[j].state != '=')
-				s_angleoff = s;
-			else if (s_angleoff < 0)
-				printf("can't use \"=\" state for the first dataset's angle offsets\n");
-			else
-				ddat->set[s].angleoff[j].val = ddat->set[s_angleoff].angleoff[j].val;
+			for (s=0; s<ddat->nsets; s++) {
+				if (ddat->set[s].angleoff[j].state != '=')
+					s_angleoff = s;
+				else if (s_angleoff < 0)
+					printf("can't use \"=\" state for the first dataset's angle offsets\n");
+				else
+					ddat->set[s].angleoff[j].val = ddat->set[s_angleoff].angleoff[j].val;
+			}
 		}
 	}
 }
@@ -349,7 +351,7 @@ __host__ void realize_spin_cuda( struct par_t *dpar, struct mod_t *dmod, struct 
 
 	/* Get the three components of the angle and spin offsets for all datasets,
 	 * with any "=" states taken into account  */
-	realize_angleoff_krnl<<<nsetsBLK,nsetsTHD>>>(ddat);
+	realize_angleoff_krnl<<<1,1>>>(ddat);
 	checkErrorAfterKernelLaunch("realize_angleoff_krnl, line 352");
 
 	realize_omegaoff_krnl<<<nsetsBLK,nsetsTHD>>>(ddat);
@@ -453,7 +455,8 @@ __host__ void realize_spin_cuda( struct par_t *dpar, struct mod_t *dmod, struct 
 			 * lightcurve points don't have multiple "views").	 */
 			get_lghtcrv_nframes_krnl<<<1,1>>>(ddat, s);
 			checkErrorAfterKernelLaunch("get_lghtcrv_nframes_krnl, line 454");
-			gpuErrchk(cudaMemcpyFromSymbol(&nframes, dnframes, sizeof(nframes), 0, cudaMemcpyDeviceToHost));
+			gpuErrchk(cudaMemcpyFromSymbol(&nframes, dnframes, sizeof(nframes),
+					0, cudaMemcpyDeviceToHost));
 			int i, ncalc;
 			ncalc = nframes;
 

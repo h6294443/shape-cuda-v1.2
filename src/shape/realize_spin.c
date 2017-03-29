@@ -171,41 +171,41 @@ void realize_spin( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
           }
         break;
 
-    /*case POS:
+    case POS:
 
-          See "case DOPPLER" above for more extensive comments, since
-            the Doppler and POS procedures are identical.
+        /*  See "case DOPPLER" above for more extensive comments, since
+            the Doppler and POS procedures are identical.*/
 
         poset = &(*dat).set[s].desc.poset;
         for (f=0; f<(*poset).nframes; f++)
           for (k=0; k<(*poset).nviews; k++) {
 
-              Deal with spin impulses
+            /*  Deal with spin impulses*/
 
             realize_impulse( (*mod).spin, (*poset).frame[f].view[k].t,
                              (*poset).frame[f].t_integrate,
                              (*poset).frame[f].impulse, &(*poset).frame[f].n_integrate);
 
-              Get the model's intrinsic spin vector (in body coordinates)
-                at the (light-time corrected) epoch of each view.
+             /* Get the model's intrinsic spin vector (in body coordinates)
+                at the (light-time corrected) epoch of each view.*/
 
             inteuler( (*mod).spin, (*poset).frame[f].t_integrate,
                       (*poset).frame[f].impulse, (*poset).frame[f].n_integrate,
                       (*poset).frame[f].view[k].intspin, (*poset).frame[f].view[k].ae,
                       (*mod).spin.pa, (*par).int_method, (*par).int_abstol);
 
-              Apply this dataset's spin offsets (also in body coordinates)
-                to the intrinsic spin vector of this view.
+             /* Apply this dataset's spin offsets (also in body coordinates)
+                to the intrinsic spin vector of this view.*/
 
             for (j=0; j<=2; j++)
               (*poset).frame[f].view[k].intspin[j] += (*dat).set[s].omegaoff[j].val;
 
-              Transform the intrinsic spin vector to ecliptic coordinates
+             /* Transform the intrinsic spin vector to ecliptic coordinates*/
 
             cotrans( (*poset).frame[f].view[k].intspin, (*poset).frame[f].view[k].ae,
                      (*poset).frame[f].view[k].intspin, -1);
 
-              Now get the total apparent spin vector in ecliptic coordinates
+             /* Now get the total apparent spin vector in ecliptic coordinates*/
 
             for (j=0; j<=2; j++)
               (*poset).frame[f].view[k].spin[j] = (*poset).frame[f].view[k].orbspin[j] +
@@ -215,44 +215,43 @@ void realize_spin( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 
     case LGHTCRV:
 
-          See "case DOPPLER" above for more extensive comments, since
+        /*  See "case DOPPLER" above for more extensive comments, since
             the procedure for each Doppler frame is identical to the 
             procedure for each calculated lightcurve point (except that
-            calculated lightcurve points don't have multiple "views").
-
+            calculated lightcurve points don't have multiple "views").*/
         lghtcrv = &(*dat).set[s].desc.lghtcrv;
         for (i=1; i<=(*lghtcrv).ncalc; i++) {
 
-            Deal with spin impulses
+          /*  Deal with spin impulses*/
 
           realize_impulse( (*mod).spin, (*lghtcrv).x[i], (*lghtcrv).rend[i].t_integrate,
                            (*lghtcrv).rend[i].impulse, &(*lghtcrv).rend[i].n_integrate);
 
-            Get the model's intrinsic spin vector (in body coordinates)
-              at the (light-time corrected) epoch of this lightcurve point.
+          /*  Get the model's intrinsic spin vector (in body coordinates)
+              at the (light-time corrected) epoch of this lightcurve point.*/
 
           inteuler( (*mod).spin, (*lghtcrv).rend[i].t_integrate, (*lghtcrv).rend[i].impulse,
                     (*lghtcrv).rend[i].n_integrate, (*lghtcrv).rend[i].intspin,
                     (*lghtcrv).rend[i].ae, (*mod).spin.pa, (*par).int_method, (*par).int_abstol);
 
-            Apply this dataset's spin offsets (also in body coordinates)
-              to the intrinsic spin vector of this point.
+          /*  Apply this dataset's spin offsets (also in body coordinates)
+              to the intrinsic spin vector of this point.*/
 
           for (j=0; j<=2; j++)
             (*lghtcrv).rend[i].intspin[j] += (*dat).set[s].omegaoff[j].val;
 
-            Transform the intrinsic spin vector to ecliptic coordinates
+          /*  Transform the intrinsic spin vector to ecliptic coordinates*/
 
           cotrans( (*lghtcrv).rend[i].intspin, (*lghtcrv).rend[i].ae,
                    (*lghtcrv).rend[i].intspin, -1);
 
-            Now get the total apparent spin vector in ecliptic coordinates
+          /*  Now get the total apparent spin vector in ecliptic coordinates*/
 
           for (j=0; j<=2; j++)
             (*lghtcrv).rend[i].spin[j] = (*lghtcrv).rend[i].orbspin[j] +
                                          (*lghtcrv).rend[i].intspin[j];
         }
-        break;*/
+        break;
     default:
         bailout("realize_spin: can't handle this type yet\n");
     }

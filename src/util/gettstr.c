@@ -27,8 +27,7 @@ int gettstr( FILE *fp, char *rstr)
   do{
     c = fgetc(fp);
     
-    /* If end-of-file is found outside a comment, return 0
-       and set string to NULL                               */
+    /* If end-of-file is found outside a comment, return 0 & set string to NULL*/
 
     if (c == EOF){
       printf("WARNING: no valid string available\n");
@@ -36,9 +35,8 @@ int gettstr( FILE *fp, char *rstr)
       return 0;
     }
 
-    /* If a comment is starting, keep reading until the closing
-       brace, then go back to the beginning of the loop. If EOF
-       is found in comment, then terminate                       */
+    /* If a comment is starting, keep reading until the closing brace, then go
+     * back to beginning of loop. If EOF is found in comment, then terminate */
 
     if (c == '{'){
       while((c=fgetc(fp)) != '}')
@@ -60,15 +58,15 @@ int gettstr( FILE *fp, char *rstr)
 
     *rstr++ = c;
 
-    /* Read the next character unless it is a opening brace in which
-       case it has to be sent back to the buffer before finishing      */
+    /* Read next character unless it is a opening brace in which case it has to
+     * be sent back to the buffer before finishing      */
 
     if((c=fgetc(fp)) == '{')
-      if(ungetc(c, fp) == EOF){
-	printf("ERROR: buffering must have been deactivated, put space or newline before comments\n");
-        fprintf(stderr, "ERROR: gettstr.c\n");
-        exit(2);
-      }
+    	if(ungetc(c, fp) == EOF){
+    		printf("ERROR: buffering must have been deactivated, put space or newline before comments\n");
+    		fprintf(stderr, "ERROR: gettstr.c\n");
+    		exit(2);
+    	}
     
   }while (c != EOF && !isspace(c) && c != '{');
 
