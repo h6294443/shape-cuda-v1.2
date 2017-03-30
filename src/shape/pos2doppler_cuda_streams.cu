@@ -151,7 +151,7 @@ extern "C" {
 }
 
 /* Declare __device__ vars and structs, which have file scope */
-__device__ int pds_nsinc2_sq, pds_any_overflow, pds_in_bounds, pds_badradar;
+__device__ int pds_nsinc2_sq, pds_any_overflow, pds_in_bounds, pds_badradar_global;
 
 /*	Note that both pos2deldop_cuda.cu and posvis_cuda.cu have the atomicMaxf
  * 	and atomicMinf device functions defined separately.  This is done due to
@@ -192,7 +192,8 @@ __global__ void pos2doppler_init_streams_krnl(
 		int set,
 		int v,
 		int nframes,
-		int f) {
+		int f,
+		int *badradararr) {
 
 	/* single-threaded kernel */
 
@@ -207,7 +208,7 @@ __global__ void pos2doppler_init_streams_krnl(
 		frame[f]->idoplim[1] = -999999;
 		frame[f]->doplim[0] =  HUGENUMBER;
 		frame[f]->doplim[1] = -HUGENUMBER;
-		pds_badradar = 0;
+		badradararr[f] = 0;
 		frame[f]->badradar_logfactor = 0.0;
 
 		/*  Get w, the apparent spin vector in observer coordinates  */
@@ -238,7 +239,8 @@ __global__ void pos2doppler_radar_parameters_streams_krnl(
 		int set,
 		int nframes,
 		int v,
-		int f) {
+		int f,
+		int *badradararr) {
 
 	/* single-threaded kernel */
 	double dopfact;
@@ -291,7 +293,7 @@ __global__ void pos2doppler_radar_parameters_streams_krnl(
 	dop[f].w = -(nsinc2 - 1)*(xyincr[f].x + xyincr[f].y)/2;
 	dop[f].x = (nsinc2 - 1)*(fabs(xyincr[f].x) + fabs(xyincr[f].x))/2;
 	if (2*dop[f].x + sinc2width + 1 > MAXBINS) {
-		pds_badradar = 1;
+		badradararr[f] = 1;
 		frame[f]->badradar_logfactor += log((2*dop[f].x + sinc2width + 1) / MAXBINS);
 		if (dpar->warn_badradar) {
 			printf("\nWARNING in pos2doppler.c for set %2d frame %2d:\n", set, f);
@@ -544,7 +546,8 @@ __global__ void pos2doppler_finish_streams_krnl(
 		int *ndop,
 		int set,
 		int nframes,
-		int f) {
+		int f,
+		int *badradararr) {
 
 	/* Single-threaded kernel */
 	int j, j1, j2;
@@ -595,7 +598,7 @@ __global__ void pos2doppler_finish_streams_krnl(
 			/* Print a warning if the model extends even beyond the overflow spectrum  */
 			if (((frame[f]->idoplim[0] + idop0[f]) < 0) ||
 					((frame[f]->idoplim[1] + idop0[f]) >= MAXOVERFLOW) ) {
-				pds_badradar = 1;
+				badradararr[f] = 1;
 				dopfactor = (MAX(frame[f]->idoplim[1] + idop0[f], MAXOVERFLOW)
 					- MIN(frame[f]->idoplim[0]+idop0[f],0))/(1.0*MAXOVERFLOW);
 				frame[f]->badradar_logfactor += log(dopfactor);
@@ -608,6 +611,8 @@ __global__ void pos2doppler_finish_streams_krnl(
 				}
 			}
 		}
+
+		if (badradararr[f]) pds_badradar_global = 0;
 	}
 }
 __host__ int pos2doppler_cuda_streams(
@@ -623,6 +628,7 @@ __host__ int pos2doppler_cuda_streams(
 		int set,
 		int nframes,
 		int v,
+		int *badradararr,
 		cudaStream_t *pds_stream)
 {
 	int badradar, xspan, yspan, nThreads[nframes], f, *idop0;
@@ -647,11 +653,11 @@ __host__ int pos2doppler_cuda_streams(
 	for (f=0; f<nframes; f++) {
 		/* Launch single-threaded initialization kernel */
 		pos2doppler_init_streams_krnl<<<1,1,0,pds_stream[f]>>>(ddat, frame, pos,
-				w, doplim, xylim, ndop, idop0, set, v, nframes, f);
+				w, doplim, xylim, ndop, idop0, set, v, nframes, f, badradararr);
 
 		pos2doppler_radar_parameters_streams_krnl<<<1,1,0,pds_stream[f]>>>(dpar,
 				ddat, frame, pos, dop, w, axay, xyincr, dopshift, orbit_dopoff,
-				set, nframes, v, f);
+				set, nframes, v, f, badradararr);
 	} checkErrorAfterKernelLaunch("pos2doppler init and radar parameter kernels"
 			"in pos2doppler_cuda_streams.cu");
 
@@ -672,13 +678,12 @@ __host__ int pos2doppler_cuda_streams(
 
 		/* Launch the single-thread kernel to finish up Doppler calculations */
 		pos2doppler_finish_streams_krnl<<<1,1,0,pds_stream[f]>>>(dpar,ddat,frame,
-				dop, doplim, dopshift, idop0, ndop, set, nframes, f);
+				dop, doplim, dopshift, idop0, ndop, set, nframes, f, badradararr);
 	}
 	/* Check for errors in the kernel launches & copy the badradar flag back */
 	checkErrorAfterKernelLaunch("pos2doppler_finish_krnl, line ");
-	gpuErrchk(cudaMemcpyFromSymbol(&badradar, pds_badradar, sizeof(int),
+	gpuErrchk(cudaMemcpyFromSymbol(&badradar, pds_badradar_global, sizeof(int),
 			0, cudaMemcpyDeviceToHost));
-
 	int debug = 0;
 	if (debug)
 		dbg_print_fit(ddat, set, 3);
@@ -692,6 +697,6 @@ __host__ int pos2doppler_cuda_streams(
 	cudaFree(dop);
 	cudaFree(xylim);
 	cudaFree(idop0);
-
 	return badradar;
+
 }

@@ -175,7 +175,7 @@ __global__ void posvis_init_streams_krnl(
 				dev_cotrans5(usrc, pos[frm]->oe, usrc, 1); /* in observer coordinates */
 			}
 		}
-		outbndarr[f] = 0;
+		outbndarr[frm] = 0;
 	}
 }
 __global__ void posvis_facet_streams_krnl(
@@ -191,7 +191,7 @@ __global__ void posvis_facet_streams_krnl(
 		int nfacets,
 		int frm,
 		int smooth,
-		int outbndarr) {
+		int *outbndarr) {
 	/* (nf * nframes)-threaded kernel */
 
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
@@ -452,7 +452,7 @@ __host__ int posvis_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 
 		/* Initialize via single-thread kernel first */
 		posvis_init_streams_krnl<<<1,1,0,posvis_stream[f]>>>(pos, oa, usrc,
-				f, src, outndarr);
+				f, src, outbndarr);
 
 		/* Now the main facet kernel */
 		posvis_facet_streams_krnl<<<BLK,THD, 0, posvis_stream[f]>>>(pos, verts,

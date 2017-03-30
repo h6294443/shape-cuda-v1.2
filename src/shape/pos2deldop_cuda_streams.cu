@@ -209,7 +209,8 @@ __global__ void pos2deldop_init_streams_krnl(
 		int *ndel,
 		int *ndop,
 		int set,
-		int f) {
+		int f,
+		int *badradararr) {
 	/* Single-threaded kernel */
 	if (threadIdx.x ==0) {
 		/*  Initialize variables to avoid compilation warnings  */
@@ -225,7 +226,7 @@ __global__ void pos2deldop_init_streams_krnl(
 		frame[f]->doplim[0] =  HUGENUMBER;
 		frame[f]->doplim[1] = -HUGENUMBER;
 
-		p2ds_badradar = 0;
+		badradararr[f] = 0;
 		frame[f]->badradar_logfactor = 0.0;
 	}
 }
@@ -245,7 +246,7 @@ __global__ void pos2deldop_data_sampling_krnl(
 		int f,
 		int v,
 		double orbit_dopoff,
-		int *badradar) {
+		int *badradararr) {
 	/* Single-threaded kernel */
 
 	/* Get parameters related to data sampling and data reduction; then
@@ -255,7 +256,6 @@ __global__ void pos2deldop_data_sampling_krnl(
 	 * 				image rows within each baud  */
 
 	if (threadIdx.x ==0) {
-		badradar[f] = 0;
 		p2ds_codemethod = ddat->set[set].desc.deldop.codemethod;
 		p2ds_spb = ddat->set[set].desc.deldop.spb;
 		p2ds_stride = ddat->set[set].desc.deldop.stride;
@@ -320,7 +320,7 @@ __global__ void pos2deldop_data_sampling_krnl(
 
 		if (2 * dop[f].x + dpar->sinc2width + 1 > MAXBINS) {
 //			p2ds_badradar = 1;
-			badradar[f] = 1;
+			badradararr[f] = 1;
 			frame[f]->badradar_logfactor += log(
 					(2 * dop[f].x + dpar->sinc2width + 1) / MAXBINS);
 			if (dpar->warn_badradar) {
@@ -757,7 +757,7 @@ __global__ void pos2deldop_overflow_streams_krnl(
 					((frame[f]->idoplim[0] + idop0[f]) < 0)            ||
 					((frame[f]->idoplim[1] + idop0[f]) >= MAXOVERFLOW)    ) {
 				//p2ds_badradar = 1;
-				badradar[f] = 1;
+				badradararr[f] = 1;
 				delfactor = (MAX(frame[f]->idellim[1] + idel0[f], MAXOVERFLOW)
 						- MIN(frame[f]->idellim[0] + idel0[f], 0)         )
 		                				  / (1.0*MAXOVERFLOW);
@@ -819,12 +819,12 @@ __host__ int pos2deldop_cuda_streams(
 	for (int f=0; f<nframes; f++) {
 		/* Launch single-thread initialization kernel */
 		pos2deldop_init_streams_krnl<<<1,1,0,p2d_stream[f]>>>(ddat, frame, idel0,
-				idop0, ndel, ndop, set, f);
+				idop0, ndel, ndop, set, f, badradararr);
 
 		/* Launch kernel to determine data sampling/radar parameters.  */
 		pos2deldop_data_sampling_krnl<<<1,1,0,p2d_stream[f]>>>(dpar, ddat,
 				frame, pos, axay, xyincr, deldopshift, w, dop, deldoplim,
-				xylim, set, f, v, orbit_dopoff);
+				xylim, set, f, v, orbit_dopoff, badradararr);
 	}
 	checkErrorAfterKernelLaunch("pos2deldop_init_streams_krnl");
 	gpuErrchk(cudaMemcpy(host_xylim, xylim, nframes*sizeof(int4), cudaMemcpyDeviceToHost));

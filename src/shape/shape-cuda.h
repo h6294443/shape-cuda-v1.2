@@ -73,6 +73,8 @@ __host__ void calc_fits_cuda(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat);
 __host__ void calc_fits_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat);
+__host__ void calc_fits_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat);
 __host__ double chi2_cuda(struct par_t *dpar, struct dat_t *ddat, int list_breakdown);
 __host__ double chi2_cuda_af(struct par_t *dpar,struct dat_t *ddat,
 		int list_breakdown, int nsets);
@@ -129,7 +131,7 @@ __host__ int pos2doppler_cuda_af( struct par_t *dpar, struct mod_t *dmod,
 __host__ int pos2doppler_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, struct pos_t **pos, double orbit_xoff, double
 		orbit_yoff, double orbit_dopoff, int *ndop, int body, int set,
-		int nframes, int v,	cudaStream_t *pds_stream);
+		int nframes, int v,	int *badradararr, cudaStream_t *pds_stream);
 __host__ int posvis_cuda_2(struct par_t *dpar, struct mod_t *dmod, struct
 		dat_t *ddat, double orbit_offset[3], int set, int frame, int src,
 		int body, int comp);
@@ -222,6 +224,10 @@ __global__ void euler2mat_realize_mod_krnl(struct mod_t *dmod);
 __global__ void get_types_krnl(struct dat_t *ddat, unsigned char *dtype);
 __global__ void posclr_streams_krnl(struct pos_t **pos, int *posn, int f);
 __global__ void posmask_universal_krnl(struct par_t *dpar, struct pos_t *pos, int nThreads, int xspan);
+__global__ void posmask_init_streams_krnl(struct pos_t **pos, double3 *so,
+		double *pixels_per_km, int f);
+__global__ void posmask_streams_krnl(struct par_t *dpar, struct pos_t **pos,
+		double3 *so, double *pixels_per_km,	int *posn, int nThreads, int xspan,	int f);
 __global__ void realize_angleoff_krnl(struct dat_t *ddat);
 __global__ void realize_omegaoff_krnl(struct dat_t *ddat);
 __global__ void update_spin_angle_krnl(struct mod_t *dmod);
