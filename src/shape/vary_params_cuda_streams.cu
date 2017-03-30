@@ -109,51 +109,6 @@ __device__ double st_deldop_zmax=0.0, st_rad_xsec=0.0, st_opt_brightness=0.0,
 		st_cos_subradarlat=0.0;
 __device__ int vpst_n, vps_ncalc, vps_weight;
 
-
-//__global__ void get_compute_flags_krnl(struct par_t *dpar, struct dat_t *ddat,
-//		int s, int f) {
-//	/* Single-threaded kernel */
-//	if (threadIdx.x ==0) {
-//		switch (ddat->set[s].type) {
-//		case DELAY:
-//			dcompute_zmax = (dpar->vary_delcor0 != VARY_NONE
-//					&& ddat->set[s].desc.deldop.delcor.a[0].state != 'c');
-//			dcompute_xsec = (dpar->vary_radalb != VARY_NONE
-//					&& ddat->set[s].desc.deldop.frame[f].cal.state == 'c');
-//			dcompute_cosdelta = (dpar->vary_dopscale != VARY_NONE
-//					&& ddat->set[s].desc.deldop.dopscale.state != 'c');
-//			vp_pos = &ddat->set[s].desc.deldop.frame[f].pos;
-//			dweight = ddat->set[s].desc.deldop.frame[f].weight;
-//			dndel = ddat->set[s].desc.deldop.frame[f].ndel;
-//			dndop = ddat->set[s].desc.deldop.frame[f].ndop;
-//			break;
-//		case DOPPLER:
-//			dcompute_xsec = (dpar->vary_radalb != VARY_NONE &&
-//					ddat->set[s].desc.doppler.frame[f].cal.state == 'c');
-//			dcompute_cosdelta = (dpar->vary_dopscale != VARY_NONE &&
-//					ddat->set[s].desc.doppler.dopscale.state != 'c');
-//			vp_pos = &ddat->set[s].desc.doppler.frame[f].pos;
-//			dweight = ddat->set[s].desc.doppler.frame[f].weight;
-//			dndop = ddat->set[s].desc.doppler.frame[f].ndop;
-//			break;
-//			//		case LGHTCRV:
-//			//			vp_pos = &ddat->set[s].desc.lghtcrv.rend[f].pos;
-//			//			dlghtcrv_bistatic = vp_pos->bistatic;
-//			//			dlghtcrv_n = ddat->set[s].desc.lghtcrv.n;
-//			//			break;
-//		}
-//	}
-//}
-
-//__global__ void get_lghtcrv_cb_krnl(struct par_t *dpar, struct dat_t *ddat,
-//		int s) {
-//	/* Single-threaded kernel */
-//	if (threadIdx.x == 0) {
-//		dcompute_brightness = (dpar->vary_optalb != VARY_NONE
-//				&& ddat->set[s].desc.lghtcrv.cal.state == 'c');
-//	}
-//}
-
 __global__ void vps_get_lghtcrv_params_krnl(struct dat_t *ddat, int s) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
@@ -591,7 +546,7 @@ __host__ void vary_params_cuda_streams( struct par_t *dpar, struct mod_t *dmod,
 	 */
 
 	double orbit_offset[3] = {0.0, 0.0, 0.0};
-	int c=0, f, s, compute_brightness, compute_zmax,
+	int c=0, f, s, compute_brightness, compute_zmax, bistatic_all,
 			compute_cosdelta, n, ncalc, nx, lghtcrv_bistatic, nframes;
 	dim3 pxBLK,THD,BLKncalc;
 	THD.x = maxThreadsPerBlock;
@@ -855,11 +810,14 @@ __host__ void vary_params_cuda_streams( struct par_t *dpar, struct mod_t *dmod,
 				 * number and distance toward the source of each pixel in this
 				 * projected view; use this information to determine which POS
 				 * pixels are shadowed */
-				if (lghtcrv_bistatic)
+				for (f=0; f<nframes; f++)
+					if (pos[f]->bistatic)
+						bistatic_all = 1;
+				if (bistatic_all)
 					posvis_cuda_streams(dpar, dmod, ddat, orbit_offset,s,f,	1,
 							0, c, outbndarr, vp_stream);
 
-				if (lghtcrv_bistatic) {
+				if (bistatic_all) {
 					for (f=0; f<ncalc; f++) {
 						/* Initialize this stream for the posmask kernel to follow */
 						posmask_init_streams_krnl<<<1,1,0,vp_stream[f]>>>(pos,

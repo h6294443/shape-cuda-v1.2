@@ -1546,8 +1546,6 @@ __host__ void calc_lghtcrv_cuda( struct par_t *dpar, struct mod_t *dmod, struct 
 	double km_p_pxl, brightness_temp, orbit_offset[3] = {0.0, 0.0, 0.0};
 
 	dim3 BLK,THD;
-//	struct pos_t *pos;
-//	cudaCalloc((void**)&pos, sizeof(struct pos_t), 1);
 
 	/* Get n (# of observed points for this lightcurve), and ncalc (# of epochs
 	 * at which model lightcurve brightnesses are to be computed            */
@@ -1560,10 +1558,6 @@ __host__ void calc_lghtcrv_cuda( struct par_t *dpar, struct mod_t *dmod, struct 
 	 * with i=1,2,...,ncalc; these may/may not be the same as epochs t[i]
 	 * (i=1,2,...,n) at which actual lightcurve observations were made.  */
 
-	/* Problem description:  cf_lghtcrv->rend[i=8].oe for set 2 changes between i=1 and i=2
-	 * it should stay at small numbers (<1.0), but the change prompts an identity matrix like
-	 * pattern of 1,1; 2,2; 3,3 being equal to lghtcrv->x[i] = 2447670.5833
-	 */
 	for (i=1; i<=ncalc; i++) {
 		/* Set lghtcrv, rend, and pos */
 		cf_set_shortcuts_krnl<<<1,1>>>(ddat, s, i);
@@ -1601,13 +1595,6 @@ __host__ void calc_lghtcrv_cuda( struct par_t *dpar, struct mod_t *dmod, struct 
 		}
 		gpuErrchk(cudaMemcpyFromSymbol(&bistatic, cf_bistatic, sizeof(int),
 				0, cudaMemcpyDeviceToHost));
-
-//		if ((s==2)) {
-//			nThreads = (2*pos_n+1)*(2*pos_n+1);
-//			dbg_print_lghtcrv_pos_arrays(ddat, s, i, nThreads, pos_n);
-//			printf("\n");
-//		}
-
 
 		/* Now view model from source (sun) and get facet number and distance
 		 * toward source of each pixel in this projected view; use this
