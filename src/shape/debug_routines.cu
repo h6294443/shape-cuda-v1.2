@@ -192,16 +192,14 @@ __global__ void dbg_sum_up_pos_krnl(struct dat_t *ddat, int s, int f) {
 	}
 }
 
-__host__ void dbg_print_fit(struct dat_t *ddat, int s, int f) {
+__host__ void dbg_print_fit(struct dat_t *ddat, int s, int f, char *filename_fit) {
 	/* Debug function that prints all Doppler frame fit values to csv */
 
 	int idop, nThreads, ndop, xlim[2], ylim[2];
 	FILE *fp_fit;
-	char *filename_fit;
 	double *fit;
 	dim3 BLK,THD;
 
-	filename_fit = "doppler_fit_cuda.csv";
 	printf("\n %sfile created",filename_fit);
 
 	/* Launch 1st debug kernel to get ndop and xlim/ylim	 */
@@ -269,16 +267,16 @@ __host__ void dbg_print_fit_host(struct dat_t *ddat, int s, int f) {
 	fprintf(fp_fit, "\nthreads , %i", nThreads);
 	fclose(fp_fit);
 }
-__host__ void dbg_print_deldop_fit(struct dat_t *ddat, int s, int f) {
+__host__ void dbg_print_deldop_fit(struct dat_t *ddat, int s, int f, char *filename_fit) {
 	/* Debug function that prints all Doppler frame fit values to csv */
 
 	int idop, ndop, idel, ndel, nbins, nThreads, offset, xlim[2], ylim[2];
 	FILE *fp_fit;
-	char *filename_fit;
+//	char *filename_fit;
 	double *fit_dd;
 	dim3 BLK,THD;
 
-	filename_fit = "deldop_fit_cuda.csv";
+//	filename_fit = "deldop_fit_cuda.csv";
 	printf("\n %sfile created",filename_fit);
 
 	/* Launch 1st debug kernel to get ndop and xlim/ylim	 */

@@ -649,9 +649,9 @@ __host__ int pos2doppler_cuda_af( struct par_t *dpar, struct mod_t *dmod,
 	gpuErrchk(cudaMemcpyFromSymbol(&badradar, afdop_badradar, sizeof(badradar),
 			0, cudaMemcpyDeviceToHost));
 
-	int debug = 0;
-	if (debug)
-		dbg_print_fit(ddat, set, 3);
+//	int debug = 0;
+//	if (debug)
+//		dbg_print_fit(ddat, set, 3);
 
 	cudaFree(frame);
 	cudaFree(pos);

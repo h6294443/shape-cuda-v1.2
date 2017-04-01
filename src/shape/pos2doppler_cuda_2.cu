@@ -402,7 +402,6 @@ __global__ void pos2doppler_pixel_krnl(struct par_t *dpar, struct mod_t
 			 * = d[cross section]/d[area] ) includes a sec(theta) factor to
 			 * account for the fact that the POS pixel area is projected area
 			 * rather than physical area on the target surface.	 */
-
 			amp = dev_radlaw(&dmod->photo, ddat->set[set].desc.doppler.iradlaw,
 					p2d_pos->cose_s[zaddr], p2d_pos->comp[x][y], p2d_pos->f[x][y])
 		    		 * p2d_pos->km_per_pixel * p2d_pos->km_per_pixel  / sumweights;
@@ -410,7 +409,6 @@ __global__ void pos2doppler_pixel_krnl(struct par_t *dpar, struct mod_t
 			/* Only add POS pixel's power contributions to model Doppler spect-
 			 * rum if NONE of those contributions fall outside spectrum limits*/
 			if (p2d_in_bounds) {
-
 				/*  Add the cross-section contributions to the model frame  */
 				for (idop=idop_min; idop<=idop_max; idop++) {
 					k = MIN( idop - idop_min, MAXBINS);
@@ -588,9 +586,9 @@ __host__ int pos2doppler_cuda_2( struct par_t *dpar, struct mod_t *dmod,
 	gpuErrchk(cudaMemcpyFromSymbol(&badradar, p2d_badradar, sizeof(badradar),
 			0, cudaMemcpyDeviceToHost));
 
-	int debug = 0;
-	if (debug)
-		dbg_print_fit(ddat, set, frm);
+//	int debug = 0;
+//	if (debug)
+//		dbg_print_fit(ddat, set, frm);
 
 	return badradar;
 }

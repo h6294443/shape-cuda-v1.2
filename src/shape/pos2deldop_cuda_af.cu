@@ -940,10 +940,10 @@ __host__ int pos2deldop_cuda_af(
 					cudaMemcpyDeviceToHost));
 
 	/* Start debug */
-	int debug = 0;
+	/*int debug = 0;
 	if (debug)
 		dbg_print_deldop_fit(ddat, set, 3);
-
+*/
 	/* Free pointers */
 	cudaFree(pos);
 	cudaFree(frame);

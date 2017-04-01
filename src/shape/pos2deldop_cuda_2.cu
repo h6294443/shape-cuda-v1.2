@@ -752,9 +752,9 @@ __host__ int pos2deldop_cuda_2(struct par_t *dpar, struct mod_t *dmod, struct
 	gpuErrchk(cudaMemcpyFromSymbol(&hbadradar, badradar, sizeof(badradar),
 				0, cudaMemcpyDeviceToHost));
 
-	int debug = 0;
-	if (debug)
-		dbg_print_deldop_fit(ddat, set, frm);
+//	int debug = 0;
+//	if (debug)
+//		dbg_print_deldop_fit(ddat, set, frm);
 
 	return hbadradar;
 }

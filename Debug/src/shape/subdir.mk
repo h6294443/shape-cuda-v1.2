@@ -13,6 +13,7 @@ CU_SRCS += \
 ../src/shape/cel_cuda.cu \
 ../src/shape/chi2_cuda.cu \
 ../src/shape/chi2_cuda_af.cu \
+../src/shape/chi2_cuda_streams.cu \
 ../src/shape/copy_to_device.cu \
 ../src/shape/debug_routines.cu \
 ../src/shape/deldopoffs_cuda.cu \
@@ -129,6 +130,7 @@ OBJS += \
 ./src/shape/chi2.o \
 ./src/shape/chi2_cuda.o \
 ./src/shape/chi2_cuda_af.o \
+./src/shape/chi2_cuda_streams.o \
 ./src/shape/convex_hull.o \
 ./src/shape/copy_to_device.o \
 ./src/shape/covar.o \
@@ -229,6 +231,7 @@ CU_DEPS += \
 ./src/shape/cel_cuda.d \
 ./src/shape/chi2_cuda.d \
 ./src/shape/chi2_cuda_af.d \
+./src/shape/chi2_cuda_streams.d \
 ./src/shape/copy_to_device.d \
 ./src/shape/debug_routines.d \
 ./src/shape/deldopoffs_cuda.d \

@@ -78,6 +78,10 @@ __host__ void calc_fits_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 __host__ double chi2_cuda(struct par_t *dpar, struct dat_t *ddat, int list_breakdown);
 __host__ double chi2_cuda_af(struct par_t *dpar,struct dat_t *ddat,
 		int list_breakdown, int nsets);
+__host__ double chi2_cuda_streams(struct par_t *dpar, struct dat_t *ddat,
+		int list_breakdown, int nsets);
+__host__ double chi2_lghtcrv_cuda_lghtcrv(struct par_t *dpar, struct dat_t *ddat,
+		int s, int list_breakdown, double *chi2_all_lghtcrv, int nframes,int lc_n);
 __host__ void compute_dv_dcom_dI_reduction(float *dv, float *dcom0, float
 		*dcom1, float *dcom2, float *dI00, float *dI01, float *dI02, float
 		*dI10, float *dI11, float *dI12, float *dI20, float *dI21, float *dI22,
@@ -215,6 +219,8 @@ __device__ void dev_rzextr( int iest, double xest, double *yest, double *yz, dou
 __device__ double radlaw_cuda(union radscat_t *radar, unsigned char *radtype,
 		int ilaw, double cosinc, int c, int f);
 
+__global__ void c2_add_chi2_krnl(struct dat_t *ddat, int s);
+__global__ void c2_set_chi2_krnl(struct dat_t *ddat, double chi2, int s);
 __global__ void cf_init_seen_flags_krnl(struct mod_t *dmod, int nf);
 __global__ void cf_set_final_pars_krnl(struct par_t *dpar, struct dat_t *ddat);
 __global__ void clrvect_krnl(struct dat_t *ddat, int s, int f, int nThreads);
@@ -233,9 +239,9 @@ __global__ void realize_omegaoff_krnl(struct dat_t *ddat);
 __global__ void update_spin_angle_krnl(struct mod_t *dmod);
 __global__ void dbg_vertex_nrmls_krnl(struct mod_t *dmod, int *nafnas);
 
-__host__ void dbg_print_fit(struct dat_t *ddat, int s, int f);
+__host__ void dbg_print_fit(struct dat_t *ddat, int s, int f, char *filename);
 void dbg_print_fit_host(struct dat_t *ddat, int s, int f);
-__host__ void dbg_print_deldop_fit(struct dat_t *ddat, int s, int f);
+__host__ void dbg_print_deldop_fit(struct dat_t *ddat, int s, int , char *filename);
 void dbg_print_deldop_fit_host(struct dat_t *ddat, int s, int f);
 __host__ void dbg_print_RandC(struct mod_t *dmod);
 void dbg_print_RandC_host(struct mod_t *dmod);

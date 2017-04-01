@@ -756,22 +756,7 @@ double objective( double x)
 		realize_xyoff( sdat);
 
 	calc_fits( spar, smod, sdat);
-
-	int debug = 0;
-	if (debug) {
-		dbg_print_deldop_fit_host(sdat, 0, 0);
-		dbg_print_deldop_fit_host(sdat, 0, 1);
-		dbg_print_deldop_fit_host(sdat, 0, 2);
-		dbg_print_deldop_fit_host(sdat, 0, 3);
-		dbg_print_fit_host(sdat, 1, 0);
-		dbg_print_fit_host(sdat, 1, 1);
-		dbg_print_fit_host(sdat, 1, 2);
-		dbg_print_fit_host(sdat, 1, 3);
-	}
-
-
 	err = chi2( spar, sdat, 0);
-
 
 	/* Divide chi-square by DOF to get reduced chi-square.    */
 	err /= sdat->dof;
