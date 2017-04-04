@@ -21,6 +21,11 @@
 		gpuErrchk(cudaMemset(*A, 0, B*C)); \
     } while (0)
 
+#define cudaCalloc1(A, B, C) \
+    do { \
+    	gpuErrchk(cudaMallocManaged(A, B*C, cudaMemAttachGlobal)); \
+    } while (0)
+
 #define MAXIMP 10
 
 /* Flags */
@@ -65,6 +70,9 @@ int pos2doppler_cuda( struct par_t *par, struct photo_t *photo,
 
 __host__ double apply_photo_cuda(struct mod_t *dmod, struct dat_t *ddat,
 		int body, int set, int frm);
+__host__ void apply_photo_cuda_streams(struct mod_t *dmod, struct dat_t *ddat,
+		struct pos_t **pos, int4 *xylim, int2 *span, dim3 *BLKpx, int *nThreads,
+		int body, int set, int nframes, cudaStream_t *ap_stream);
 __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod, struct dat_t
 		*ddat, struct par_t *par, struct mod_t *mod, struct dat_t *dat);
 __host__ void c2af_deldop_add_o2_m2(float **temp_o2, float **temp_m2,
@@ -145,6 +153,11 @@ __host__ int posvis_af(struct par_t *dpar, struct mod_t *dmod,
 __host__ int posvis_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, double orbit_offset[3], int set, int nframes,
 		int src, int body, int comp, int *outndarr, cudaStream_t *posvis_stream);
+__host__ int posvis_cuda_streams2(struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat, struct pos_t **pos, struct vertices_t **verts,
+		float3 orbit_offset, int *posn, int *outbndarr, int set, int nframes,
+		int src, int nf, int body, int comp, unsigned char type,
+		cudaStream_t *posvis_stream);
 __host__ void realize_delcor_cuda(struct dat_t *ddat, double delta_delcor0,
 		int delcor0_mode, int nsets);
 __host__ void realize_dopscale_cuda(struct par_t *dpar, struct dat_t *ddat,
@@ -169,6 +182,9 @@ __host__ void vary_params_af( struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int action, double *deldop_zmax, double
 		*rad_xsec, double *opt_brightness, double *cos_subradarlat, int nsets);
 __host__ void vary_params_cuda_streams( struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat, int action, double *deldop_zmax, double
+		*rad_xsec, double *opt_brightness, double *cos_subradarlat, int nsets);
+__host__ void vary_params_cuda_streams2( struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int action, double *deldop_zmax, double
 		*rad_xsec, double *opt_brightness, double *cos_subradarlat, int nsets);
 

@@ -392,7 +392,7 @@ __host__ void calc_fits_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 	int s, *nf_nsets, c=0;
 	unsigned char type;
 	dim3 BLK,THD;
-	cudaCalloc((void**)&nf_nsets, sizeof(int), 2);
+	cudaCalloc1((void**)&nf_nsets, sizeof(int), 2);
 
 	/* Initialize flags that indicate the model extends beyond POS frame, that
 	 * plane-of-sky fit images are too small to "contain" the target, and that
@@ -880,15 +880,15 @@ __host__ void calc_deldop_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 			0, cudaMemcpyDeviceToHost));
 
 	/* Allocate memory */
-	cudaCalloc((void**)&frame, 		sizeof(struct deldopfrm_t*), nframes);
-	cudaCalloc((void**)&view0, 		sizeof(struct deldopview_t*),nframes);
-	cudaCalloc((void**)&pos, 		sizeof(struct pos_t*), 		 nframes);
-	cudaCalloc((void**)&overflow, 	sizeof(float),				 	   5);
-	cudaCalloc((void**)&ndel, 		sizeof(int),				 nframes);
-	cudaCalloc((void**)&ndop, 		sizeof(int),				 nframes);
-	cudaCalloc((void**)&pos_n, 		sizeof(int),				 nframes);
-	cudaCalloc((void**)&global_lim, sizeof(int),				 nframes);
-	cudaCalloc((void**)&xylim, 		sizeof(int4),				 nframes);
+	cudaCalloc1((void**)&frame, 		sizeof(struct deldopfrm_t*), nframes);
+	cudaCalloc1((void**)&view0, 		sizeof(struct deldopview_t*),nframes);
+	cudaCalloc1((void**)&pos, 		sizeof(struct pos_t*), 		 nframes);
+	cudaCalloc1((void**)&overflow, 	sizeof(float),				 	   5);
+	cudaCalloc1((void**)&ndel, 		sizeof(int),				 nframes);
+	cudaCalloc1((void**)&ndop, 		sizeof(int),				 nframes);
+	cudaCalloc1((void**)&pos_n, 		sizeof(int),				 nframes);
+	cudaCalloc1((void**)&global_lim, sizeof(int),				 nframes);
+	cudaCalloc1((void**)&xylim, 		sizeof(int4),				 nframes);
 
 //	for (f=0; f<nframes; f++) {
 	/* Set frame, view0, and pos */
@@ -910,9 +910,9 @@ __host__ void calc_deldop_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 	if (nviews > 1) {
 		/* Allocate fit_store which is a double-pointer in the af version as
 		 * each frame needs its own fit_store array */
-		cudaCalloc((void**)&fit_store, sizeof(float*), nframes);
+		cudaCalloc1((void**)&fit_store, sizeof(float*), nframes);
 		for (int i=0; i<nframes; i++)
-			cudaCalloc((void**)&fit_store[i], sizeof(float), frmsz);
+			cudaCalloc1((void**)&fit_store[i], sizeof(float), frmsz);
 	}
 	/*  Loop over all views for this (smeared) frame, going in an order that
         ends with the view corresponding to the epoch listed for this frame
@@ -1074,14 +1074,14 @@ __host__ void calc_doppler_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 			0, cudaMemcpyDeviceToHost));
 
 	/* Allocate memory */
-	cudaCalloc((void**)&frame, 		sizeof(struct dopfrm_t*), nframes);
-	cudaCalloc((void**)&view0, 		sizeof(struct dopview_t*),nframes);
-	cudaCalloc((void**)&pos, 		sizeof(struct pos_t*), 	  nframes);
-	cudaCalloc((void**)&overflow, 	sizeof(float),			        4);
-	cudaCalloc((void**)&ndop, 		sizeof(int),		 	  nframes);
-	cudaCalloc((void**)&pos_n, 		sizeof(int),			  nframes);
-	cudaCalloc((void**)&global_lim, sizeof(int),			  nframes);
-	cudaCalloc((void**)&xylim, 		sizeof(int4),			  nframes);
+	cudaCalloc1((void**)&frame, 		sizeof(struct dopfrm_t*), nframes);
+	cudaCalloc1((void**)&view0, 		sizeof(struct dopview_t*),nframes);
+	cudaCalloc1((void**)&pos, 		sizeof(struct pos_t*), 	  nframes);
+	cudaCalloc1((void**)&overflow, 	sizeof(float),			        4);
+	cudaCalloc1((void**)&ndop, 		sizeof(int),		 	  nframes);
+	cudaCalloc1((void**)&pos_n, 		sizeof(int),			  nframes);
+	cudaCalloc1((void**)&global_lim, sizeof(int),			  nframes);
+	cudaCalloc1((void**)&xylim, 		sizeof(int4),			  nframes);
 
 //	for (f=0; f<nframes; f++) {
 	/* Set frame, view0, and pos */
@@ -1104,9 +1104,9 @@ __host__ void calc_doppler_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 	if (nviews > 1) {
 		/* Allocate fit_store which is a double-pointer in the af version as
 		 * each frame needs its own fit_store array */
-		cudaCalloc((void**)&fit_store, sizeof(float*), nframes);
+		cudaCalloc1((void**)&fit_store, sizeof(float*), nframes);
 		for (int i=0; i<nframes; i++)
-			cudaCalloc((void**)&fit_store[i], sizeof(float), frmsz);
+			cudaCalloc1((void**)&fit_store[i], sizeof(float), frmsz);
 	}
 
 	/* Loop over all views for this (smeared) frame, going in an order that

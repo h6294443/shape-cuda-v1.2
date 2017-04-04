@@ -945,11 +945,11 @@ __host__ int posvis_cuda_2(struct par_t *dpar, struct mod_t *dmod,
 				cudaMemcpyDeviceToHost));
 
 	if (POSVIS_SEPARATE) {
-		cudaCalloc((void**)&minmax_overall, sizeof(float), 4);
-		cudaCalloc((void**)&iminflt, 		sizeof(float), nf);
-		cudaCalloc((void**)&imaxflt, 		sizeof(float), nf);
-		cudaCalloc((void**)&jminflt, 		sizeof(float), nf);
-		cudaCalloc((void**)&jmaxflt, 		sizeof(float), nf);
+		cudaCalloc1((void**)&minmax_overall, sizeof(float), 4);
+		cudaCalloc1((void**)&iminflt, 		sizeof(float), nf);
+		cudaCalloc1((void**)&imaxflt, 		sizeof(float), nf);
+		cudaCalloc1((void**)&jminflt, 		sizeof(float), nf);
+		cudaCalloc1((void**)&jmaxflt, 		sizeof(float), nf);
 	}
 
 	/* Configure and launch the facet kernel. Which kernel gets launched

@@ -75,8 +75,8 @@ extern "C" {
 #include "head.h"
 #include <limits.h>
 }
-__device__ int posvis_streams_outbnd=0, posvis_streams_nf,
-		posvis_streams_smooth, posvis_streams_n;
+__device__ int posvis_streams_outbnd, pvst_nf, pvst_smooth;
+__device__ struct vertices_t *pvst_verts;
 
 /* Note that the following two custom atomic functions are declared in each
  * file they are needed .  As static __device__ functions, this is the only
@@ -410,10 +410,11 @@ __host__ int posvis_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 	int posn[nframes];
 
 	/* Allocate temporary arrays/structs */
-	cudaCalloc((void**)&ijminmax_overall, sizeof(float4), nframes);
-	cudaCalloc((void**)&pos, sizeof(struct pos_t*), nframes);
-	cudaCalloc((void**)&verts, sizeof(struct vertices_t), nframes);
-	cudaCalloc((void**)&oa, sizeof(double3), (nframes*3));
+	cudaCalloc1((void**)&ijminmax_overall, sizeof(float4), nframes);
+	cudaCalloc1((void**)&pos, sizeof(struct pos_t*), nframes);
+	cudaCalloc1((void**)&verts, sizeof(struct vertices_t), nframes);
+	cudaCalloc1((void**)&oa, sizeof(double3), (nframes*3));
+	cudaCalloc1((void**)&usrc, sizeof(double3), nframes);
 
 	/* Create the timer events */
 	cudaEvent_t start, stop;
@@ -498,6 +499,385 @@ __host__ int posvis_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 	if (TIMING) {
 		cudaEventDestroy(start);
 		cudaEventDestroy(stop);
+	}
+	return outbnd;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+__global__ void posvis_streams_init_krnl(
+		struct par_t *dpar,
+		struct pos_t **pos,
+		float4 *ijminmax_overall,
+		double3 *oa,
+		double3 *usrc,
+		int *outbndarr,
+		int c,
+		int f,
+		int start,
+		int end,
+		int src) {
+
+	/* Single-threaded, streamed kernel */
+	if (threadIdx.x == 0) {
+		if (f == start) {
+			posvis_streams_outbnd = 0;
+			pvst_smooth = dpar->pos_smooth;
+		}
+		ijminmax_overall[f].w = ijminmax_overall[f].y = HUGENUMBER;
+		ijminmax_overall[f].x = ijminmax_overall[f].z = -HUGENUMBER;
+		pos[f]->posbnd_logfactor = 0.0;
+
+		dev_mtrnsps2(oa, pos[f]->ae, f);
+
+		if (src) {
+			/* We're viewing the model from the sun: at the center of each pixel
+			 * in the projected view, we want cos(incidence angle), distance from
+			 * the COM towards the sun, and the facet number.                */
+			dev_mmmul2(oa, pos[f]->se, oa, f); /* oa takes ast into sun coords           */
+		} else {
+			/* We're viewing the model from Earth: at the center of each POS pixel
+			 * we want cos(scattering angle), distance from the COM towards Earth,
+			 * and the facet number.  For bistatic situations (lightcurves) we also
+									 want cos(incidence angle) and the unit vector towards the source.     */
+			dev_mmmul2(oa, pos[f]->oe, oa, f); /* oa takes ast into obs coords */
+			if (pos[f]->bistatic) {
+				usrc[f].x = usrc[f].y = 0.0; /* unit vector towards source */
+				usrc[f].z = 1.0;
+				dev_cotrans5(usrc, pos[f]->se, usrc, -1);
+				dev_cotrans5(usrc, pos[f]->oe, usrc, 1); /* in observer coordinates */
+			}
+		}
+		outbndarr[f] = 0;
+	}
+}
+__global__ void posvis_facet_streams2_krnl(
+		struct pos_t **pos,
+		struct vertices_t **verts,
+		float4 *ijminmax_overall,
+		float3 orbit_offs,
+		double3 *oa,
+		double3 *usrc,
+		int src,
+		int body,
+		int comp,
+		int nfacets,
+		int frm,
+		int smooth,
+		int *outbndarr) {
+	/* (nf * nframes)-threaded kernel */
+
+	int f = blockIdx.x * blockDim.x + threadIdx.x;
+	int pxa, k, i, i1, i2, j, j1, j2, imin, imax, jmin, jmax;
+	double n[3], v0[3], v1[3], v2[3], x[3], s, t, z, den;
+	float imin_dbl, imax_dbl, jmin_dbl, jmax_dbl, old;
+	int3 fidx;
+
+	if (f < nfacets) {
+
+		fidx.x = verts[0]->f[f].v[0];
+		fidx.y = verts[0]->f[f].v[1];
+		fidx.z = verts[0]->f[f].v[2];
+
+		/* Get the normal to this facet in body-fixed (asteroid) coordinates
+		 * and convert it to observer coordinates     */
+		for (i = 0; i <= 2; i++)
+			n[i] = verts[0]->f[f].n[i];
+
+		dev_cotrans6(n, oa, n, 1, frm);
+		//dev_cotrans3(n, oa, n, 1);
+
+		/* Consider this facet further only if its normal points somewhat
+		 * towards the observer rather than away         */
+		if (n[2] > 0.0) {
+			/* Convert the three sets of vertex coordinates from body to ob-
+			 * server coordinates; orbit_offset is the center-of-mass offset
+			 * (in observer coordinates) for this model at this frame's epoch
+			 * due to orbital motion, in case the model is half of a binary
+			 * system.  */
+			dev_cotrans6(v0, oa, verts[0]->v[fidx.x].x, 1, frm);
+			dev_cotrans6(v1, oa, verts[0]->v[fidx.y].x, 1, frm);
+			dev_cotrans6(v2, oa, verts[0]->v[fidx.z].x, 1, frm);
+
+			for (i = 0; i <= 2; i++) {
+				v0[i] += orbit_offs.x;
+				v1[i] += orbit_offs.y;
+				v2[i] += orbit_offs.z;
+			}
+
+			/* Find rectangular region (in POS pixels) containing the projected
+			 * facet - use floats in case model has illegal parameters and the
+			 * pixel numbers exceed the limits for valid integers                         */
+			imin_dbl = floor(MIN(v0[0],MIN(v1[0],v2[0])) / pos[frm]->km_per_pixel
+							- SMALLVAL + 0.5);
+			imax_dbl = floor(MAX(v0[0],MAX(v1[0],v2[0])) / pos[frm]->km_per_pixel
+							+ SMALLVAL + 0.5);
+			jmin_dbl = floor(MIN(v0[1],MIN(v1[1],v2[1])) / pos[frm]->km_per_pixel
+							- SMALLVAL + 0.5);
+			jmax_dbl = floor(MAX(v0[1],MAX(v1[1],v2[1])) / pos[frm]->km_per_pixel
+							+ SMALLVAL + 0.5);
+			imin = (imin_dbl < INT_MIN) ? INT_MIN : (int) imin_dbl;
+			imax = (imax_dbl > INT_MAX) ? INT_MAX : (int) imax_dbl;
+			jmin = (jmin_dbl < INT_MIN) ? INT_MIN : (int) jmin_dbl;
+			jmax = (jmax_dbl > INT_MAX) ? INT_MAX : (int) jmax_dbl;
+
+			/*  Set the outbnd flag if the facet extends beyond the POS window  */
+			if ((imin < (-pos[frm]->n)) || (imax > pos[frm]->n) ||
+					(jmin < (-pos[frm]->n))	|| (jmax > pos[frm]->n)) {
+				posvis_streams_outbnd = 1;
+				outbndarr[f] = 1;
+			}
+
+			/* Figure out if facet projects at least partly within POS window;
+			 * if it does, look at each "contained" POS pixel and get the
+			 * z-coordinate and cos(scattering angle)           */
+			i1 = MAX(imin, -pos[frm]->n);		j1 = MAX(jmin, -pos[frm]->n);
+			i2 = MIN(imax,  pos[frm]->n);		j2 = MIN(jmax,  pos[frm]->n);
+
+			if (i1 > pos[frm]->n || i2 < -pos[frm]->n || j1 > pos[frm]->n || j2 < -pos[frm]->n) {
+
+				/* Facet is entirely outside the POS frame: just keep track of
+				 * changed POS region     */
+				dev_POSrect_streams(pos, src, imin_dbl, imax_dbl, jmin_dbl, jmax_dbl,
+						ijminmax_overall, frm);
+
+			} else {
+
+				dev_POSrect_streams(pos, src, (float)i1, (float)i2, (float)j1,
+						(float)j2, ijminmax_overall, frm);
+
+				/* Facet is at least partly within POS frame: find all POS
+				 * pixels whose centers project onto this facet  */
+				for (i = i1; i <= i2; i++) {
+					x[0] = i * pos[frm]->km_per_pixel;
+					for (j = j1; j <= j2; j++) {
+						x[1] = j * pos[frm]->km_per_pixel;
+
+						/* Calculate the pixel address for 1D arrays */
+						pxa = (j+pos[frm]->n) * (2*pos[frm]->n + 1) + (i+pos[frm]->n);
+
+						/* Compute parameters s(x,y) and t(x,y) which define a
+						 * facet's surface as
+						 *         z = z0 + s*(z1-z0) + t*(z2-z1)
+						 * where z0, z1, and z2 are the z-coordinates at the
+						 * vertices. The conditions 0 <= s <= 1 and
+						 * 0 <= t <= s require the POS pixel center to be
+						 * "within" the (projected) perimeter of facet f.    */
+						den = 1	/ ((v1[0] - v0[0]) * (v2[1] - v1[1])
+								 - (v2[0] - v1[0]) * (v1[1] - v0[1]));
+						s = ((x[0] - v0[0]) * (v2[1] - v1[1])
+						  - (v2[0] - v1[0]) * (x[1] - v0[1])) * den;
+
+						if ((s >= -SMALLVAL) && (s <= 1.0 + SMALLVAL)) {
+
+							t = ((v1[0] - v0[0]) * (x[1] - v0[1])
+							    - (x[0] - v0[0]) * (v1[1]- v0[1])) * den;
+							if ((t >= -SMALLVAL) && (t <= s + SMALLVAL)) {
+
+								/* Compute z-coordinate of pixel center: its
+								 * distance measured from the origin towards
+								 * Earth.    */
+								z = v0[2] + s*(v1[2]-v0[2]) + t*(v2[2]-v1[2]);
+
+								/* If fac[i][j] is >= 0, pixel [i][j] was al-
+								 * ready assigned values during a previous call
+								 * to posvis for a different model component.
+								 * If so, override only if the current component
+								 * is blocking our view of (i.e., is closer to
+								 * us than) the previous one.   */
+
+								/* Following line replaces the previous if check
+								 * for z > zz[i][j]
+								 * atomicMaxf returns the value that was sitting
+								 * at zzf[pxa] at time of call.  So if that value
+								 * matches the z we compared to*/
+
+								if (src)
+									old = atomicMaxf(&pos[frm]->zill_s[pxa], z);
+								else
+									old = atomicMaxf(&pos[frm]->z_s[pxa], z);
+
+								if (old < z || pos[frm]->fill[i][j] < 0 ||
+										pos[frm]->f[i][j] < 0) {
+
+									/* Next line assigns distance of POS pixel
+									 * center from COM towards Earth; that is,
+									 * by changing zz,it changes pos->z or
+									 * pos->zill                */
+									/* following line is a first time z calc
+									 * for this pixel  */
+									if ( (pos[frm]->fill[i][j] < 0) || (pos[frm]->f[i][j] < 0)){
+										if (src)	atomicExch(&pos[frm]->zill_s[pxa], z);
+										else 		atomicExch(&pos[frm]->z_s[pxa], z);
+									}
+
+									if (smooth) {
+
+										/* Get pvs_smoothed version of facet unit
+										 * normal: Take the linear combination
+										 * of the three vertex normals; trans-
+										 * form from body to observer coordina-
+										 * tes; and make sure that it points
+										 * somewhat in our direction.         */
+										for (k = 0; k <= 2; k++)
+											n[k] =	verts[0]->v[fidx.x].n[k]
+											 + s * (verts[0]->v[fidx.y].n[k] - verts[0]->v[fidx.x].n[k])
+											 + t * (verts[0]->v[fidx.z].n[k] - verts[0]->v[fidx.y].n[k]);
+										dev_cotrans6(n, oa, n, 1, frm);
+										//dev_cotrans3(n, oa, n, 1);
+										dev_normalize(n);
+									}
+
+									/* Determine scattering and/or incidence
+									 * angles. Next lines change pos->cose/
+									 * cosill. If bistatic (lightcurves), where
+									 * we are viewing from Earth (src = 0),
+									 * pos->cosi is also changed.                 */
+									if (n[2] > 0.0) {
+										if (src) atomicExch(&pos[frm]->cosill_s[pxa], n[2]);
+										else	 atomicExch(&pos[frm]->cose_s[pxa], n[2]);
+										if ((!src) && (pos[frm]->bistatic)) {
+											float temp = (float)dev_dot2(n,usrc);
+											atomicExch(&pos[frm]->cosi_s[pxa], temp);
+											if (pos[frm]->cosi_s[pxa] <= 0.0)
+												pos[frm]->cose_s[pxa] = 0.0;
+										}
+									}
+
+									/* Next lines change pos->body/bodyill,
+									 * pos->comp/compill, pos->f/fill          */
+									if (src) {
+										pos[frm]->bodyill[i][j] = body;
+										pos[frm]->compill[i][j] = comp;
+										pos[frm]->fill[i][j] = f;
+									} else {
+										pos[frm]->body[i][j] = body;
+										pos[frm]->comp[i][j] = comp;
+										pos[frm]->f[i][j] = f;
+									}
+
+								} /* end if (no other facet yet blocks this facet from view) */
+							} /* end if 0 <= t <= s (facet center is "in" this POS pixel) */
+						} /* end if 0 <= s <= 1 */
+					} /* end j-loop over POS rows */
+				} /* end i-loop over POS columns */
+			} /* end else of if (i1 > pos->n || i2 < -pos->n || j1 > pos->n || j2 < -pos->n) */
+		} /* End if (n[2] > 0.0) */
+	} /* end if (f < nf) */
+}
+__global__ void posvis_streams_outbnd_krnl(struct pos_t **pos, int *posn,
+		int *outbndarr, float4 *ijminmax_overall, int f) {
+	/* Single-threaded, streamed kernel */
+	double xfactor, yfactor;
+	if (threadIdx.x == 0) {
+		if (outbndarr[f]) {
+			/* ijminmax_overall.w = imin_overall
+			 * ijminmax_overall.x = imax_overall
+			 * ijminmax_overall.y = jmin_overall
+			 * ijminmax_overall.z = jmax_overall	 */
+			xfactor = (MAX( ijminmax_overall[f].x,  posn[f]) -
+					MIN( ijminmax_overall[f].w, -posn[f]) + 1) / (2*posn[f]+1);
+			yfactor = (MAX( ijminmax_overall[f].z,  posn[f]) -
+					MIN( ijminmax_overall[f].y, -posn[f]) + 1) / (2*posn[f]+1);
+			pos[f]->posbnd_logfactor = log(xfactor*yfactor);
+		}
+	}
+}
+
+__host__ int posvis_cuda_streams2(
+		struct par_t *dpar,
+		struct mod_t *dmod,
+		struct dat_t *ddat,
+		struct pos_t **pos,
+		struct vertices_t **verts,
+		float3 orbit_offset,
+		int *posn,
+		int *outbndarr,
+		int set,
+		int nframes,
+		int src,
+		int nf,
+		int body, int comp, unsigned char type, cudaStream_t *posvis_stream) {
+
+	int outbnd, smooth, start, end, frames_alloc, i=0, f;
+	dim3 BLK,THD;
+	cudaEvent_t start1, stop1;
+	float milliseconds;
+	float4 *ijminmax_overall;
+	double3 *oa, *usrc;
+
+
+	/* Launch parameters for the facet_streams kernel */
+	THD.x = maxThreadsPerBlock;
+	BLK.x = floor((THD.x - 1 + nf) / THD.x);
+
+	/* Set up the offset addressing for lightcurves if this is a lightcurve */
+	if (type == LGHTCRV) {
+		start = 1;	/* fixes the lightcurve offsets */
+		end = nframes + 1;
+		frames_alloc = nframes + 1;
+	} else {
+		start = 0;
+		end = nframes;
+		frames_alloc = nframes;
+	}
+	float4 hijmm[frames_alloc];
+	/* Allocate temporary arrays/structs */
+	gpuErrchk(cudaMalloc((void**)&ijminmax_overall, sizeof(float4) * frames_alloc));
+	gpuErrchk(cudaMalloc((void**)&oa, sizeof(double3) * (frames_alloc*3)));
+	gpuErrchk(cudaMalloc((void**)&usrc, sizeof(double3) * frames_alloc));
+
+	if (TIMING) {
+		/* Create the timer events */
+		cudaEventCreate(&start1);
+		cudaEventCreate(&stop1);
+		cudaEventRecord(start1);
+	}
+
+	for (int f=start; f<end; f++) {
+
+		/* Initialize via single-thread kernel first */
+		posvis_streams_init_krnl<<<1,1,0,posvis_stream[f-start]>>>(dpar,
+				pos, ijminmax_overall, oa, usrc, outbndarr, comp, f, start,
+				end, src);
+
+		/* Now the main facet kernel */
+		posvis_facet_streams2_krnl<<<BLK,THD, 0, posvis_stream[f-start]>>>(pos, verts,
+				ijminmax_overall, orbit_offset, oa, usrc,	src, body, comp,
+				nf, f, smooth, outbndarr);
+		/* Take care of any posbnd flags */
+		posvis_streams_outbnd_krnl<<<1,1,0,posvis_stream[f-start]>>>(pos, posn,
+				outbndarr, ijminmax_overall, f);
+	}
+	cudaMemcpy(&hijmm, ijminmax_overall, sizeof(float4)*frames_alloc, cudaMemcpyDeviceToHost);
+
+	if (TIMING) {
+		cudaEventRecord(stop1);
+		cudaEventSynchronize(stop1);
+		milliseconds = 0;
+		cudaEventElapsedTime(&milliseconds, start1, stop1);
+		printf("%i facets in posvis_cuda_2 in %3.3f ms with %i frames.\n", nf, milliseconds, nframes);
+	}
+	checkErrorAfterKernelLaunch("The three posvis_cuda_streams2 kernels");
+	gpuErrchk(cudaMemcpyFromSymbol(&outbnd, posvis_streams_outbnd, sizeof(outbnd), 0,
+			cudaMemcpyDeviceToHost));
+
+	//	for (int f=0; f<nframes; f++)
+//		cudaStreamSynchronize(posvis_stream[f]);
+//dbg_print_pos_z(ddat, set, 0, posn[0]);
+
+	/* Free temp arrays, destroy streams and timers, as applicable */
+
+	cudaFree(ijminmax_overall);
+	cudaFree(oa);
+	cudaFree(usrc);
+
+
+	if (TIMING) {
+		cudaEventDestroy(start1);
+		cudaEventDestroy(stop1);
 	}
 	return outbnd;
 }

@@ -875,20 +875,20 @@ __host__ int pos2deldop_cuda_af(
 	float3  *w;
 	float4 *deldoplim, *dop;
 
-	cudaCalloc((void**)&idel0, sizeof(int), nframes);
-	cudaCalloc((void**)&idop0, sizeof(int), nframes);
-	cudaCalloc((void**)&ndel, sizeof(int), nframes);
-	cudaCalloc((void**)&ndop, sizeof(int), nframes);
-	cudaCalloc((void**)&frame, sizeof(struct deldopfrm_t*), nframes);
-	cudaCalloc((void**)&pos, sizeof(struct pos_t*), nframes);
-	cudaCalloc((void**)&w, sizeof(float3), nframes);
-	cudaCalloc((void**)&axay, sizeof(float2), nframes);
-	cudaCalloc((void**)&xyincr, sizeof(float2), nframes);
-	cudaCalloc((void**)&deldopshift, sizeof(float2), nframes);
-	cudaCalloc((void**)&xylim, sizeof(int4), nframes);
-	cudaCalloc((void**)&deldoplim, sizeof(float4), nframes);
-	cudaCalloc((void**)&dop, sizeof(float4), nframes);
-	cudaCalloc((void**)&global_lim, sizeof(int), 4);
+	cudaCalloc1((void**)&idel0, sizeof(int), nframes);
+	cudaCalloc1((void**)&idop0, sizeof(int), nframes);
+	cudaCalloc1((void**)&ndel, sizeof(int), nframes);
+	cudaCalloc1((void**)&ndop, sizeof(int), nframes);
+	cudaCalloc1((void**)&frame, sizeof(struct deldopfrm_t*), nframes);
+	cudaCalloc1((void**)&pos, sizeof(struct pos_t*), nframes);
+	cudaCalloc1((void**)&w, sizeof(float3), nframes);
+	cudaCalloc1((void**)&axay, sizeof(float2), nframes);
+	cudaCalloc1((void**)&xyincr, sizeof(float2), nframes);
+	cudaCalloc1((void**)&deldopshift, sizeof(float2), nframes);
+	cudaCalloc1((void**)&xylim, sizeof(int4), nframes);
+	cudaCalloc1((void**)&deldoplim, sizeof(float4), nframes);
+	cudaCalloc1((void**)&dop, sizeof(float4), nframes);
+	cudaCalloc1((void**)&global_lim, sizeof(int), 4);
 
 	/* Launch nframes-threaded initialization kernel */
 	THD.x = nframes;

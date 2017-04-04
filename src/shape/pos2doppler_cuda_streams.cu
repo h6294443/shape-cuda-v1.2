@@ -640,15 +640,15 @@ __host__ int pos2doppler_cuda_streams(
 	float4 *dop;
 	int4 *xylim, host_xylim[nframes];
 
-	cudaCalloc((void**)&frame, 	  	 sizeof(struct dopfrm_t*),nframes);
-	cudaCalloc((void**)&dopshift, 	 sizeof(float), 		  nframes);
-	cudaCalloc((void**)&axay, 	  	 sizeof(float2), 		  nframes);
-	cudaCalloc((void**)&xyincr,   	 sizeof(float2), 		  nframes);
-	cudaCalloc((void**)&doplim,   	 sizeof(float2), 		  nframes);
-	cudaCalloc((void**)&w, 		  	 sizeof(float3), 		  nframes);
-	cudaCalloc((void**)&dop, 	  	 sizeof(float4), 		  nframes);
-	cudaCalloc((void**)&xylim, 	  	 sizeof(int4), 			  nframes);
-	cudaCalloc((void**)&idop0,	   	 sizeof(int), 			  nframes);
+	cudaCalloc1((void**)&frame, 	  	 sizeof(struct dopfrm_t*),nframes);
+	cudaCalloc1((void**)&dopshift, 	 sizeof(float), 		  nframes);
+	cudaCalloc1((void**)&axay, 	  	 sizeof(float2), 		  nframes);
+	cudaCalloc1((void**)&xyincr,   	 sizeof(float2), 		  nframes);
+	cudaCalloc1((void**)&doplim,   	 sizeof(float2), 		  nframes);
+	cudaCalloc1((void**)&w, 		  	 sizeof(float3), 		  nframes);
+	cudaCalloc1((void**)&dop, 	  	 sizeof(float4), 		  nframes);
+	cudaCalloc1((void**)&xylim, 	  	 sizeof(int4), 			  nframes);
+	cudaCalloc1((void**)&idop0,	   	 sizeof(int), 			  nframes);
 
 	for (f=0; f<nframes; f++) {
 		/* Launch single-threaded initialization kernel */

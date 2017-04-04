@@ -47,7 +47,7 @@ extern "C" {
 __device__ double dev_hapke( double cosi, double cose, double phase,
               double w, double h, double B0, double g, double theta)
 {
-  
+
   double sqrt1minw, r0, i, e, sini, psi, cospsi, sin2psiovr2, tmp, P, B, S, cosphase, pi,
          r, Hmu0p, Hmup, sine, E1e, E1i, E2e, E2i, f, C, cottheta, arg, mu0, mu,
          tantheta, mu0p, mup, mup0, mu0p0;
@@ -139,7 +139,7 @@ __device__ double dev_hapke( double cosi, double cose, double phase,
       } else {
           E1i = E2i = 0.0;
       }
-    
+
       mu0p0 = C*(mu0 + sini*tantheta*E2i/(2 - E1i));
       mup0 = C*(mu + sine*tantheta*E2e/(2 - E1e));
       if (i < e) {

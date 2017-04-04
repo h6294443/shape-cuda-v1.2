@@ -332,8 +332,8 @@ int read_shape( FILE *fp, struct par_t *par, struct mod_t *mod)
 				* If it is not enabled, allocate via the standard C call.				 */
 
 				if (CUDA) {
-					cudaCalloc((void**)&mod->shape.comp[i].desc.har.a[j], sizeof(struct param_t *), j + 1);
-					cudaCalloc((void**)&mod->shape.comp[i].desc.har.b[j], sizeof(struct param_t *), j + 1);
+					cudaCalloc((void**)&mod->shape.comp[i].desc.har.a[j], sizeof(struct param_t), j + 1);
+					cudaCalloc((void**)&mod->shape.comp[i].desc.har.b[j], sizeof(struct param_t), j + 1);
 				}
 				else {				
 					mod->shape.comp[i].desc.har.a[j] = (struct param_t *)

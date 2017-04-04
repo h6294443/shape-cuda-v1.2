@@ -246,7 +246,7 @@ __host__ double chi2_lghtcrv_cuda(struct par_t *dpar, struct dat_t *ddat,
 __device__ double c2_chi2, c2_chi2_frame, c2_chi2_set, c2_weight,
 	c2_chi2_all_doppler, chi2_fit0_doppler, dof_fit0_doppler, c2_chi2_all_deldop,
 	chi2_fit0_deldop, dof_fit0_deldop;
-__device__ int c2_nsets, c2_nframes, c2_ndel, c2_ndop;
+__device__ int c2_nsets, c2_nframes, c2_ndel, c2_ndop, c2_ncalc, c2_n;
 __device__ unsigned char c2_type;
 __device__ float o2, m2, om;
 __device__ struct deldop_t *c2_deldop;
@@ -298,6 +298,8 @@ __global__ void c2_get_frames_krnl(struct dat_t *ddat, int s) {
 		case LGHTCRV:
 			c2_lghtcrv = &ddat->set[s].desc.lghtcrv;
 			c2_nframes = c2_lghtcrv->n;
+			c2_n = c2_lghtcrv->n;
+			c2_ncalc = c2_lghtcrv->ncalc;
 		}
 	}
 }
@@ -882,16 +884,18 @@ __host__ double chi2_doppler_cuda(struct par_t *dpar, struct dat_t *ddat, int s,
 __host__ double chi2_lghtcrv_cuda(struct par_t *dpar, struct dat_t *ddat,
 		int s, int list_breakdown, double *chi2_all_lghtcrv)
 {
-	int n;
+	int n, ncalc;
 	double *dof_chi2set, chi2;
 	dim3 BLK,THD;
 
-	cudaCalloc((void**)&dof_chi2set, sizeof(double), 2);
+	cudaCalloc1((void**)&dof_chi2set, sizeof(double), 2);
 
 	/* Launch single-threaded kernel to get # of frames for this set */
 	c2_get_frames_krnl<<<1,1>>>(ddat, s);
 	checkErrorAfterKernelLaunch("c2_get_frames_krnl");
-	gpuErrchk(cudaMemcpyFromSymbol(&n, c2_nframes, sizeof(int),
+	gpuErrchk(cudaMemcpyFromSymbol(&n, c2_n, sizeof(int),
+			0, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpyFromSymbol(&ncalc, c2_ncalc, sizeof(int),
 			0, cudaMemcpyDeviceToHost));
 
 	/* Compute contributions to chi-square  */
@@ -903,6 +907,7 @@ __host__ double chi2_lghtcrv_cuda(struct par_t *dpar, struct dat_t *ddat,
 
 
 //	dbg_print_lghtcrv_arrays(ddat, s, n, "cuda_lghtcrv_arrays.csv");
+//	dbg_print_lghtcrv_xyy2(ddat, s, ncalc, "lghtcrv_cuda_arrays.csv");
 
 	if (list_breakdown)
 		*chi2_all_lghtcrv += dof_chi2set[1];

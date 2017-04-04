@@ -600,18 +600,18 @@ __host__ int pos2doppler_cuda_af( struct par_t *dpar, struct mod_t *dmod,
 	float4 *dop;
 	int4 *xylim;
 
-	cudaCalloc((void**)&frame, 	  	 sizeof(struct dopfrm_t*),nframes);
-	cudaCalloc((void**)&pos, 	  	 sizeof(struct pos_t*),   nframes);
-	cudaCalloc((void**)&dopshift, 	 sizeof(float), 		  nframes);
-	cudaCalloc((void**)&axay, 	  	 sizeof(float2), 		  nframes);
-	cudaCalloc((void**)&xyincr,   	 sizeof(float2), 		  nframes);
-	cudaCalloc((void**)&doplim,   	 sizeof(float2), 		  nframes);
-	cudaCalloc((void**)&w, 		  	 sizeof(float3), 		  nframes);
-	cudaCalloc((void**)&dop, 	  	 sizeof(float4), 		  nframes);
-	cudaCalloc((void**)&xylim, 	  	 sizeof(int4), 			  nframes);
-	cudaCalloc((void**)&global_lim,	 sizeof(int), 			        4);
-	cudaCalloc((void**)&idop0,	   	 sizeof(int), 			  nframes);
-	cudaCalloc((void**)&ndop,	   	 sizeof(int), 			  nframes);
+	cudaCalloc1((void**)&frame, 	  	 sizeof(struct dopfrm_t*),nframes);
+	cudaCalloc1((void**)&pos, 	  	 sizeof(struct pos_t*),   nframes);
+	cudaCalloc1((void**)&dopshift, 	 sizeof(float), 		  nframes);
+	cudaCalloc1((void**)&axay, 	  	 sizeof(float2), 		  nframes);
+	cudaCalloc1((void**)&xyincr,   	 sizeof(float2), 		  nframes);
+	cudaCalloc1((void**)&doplim,   	 sizeof(float2), 		  nframes);
+	cudaCalloc1((void**)&w, 		  	 sizeof(float3), 		  nframes);
+	cudaCalloc1((void**)&dop, 	  	 sizeof(float4), 		  nframes);
+	cudaCalloc1((void**)&xylim, 	  	 sizeof(int4), 			  nframes);
+	cudaCalloc1((void**)&global_lim,	 sizeof(int), 			        4);
+	cudaCalloc1((void**)&idop0,	   	 sizeof(int), 			  nframes);
+	cudaCalloc1((void**)&ndop,	   	 sizeof(int), 			  nframes);
 
 	/* Launch nframes-threaded initialization kernel */
 	THD.x = nframes;

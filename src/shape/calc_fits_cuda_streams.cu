@@ -339,15 +339,15 @@ extern "C" {
 }
 
 __host__ void calc_deldop_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
-		struct dat_t *ddat, int s, int nframes, int nviews, unsigned char type,
-		cudaStream_t *cf_stream);
+		struct dat_t *ddat, struct vertices_t **verts, int s, int nframes, int
+		nviews, unsigned char type, int nf, cudaStream_t *cf_stream);
 __host__ void calc_doppler_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
-		struct dat_t *ddat, int s, int nframes, int nviews, unsigned char type,
-		cudaStream_t *cf_stream);
+		struct dat_t *ddat, struct vertices_t **verts, int s, int nframes, int
+		nviews, unsigned char type, int nf, cudaStream_t *cf_stream);
 ////__host__ void calc_poset_cuda( struct par_t *par, struct mod_t *mod, int s);
 __host__ void calc_lghtcrv_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
-		struct dat_t *ddat, int s, int nframes, int nviews, unsigned char type,
-		int lc_n, cudaStream_t *cf_stream);
+		struct dat_t *ddat, struct vertices_t **verts, int s, int nframes, int
+		nviews, unsigned char type, int lc_n, int nf, cudaStream_t *cf_stream);
 
 __device__ int cfs_nf, cfs_nsets, cfs_v0_index, cfs_exclude_seen, cfs_ncalc, cfs_n;
 __device__ double cfs_lghtcrv_posbnd_logfactor;
@@ -407,7 +407,7 @@ __device__ void dev_splint_cfs(double *xa,double *ya,double *y2a,int n,double x,
 			y2a[khi]) * (h*h)/6.0;
 }
 __global__ void cfs_init_devpar_krnl(struct par_t *dpar, struct mod_t
-		*dmod, struct dat_t *ddat) {
+		*dmod, struct dat_t *ddat, struct vertices_t **verts) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
 		dpar->posbnd = 0;
@@ -416,7 +416,8 @@ __global__ void cfs_init_devpar_krnl(struct par_t *dpar, struct mod_t
 		dpar->posbnd_logfactor = 0.0;
 		dpar->badposet_logfactor = 0.0;
 		dpar->badradar_logfactor = 0.0;
-		cfs_nf = dmod->shape.comp[0].real.nf;
+		verts[0] = &dmod->shape.comp[0].real;
+		cfs_nf = verts[0]->nf;
 		cfs_nsets = ddat->nsets;
 	}
 }
@@ -459,13 +460,15 @@ __host__ void calc_fits_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 	unsigned char *type;
 	dim3 BLK,THD;
 	THD.x = maxThreadsPerBlock;
+	struct vertices_t **verts;
+	gpuErrchk(cudaMalloc((void**)&verts, sizeof(struct vertices_t*)*2));
 
 	/* Initialize flags that indicate the model extends beyond POS frame, that
 	 * plane-of-sky fit images are too small to "contain" the target, and that
 	 * model is too wide in (delay-)Doppler space to create (delay-)Doppler fit
 	 * frames.  Note that this also gets mod->shape.nf and nsets            */
 
-	cfs_init_devpar_krnl<<<1,1>>>(dpar, dmod, ddat);
+	cfs_init_devpar_krnl<<<1,1>>>(dpar, dmod, ddat, verts);
 	checkErrorAfterKernelLaunch("cfs_init_devpar_krnl");
 	gpuErrchk(cudaMemcpyFromSymbol(&nf, cfs_nf, sizeof(int),
 				0, cudaMemcpyDeviceToHost));
@@ -510,20 +513,20 @@ __host__ void calc_fits_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 
 		switch (htype[s]) {
 		case DELAY:
-			calc_deldop_cuda_streams(dpar, dmod, ddat, s, hnframes[s],
-					hnviews[s], htype[s], cf_stream );
+			calc_deldop_cuda_streams(dpar, dmod, ddat, verts, s, hnframes[s],
+					hnviews[s], htype[s], nf, cf_stream );
 			break;
 		case DOPPLER:
-			calc_doppler_cuda_streams(dpar, dmod, ddat, s, hnframes[s],
-					hnviews[s], htype[s], cf_stream );
+			calc_doppler_cuda_streams(dpar, dmod, ddat, verts, s, hnframes[s],
+					hnviews[s], htype[s], nf, cf_stream );
 			break;
 		case POS:
 			printf("Write calc_poset_cuda!");
 //			calc_poset_cuda(dpar, dmod, s);
 			break;
 		case LGHTCRV:
-			calc_lghtcrv_cuda_streams(dpar, dmod, ddat, s, hnframes[s],
-					hnviews[s], htype[f], lc_n[s], cf_stream);
+			calc_lghtcrv_cuda_streams(dpar, dmod, ddat, verts, s, hnframes[s],
+					hnviews[s], htype[s], n[s],nf, cf_stream);
 			break;
 		default:
 			printf("calc_fits_cuda.c: can't handle this type yet\n");
@@ -545,6 +548,8 @@ __host__ void calc_fits_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 	cudaFree(type);
 	cudaFree(nframes);
 	cudaFree(nviews);
+	cudaFree(lc_n);
+	cudaFree(verts);
 }
 __global__ void cfs_set_deldop_shortcuts_krnl(struct dat_t *ddat,
 		struct deldopfrm_t **frame, struct pos_t **pos,
@@ -602,9 +607,10 @@ __global__ void cfs_set_lghtcrv_shortcuts_streams_krnl(struct dat_t *ddat,
 		int *posn, int s, int f) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
-		if (f == 0)
+		if (f == 1)
 			cfs_lghtcrv = &ddat->set[s].desc.lghtcrv;
-		rend[f] = &cfs_lghtcrv->rend[f];
+
+		rend[f] = &ddat->set[s].desc.lghtcrv.rend[f];//&cfs_lghtcrv->rend[f];
 		pos[f] = &rend[f]->pos;
 		posn[f] = pos[f]->n;
 		overflow[0] = 0.0;
@@ -790,6 +796,14 @@ __global__ void cfs_set_lghtcrv_y_streams_krnl(double *brightness_temp,
 		cfs_lghtcrv->y[i] = brightness_temp[i];
 	}
 }
+__global__ void cfs_set_lghtcrv_y_streams2_krnl(double *brightness_temp,
+		int nfplus) {
+	/* Single-threaded kernel */
+	int i = blockIdx.x * blockDim.x + threadIdx.x;
+	if (i < nfplus) {
+		cfs_lghtcrv->y[i] = brightness_temp[i];
+	}
+}
 __global__ void cf_set_badradar_streams_krnl(struct par_t *dpar, int f,
 		unsigned char type) {
 	/* Single-threaded kernel */
@@ -904,10 +918,12 @@ __global__ void cf_gamma_trans_streams_krnl(struct par_t *dpar, struct dat_t *dd
 }
 
 __host__ void calc_deldop_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
-		struct dat_t *ddat, int s, int nframes, int nviews, unsigned char type,
-		cudaStream_t *cf_stream)
+		struct dat_t *ddat, struct vertices_t **verts, int s, int nframes,
+		int nviews, unsigned char type, int nf, cudaStream_t *cf_stream)
 {
 	double orbit_offset[3] = {0.0, 0.0, 0.0};
+	float3 orbit_off3;
+	orbit_off3.x = orbit_off3.y = orbit_off3.z = 0.0;
 	int *ndel, *ndop, *posn, *bistatic, v0_index, exclude_seen, f, v2, c=0, yspan,
 			*outbndarr;
 	float **fit_store, *overflow;
@@ -921,17 +937,17 @@ __host__ void calc_deldop_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 		houtbndarr[nframes], xspan[nframes], nThreadspx[nframes], nThreadsdd[nframes],
 		nThreadspx1[nframes], v[nviews+1];
 
-	cudaCalloc((void**)&pos, sizeof(pos_t*), nframes);
-	cudaCalloc((void**)&frame, sizeof(deldopfrm_t*), nframes);
-	cudaCalloc((void**)&view0, sizeof(deldopview_t*), nframes);
-	cudaCalloc((void**)&fit_store, sizeof(float*), nframes);
-	cudaCalloc((void**)&ndel, sizeof(int), nframes);
-	cudaCalloc((void**)&ndop, sizeof(int), nframes);
-	cudaCalloc((void**)&posn, sizeof(int), nframes);
-	cudaCalloc((void**)&bistatic, sizeof(int), nframes);
-	cudaCalloc((void**)&xylim, sizeof(int4), nframes);
-	cudaCalloc((void**)&overflow, sizeof(float), 6);
-	cudaCalloc((void**)&outbndarr, sizeof(int), nframes);
+	gpuErrchk(cudaMalloc((void**)&pos, sizeof(pos_t*) * nframes));
+	gpuErrchk(cudaMalloc((void**)&frame, sizeof(deldopfrm_t*) * nframes));
+	gpuErrchk(cudaMalloc((void**)&view0, sizeof(deldopview_t*) * nframes));
+	gpuErrchk(cudaMalloc((void**)&fit_store, sizeof(float*) * nframes));
+	gpuErrchk(cudaMalloc((void**)&ndel, sizeof(int) * nframes));
+	gpuErrchk(cudaMalloc((void**)&ndop, sizeof(int) * nframes));
+	gpuErrchk(cudaMalloc((void**)&posn, sizeof(int) * nframes));
+	gpuErrchk(cudaMalloc((void**)&bistatic, sizeof(int) * nframes));
+	gpuErrchk(cudaMalloc((void**)&xylim, sizeof(int4) * nframes));
+	gpuErrchk(cudaMalloc((void**)&overflow, sizeof(float) * 6));
+	gpuErrchk(cudaMalloc((void**)&outbndarr, sizeof(int) * nframes));
 
 	for (f=0; f<nframes; f++)
 		/* Set deldop, frame, view0, and pos in nframes streamed kernels */
@@ -955,7 +971,7 @@ __host__ void calc_deldop_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 		if (nviews > 1) {
 			/* Allocate fit_store as a single pointer, originally a double
 			 * pointer. This also initializes the entire array to zero. */
-			cudaCalloc((void**)&fit_store[f], sizeof(float), nThreadsdd[f]);
+			cudaCalloc1((void**)&fit_store[f], sizeof(float), nThreadsdd[f]);
 		}
 	}
 	/*  Loop over all views for this (smeared) frame, going in an order that
@@ -985,8 +1001,11 @@ __host__ void calc_deldop_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 	/* NOTE: Limited to single component for now */
 
 //	for (v2=0; v2<no_views; v2++)
-	posvis_cuda_streams(dpar, dmod, ddat, orbit_offset, s, nframes,
-						0, 0, c, outbndarr, cf_stream);
+//	posvis_cuda_streams(dpar, dmod, ddat, orbit_offset, s, nframes,
+//						0, 0, c, outbndarr, cf_stream);
+	posvis_cuda_streams2(dpar, dmod, ddat, pos, verts, orbit_off3, posn,
+			outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream);
+
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
 			cudaMemcpyDeviceToHost));
 
@@ -1080,13 +1099,22 @@ __host__ void calc_deldop_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 				"cf_gamma_trans_krnl");
 		cudaFree(fit_store);
 	}
+	cudaFree(ndel);
+	cudaFree(ndop);
+	cudaFree(posn);
+	cudaFree(bistatic);
+	cudaFree(xylim);
+	cudaFree(overflow);
+	cudaFree(outbndarr);
 }
 
 __host__ void calc_doppler_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
-		struct dat_t *ddat, int s, int nframes, int nviews, unsigned char type,
-		cudaStream_t *cf_stream)
+		struct dat_t *ddat, struct vertices_t **verts, int s, int nframes,
+		int nviews, unsigned char type, int nf, cudaStream_t *cf_stream)
 {
 	double orbit_offset[3] = {0.0, 0.0, 0.0};
+	float3 orbit_off3;
+	orbit_off3.x = orbit_off3.y = orbit_off3.z = 0.0;
 	float **fit_store, *overflow;
 	int *ndop, *posn, *bistatic, v0_index, exclude_seen, nx, f, v2, c=0, yspan,
 			*outbndarr;
@@ -1100,16 +1128,16 @@ __host__ void calc_doppler_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 		xspan[nframes], nThreadspx[nframes], nThreadspx1[nframes], v[nviews+1];
 
 	/* Allocate the CUDA pointers */
-	cudaCalloc((void**)&pos, 		sizeof(struct pos_t*), 		nframes);
-	cudaCalloc((void**)&frame, 		sizeof(struct dopfrm_t*), 	nframes);
-	cudaCalloc((void**)&view0, 		sizeof(struct dopview_t*), 	nframes);
-	cudaCalloc((void**)&fit_store,	sizeof(float*), 			nframes);
-	cudaCalloc((void**)&ndop, 		sizeof(int), 				nframes);
-	cudaCalloc((void**)&posn, 		sizeof(int), 				nframes);
-	cudaCalloc((void**)&bistatic, 	sizeof(int), 				nframes);
-	cudaCalloc((void**)&xylim, 		sizeof(int4), 				nframes);
-	cudaCalloc((void**)&overflow, 	sizeof(float), 				nframes);
-	cudaCalloc((void**)&outbndarr, 	sizeof(int), 				nframes);
+	cudaCalloc1((void**)&pos, 		sizeof(struct pos_t*), 		nframes);
+	cudaCalloc1((void**)&frame, 		sizeof(struct dopfrm_t*), 	nframes);
+	cudaCalloc1((void**)&view0, 		sizeof(struct dopview_t*), 	nframes);
+	cudaCalloc1((void**)&fit_store,	sizeof(float*), 			nframes);
+	cudaCalloc1((void**)&ndop, 		sizeof(int), 				nframes);
+	cudaCalloc1((void**)&posn, 		sizeof(int), 				nframes);
+	cudaCalloc1((void**)&bistatic, 	sizeof(int), 				nframes);
+	cudaCalloc1((void**)&xylim, 		sizeof(int4), 				nframes);
+	cudaCalloc1((void**)&overflow, 	sizeof(float), 				nframes);
+	cudaCalloc1((void**)&outbndarr, 	sizeof(int), 				nframes);
 
 	for (f=0; f<nframes; f++)
 		/* Set doppler, frame, view0, and pos in nframes streamed kernels */
@@ -1132,7 +1160,7 @@ __host__ void calc_doppler_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 		if (nviews > 1)
 			/* Allocate fit_store as a single pointer, originally a double
 			 * pointer. This also initializes the entire array to zero. */
-			cudaCalloc((void**)&fit_store[f], sizeof(float), ndop[f]);
+			cudaCalloc1((void**)&fit_store[f], sizeof(float), ndop[f]);
 	}
 
 	/* Loop over all views for this (smeared) frame, going in an order that
@@ -1159,8 +1187,10 @@ __host__ void calc_doppler_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 	 * model portion extends beyond POS frame limits.*/
 	/* NOTE: Limited to single component for now */
 	//for (v2=v0_index+1; v2<=v0_index+nviews; v2++) {
-	posvis_cuda_streams(dpar, dmod, ddat, orbit_offset, s, nframes, 0, 0, c,
-			outbndarr, cf_stream);
+//	posvis_cuda_streams(dpar, dmod, ddat, orbit_offset, s, nframes, 0, 0, c,
+//			outbndarr, cf_stream);
+	posvis_cuda_streams2(dpar, dmod, ddat, pos, verts, orbit_off3, posn,
+			outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream);
 
 	/* Copy the posbnd flag returns for all frames to a host copy */
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
@@ -1445,114 +1475,123 @@ __host__ void calc_doppler_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 ////
 ////
 __host__ void calc_lghtcrv_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
-		struct dat_t *ddat, int s, int nframes, int nviews, unsigned char type,
-		int lc_n, cudaStream_t *cf_stream)
+		struct dat_t *ddat, struct vertices_t **verts, int s, int nframes, int
+		nviews, unsigned char type, int lc_n, int nf, cudaStream_t *cf_stream)
 {
-	int ncalc, c=0, i, *posn, *bistatic, n, yspan, nThreads, exclude_seen, f,
+	int ncalc, c=0, i, *posn, *bistatic, n, nThreads, exclude_seen, f,
 			bistatic_all, *outbndarr;
-	double *pxlpkm, brightness_temp[nframes], posbnd_logfactor,
-		orbit_offset[3] = {0.0, 0.0, 0.0};
+	int nfplus = nframes+1; /* This is to accomodate the +1 start in lghtcrv */
+	double *pxlpkm, posbnd_logfactor, orbit_offset[3] = {0.0, 0.0, 0.0};
+	float3 orbit_off3;
+	orbit_off3.x = orbit_off3.y = orbit_off3.z = 0.0;
 	double3 *so;
 	int4 *xylim;
-	dim3 BLKpx[nframes],THD,THD9;
+	dim3 BLKpx[nfplus],THD,THD9;
 	THD.x = maxThreadsPerBlock; THD9.x = 9;
 	struct pos_t **pos;
 	struct crvrend_t **rend;
 	ncalc = nframes;
 	n = lc_n;
 	float *overflow;
-	int hposn[nframes], hbistatic[nframes], houtbndarr[nframes], xspan[nframes],
-		nThreadspx[nframes], nThreadspx1[nframes];
-	int4 hxylim[nframes];
+	int hbistatic[nfplus], houtbndarr[nfplus],
+		nThreadspx[nfplus], nThreadspx1[nfplus], hposn[nfplus];
+	int4 hxylim[nfplus];
+	int2 span[nfplus];
 
-	cudaCalloc((void**)&pos, 	  sizeof(struct pos_t*), 	 nframes);
-	cudaCalloc((void**)&rend, 	  sizeof(struct crvrend_t*), nframes);
-	cudaCalloc((void**)&posn, 	  sizeof(int), 				 nframes);
-	cudaCalloc((void**)&bistatic, sizeof(int), 				 nframes);
-	cudaCalloc((void**)&pxlpkm,   sizeof(double), 			 nframes);
-	cudaCalloc((void**)&overflow, sizeof(float), 			 nframes);
-	cudaCalloc((void**)&xylim, 	  sizeof(int4), 			 nframes);
-	cudaCalloc((void**)&outbndarr,sizeof(int),	 			 nframes);
-	cudaCalloc((void**)&so, 	  sizeof(double3), 			(nframes*3));
+	gpuErrchk(cudaMalloc((void**)&pos, 	  sizeof(struct pos_t*) * nfplus));
+	gpuErrchk(cudaMalloc((void**)&rend, 	  sizeof(struct crvrend_t*) * nfplus));
+	gpuErrchk(cudaMalloc((void**)&posn, 	  sizeof(int) * nfplus));
+	gpuErrchk(cudaMalloc((void**)&bistatic, sizeof(int) * nfplus));
+	gpuErrchk(cudaMalloc((void**)&pxlpkm,   sizeof(double) * nfplus));
+	gpuErrchk(cudaMalloc((void**)&overflow, sizeof(float) * nfplus));
+	gpuErrchk(cudaMalloc((void**)&xylim, 	  sizeof(int4) * nfplus));
+	gpuErrchk(cudaMalloc((void**)&outbndarr,sizeof(int) * nfplus));
+	gpuErrchk(cudaMalloc((void**)&so, 	  sizeof(double3) * ((nframes*3)+1)));
 
 	/* Set shortcuts and copy pos->n back for all frames */
-	for (f=0; f<nframes; f++)
-		cfs_set_lghtcrv_shortcuts_streams_krnl<<<1,1,0,cf_stream[f]>>>(ddat,
+	for (f=1; f<=nframes; f++){
+		cfs_set_lghtcrv_shortcuts_streams_krnl<<<1,1,0,cf_stream[f-1]>>>(ddat,
 				rend, pos, overflow, posn, s, f);
 	checkErrorAfterKernelLaunch("cfs_set_lghtcrv_shortcuts_streams_krnl");
-	gpuErrchk(cudaMemcpy(&hposn, posn, sizeof(int)*nframes,
+	}
+
+	gpuErrchk(cudaMemcpy(&hposn, posn, sizeof(int)* nfplus,
 			cudaMemcpyDeviceToHost));
 
 	/* Calculate launch parameters for later */
-	for (f=0; f<nframes; f++) {
-		xspan[f] = (2 * hposn[f] + 1);
-		nThreadspx[f] =  xspan[f] * xspan[f];
+	for (f=1; f<=nframes; f++) {
+		span[f].x = (2 * hposn[f] + 1);
+		nThreadspx[f] =  span[f].x * span[f].x;
 		BLKpx[f] = floor((THD.x - 1 + nThreadspx[f]) / THD.x);
 	}
 	/* Calculate model lightcurve values at each user-specified epochs x[i],
 	 * with i=1,2,...,ncalc; these may/may not be the same as epochs t[i]
 	 * (i=1,2,...,n) at which actual lightcurve observations were made.  */
 
-	for (i=1; i<=ncalc; i++) {
+	for (f=1; f<=ncalc; f++) {
 		/* Launch 9-threaded kernel to set pos->ae,pos->oe,pos->bistatic.*/
-		cfs_set_pos_ae_streams_krnl<<<1,THD9,0,cf_stream[f]>>>(pos, f,
+		cfs_set_pos_ae_streams_krnl<<<1,THD9,0,cf_stream[f-1]>>>(pos, f,
 				bistatic, type, 0);
 
 		/* Clear the POS-view to initialize */
-		posclr_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f);
+		posclr_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn, f);
 	} checkErrorAfterKernelLaunch("cfs_set_pos_ae_streams and posclr_streams_krnl");
 
 	/* Call routine posvis to get  facet number, scattering & incidence
 	 * angle, distance toward Earth at center of each POS pixel; set posbnd
 	 * parameter = 1 if any model portion extends beyond POS frame limits*/
 
-	posvis_cuda_streams(dpar, dmod, ddat, orbit_offset, s, nframes, 0, 0, c,
-			outbndarr, cf_stream);
+//	posvis_cuda_streams(dpar, dmod, ddat, orbit_offset, s, nframes, 0, 0, c,
+//			outbndarr, cf_stream);
+	posvis_cuda_streams2(dpar, dmod, ddat, pos, verts, orbit_off3, posn,
+				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream);
 
 	/* Copy the posbnd flag returns for all frames to a host copy */
-	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
+	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*(nfplus),
 			cudaMemcpyDeviceToHost));
 
 	/* Now check the outbndarr for the posbnd flag for each frame */
-	for (f=0; f<nframes; f++) {
+	for (f=1; f<=nframes; f++) {
 		if (houtbndarr[f]) {
 			/* Call single-threaded kernel to set dpar->posbnd and dpar->posbnd_logfactor */
-			cfs_set_posbnd_streams_krnl<<<1,1,0,cf_stream[f]>>>(dpar, pos, f, type);
+			cfs_set_posbnd_streams_krnl<<<1,1,0,cf_stream[f-1]>>>(dpar, pos, f, type);
 			houtbndarr[f]=0;
 		}
 	}
-	gpuErrchk(cudaMemcpy(&hbistatic, bistatic, sizeof(int)*nframes, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(&hbistatic, bistatic, sizeof(int)*(nfplus), cudaMemcpyDeviceToHost));
 
 	/* Now view model from source (sun) and get facet number and distance
 	 * toward source of each pixel in this projected view; use this
 	 * information to determine which POS pixels are shadowed       */
 	/* Because posvis_cuda_streams processes all frames at the same time, if
 	 * any of the frames are bistatic, all of them get calculated again  */
-	for (f=0; f<nframes; f++)
-		if (bistatic[f])
+	for (f=1; f<=nframes; f++)
+		if (hbistatic[f])
 			bistatic_all = 1;
 
 	if (bistatic_all) {
-		posvis_cuda_streams(dpar, dmod, ddat, orbit_offset, s, nframes, 1, 0, c,
-				outbndarr, cf_stream);
+//		posvis_cuda_streams(dpar, dmod, ddat, orbit_offset, s, nframes, 1, 0, c,
+//				outbndarr, cf_stream);
+		posvis_cuda_streams2(dpar, dmod, ddat, pos, verts, orbit_off3, posn,
+				outbndarr, s, nframes, 1, nf, 0, c, type, cf_stream);
 
 		/* Copy the posbnd flag returns for all frames to a host copy */
-		gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
+		gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nfplus,
 				cudaMemcpyDeviceToHost));
 
 		/* Now check the outbndarr for the posbnd flag for each frame */
-		for (f=0; f<nframes; f++) {
+		for (f=1; f<=nframes; f++) {
 			if (houtbndarr[f]) {
 				/* Call single-threaded kernel to set dpar->posbnd and dpar->posbnd_logfactor */
-				cfs_set_posbnd_streams_krnl<<<1,1,0,cf_stream[f]>>>(dpar, pos, f, type);
+				cfs_set_posbnd_streams_krnl<<<1,1,0,cf_stream[f-1]>>>(dpar, pos, f, type);
 			}
 			/* Initialize this stream for the posmask kernel to follow */
-			posmask_init_streams_krnl<<<1,1,0,cf_stream[f]>>>(pos, so, pxlpkm, f);
+			posmask_init_streams_krnl<<<1,1,0,cf_stream[f-1]>>>(pos, so, pxlpkm, f);
 
 			/* Now call posmask kernel for this stream, then loop
 			 * to next stream and repeat 	 */
-			posmask_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(
-					dpar, pos, so, pxlpkm, posn, nThreadspx[f],	xspan[f], f);
+			posmask_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(
+					dpar, pos, so, pxlpkm, posn, nThreadspx[f],	span[f].x, f);
 
 		} checkErrorAfterKernelLaunch("posmask_streams_krnl");
 	}
@@ -1560,47 +1599,37 @@ __host__ void calc_lghtcrv_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 	 * scattering and incidence angles, and mark facets which project onto
 	 * their centers as having been "seen" at least once   */
 	/* Get xlim and ylim and exclude_seen flag */
-	for (f=0; f<nframes; f++)
-		cfs_get_exclude_seen_streams_krnl<<<1,1,0,cf_stream[f]>>>(dpar,pos,xylim,f);
+	for (f=1; f<=nframes; f++)
+		cfs_get_exclude_seen_streams_krnl<<<1,1,0,cf_stream[f-1]>>>(dpar,pos,xylim,f);
 	checkErrorAfterKernelLaunch("cfs_get_exclude_seen_streams_krnl (calc_lghtcrv_cuda_streams");
 
 	/* Now copy the flag and all frame pos's xlim and ylim values back from GPU */
 	gpuErrchk(cudaMemcpyFromSymbol(&exclude_seen, cfs_exclude_seen, sizeof(int),
 			0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpy(&hxylim, xylim, sizeof(int4)*nframes, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(&hxylim, xylim, sizeof(int4)*nfplus, cudaMemcpyDeviceToHost));
 
 	/* Calculate launch parameters for all frames */
-	for (f=0; f<nframes; f++) {
-		xspan[f] = hxylim[f].x - hxylim[f].w + 1;
-		yspan = hxylim[f].y - hxylim[f].z + 1;
-		nThreadspx1[f] = xspan[f] * yspan;
-		BLKpx[f].x = (THD.x -1 + nThreadspx1[f]) / THD.x;
+	for (f=1; f<=nframes; f++) {
+		span[f].x = hxylim[f].x - hxylim[f].w + 1;
+		span[f].y = hxylim[f].z - hxylim[f].y + 1;
+		nThreadspx1[f] = span[f].x * span[f].y;
+		BLKpx[f].x = floor ((THD.x -1 + nThreadspx1[f]) / THD.x);
 	}
 
-	for (f=0; f<nframes; f++) {
+	for (f=1; f<=nframes; f++) {
 		/* Go through all POS pixels which are visible with low enough
 		 * scattering angle and mark the facets which project onto
 		 * their centers as having been "seen" at least once           */
 		if (s != exclude_seen)
-			cf_mark_pixels_seen_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(
-					dpar, dmod, pos, xylim, nThreadspx1[f], xspan[f], f);
+			cf_mark_pixels_seen_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(
+					dpar, dmod, pos, xylim, nThreadspx1[f], span[f].x, f);
 	} checkErrorAfterKernelLaunch("cf_mark_pixels_krnl (calc_lghtcrv_cuda)");
 
-	for (f=0; f<nframes; f++)
-		/* Compute the model brightness for this model lightcurve point  */
-		brightness_temp[f] = apply_photo_cuda(dmod, ddat, 0, s, f);
+	/* Compute model brightness for this lightcurve point then copy to device  */
+	apply_photo_cuda_streams(dmod, ddat, pos, xylim, span, BLKpx, nThreadspx1,
+			0, s, nframes, cf_stream);
 
-	/* Now launch the streamed kernel to set the brightness */
-	for (f=0; f<nframes; f++)
-		cfs_set_lghtcrv_y_streams_krnl<<<1,1>>>(brightness_temp, i);
-	checkErrorAfterKernelLaunch("cf_compute_and_set_lghtcrv_brightness_krnl");
-
-//	xspan = 2*pos_n + 1;
-//	nThreads = xspan * xspan;
-//	BLK.x = floor((maxThreadsPerBlock-1+nThreads)/maxThreadsPerBlock);
-//	THD.x = maxThreadsPerBlock;
 //	dbg_print_lghtcrv_pos_arrays(ddat, s, 22, nThreads, pos_n);
-
 
 	/* Now that we have calculated the model lightcurve brightnesses y at each
 	 * of the epochs x, we use cubic spline interpolation (Numerical Recipes
@@ -1620,7 +1649,7 @@ __host__ void calc_lghtcrv_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 
 	nThreads = nframes;
 	double *u;
-	cudaCalloc((void**)&u, sizeof(double), ncalc);
+	cudaCalloc1((void**)&u, sizeof(double), ncalc);
 	int threads = 128;
 	BLKpx[0].x = floor((threads-1+nThreads)/threads);
 	THD.x = threads;
@@ -1644,5 +1673,14 @@ __host__ void calc_lghtcrv_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 	cfs_splint_lghtcrv_krnl<<<BLKpx[0],THD>>>(dpar);
 	checkErrorAfterKernelLaunch("cf_splint_lghtcrv_krnl");
 
+	cudaFree(pos);
+	cudaFree(rend);
+	cudaFree(posn);
+	cudaFree(bistatic);
+	cudaFree(pxlpkm);
+	cudaFree(overflow);
+	cudaFree(xylim);
+	cudaFree(outbndarr);
+	cudaFree(so);
 	cudaFree(u);
 }

@@ -413,42 +413,42 @@ __global__ void p_optalbvar_krnl(struct mod_t *dmod) {
 			for (ilaw=0; ilaw<dmod->photo.noptlaws; ilaw++) {
 				switch (dmod->photo.opttype[ilaw]) {
 				case HARMLAMBERT:
-				case HARMLOMMEL:
-					x = dmod->photo.optical[ilaw].harmR.local[c][f].R.val;
-					atomicAdd(&p_av, x);
-					atomicAdd(&p_av2, (x*x));
-					atomicAdd(&p_ntot, 1);
-					break;
-				case INHOLAMBERT:
-				case INHOLOMMEL:
-					x = dmod->photo.optical[ilaw].inhoR.local[c][f].R.val;
-					atomicAdd(&p_av, x);
-					atomicAdd(&p_av2, (x*x));
-					atomicAdd(&ntot, 1);
-					break;
-				case HARMHAPKE:
-					x = dmod->photo.optical[ilaw].harmhapke.local[c][f].w.val;
-					atomicAdd(&p_av, x);
-					atomicAdd(&p_av2, (x*x));
-					break;
-				case INHOHAPKE:
-					x = dmod->photo.optical[ilaw].inhohapke.local[c][f].w.val;
-					atomicAdd(&p_av, x);
-					atomicAdd(&p_av2, (x*x));
-					atomicAdd(&ntot, 1);
-					break;
-				case HARMKAAS:
-					x = dmod->photo.optical[ilaw].harmkaas.local[c][f].R.val;
-					atomicAdd(&p_av, x);
-					atomicAdd(&p_av2, (x*x));
-					atomicAdd(&ntot, 1);
-					break;
-				case INHOKAAS:
-					x = dmod->photo.optical[ilaw].inhokaas.local[c][f].R.val;
-					atomicAdd(&p_av, x);
-					atomicAdd(&p_av2, (x*x));
-					atomicAdd(&ntot, 1);
-					break;
+//				case HARMLOMMEL:
+//					x = dmod->photo.optical[ilaw].harmR.local[c][f].R.val;
+//					atomicAdd(&p_av, x);
+//					atomicAdd(&p_av2, (x*x));
+//					atomicAdd(&p_ntot, 1);
+//					break;
+//				case INHOLAMBERT:
+//				case INHOLOMMEL:
+//					x = dmod->photo.optical[ilaw].inhoR.local[c][f].R.val;
+//					atomicAdd(&p_av, x);
+//					atomicAdd(&p_av2, (x*x));
+//					atomicAdd(&ntot, 1);
+//					break;
+//				case HARMHAPKE:
+//					x = dmod->photo.optical[ilaw].harmhapke.local[c][f].w.val;
+//					atomicAdd(&p_av, x);
+//					atomicAdd(&p_av2, (x*x));
+//					break;
+//				case INHOHAPKE:
+//					x = dmod->photo.optical[ilaw].inhohapke.local[c][f].w.val;
+//					atomicAdd(&p_av, x);
+//					atomicAdd(&p_av2, (x*x));
+//					atomicAdd(&ntot, 1);
+//					break;
+//				case HARMKAAS:
+//					x = dmod->photo.optical[ilaw].harmkaas.local[c][f].R.val;
+//					atomicAdd(&p_av, x);
+//					atomicAdd(&p_av2, (x*x));
+//					atomicAdd(&ntot, 1);
+//					break;
+//				case INHOKAAS:
+//					x = dmod->photo.optical[ilaw].inhokaas.local[c][f].R.val;
+//					atomicAdd(&p_av, x);
+//					atomicAdd(&p_av2, (x*x));
+//					atomicAdd(&ntot, 1);
+//					break;
 				}
 			}
 		}

@@ -1068,7 +1068,7 @@ __host__ void calc_deldop_cuda(struct par_t *dpar, struct mod_t *dmod,
 		if (nviews > 1) {
 			/* Allocate fit_store as a single pointer, originally a double
 			 * pointer. This also initializes the entire array to zero. */
-			cudaCalloc((void**)&fit_store, sizeof(float), ndel*ndop);
+			cudaCalloc1((void**)&fit_store, sizeof(float), ndel*ndop);
 		}
 
 		/*  Loop over all views for this (smeared) frame, going in an order that
@@ -1226,7 +1226,7 @@ __host__ void calc_doppler_cuda(struct par_t *dpar, struct mod_t *dmod,
 		if (nviews > 1)
 			/* Allocate fit_store as a single pointer, originally a double
 			 * pointer. This also initializes the entire array to zero. */
-			cudaCalloc((void**)&fit_store, sizeof(float), ndop);
+			cudaCalloc1((void**)&fit_store, sizeof(float), ndop);
 
 		/* Loop over all views for this (smeared) frame, going in an order that
 		 * ends with the view corresponding to the epoch listed for this frame
@@ -1672,7 +1672,7 @@ __host__ void calc_lghtcrv_cuda( struct par_t *dpar, struct mod_t *dmod, struct 
 
 	nThreads = ncalc;
 	double *u;
-	cudaCalloc((void**)&u, sizeof(double), ncalc);
+	cudaCalloc1((void**)&u, sizeof(double), ncalc);
 	int threads = 128;
 	BLK.x = floor((threads-1+nThreads)/threads);
 	THD.x = threads;

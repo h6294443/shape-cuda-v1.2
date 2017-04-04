@@ -568,4 +568,3 @@ __device__ double dev_radlaw( struct photo_t *photo, int ilaw, double cosinc, in
 
   return diffxsec_proj;
 }
-

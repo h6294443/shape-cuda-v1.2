@@ -745,14 +745,14 @@ __host__ double chi2_deldop_cuda_af(struct par_t *dpar, struct dat_t *ddat, int 
 			0, cudaMemcpyDeviceToHost));
 
 	/* Allocate memory */
-	cudaCalloc((void**)&ndel, 		 sizeof(int),    nframes);
-	cudaCalloc((void**)&ndop, 		 sizeof(int), 	 nframes);
-	cudaCalloc((void**)&o2_m2_om_wt, sizeof(float4), nframes);
-	cudaCalloc((void**)&frame, 		 sizeof(struct deldopfrm_t), nframes);
-	cudaCalloc((void**)&temp_o2, 	 sizeof(float*), nframes);
-	cudaCalloc((void**)&temp_m2,   	 sizeof(float*), nframes);
-	cudaCalloc((void**)&temp_om, 	 sizeof(float*), nframes);
-	cudaCalloc((void**)&chi2_frame,  sizeof(double), nframes);
+	cudaCalloc1((void**)&ndel, 		 sizeof(int),    nframes);
+	cudaCalloc1((void**)&ndop, 		 sizeof(int), 	 nframes);
+	cudaCalloc1((void**)&o2_m2_om_wt, sizeof(float4), nframes);
+	cudaCalloc1((void**)&frame, 		 sizeof(struct deldopfrm_t), nframes);
+	cudaCalloc1((void**)&temp_o2, 	 sizeof(float*), nframes);
+	cudaCalloc1((void**)&temp_m2,   	 sizeof(float*), nframes);
+	cudaCalloc1((void**)&temp_om, 	 sizeof(float*), nframes);
+	cudaCalloc1((void**)&chi2_frame,  sizeof(double), nframes);
 
 	/* Launch nframes-threaded kernel to get ndel/ndop for this frame and
 	 * set up other radar parameter shortcuts. See kernel for details. */
@@ -766,9 +766,9 @@ __host__ double chi2_deldop_cuda_af(struct par_t *dpar, struct dat_t *ddat, int 
 	frmsz = ndel[0] * ndop[0];
 	nThreads = nframes * frmsz;
 	for (int frm=0; frm<nframes; frm++) {
-		cudaCalloc((void**)&temp_o2[frm], sizeof(float), frmsz);
-		cudaCalloc((void**)&temp_m2[frm], sizeof(float), frmsz);
-		cudaCalloc((void**)&temp_om[frm], sizeof(float), frmsz);
+		cudaCalloc1((void**)&temp_o2[frm], sizeof(float), frmsz);
+		cudaCalloc1((void**)&temp_m2[frm], sizeof(float), frmsz);
+		cudaCalloc1((void**)&temp_om[frm], sizeof(float), frmsz);
 	}
 
 	/* Configure and launch kernel that prepares three arrays (o2, m2, om)
@@ -834,13 +834,13 @@ __host__ double chi2_doppler_cuda_af(struct par_t *dpar, struct dat_t *ddat, int
 			0, cudaMemcpyDeviceToHost));
 
 	/* Allocate memory */
-	cudaCalloc((void**)&ndop, 		 sizeof(int), 	 nframes);
-	cudaCalloc((void**)&o2_m2_om_wt, sizeof(float4), nframes);
-	cudaCalloc((void**)&frame, 		 sizeof(struct dopfrm_t), nframes);
-	cudaCalloc((void**)&temp_o2, 	 sizeof(float), nframes);
-	cudaCalloc((void**)&temp_m2,   	 sizeof(float), nframes);
-	cudaCalloc((void**)&temp_om, 	 sizeof(float), nframes);
-	cudaCalloc((void**)&chi2_frame,  sizeof(double), nframes);
+	cudaCalloc1((void**)&ndop, 		 sizeof(int), 	 nframes);
+	cudaCalloc1((void**)&o2_m2_om_wt, sizeof(float4), nframes);
+	cudaCalloc1((void**)&frame, 		 sizeof(struct dopfrm_t), nframes);
+	cudaCalloc1((void**)&temp_o2, 	 sizeof(float), nframes);
+	cudaCalloc1((void**)&temp_m2,   	 sizeof(float), nframes);
+	cudaCalloc1((void**)&temp_om, 	 sizeof(float), nframes);
+	cudaCalloc1((void**)&chi2_frame,  sizeof(double), nframes);
 
 	/* Launch nframes-threaded kernel to get ndel/ndop for this frame and
 	 * set up other radar parameter shortcuts. See kernel for details. */

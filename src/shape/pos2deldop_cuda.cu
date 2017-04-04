@@ -396,20 +396,20 @@ int pos2deldop_cuda(struct par_t *par, struct photo_t *photo, double orbit_xoff,
 	unsigned char *radtype, *kernel_uchars;
 
 	/* Allocate pointers in CUDA Unified Memory	*/
-	cudaCalloc((void**)&frame, 			  sizeof(struct deldopfrm_t),		1);
-	cudaCalloc((void**)&pos, 			  sizeof(struct pos_t),				1);
-	cudaCalloc((void**)&kernel_ints, 	  sizeof(int), 			   		   10);
-	cudaCalloc((void**)&kernel_doubles,   sizeof(double), 		   		   16);
-	cudaCalloc((void**)&deldoplim,	 	  sizeof(float), 					4);
-	cudaCalloc((void**)&kernel_ints, 	  sizeof(int), 					   20);
-	cudaCalloc((void**)&kernel_doubles,   sizeof(double), 				   15);
-	cudaCalloc((void**)&kernel_uchars, 	  sizeof(unsigned char), 			4);
-	cudaCalloc((void**)&map_posf,		  sizeof(float*), 		   2*pos->n+1);
-	cudaCalloc((void**)&fit_overflow, 	  sizeof(float*), 	  		  MAXBINS);
-	cudaCalloc((void**)&map_fitf,		  sizeof(float*),deldop->frame[frm].ndel);
-	cudaCalloc((void**)&fitf, 			  sizeof(float*),deldop->frame[frm].ndel);
-	cudaCalloc((void**)&radar, 			  sizeof(union radscat_t),photo->nradlaws);
-	cudaCalloc((void**)&radtype,		  sizeof(unsigned char),  photo->nradlaws);
+	cudaCalloc1((void**)&frame, 			  sizeof(struct deldopfrm_t),		1);
+	cudaCalloc1((void**)&pos, 			  sizeof(struct pos_t),				1);
+	cudaCalloc1((void**)&kernel_ints, 	  sizeof(int), 			   		   10);
+	cudaCalloc1((void**)&kernel_doubles,   sizeof(double), 		   		   16);
+	cudaCalloc1((void**)&deldoplim,	 	  sizeof(float), 					4);
+	cudaCalloc1((void**)&kernel_ints, 	  sizeof(int), 					   20);
+	cudaCalloc1((void**)&kernel_doubles,   sizeof(double), 				   15);
+	cudaCalloc1((void**)&kernel_uchars, 	  sizeof(unsigned char), 			4);
+	cudaCalloc1((void**)&map_posf,		  sizeof(float*), 		   2*pos->n+1);
+	cudaCalloc1((void**)&fit_overflow, 	  sizeof(float*), 	  		  MAXBINS);
+	cudaCalloc1((void**)&map_fitf,		  sizeof(float*),deldop->frame[frm].ndel);
+	cudaCalloc1((void**)&fitf, 			  sizeof(float*),deldop->frame[frm].ndel);
+	cudaCalloc1((void**)&radar, 			  sizeof(union radscat_t),photo->nradlaws);
+	cudaCalloc1((void**)&radtype,		  sizeof(unsigned char),  photo->nradlaws);
 	/* Note that allocation for map_facet_powerf is skipped for now until I
 	 * figure out where that is allocated in standard code.	 */
 
@@ -418,14 +418,14 @@ int pos2deldop_cuda(struct par_t *par, struct photo_t *photo, double orbit_xoff,
 	 * fix the pointer indexing in the inner loop addressing.	*/
 	map_posf -= -pos->n;
 	for (i=0; i<MAXBINS; i++)
-		cudaCalloc((void**)&fit_overflow[i], sizeof(float), MAXBINS);
+		cudaCalloc1((void**)&fit_overflow[i], sizeof(float), MAXBINS);
 	for (i=0; i<2*pos->n+1; i++){
-		cudaCalloc((void**)&map_posf[i], sizeof(float), 2*pos->n+1);
+		cudaCalloc1((void**)&map_posf[i], sizeof(float), 2*pos->n+1);
 		map_posf[i] -= -pos->n;
 	}
 	for (i=0; i<deldop->frame[frm].ndel; i++){
-		cudaCalloc((void**)&fitf[i],    sizeof(float),deldop->frame[frm].ndop);
-		cudaCalloc((void**)&map_fitf[i],sizeof(float),deldop->frame[frm].ndop);
+		cudaCalloc1((void**)&fitf[i],    sizeof(float),deldop->frame[frm].ndop);
+		cudaCalloc1((void**)&map_fitf[i],sizeof(float),deldop->frame[frm].ndop);
 	}
 
 	/* Initialize variables to avoid compilation warnings  */

@@ -273,15 +273,15 @@ int pos2doppler_cuda( struct par_t *par, struct photo_t *photo,
 	unsigned char *radtype, *kernel_uchars;
 
 	/*	Allocate device memory for data passed to GPU	*/
-	cudaCalloc((void**)&frame, 			sizeof(struct dopfrm_t),	1);
-	cudaCalloc((void**)&pos, 			sizeof(struct pos_t), 		1);
-	cudaCalloc((void**)&fit_overflow,	sizeof(double),   MAXOVERFLOW);
-	cudaCalloc((void**)&radar, 			sizeof(union radscat_t), photo->nradlaws);
-	cudaCalloc((void**)&radtype,		sizeof(unsigned char),   photo->nradlaws);
-	cudaCalloc((void**)&kernel_ints, 	sizeof(int), 				9);
-	cudaCalloc((void**)&kernel_doubles, sizeof(double), 			9);
-	cudaCalloc((void**)&kernel_uchars, 	sizeof(unsigned char), 		4);
-	cudaCalloc((void**)&fitf, 			sizeof(float), doppler->frame[frm].ndop);
+	cudaCalloc1((void**)&frame, 			sizeof(struct dopfrm_t),	1);
+	cudaCalloc1((void**)&pos, 			sizeof(struct pos_t), 		1);
+	cudaCalloc1((void**)&fit_overflow,	sizeof(double),   MAXOVERFLOW);
+	cudaCalloc1((void**)&radar, 			sizeof(union radscat_t), photo->nradlaws);
+	cudaCalloc1((void**)&radtype,		sizeof(unsigned char),   photo->nradlaws);
+	cudaCalloc1((void**)&kernel_ints, 	sizeof(int), 				9);
+	cudaCalloc1((void**)&kernel_doubles, sizeof(double), 			9);
+	cudaCalloc1((void**)&kernel_uchars, 	sizeof(unsigned char), 		4);
+	cudaCalloc1((void**)&fitf, 			sizeof(float), doppler->frame[frm].ndop);
 
 	/*	Variable initialization section	*/
 	frame = &doppler->frame[frm];

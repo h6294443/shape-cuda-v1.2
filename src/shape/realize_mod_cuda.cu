@@ -737,7 +737,7 @@ __host__ void realize_coordinates_cuda( struct par_t *dpar, struct mod_t *dmod, 
 	 * facet normals for all facets attached to each vertex     */
 ///
 //	int *nafnas;
-//	cudaCalloc((void**)&nafnas, sizeof(int), 2);
+//	cudaCalloc1((void**)&nafnas, sizeof(int), 2);
 
 //	dbg_vertex_nrmls_krnl<<<nvBLK,nvTHD>>>(dmod, nafnas);
 	calc_vertex_nrmls_krnl<<<nvBLK,nvTHD>>>(dmod);
@@ -1132,19 +1132,19 @@ __host__ void compute_moments_cuda( struct mod_t *dmod)
 	area2 = area1;
 
 	/* Allocate temporary dv, dcom, dI pointers */
-	cudaCalloc((void**)&dv, sizeof(float), size);
-	cudaCalloc((void**)&dcom0, sizeof(float), size);
-	cudaCalloc((void**)&dcom1, sizeof(float), size);
-	cudaCalloc((void**)&dcom2, sizeof(float), size);
-	cudaCalloc((void**)&dI00, sizeof(float), size);
-	cudaCalloc((void**)&dI01, sizeof(float), size);
-	cudaCalloc((void**)&dI02, sizeof(float), size);
-	cudaCalloc((void**)&dI10, sizeof(float), size);
-	cudaCalloc((void**)&dI11, sizeof(float), size);
-	cudaCalloc((void**)&dI12, sizeof(float), size);
-	cudaCalloc((void**)&dI20, sizeof(float), size);
-	cudaCalloc((void**)&dI21, sizeof(float), size);
-	cudaCalloc((void**)&dI22, sizeof(float), size);
+	cudaCalloc1((void**)&dv, sizeof(float), size);
+	cudaCalloc1((void**)&dcom0, sizeof(float), size);
+	cudaCalloc1((void**)&dcom1, sizeof(float), size);
+	cudaCalloc1((void**)&dcom2, sizeof(float), size);
+	cudaCalloc1((void**)&dI00, sizeof(float), size);
+	cudaCalloc1((void**)&dI01, sizeof(float), size);
+	cudaCalloc1((void**)&dI02, sizeof(float), size);
+	cudaCalloc1((void**)&dI10, sizeof(float), size);
+	cudaCalloc1((void**)&dI11, sizeof(float), size);
+	cudaCalloc1((void**)&dI12, sizeof(float), size);
+	cudaCalloc1((void**)&dI20, sizeof(float), size);
+	cudaCalloc1((void**)&dI21, sizeof(float), size);
+	cudaCalloc1((void**)&dI22, sizeof(float), size);
 
 	/* Set area and initialize per-component COM and Inertia arrays */
 	comp_moments_2ndinit_krnl<<<1,1>>>(dmod, area1, area2, c);

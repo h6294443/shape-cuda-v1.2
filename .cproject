@@ -29,7 +29,7 @@
 								<option id="nvcc.compiler.pic.1311743432" name="Position Independent Code (-fPIC)" superClass="nvcc.compiler.pic"/>
 								<option id="nvcc.compiler.option.lineinfo.793014053" name="Generate line-number information for device code (-lineinfo)" superClass="nvcc.compiler.option.lineinfo" value="true" valueType="boolean"/>
 								<option id="nvcc.compiler.option.gprof.543407613" name="Generate gprof information (-pg)" superClass="nvcc.compiler.option.gprof" value="true" valueType="boolean"/>
-								<option id="nvcc.compiler.include.paths.2081294068" name="Include paths (-I)" superClass="nvcc.compiler.include.paths" valueType="includePath"/>
+								<option id="nvcc.compiler.include.paths.2081294068" name="Include paths (-I)" superClass="nvcc.compiler.include.paths"/>
 								<inputType id="nvcc.compiler.input.cu.1491867805" superClass="nvcc.compiler.input.cu"/>
 								<inputType id="nvcc.compiler.input.cpp.910565664" superClass="nvcc.compiler.input.cpp"/>
 								<inputType id="nvcc.compiler.input.c.1083285283" superClass="nvcc.compiler.input.c"/>
@@ -100,7 +100,7 @@
 								<option id="nvcc.linker.option.paths.542292395" name="Library search path (-L)" superClass="nvcc.linker.option.paths" valueType="libPaths">
 									<listOptionValue builtIn="false" value="/home/matt/CFITSIO/lib"/>
 								</option>
-								<option id="nvcc.linker.option.libs.1903058908" superClass="nvcc.linker.option.libs" valueType="libs">
+								<option id="nvcc.linker.option.libs.1903058908" name="Libraries (-l)" superClass="nvcc.linker.option.libs" valueType="libs">
 									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="cfitsio"/>
 								</option>
 								<inputType id="nvcc.linker.input.1429946263" superClass="nvcc.linker.input">
@@ -117,10 +117,11 @@
 				</configuration>
 			</storageModule>
 			<storageModule moduleId="com.nvidia.cuda.ide.build.project.ICudaProjectConfiguration">
-				<executable devicelink="false">
+				<executable devicelink="true">
 					<sass major="3" minor="5"/>
 					<ptx major="3" minor="5"/>
 				</executable>
+				<editor-arch major="3" minor="5"/>
 			</storageModule>
 			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
 		</cconfiguration>

@@ -250,7 +250,7 @@ __host__ void realize_spin_cuda_af( struct par_t *dpar, struct mod_t *dmod, stru
 	unsigned char *dtype;
 	dim3 nsetsBLK, nsetsTHD, BLK, THD;
 
-	cudaCalloc((void**)&dtype, sizeof(unsigned char), nsets);
+	cudaCalloc1((void**)&dtype, sizeof(unsigned char), nsets);
 
 	/* Calculate launch parameters for all kernels going over all vertices */
 	nsetsBLK.x = floor((maxThreadsPerBlock-1+nsets)/maxThreadsPerBlock);

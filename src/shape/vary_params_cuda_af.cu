@@ -699,7 +699,7 @@ __host__ void vary_params_af( struct par_t *dpar, struct mod_t *dmod,
 				sizeof(int), 0, cudaMemcpyDeviceToHost));
 
 			/* Allocate temporary arrays */
-			cudaCalloc((void**)&pos, sizeof(struct pos_t*), nframes);
+			cudaCalloc1((void**)&pos, sizeof(struct pos_t*), nframes);
 			cudaMallocManaged((void**)&ndel, sizeof(int)*nframes, cudaMemAttachHost);
 			cudaMallocManaged((void**)&ndop, sizeof(int)*nframes, cudaMemAttachHost);
 			cudaMallocManaged((void**)&nThreads, sizeof(int)*nframes, cudaMemAttachHost);
@@ -807,7 +807,7 @@ __host__ void vary_params_af( struct par_t *dpar, struct mod_t *dmod,
 					sizeof(int), 0, cudaMemcpyDeviceToHost));
 
 			/* Allocate temporary arrays */
-			cudaCalloc((void**)&pos, sizeof(struct pos_t*), nframes);
+			cudaCalloc1((void**)&pos, sizeof(struct pos_t*), nframes);
 			cudaMallocManaged((void**)&ndop, sizeof(int)*nframes, cudaMemAttachHost);
 			cudaMallocManaged((void**)&nThreads, sizeof(int)*nframes, cudaMemAttachHost);
 			cudaMallocManaged((void**)&compute_xsec, sizeof(int)*nframes, cudaMemAttachHost);

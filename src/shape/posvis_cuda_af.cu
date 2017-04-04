@@ -445,8 +445,8 @@ __host__ int posvis_af(struct par_t *dpar, struct mod_t *dmod,
 	orbit_offs.y = orbit_offset[1];
 	orbit_offs.z = orbit_offset[2];
 
-	cudaCalloc((void**)&pos, sizeof(struct pos_t*), nframes);
-	cudaCalloc((void**)&ijminmax_overall, sizeof(float4), nframes);
+	cudaCalloc1((void**)&pos, sizeof(struct pos_t*), nframes);
+	cudaCalloc1((void**)&ijminmax_overall, sizeof(float4), nframes);
 
 	/* Launch init kernel */
 	THD.x = nframes;

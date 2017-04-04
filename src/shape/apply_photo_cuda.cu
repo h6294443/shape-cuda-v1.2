@@ -83,6 +83,7 @@ __device__ int ap_ilaw, ap_posn;
 __device__ int4 ap_xylim;
 __device__ double phasefunc, scale_lommsee, scale_lambert, intensityfactor, phase;
 __device__ float sum;
+__device__ double dblsum;
 
 __global__ void ap_get_pos_krnl(struct dat_t *ddat, struct mod_t *dmod,
 		int set, int frm, unsigned char *type) {
@@ -102,6 +103,22 @@ __global__ void ap_get_pos_krnl(struct dat_t *ddat, struct mod_t *dmod,
 		ap_xylim.z = ap_pos->ylim[1];
 	}
 }
+__global__ void ap_init_streams_krnl(
+		struct dat_t *ddat,
+		struct mod_t *dmod,
+		struct pos_t **pos,
+		int set, int nframes, unsigned char *type, float *dsum) {
+	/* nframes-threaded kernel */
+	int f = blockIdx.x * blockDim.x + threadIdx.x + 1;
+	if (f <= nframes) {
+		ap_ilaw = ddat->set[set].desc.lghtcrv.ioptlaw;
+		//ap_type = &dmod->photo.opttype[ap_ilaw];
+		type[0] = dmod->photo.opttype[ap_ilaw];
+		dsum[f] = 0.0;
+		intensityfactor = (pos[f]->km_per_pixel/AU) * (pos[f]->km_per_pixel/AU);
+		phase = ddat->set[set].desc.lghtcrv.solar_phase[f];
+	}
+}
 __global__ void ap_lambertlaw_krnl(struct mod_t *dmod, int nThreads,
 		int body, int2 span) {
 	/* Multi-threaded kernel */
@@ -119,6 +136,24 @@ __global__ void ap_lambertlaw_krnl(struct mod_t *dmod, int nThreads,
 			ap_pos->b[i][j] = intensityfactor * scale * ap_pos->cosi[i][j];
 			b = __double2float_rd(ap_pos->b[i][j]);
 			atomicAdd(&sum, b);
+		}
+	}
+}
+__global__ void ap_lambertlaw_streams_krnl(struct mod_t *dmod, struct pos_t **pos,
+		int4 *xylim, int nThreads, int body, int2 span, float *dsum, int f) {
+	/* Multi-threaded kernel */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int i = offset % span.x + xylim[f].w;
+	int j = offset / span.x + xylim[f].y;
+	double scale;
+
+	if (offset < nThreads) {
+		scale = dmod->photo.optical[ap_ilaw].R.R.val/PIE;
+
+		if (pos[f]->cose_s[offset] > 0.0 && pos[f]->cosi_s[offset] > 0.0
+				&& pos[f]->body[i][j] == body) {
+			pos[f]->b_s[offset] = intensityfactor * scale * pos[f]->cosi_s[offset];
+			atomicAdd(&dsum[f], pos[f]->b_s[offset]);
 		}
 	}
 }
@@ -355,6 +390,26 @@ __global__ void ap_kaas_krnl(struct mod_t *dmod, int nThreads, int body, int2 sp
 		}
 	}
 }
+__global__ void ap_kaas_streams_krnl(struct mod_t *dmod, struct pos_t **pos,
+		int nThreads, int body, int2 span, int4 *xylim, float *dsum, int f) {
+	/* Multi-threaded kernel */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int i = offset % span.x + xylim[f].w;
+	int j = offset / span.x + xylim[f].y;
+	int n = pos[f]->n;
+	int pos_spn = 2*n+1;
+	int pxa = (j+n)*pos_spn + (i+n);
+
+	if (offset < nThreads) {
+		if (pos[f]->cose_s[pxa] > 0.0 && pos[f]->cosi_s[pxa] > 0.0
+		 && pos[f]->body[i][j] == body) {
+			pos[f]->b_s[pxa] = intensityfactor * pos[f]->cosi_s[pxa]
+			    *(scale_lommsee / (pos[f]->cosi_s[pxa] + pos[f]->cose_s[pxa])
+			    + scale_lambert);
+			atomicAdd(&dsum[f], pos[f]->b_s[pxa]);
+		}
+	}
+}
 __global__ void ap_harmkaas_krnl(struct mod_t *dmod, int nThreads, int body, int2 span) {
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
@@ -420,7 +475,14 @@ __global__ void ap_get_sum_krnl() {
 		if (sum == 0)
 			sum = TINY; //printf("\nsum =0!\n");
 }
-
+__global__ void ap_set_lghtcrv_y_streams2_krnl(struct dat_t *ddat, int s, float *dsum,
+		int size) {
+	/* Single-threaded kernel */
+	int i = blockIdx.x * blockDim.x + threadIdx.x;
+	if (i < size) {
+		ddat->set[s].desc.lghtcrv.y[i] = dsum[i+1];
+	}
+}
 __host__ double apply_photo_cuda(struct mod_t *dmod, struct dat_t *ddat, int body,
 		int set, int frm)
 {
@@ -431,7 +493,7 @@ __host__ double apply_photo_cuda(struct mod_t *dmod, struct dat_t *ddat, int bod
 	int4 xylim;
 	int2 span;
 
-	cudaCalloc((void**)&type, sizeof(unsigned char), 2);
+	cudaCalloc1((void**)&type, sizeof(unsigned char), 2);
 	/* Launch single-thread kernel to assign pos address and get type */
 	ap_get_pos_krnl<<<1,1>>>(ddat, dmod, set, frm, type);
 	checkErrorAfterKernelLaunch("ap_get_pos_krnl");
@@ -537,6 +599,138 @@ __host__ double apply_photo_cuda(struct mod_t *dmod, struct dat_t *ddat, int bod
 		hsum = TINY;
 	//cudaFree(type);
 	return (double)hsum;
+}
+
+__host__ void apply_photo_cuda_streams(
+		struct mod_t *dmod,
+		struct dat_t *ddat,
+		struct pos_t **pos,
+		int4 *xylim,
+		int2 *span,
+		dim3 *BLKpx,
+		int *nThreads,
+		int body,
+		int set,
+		int nframes,
+		cudaStream_t *ap_stream)
+{
+	unsigned char *type, *htype;
+	int f;
+	float *hsum, *dsum;
+	dim3 BLK, THD;
+
+	gpuErrchk(cudaMalloc((void**)&type, sizeof(unsigned char) * 2));
+	gpuErrchk(cudaMalloc((void**)&dsum, sizeof(float)*(nframes+1)));
+	htype = (unsigned char *) malloc(2*sizeof(unsigned char));
+	hsum = (float *) malloc((nframes+1)*sizeof(float));
+
+	/* Launch single-thread kernel to assign pos address and get type */
+	THD.x = maxThreadsPerBlock;
+	BLK.x = floor((THD.x - 1 + nframes) / THD.x);
+	ap_init_streams_krnl<<<BLK,THD>>>(ddat, dmod, pos, set, nframes, type, dsum);
+	checkErrorAfterKernelLaunch("ap_init_streams_krnl");
+
+//	gpuErrchk(cudaMemcpyFromSymbol(&ilaw, ap_ilaw, sizeof(ilaw), 0,
+//			cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(htype, type, sizeof(unsigned char) *2,
+			cudaMemcpyDeviceToHost));
+
+	for (f=0;f<=nframes;f++)
+		hsum[f]=0.0;
+
+	switch (htype[0]) {
+	case LAMBERTLAW:
+		/* Launch Lambert Law kernel */
+		for (f=1; f<=nframes; f++)
+			ap_lambertlaw_streams_krnl<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,pos,
+					xylim, nThreads[f], body, span[f], dsum, f);
+		checkErrorAfterKernelLaunch("ap_lambertlaw_streams_krnl");
+		break;
+//	case HARMLAMBERT:
+//		/* Launch the HarmLambert kernel */
+//		ap_harmlambert_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
+//		checkErrorAfterKernelLaunch("ap_harmlambert_krnl, line ");
+//		break;
+//	case INHOLAMBERT:
+//		/* Launch the Inhomogeneous Lambert kernel */
+//		ap_inholambert_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
+//		checkErrorAfterKernelLaunch("ap_inholambert_krnl, line ");
+//		break;
+//	case LOMMEL:
+//		/* Launch the Lommel kernel */
+//		ap_lommel_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
+//		checkErrorAfterKernelLaunch("ap_lommel_krnl, line ");
+//		break;
+//	case HARMLOMMEL:
+//		/* Launch the HarmLommel kernel */
+//		ap_harmlommel_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
+//		checkErrorAfterKernelLaunch("ap_harmlommel_krnl, line ");
+//		break;
+//	case INHOLOMMEL:
+//		/* Launch the Inhomogeneous Lommel kernel */
+//		ap_harmlommel_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
+//		checkErrorAfterKernelLaunch("ap_inholommel_krnl, line ");
+//		break;
+//	case GEOMETRICAL:
+//		/* Launch the Geometrical law kernel */
+//		ap_geometrical_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
+//		checkErrorAfterKernelLaunch("ap_geometrical_krnl, line ");
+//		break;
+//	case HAPKE:
+//		/* Launch the Hapke kernel */
+//		ap_hapke_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
+//		checkErrorAfterKernelLaunch("ap_hapke_krnl, line ");
+//		break;
+//	case HARMHAPKE:
+//		/* Launch the HarmHapke kernel */
+//		ap_harmhapke_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
+//		checkErrorAfterKernelLaunch("ap_harmhapke_krnl, line ");
+//		break;
+//	case INHOHAPKE:
+//		/* Launch the Inhomogeneous Hapke kernel */
+//		ap_inhohapke_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
+//		checkErrorAfterKernelLaunch("ap_inhohapke_krnl, line ");
+//		break;
+	case KAASALAINEN:
+		/* Launch single-thread kernel to init Kaas */
+		ap_kaas_init_krnl<<<1,1>>>(dmod);
+		checkErrorAfterKernelLaunch("ap_kaas_init_krnl");
+
+		/* Launch the main Kaasalainen kernel */
+		for (f=1; f<=nframes; f++){
+			ap_kaas_streams_krnl<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
+					nThreads[f], body, span[f], xylim, dsum, f);
+			//cudaDeviceSynchronize();
+		}
+		checkErrorAfterKernelLaunch("ap_kaas_streams_krnl, line ");
+		break;
+//	case HARMKAAS:
+//		/* Launch the HarmKaas kernel */
+//		ap_harmkaas_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
+//		checkErrorAfterKernelLaunch("ap_harmkaas_krnl, line ");
+//		break;
+//	case INHOKAAS:
+//		/* Launch the HarmKaas kernel */
+//		ap_inhokaas_krnl<<<BLK,THD>>>(dmod, nThreads, body, span);
+//		checkErrorAfterKernelLaunch("ap_inhokaas_krnl, line ");
+//		break;
+//	case NOLAW:
+//		bailout("apply_photo.c: can't set optical scattering law = \"none\" when optical data are used\n");
+//		break;
+	default:
+		bailout("apply_photo.c: can't handle that optical scattering law yet\n");
+	}
+	/* Now set the lghtcrv->y values with what was calculated here */
+	BLK.x = floor((THD.x - 1 + (nframes+1)) / THD.x);
+	ap_set_lghtcrv_y_streams2_krnl<<<BLK,THD>>>(ddat, set, dsum, (nframes+1));
+	checkErrorAfterKernelLaunch("ap_set_lghtcrv_y_streams2_krnl");
+	gpuErrchk(cudaMemcpy(hsum, dsum, sizeof(float)*(nframes+1),
+			cudaMemcpyDeviceToHost));
+
+	cudaFree(dsum);
+	cudaFree(type);
+	free(htype);
+	free(hsum);
 }
 
 #undef TINY
