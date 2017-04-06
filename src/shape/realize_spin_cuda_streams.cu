@@ -80,6 +80,29 @@ __global__ void add_offsets_to_euler_streams_krnl(struct mod_t *dmod,
 		}
 	}
 }
+__global__ void add_offsets_to_euler_streams2_krnl(struct mod_t *dmod,
+		struct dat_t *ddat, double3 *angle_omega_save, int s)
+{
+	/* Single-threaded kernel */
+	/*	angle_omega_save[0].x,y,z = original anglesave[3]
+	 * 	angle_omega_save[1].x,y,z = original omegasave[3]
+	 * 		 */
+
+	if (threadIdx.x == 0) {
+
+		angle_omega_save[0].x = dmod->spin.angle[0].val;
+		angle_omega_save[0].y = dmod->spin.angle[1].val;
+		angle_omega_save[0].z = dmod->spin.angle[2].val;
+		angle_omega_save[1].x = dmod->spin.omega[0].val;
+		angle_omega_save[1].y = dmod->spin.omega[1].val;
+		angle_omega_save[1].z = dmod->spin.omega[2].val;
+//		Original code:
+//		anglesave[j] = dmod->spin.angle[j].val;
+//		omegasave[j] = dmod->spin.omega[j].val;
+		for (int j=0; j<=2; j++)
+			dmod->spin.angle[j].val += ddat->set[s].angleoff[j].val;
+	}
+}
 __global__ void realize_spin_dop_streams_krnl(struct mod_t *dmod, struct dat_t *ddat,
 		struct par_t *dpar, int s, int f)
 {
@@ -430,6 +453,139 @@ __host__ void realize_spin_cuda_streams( struct par_t *dpar, struct mod_t *dmod,
 	cudaFree(angle_omega_save);
 }
 
+__host__ void realize_spin_cuda_streams2(
+		struct par_t *dpar,
+		struct mod_t *dmod,
+		struct dat_t *ddat,
+		unsigned char *htype,
+		unsigned char *dtype,
+		int *nframes,
+		int *nviews,
+		int nsets,
+		cudaStream_t *rs_stream)
+{
+	int s, f;
+	dim3 nsetsBLK, nsetsTHD, BLK, THD;
+	double3 *angle_omega_save;
+	THD.x = maxThreadsPerBlock;
+
+	gpuErrchk(cudaMalloc((void**)&angle_omega_save, sizeof(double3)*2));
+
+	/* Calculate launch parameters for all kernels going over all vertices */
+	nsetsBLK.x = floor((THD.x - 1 + nsets) / THD.x);
+
+	/* Get the three components of the angle and spin offsets for all datasets,
+	 * with any "=" states taken into account  */
+	realize_angleoff_krnl<<<1,1>>>(ddat);
+	checkErrorAfterKernelLaunch("realize_angleoff_krnl (realize_spin_cuda_streams2.cu)");
+
+	realize_omegaoff_krnl<<<nsetsBLK,THD>>>(ddat);
+	checkErrorAfterKernelLaunch("realize_omegaoff_krnl, (realize_spin_cuda_streams2.cu");
+
+	/* Note: Maybe turn the dataset loop into cudaStreams later */
+	/* Determine the model spin state for each dataset in turn */
+
+	for (s=0; s<nsets; s++) {
+
+		/* Add this dataset's angle offsets to the model Euler angles. Later
+		 * we'll add the spin offsets for each frame separately, after updating
+		 * the intrinsic spin vector to each epoch. Save the original Euler
+		 * angles to be restored later.          */
+		/* Launch kernel do add angle offsets to Euler angles.  Three threads total */
+		add_offsets_to_euler_streams2_krnl<<<1,1>>>(dmod,ddat,angle_omega_save,s);
+		checkErrorAfterKernelLaunch("add_offsets_to_euler_streams_krnl");
+
+		BLK.x = floor((THD.x - 1 + nviews[s]) / THD.x);
+
+		switch (htype[s]) {
+		case DOPPLER:
+			/* Create lists of epochs and impulses, starting at initial spin
+			 * epoch t0 and ending at this view's epoch t, that will be
+			 * "encountered" in evolving the spin state from t0 to t, with the
+			 * impulses negated if we're evolving backwards in time. These
+			 * lists will be used by the inteuler routine to break up evolution
+			 * of the spin state) into integrations over several smaller time
+			 * intervals, punctuated by spin impulses.                        */
+			/* Integrate Euler's equations to get models intrinsic spin vector
+			 * at the (light-time corrected) epoch of each view.
+			 * dpar->int_method tells inteuler which integration method to use.
+			 * If dmod->spin.pa == 1, Euler's equations aren't used (principal-
+			 * axis rotator).
+			 * Input dmod->spin is initial spin specification given in mod file.
+			 * Output is frame[f].view[k].ae, the transformation matrix from
+			 * ecliptic to body coordinates at epoch frame[f].view[k].t, and
+			 * frame[f].view[k].intspin, the intrinsic spin vector (in body-
+			 * fixed coordinates) at this epoch.         */
+			/* Loop through every frame and launch a stream kernel with nview
+			 * threads  */
+			for (f=0; f<nframes[s]; f++)
+				realize_spin_dop_streams_krnl<<<BLK,THD,0,rs_stream[f]>>>(dmod,
+						ddat, dpar, s, f);
+			checkErrorAfterKernelLaunch("realize_spin_dop_streams_krnl");
+
+			break;
+		case DELAY:
+			/* See "case DOPPLER" above for more extensive comments, since the
+			 * Doppler and delay-Doppler procedures are identical.  */
+			/* Deal with spin impulses  */
+			/* Get the model's intrinsic spin vector (in body coordinates)
+			 * at the (light-time corrected) epoch of each view.            */
+			/* Apply dataset's spin offsets (also in body coordinates)
+			 * to the intrinsic spin vector of this view.                    */
+
+			for (f=0; f<nframes[s]; f++)
+				realize_spin_deldop_streams_krnl<<<BLK,THD,0,rs_stream[f]>>>(
+						dmod, ddat, dpar, s, f);
+			checkErrorAfterKernelLaunch("realize_spin_deldop_streams_krnl");
+
+			break;
+		case POS:
+			/* See "case DOPPLER" above for more extensive comments, since the
+			 * Doppler and POS procedures are identical. */
+			/* Deal with spin impulses */
+			/* Get model's intrinsic spin vector (in body coordinates)
+			 * at the (light-time corrected) epoch of each view. */
+			/* Apply dataset's spin offsets (also in body coordinates)
+			 * to the intrinsic spin vector of this view. */
+
+			for (f=0; f<nframes[s]; f++)
+				realize_spin_poset_streams_krnl<<<BLK,THD,0,rs_stream[f]>>>(
+						dmod, ddat, dpar, s, f);
+			checkErrorAfterKernelLaunch("realize_spin_poset_streams_krnl");
+
+			break;
+		case LGHTCRV:
+			/* See "case DOPPLER" above for more extensive comments, since the
+			 * procedure for each Doppler frame is identical to the procedure
+			 * for each calculated lightcurve point (except that calculated
+			 * lightcurve points don't have multiple "views").	 */
+
+			int i, ncalc;
+			ncalc = nframes[s];
+
+			/* Deal with spin impulses */
+			/* Get model's intrinsic spin vector (in body coordinates)
+			 * at (light-time corrected) epoch of lightcurve point.*/
+			/* Apply this dataset's spin offsets (also in body coordinates)
+				to the intrinsic spin vector of this point. */
+
+			for (i=0; i<ncalc; i++)
+				realize_spin_lghtcrv_streams_krnl<<<1,1,0,rs_stream[i]>>>(
+						dmod, ddat, dpar, s, i); // f = i, k = 0
+			checkErrorAfterKernelLaunch("realize_spin_lghtcrv_streams_krnl");
+
+			break;
+		default:
+			bailout("realize_spin_cuda_streams: can't handle this type yet\n");
+		}
+
+		/* Final kernel launch in realize_spin_cuda */
+		update_spin_angle_streams_krnl<<<1,1>>>(dmod, angle_omega_save);
+		checkErrorAfterKernelLaunch("update_spin_angle_streams_krnl");
+
+	}
+	cudaFree(angle_omega_save);
+}
 
 
 

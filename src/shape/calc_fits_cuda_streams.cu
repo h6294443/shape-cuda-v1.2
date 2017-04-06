@@ -421,6 +421,17 @@ __global__ void cfs_init_devpar_krnl(struct par_t *dpar, struct mod_t
 		cfs_nsets = ddat->nsets;
 	}
 }
+__global__ void cfs_init_devpar_krnl2(struct par_t *dpar) {
+	/* Single-threaded kernel */
+	if (threadIdx.x == 0) {
+		dpar->posbnd = 0;
+		dpar->badposet = 0;
+		dpar->badradar = 0;
+		dpar->posbnd_logfactor = 0.0;
+		dpar->badposet_logfactor = 0.0;
+		dpar->badradar_logfactor = 0.0;
+	}
+}
 __global__ void cfs_get_set_type_krnl(struct dat_t *ddat, int nsets,
 		unsigned char *type, int *nframes, int *nviews, int *lc_n) {
 	/* Single-threaded kernel */
@@ -550,6 +561,69 @@ __host__ void calc_fits_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 	cudaFree(nviews);
 	cudaFree(lc_n);
 	cudaFree(verts);
+}
+__host__ void calc_fits_cuda_streams2(
+		struct par_t *dpar,
+		struct mod_t *dmod,
+		struct dat_t *ddat,
+		struct vertices_t **verts,
+		int *nviews,
+		int *nframes,
+		int *lc_n,
+		unsigned char *type,
+		int nsets,
+		int nf,
+		cudaStream_t *cf_stream)
+{
+	int s;
+	dim3 BLK,THD;
+	THD.x = maxThreadsPerBlock;
+
+	/* Initialize flags that indicate the model extends beyond POS frame, that
+	 * plane-of-sky fit images are too small to "contain" the target, and that
+	 * model is too wide in (delay-)Doppler space to create (delay-)Doppler fit
+	 * frames.  Note that this also gets mod->shape.nf and nsets            */
+
+	cfs_init_devpar_krnl2<<<1,1>>>(dpar);
+	checkErrorAfterKernelLaunch("cfs_init_devpar_krnl2");
+
+	/* Initialize the flags that indicate whether or not each facet of each
+	 * model component is ever visible and unshadowed from Earth
+	 * Note:  Single component only for now.  */
+	//for (c=0; c<mod->shape.ncomp; c++)
+	BLK.x = floor((THD.x - 1 + nf)/THD.x);
+	cf_init_seen_flags_krnl<<<BLK,THD>>>(dmod,nf);
+	checkErrorAfterKernelLaunch("cf_init_seen_flags_krnl (calc_fits_cuda_streams)");
+
+	/* Calculate the fits for each dataset in turn  */
+	for (s=0; s<nsets; s++) {
+		switch (type[s]) {
+		case DELAY:
+			calc_deldop_cuda_streams(dpar, dmod, ddat, verts, s, nframes[s],
+					nviews[s], type[s], nf, cf_stream );
+			break;
+		case DOPPLER:
+			calc_doppler_cuda_streams(dpar, dmod, ddat, verts, s, nframes[s],
+					nviews[s], type[s], nf, cf_stream );
+			break;
+		case POS:
+			printf("Write calc_poset_cuda!");
+//			calc_poset_cuda(dpar, dmod, s);
+			break;
+		case LGHTCRV:
+			calc_lghtcrv_cuda_streams(dpar, dmod, ddat, verts, s, nframes[s],
+					nviews[s], type[s], lc_n[s],nf, cf_stream);
+			break;
+		default:
+			printf("calc_fits_cuda.c: can't handle this type yet\n");
+		}
+	}
+
+	/* Complete calculations of values that will be used during a fit to
+	 * increase the objective function for models with bad properties   */
+	cf_set_final_pars_krnl<<<1,1>>>(dpar, ddat);
+	checkErrorAfterKernelLaunch("cf_set_final_pars_krnl (calc_fits_cuda)");
+
 }
 __global__ void cfs_set_deldop_shortcuts_krnl(struct dat_t *ddat,
 		struct deldopfrm_t **frame, struct pos_t **pos,

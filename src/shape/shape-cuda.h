@@ -31,6 +31,7 @@
 /* Flags */
 extern int CUDA;			/* Use CUDA 									*/
 extern int STREAMS;			/* Use CUDA streams 							*/
+extern int STREAMS2;		/* Slightly different iteration of STREAMS		*/
 extern int GPU;				/* Which GPU to use 							*/
 extern int DYNPROC; 		/* Use dynamic processing (launch child kernels)*/
 extern int POSVIS_SEPARATE;	/* Use separate xlim/ylim calculation 			*/
@@ -75,6 +76,8 @@ __host__ void apply_photo_cuda_streams(struct mod_t *dmod, struct dat_t *ddat,
 		int body, int set, int nframes, cudaStream_t *ap_stream);
 __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod, struct dat_t
 		*ddat, struct par_t *par, struct mod_t *mod, struct dat_t *dat);
+__host__ double brent_abs_streams(double ax,double bx,double cx,double (*f)(double, cudaStream_t*),
+        double tol,double abstol,double *xmin, cudaStream_t *bf_stream);
 __host__ void c2af_deldop_add_o2_m2(float **temp_o2, float **temp_m2,
 		float **temp_om, int size, int nframes);
 __host__ void calc_fits_cuda(struct par_t *dpar, struct mod_t *dmod,
@@ -83,11 +86,17 @@ __host__ void calc_fits_cuda_af(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat);
 __host__ void calc_fits_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat);
+__host__ void calc_fits_cuda_streams2(struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat, struct vertices_t **verts, int *nviews, int *nframes,
+		int *lc_n, unsigned char *type, int nsets, int nf, cudaStream_t *cf_stream);
 __host__ double chi2_cuda(struct par_t *dpar, struct dat_t *ddat, int list_breakdown);
 __host__ double chi2_cuda_af(struct par_t *dpar,struct dat_t *ddat,
 		int list_breakdown, int nsets);
 __host__ double chi2_cuda_streams(struct par_t *dpar, struct dat_t *ddat,
 		int list_breakdown, int nsets);
+__host__ double chi2_cuda_streams2(struct par_t *dpar, struct dat_t *ddat,
+		unsigned char *htype, unsigned char *dtype, int *nframes, int *lc_n,
+		int list_breakdown,	int nsets, cudaStream_t *c2s_stream);
 __host__ double chi2_lghtcrv_cuda_lghtcrv(struct par_t *dpar, struct dat_t *ddat,
 		int s, int list_breakdown, double *chi2_all_lghtcrv, int nframes,int lc_n);
 __host__ void compute_dv_dcom_dI_reduction(float *dv, float *dcom0, float
@@ -119,6 +128,8 @@ __host__ void dvdI_reduce_single(struct mod_t *dmod, float *dv, float *dcom0,
 		float *dI10, float *dI11, float *dI12, float *dI20, float *dI21,
 		float *dI22, int size, int c);
 __host__ void gpuAssert(cudaError_t code, const char *file, int line);
+__host__ void mnbrak_streams(double *ax,double *bx,double *cx,double *fa,double *fb,
+	    double *fc,double (*func)(double, cudaStream_t*), cudaStream_t *bf_stream );
 __host__ void mkparlist_cuda(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, double *fparstep, double *fpartol,
 		double *fparabstol, int *fpartype, double **fpntr);
@@ -172,6 +183,9 @@ __host__ void realize_spin_cuda_af( struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int nsets);
 __host__ void realize_spin_cuda_streams( struct par_t *dpar,
 		struct mod_t *dmod, struct dat_t *ddat, int nsets);
+__host__ void realize_spin_cuda_streams2(struct par_t *dpar,struct mod_t *dmod,
+		struct dat_t *ddat, unsigned char *htype, unsigned char *dtype, int
+		*nframes, int *nviews, int nsets, cudaStream_t *rs_stream);
 __host__ void realize_xyoff_cuda( struct dat_t *ddat);
 __host__ void show_deldoplim_cuda(struct dat_t *dat, struct dat_t *ddat);
 __host__ void vary_params_cuda(struct par_t *dpar, struct mod_t *dmod,
@@ -187,6 +201,11 @@ __host__ void vary_params_cuda_streams( struct par_t *dpar, struct mod_t *dmod,
 __host__ void vary_params_cuda_streams2( struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int action, double *deldop_zmax, double
 		*rad_xsec, double *opt_brightness, double *cos_subradarlat, int nsets);
+__host__ void vary_params_cuda_streams3(struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat, int action, double *deldop_zmax, double *rad_xsec,
+		double *opt_brightness, double *cos_subradarlat, int *hnframes, int *hlc_n,
+		int *nviews, struct vertices_t **verts, unsigned char *htype,
+		unsigned char *dtype, int nf, int nsets, cudaStream_t *vp_stream);
 
 __device__ int cubic_realroots_cuda( double *coeff, double *realroot);
 __device__ void dev_bsstep(double *y, double *dydx, int nv, double *xx, double htry, double eps,

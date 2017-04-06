@@ -9,13 +9,14 @@
  */
 #include "../shape/head.h"
 
-int CUDA = 1;			/* Use CUDA code or run CPU code 		*/
-int DYNPROC = 0;		/* Use dynamic processing        		*/
-int STREAMS = 1;		/* Use CUDA streams						*/
-int GPU = 1;			/* Which GPU will run code 				*/
+int CUDA 			= 1;			/* Use CUDA code or run CPU code 		*/
+int AF 				= 0;				/* Process all frames in a set at once	*/
+int STREAMS 		= 0;		/* Use CUDA streams						*/
+int STREAMS2 		= 1;
+int TIMING 			= 0;			/* Time certain kernel executions 		*/
+int GPU 			= 1;			/* Which GPU will run code 				*/
 int POSVIS_SEPARATE = 0;/* Calculate xlim/ylim separately 		*/
-int AF = 0;				/* Process all frames in a set at once	*/
-int TIMING = 0;			/* Time certain kernel executions 		*/
+int DYNPROC 		= 0;		/* Use dynamic processing        		*/
 
 int main(int argc, char *argv[])
  {

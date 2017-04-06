@@ -4,7 +4,9 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 CU_SRCS += \
+../src/nr/brent_abs_cuda.cu \
 ../src/nr/gammln_cuda.cu \
+../src/nr/mnbrak_cuda.cu \
 ../src/nr/plgndr_cuda.cu 
 
 C_SRCS += \
@@ -75,6 +77,7 @@ OBJS += \
 ./src/nr/bessy1.o \
 ./src/nr/brent.o \
 ./src/nr/brent_abs.o \
+./src/nr/brent_abs_cuda.o \
 ./src/nr/bsstep.o \
 ./src/nr/caldat.o \
 ./src/nr/cel.o \
@@ -95,6 +98,7 @@ OBJS += \
 ./src/nr/ludcmp.o \
 ./src/nr/mmid.o \
 ./src/nr/mnbrak.o \
+./src/nr/mnbrak_cuda.o \
 ./src/nr/nrutil.o \
 ./src/nr/odeint.o \
 ./src/nr/piksrt.o \
@@ -118,7 +122,9 @@ OBJS += \
 ./src/nr/zroots.o 
 
 CU_DEPS += \
+./src/nr/brent_abs_cuda.d \
 ./src/nr/gammln_cuda.d \
+./src/nr/mnbrak_cuda.d \
 ./src/nr/plgndr_cuda.d 
 
 C_DEPS += \
