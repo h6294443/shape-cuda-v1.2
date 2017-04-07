@@ -76,8 +76,13 @@ __host__ void apply_photo_cuda_streams(struct mod_t *dmod, struct dat_t *ddat,
 		int body, int set, int nframes, cudaStream_t *ap_stream);
 __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod, struct dat_t
 		*ddat, struct par_t *par, struct mod_t *mod, struct dat_t *dat);
-__host__ double brent_abs_streams(double ax,double bx,double cx,double (*f)(double, cudaStream_t*),
-        double tol,double abstol,double *xmin, cudaStream_t *bf_stream);
+__host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod, struct
+		dat_t *ddat, struct par_t *par, struct mod_t *mod, struct dat_t *dat);
+__host__ double brent_abs_streams(double ax,double bx,double cx,double (*f)(double,
+		struct vertices_t**, unsigned char*, unsigned char*, int*, int*, int,
+		cudaStream_t*), double tol,double abstol,double *xmin, struct
+		vertices_t **verts, unsigned char *htype, unsigned char *dtype,
+		int *nframes, int *nviews, int nsets, cudaStream_t *bf_stream);
 __host__ void c2af_deldop_add_o2_m2(float **temp_o2, float **temp_m2,
 		float **temp_om, int size, int nframes);
 __host__ void calc_fits_cuda(struct par_t *dpar, struct mod_t *dmod,
@@ -129,10 +134,17 @@ __host__ void dvdI_reduce_single(struct mod_t *dmod, float *dv, float *dcom0,
 		float *dI22, int size, int c);
 __host__ void gpuAssert(cudaError_t code, const char *file, int line);
 __host__ void mnbrak_streams(double *ax,double *bx,double *cx,double *fa,double *fb,
-	    double *fc,double (*func)(double, cudaStream_t*), cudaStream_t *bf_stream );
+	    double *fc,double (*func)(double, struct vertices_t**, unsigned char*,
+	    		unsigned char*, int*, int*, int, cudaStream_t*), struct
+	    		vertices_t **verts, unsigned char *htype, unsigned char *dtype,
+	    		int *nframes, int *nviews, int nsets, cudaStream_t *bf_stream );
 __host__ void mkparlist_cuda(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, double *fparstep, double *fpartol,
 		double *fparabstol, int *fpartype, double **fpntr);
+__host__ void mkparlist_cuda2(struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat, double *fparstep, double *fpartol,
+		double *fparabstol, int *fpartype, double **fpntr,
+		int nfpar, int nsets);
 __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat);
 __host__ int pos2deldop_cuda_2(struct par_t *dpar, struct mod_t *dmod,
@@ -184,10 +196,12 @@ __host__ void realize_spin_cuda_af( struct par_t *dpar, struct mod_t *dmod,
 __host__ void realize_spin_cuda_streams( struct par_t *dpar,
 		struct mod_t *dmod, struct dat_t *ddat, int nsets);
 __host__ void realize_spin_cuda_streams2(struct par_t *dpar,struct mod_t *dmod,
-		struct dat_t *ddat, unsigned char *htype, unsigned char *dtype, int
-		*nframes, int *nviews, int nsets, cudaStream_t *rs_stream);
+		struct dat_t *ddat, unsigned char *htype, int *nframes, int *nviews,
+		int nsets, cudaStream_t *rs_stream);
 __host__ void realize_xyoff_cuda( struct dat_t *ddat);
 __host__ void show_deldoplim_cuda(struct dat_t *dat, struct dat_t *ddat);
+__host__ void show_deldoplim_cuda_streams(struct dat_t *ddat,
+		unsigned char *type, int nsets, int *nframes, int maxframes);
 __host__ void vary_params_cuda(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int action, double *deldop_zmax,
 		double *rad_xsec, double *opt_brightness, double *cos_subradarlat,
@@ -291,8 +305,8 @@ unsigned int nextPow2(unsigned int x);
 float2 getNumBlocksAndThreads(int n, int maxBlocks, int maxThreads);
 __host__ void dbg_check_array_for_content(float *in, int size);
 __host__ void dbg_print_array1(float *in, int size);
-__host__ void dbg_print_pos_z(struct dat_t *ddat, int set, int frm, int n);
-__host__ void dbg_print_pos_cose_s(struct dat_t *ddat, int set, int frm, int n);
+__host__ void dbg_print_pos_z(struct dat_t *ddat, int set, int frm, int n, char *filename);
+__host__ void dbg_print_pos_cose_s(struct dat_t *ddat, int set, int frm, int n, char *filename);
 __host__ void dbg_print_pos_z_af(struct dat_t *ddat, int set, int n);
 __host__ void dbg_print_cose_af(struct dat_t *ddat, int set, int n);
 __host__ void dbg_print_array1D_dbl(double *data, int size, int offset, char *filename);

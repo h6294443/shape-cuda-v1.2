@@ -248,6 +248,145 @@ __global__ void mpl_comp_krnl(struct par_t *dpar, struct mod_t *dmod,
 		}
 	}
 }
+__global__ void mpl_comp_krnl2(struct par_t *dpar, struct mod_t *dmod,
+		double **fpntr, double *fparstep, double *fpartol, double *fparabstol,
+		int *fpartype) {
+	/* Single-threaded kernel */
+	if (threadIdx.x == 0) {
+		p = -1;
+		int i = 0, j, k; /* component index - always zero */
+		for (j=0; j<=2; j++) {     /* check linear offsets */
+			if (dmod->shape.comp[i].off[j].state == 'f') {
+				fpntr[++p] = &dmod->shape.comp[i].off[j].val;
+				fparstep[p] = dpar->length_step;
+				fpartol[p] = dpar->length_tol;
+				fparabstol[p] = dpar->length_abstol;
+				fpartype[p] = SIZEPAR;
+			}
+		}
+		for (j=0; j<=2; j++) {    /* check angular offsets */
+			if (dmod->shape.comp[i].rot[j].state == 'f') {
+				fpntr[++p] = &dmod->shape.comp[i].rot[j].val;
+				fparstep[p] = dpar->angle_step;
+				fpartol[p] = dpar->angle_tol;
+				fparabstol[p] = dpar->angle_abstol;
+				fpartype[p] = SHAPEPAR;
+			}
+		}
+
+		switch (dmod->shape.comp[i].type) {
+		case ELLIPSE:
+			if (dmod->shape.comp[i].desc.ell.two_a.state == 'f') {
+				fpntr[++p] = &dmod->shape.comp[i].desc.ell.two_a.val;
+				fparstep[p] = dpar->length_step;
+				fpartol[p] = dpar->length_tol;
+				fparabstol[p] = dpar->length_abstol;
+				fpartype[p] = SIZEPAR;
+			}
+			if (dmod->shape.comp[i].desc.ell.a_over_b.state == 'f') {
+				fpntr[++p] = &dmod->shape.comp[i].desc.ell.a_over_b.val;
+				fparstep[p] = dpar->ratio_step;
+				fpartol[p] = dpar->ratio_tol;
+				fparabstol[p] = dpar->ratio_abstol;
+				fpartype[p] = SHAPEPAR;
+			}
+			if (dmod->shape.comp[i].desc.ell.b_over_c.state == 'f') {
+				fpntr[++p] = &dmod->shape.comp[i].desc.ell.b_over_c.val;
+				fparstep[p] = dpar->ratio_step;
+				fpartol[p] = dpar->ratio_tol;
+				fparabstol[p] = dpar->ratio_abstol;
+				fpartype[p] = SHAPEPAR;
+			}
+			break;
+		case OVOID:
+			if (dmod->shape.comp[i].desc.ovoid.two_a.state == 'f') {
+				fpntr[++p] = &dmod->shape.comp[i].desc.ovoid.two_a.val;
+				fparstep[p] = dpar->length_step;
+				fpartol[p] = dpar->length_tol;
+				fparabstol[p] = dpar->length_abstol;
+				fpartype[p] = SIZEPAR;
+			}
+			if (dmod->shape.comp[i].desc.ovoid.a_over_b.state == 'f') {
+				fpntr[++p] = &dmod->shape.comp[i].desc.ovoid.a_over_b.val;
+				fparstep[p] = dpar->ratio_step;
+				fpartol[p] = dpar->ratio_tol;
+				fparabstol[p] = dpar->ratio_abstol;
+				fpartype[p] = SHAPEPAR;
+			}
+			if (dmod->shape.comp[i].desc.ovoid.b_over_c.state == 'f') {
+				fpntr[++p] = &dmod->shape.comp[i].desc.ovoid.b_over_c.val;
+				fparstep[p] = dpar->ratio_step;
+				fpartol[p] = dpar->ratio_tol;
+				fparabstol[p] = dpar->ratio_abstol;
+				fpartype[p] = SHAPEPAR;
+			}
+			if (dmod->shape.comp[i].desc.ovoid.k.state == 'f') {
+				fpntr[++p] = &dmod->shape.comp[i].desc.ovoid.k.val;
+				fparstep[p] = dpar->ratio_step;
+				fpartol[p] = dpar->ratio_tol;
+				fparabstol[p] = dpar->ratio_abstol;
+				fpartype[p] = SHAPEPAR;
+			}
+			break;
+		case HARMONIC:
+			for (j=0; j<=2; j++)
+				if (dmod->shape.comp[i].desc.har.scalefactor[j].state == 'f') {
+					fpntr[++p] = &dmod->shape.comp[i].desc.har.scalefactor[j].val;
+					fparstep[p] = dpar->ratio_step;
+					fpartol[p] = dpar->ratio_tol;
+					fparabstol[p] = dpar->ratio_abstol;
+					fpartype[p] = SIZEPAR;
+				}
+			for (j=0; j<=dmod->shape.comp[i].desc.har.nhar; j++) {
+				if (dmod->shape.comp[i].desc.har.a[j][0].state == 'f') {
+					fpntr[++p] = &dmod->shape.comp[i].desc.har.a[j][0].val;
+					fparstep[p] = dpar->length_step;
+					fpartol[p] = dpar->length_tol;
+					fparabstol[p] = dpar->length_abstol;
+					fpartype[p] = SHAPEPAR;
+				}
+				for (k=1; k<=j; k++) {
+					if (dmod->shape.comp[i].desc.har.a[j][k].state == 'f') {
+						fpntr[++p] = &dmod->shape.comp[i].desc.har.a[j][k].val;
+						fparstep[p] = dpar->length_step;
+						fpartol[p] = dpar->length_tol;
+						fparabstol[p] = dpar->length_abstol;
+						fpartype[p] = SHAPEPAR;
+					}
+					if (dmod->shape.comp[i].desc.har.b[j][k].state == 'f') {
+						fpntr[++p] = &dmod->shape.comp[i].desc.har.b[j][k].val;
+						fparstep[p] = dpar->length_step;
+						fpartol[p] = dpar->length_tol;
+						fparabstol[p] = dpar->length_abstol;
+						fpartype[p] = SHAPEPAR;
+					}
+				}
+			}
+			break;
+		case VERTEX:
+			for (j=0; j<=2; j++)
+				if (dmod->shape.comp[i].desc.ver.scalefactor[j].state == 'f') {
+					fpntr[++p] = &dmod->shape.comp[i].desc.ver.scalefactor[j].val;
+					fparstep[p] = dpar->ratio_step;
+					fpartol[p] = dpar->ratio_tol;
+					fparabstol[p] = dpar->ratio_abstol;
+					fpartype[p] = SIZEPAR;
+				}
+			for (j=0; j<dmod->shape.comp[i].desc.ver.nv; j++) {
+				if (dmod->shape.comp[i].desc.ver.v[j].r.state == 'f') {
+					fpntr[++p] = &dmod->shape.comp[i].desc.ver.v[j].r.val;
+					fparstep[p] = dpar->length_step;
+					fpartol[p] = dpar->length_tol;
+					fparabstol[p] = dpar->length_abstol;
+					fpartype[p] = SHAPEPAR;
+				}
+			}
+			break;
+		default:
+			printf("mkparlist_cuda.cu: can't do that type of model yet\n");
+		}
+	}
+}
 __global__ void mpl_rad_krnl(struct par_t *dpar, struct mod_t *dmod,
 		double **fpntr, double *fparstep, double *fpartol, double *fparabstol,
 		int *fpartype) {
@@ -1035,6 +1174,92 @@ __global__ void mpl_dat_krnl(struct par_t *dpar, struct dat_t *ddat,
 		default:
 			printf("mkparlist_cuda.cu: can't handle that type of data yet\n");
 		}
+	}
+}
+__global__ void mpl_dat_krnl2(struct par_t *dpar, struct dat_t *ddat,
+		double **fpntr, double *fparstep, double *fpartol, double *fparabstol,
+		int *fpartype, int nsets) {
+	/* nsets-threaded kernel */
+	int s = blockIdx.x * blockDim.x + threadIdx.x;
+	int i, j;
+
+	if (s < nsets) {
+		for (i=0; i<=2; i++) {
+			if (ddat->set[s].angleoff[i].state == 'f') {
+				fpntr[++p] = &ddat->set[s].angleoff[i].val;
+				fparstep[p] = dpar->angle_step;
+				fpartol[p] = dpar->angle_tol;
+				fparabstol[p] = dpar->angle_abstol;
+				fpartype[p] = SPINPAR;
+			}
+		}
+		for (i=0; i<=2; i++) {
+			if (ddat->set[s].omegaoff[i].state == 'f') {
+				fpntr[++p] = &ddat->set[s].omegaoff[i].val;
+				fparstep[p] = dpar->spin_step;
+				fpartol[p] = dpar->spin_tol;
+				fparabstol[p] = dpar->spin_abstol;
+				fpartype[p] = SPINPAR;
+			}
+		}
+
+		switch (ddat->set[s].type) {
+		case DELAY:
+			for (i=0; i<=ddat->set[s].desc.deldop.delcor.n; i++) {
+				if (ddat->set[s].desc.deldop.delcor.a[i].state == 'f') {
+					j = (i < MAXDELCORPAR) ? i : 0;
+					fpntr[++p] = &ddat->set[s].desc.deldop.delcor.a[i].val;
+					fparstep[p] = dpar->delcor_step[j];
+					fpartol[p] = dpar->delcor_tol;
+					fparabstol[p] = dpar->delcor_abstol[j];
+					fpartype[p] = DELCORPAR;
+				}
+			}
+			if (ddat->set[s].desc.deldop.dopscale.state == 'f') {
+				fpntr[++p] = &ddat->set[s].desc.deldop.dopscale.val;
+				fparstep[p] = dpar->ratio_step;
+				fpartol[p] = dpar->ratio_tol;
+				fparabstol[p] = dpar->ratio_abstol;
+				fpartype[p] = DOPSCALEPAR;
+			}
+			break;
+		case DOPPLER:
+			for (i=0; i<=ddat->set[s].desc.doppler.delcor.n; i++) {
+				if (ddat->set[s].desc.doppler.delcor.a[i].state == 'f') {
+					j = (i < MAXDELCORPAR) ? i : 0;
+					fpntr[++p] = &ddat->set[s].desc.doppler.delcor.a[i].val;
+					fparstep[p] = dpar->delcor_step[j];
+					fpartol[p] = dpar->delcor_tol;
+					fparabstol[p] = dpar->delcor_abstol[j];
+					fpartype[p] = DELCORPAR;
+				}
+			}
+			if (ddat->set[s].desc.doppler.dopscale.state == 'f') {
+				fpntr[++p] = &ddat->set[s].desc.doppler.dopscale.val;
+				fparstep[p] = dpar->ratio_step;
+				fpartol[p] = dpar->ratio_tol;
+				fparabstol[p] = dpar->ratio_abstol;
+				fpartype[p] = DOPSCALEPAR;
+			}
+			break;
+		case POS:
+			for (i=0; i<ddat->set[s].desc.poset.nframes; i++) {
+				for (j=0; j<=1; j++) {
+					if (ddat->set[s].desc.poset.frame[i].off[j].state == 'f') {
+						fpntr[++p] = &ddat->set[s].desc.poset.frame[i].off[j].val;
+						fparstep[p] = dpar->xyoff_step;
+						fpartol[p] = dpar->xyoff_tol;
+						fparabstol[p] = dpar->xyoff_abstol;
+						fpartype[p] = XYOFFPAR;
+					}
+				}
+			}
+			break;
+		case LGHTCRV:
+			break;
+		default:
+			printf("mkparlist_cuda.cu: can't handle that type of data yet\n");
+		}
 
 	}
 }
@@ -1044,6 +1269,7 @@ __host__ void mkparlist_cuda(struct par_t *dpar, struct mod_t *dmod,
 {
 	int nfpar, nsets;
 	dim3 BLK,THD;
+	THD.x = maxThreadsPerBlock;
 
 	/* Get # of paramaters in dpar->fpntr */
 	mpl_get_nfpar_krnl<<<1,1>>>(dpar, ddat);
@@ -1083,10 +1309,51 @@ __host__ void mkparlist_cuda(struct par_t *dpar, struct mod_t *dmod,
 	/* Data parameters (i.e., those in the obs file, other than the "calfact"
 	 * parameters which are computed analytically)
 	 * Launching nsets threads here */
-	BLK.x = floor((maxThreadsPerBlock - 1 + nsets)/maxThreadsPerBlock);
-	THD.x = maxThreadsPerBlock; // Thread block dimensions
+	BLK.x = floor((THD.x - 1 + nsets)/THD.x);
 	mpl_dat_krnl<<<1,1>>>(dpar, ddat, fpntr, fparstep, fpartol,
 			fparabstol,	fpartype);
+	checkErrorAfterKernelLaunch("mpl_dat_krnl (mkparlist_cuda.cu)");
+
+}
+__host__ void mkparlist_cuda2(struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat, double *fparstep, double *fpartol,
+		double *fparabstol, int *fpartype, double **fpntr,
+		int nfpar, int nsets)
+{
+	dim3 BLK,THD;
+	THD.x = maxThreadsPerBlock;
+
+	/* Shape parameters - single component only */
+	//for (i=0; i<dmod->shape.ncomp; i++) { /* read each component */
+	/* Launch first parameter kernel */
+	mpl_comp_krnl2<<<1,1>>>(dpar, dmod, fpntr, fparstep, fpartol,
+			fparabstol,	fpartype);
+	checkErrorAfterKernelLaunch("mpl_comp_krnl (mkparlist_cuda.cu)");
+
+	/* Photometric parameters - only one radlaw at a time for now */
+	//for (ilaw=0; ilaw<dmod->photo.nradlaws; ilaw++) {
+	/* Launch photometric kernel */
+	mpl_rad_krnl<<<1,1>>>(dpar, dmod, fpntr, fparstep, fpartol,
+			fparabstol,	fpartype);
+	checkErrorAfterKernelLaunch("mpl_rad_krnl (mkparlist_cuda.cu)");
+
+	/* Photometric parameters - only one optlaw at a time */
+	//for (ilaw=0; ilaw<dmod->photo.noptlaws; ilaw++) {
+	mpl_photo_krnl<<<1,1>>>(dpar, dmod, fpntr, fparstep, fpartol,
+			fparabstol,	fpartype);
+	checkErrorAfterKernelLaunch("mpl_photo_krnl (mkparlist_cuda.cu)");
+
+	/* Spin parameters  */
+	mpl_spin_krnl<<<1,1>>>(dpar, dmod, fpntr, fparstep, fpartol,
+			fparabstol,	fpartype);
+	checkErrorAfterKernelLaunch("mpl_spin_krnl (mkparlist_cuda.cu)");
+
+	/* Data parameters (i.e., those in the obs file, other than the "calfact"
+	 * parameters which are computed analytically)
+	 * Launching nsets threads here */
+	BLK.x = floor((THD.x - 1 + nsets)/THD.x);
+	mpl_dat_krnl2<<<1,1>>>(dpar, ddat, fpntr, fparstep, fpartol,
+			fparabstol,	fpartype, nsets);
 	checkErrorAfterKernelLaunch("mpl_dat_krnl (mkparlist_cuda.cu)");
 
 }

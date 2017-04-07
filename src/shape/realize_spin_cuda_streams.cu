@@ -137,6 +137,40 @@ __global__ void realize_spin_dop_streams_krnl(struct mod_t *dmod, struct dat_t *
 			ddat->set[s].desc.doppler.frame[f].view[k].intspin[j];
 	}
 }
+__global__ void realize_spin_dop_streams2_krnl(struct mod_t *dmod, struct dat_t *ddat,
+		struct par_t *dpar, int nviews, int s, int f)
+{
+	/* nview-threaded kernel */
+	int k = blockIdx.x * blockDim.x + threadIdx.x;
+	int j;
+	if (k < nviews) {
+
+		dev_realize_impulse(dmod->spin,
+				ddat->set[s].desc.doppler.frame[f].view[k].t,
+				ddat->set[s].desc.doppler.frame[f].t_integrate,
+				ddat->set[s].desc.doppler.frame[f].impulse,
+				&ddat->set[s].desc.doppler.frame[f].n_integrate,s,f,k);
+
+		dev_inteuler(dmod->spin,
+				ddat->set[s].desc.doppler.frame[f].t_integrate,
+				ddat->set[s].desc.doppler.frame[f].impulse,
+				ddat->set[s].desc.doppler.frame[f].n_integrate,
+				ddat->set[s].desc.doppler.frame[f].view[k].intspin,
+				ddat->set[s].desc.doppler.frame[f].view[k].ae,
+				dmod->spin.pa, dpar->int_method, dpar->int_abstol);
+
+		for (j=0; j<=2; j++)
+			ddat->set[s].desc.doppler.frame[f].view[k].intspin[j] += ddat->set[s].omegaoff[j].val;
+
+		dev_cotrans2(ddat->set[s].desc.doppler.frame[f].view[k].intspin,
+				ddat->set[s].desc.doppler.frame[f].view[k].ae,
+				ddat->set[s].desc.doppler.frame[f].view[k].intspin, -1);
+
+		for (j=0; j<=2; j++)
+			ddat->set[s].desc.doppler.frame[f].view[k].spin[j] = ddat->set[s].desc.doppler.frame[f].view[k].orbspin[j] +
+			ddat->set[s].desc.doppler.frame[f].view[k].intspin[j];
+	}
+}
 __global__ void realize_spin_deldop_streams_krnl(struct mod_t *dmod, struct dat_t *ddat,
 		struct par_t *dpar, int s, int f)
 {
@@ -171,6 +205,40 @@ __global__ void realize_spin_deldop_streams_krnl(struct mod_t *dmod, struct dat_
 			ddat->set[s].desc.deldop.frame[f].view[k].intspin[j];
 	}
 }
+__global__ void realize_spin_deldop_streams2_krnl(struct mod_t *dmod, struct dat_t *ddat,
+		struct par_t *dpar, int nviews, int s, int f)
+{
+	/* nview-threaded kernel */
+	int k = blockIdx.x * blockDim.x + threadIdx.x;
+	int j;
+	if (k < nviews) {
+		dev_realize_impulse(dmod->spin,
+				ddat->set[s].desc.deldop.frame[f].view[k].t,
+				ddat->set[s].desc.deldop.frame[f].t_integrate,
+				ddat->set[s].desc.deldop.frame[f].impulse,
+				&ddat->set[s].desc.deldop.frame[f].n_integrate,
+				s, f, k);
+
+		dev_inteuler(dmod->spin,
+				ddat->set[s].desc.deldop.frame[f].t_integrate,
+				ddat->set[s].desc.deldop.frame[f].impulse,
+				ddat->set[s].desc.deldop.frame[f].n_integrate,
+				ddat->set[s].desc.deldop.frame[f].view[k].intspin,
+				ddat->set[s].desc.deldop.frame[f].view[k].ae,
+				dmod->spin.pa, dpar->int_method, dpar->int_abstol);
+
+		for (j=0; j<=2; j++)
+			ddat->set[s].desc.deldop.frame[f].view[k].intspin[j] += ddat->set[s].omegaoff[j].val;
+
+		dev_cotrans2(ddat->set[s].desc.deldop.frame[f].view[k].intspin,
+				ddat->set[s].desc.deldop.frame[f].view[k].ae,
+				ddat->set[s].desc.deldop.frame[f].view[k].intspin, -1);
+
+		for (j=0; j<=2; j++)
+			ddat->set[s].desc.deldop.frame[f].view[k].spin[j] = ddat->set[s].desc.deldop.frame[f].view[k].orbspin[j] +
+			ddat->set[s].desc.deldop.frame[f].view[k].intspin[j];
+	}
+}
 __global__ void realize_spin_poset_streams_krnl(struct mod_t *dmod, struct dat_t *ddat,
 		struct par_t *dpar, int s, int f)
 {
@@ -178,6 +246,40 @@ __global__ void realize_spin_poset_streams_krnl(struct mod_t *dmod, struct dat_t
 	int k = blockIdx.x * blockDim.x + threadIdx.x;
 	int j;
 	if (k < _nviews)
+	{
+		dev_realize_impulse(dmod->spin,
+				ddat->set[s].desc.poset.frame[f].view[k].t,
+				ddat->set[s].desc.poset.frame[f].t_integrate,
+				ddat->set[s].desc.poset.frame[f].impulse,
+				&ddat->set[s].desc.poset.frame[f].n_integrate,s,f,k);
+
+		dev_inteuler(dmod->spin,
+				ddat->set[s].desc.poset.frame[f].t_integrate,
+				ddat->set[s].desc.poset.frame[f].impulse,
+				ddat->set[s].desc.poset.frame[f].n_integrate,
+				ddat->set[s].desc.poset.frame[f].view[k].intspin,
+				ddat->set[s].desc.poset.frame[f].view[k].ae,
+				dmod->spin.pa, dpar->int_method, dpar->int_abstol);
+
+		for (j=0; j<=2; j++)
+			ddat->set[s].desc.poset.frame[f].view[k].intspin[j] += ddat->set[s].omegaoff[j].val;
+
+		dev_cotrans2(ddat->set[s].desc.poset.frame[f].view[k].intspin,
+				ddat->set[s].desc.poset.frame[f].view[k].ae,
+				ddat->set[s].desc.poset.frame[f].view[k].intspin, -1);
+
+		for (j=0; j<=2; j++)
+			ddat->set[s].desc.poset.frame[f].view[k].spin[j] = ddat->set[s].desc.poset.frame[f].view[k].orbspin[j] +
+			ddat->set[s].desc.poset.frame[f].view[k].intspin[j];
+	}
+}
+__global__ void realize_spin_poset_streams2_krnl(struct mod_t *dmod, struct dat_t *ddat,
+		struct par_t *dpar, int nviews, int s, int f)
+{
+	/* nview-threaded kernel */
+	int k = blockIdx.x * blockDim.x + threadIdx.x;
+	int j;
+	if (k < nviews)
 	{
 		dev_realize_impulse(dmod->spin,
 				ddat->set[s].desc.poset.frame[f].view[k].t,
@@ -458,7 +560,6 @@ __host__ void realize_spin_cuda_streams2(
 		struct mod_t *dmod,
 		struct dat_t *ddat,
 		unsigned char *htype,
-		unsigned char *dtype,
 		int *nframes,
 		int *nviews,
 		int nsets,
@@ -519,8 +620,8 @@ __host__ void realize_spin_cuda_streams2(
 			/* Loop through every frame and launch a stream kernel with nview
 			 * threads  */
 			for (f=0; f<nframes[s]; f++)
-				realize_spin_dop_streams_krnl<<<BLK,THD,0,rs_stream[f]>>>(dmod,
-						ddat, dpar, s, f);
+				realize_spin_dop_streams2_krnl<<<BLK,THD,0,rs_stream[f]>>>(dmod,
+						ddat, dpar, nviews[s], s, f);
 			checkErrorAfterKernelLaunch("realize_spin_dop_streams_krnl");
 
 			break;
@@ -534,8 +635,8 @@ __host__ void realize_spin_cuda_streams2(
 			 * to the intrinsic spin vector of this view.                    */
 
 			for (f=0; f<nframes[s]; f++)
-				realize_spin_deldop_streams_krnl<<<BLK,THD,0,rs_stream[f]>>>(
-						dmod, ddat, dpar, s, f);
+				realize_spin_deldop_streams2_krnl<<<BLK,THD,0,rs_stream[f]>>>(
+						dmod, ddat, dpar, nviews[s], s, f);
 			checkErrorAfterKernelLaunch("realize_spin_deldop_streams_krnl");
 
 			break;
@@ -549,8 +650,8 @@ __host__ void realize_spin_cuda_streams2(
 			 * to the intrinsic spin vector of this view. */
 
 			for (f=0; f<nframes[s]; f++)
-				realize_spin_poset_streams_krnl<<<BLK,THD,0,rs_stream[f]>>>(
-						dmod, ddat, dpar, s, f);
+				realize_spin_poset_streams2_krnl<<<BLK,THD,0,rs_stream[f]>>>(
+						dmod, ddat, dpar, nviews[s], s, f);
 			checkErrorAfterKernelLaunch("realize_spin_poset_streams_krnl");
 
 			break;

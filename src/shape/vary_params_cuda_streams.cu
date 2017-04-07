@@ -1888,6 +1888,9 @@ __host__ void vary_params_cuda_streams3(
 		cudaFree(compute_xsec);
 	}
 
+//	dbg_print_pos_z(ddat, 0, 0, 75, "Streams_pos_z_s0f0.csv");
+//	dbg_print_pos_cose_s(ddat, 0, 0, 75, "Streams_pos_cose_s_s0f0.csv");
+
 	/* Calculate the zmax, radar cross-section, optical brightness, and cosine
 	 * subradar latitude */
 	double dd_zmax, rd_xsec, opt_brtns, cs_sb_rdr_lat;

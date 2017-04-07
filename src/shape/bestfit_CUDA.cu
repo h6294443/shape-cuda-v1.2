@@ -250,8 +250,10 @@ static unsigned char type;
 
 static  double hotparamval;
 double objective_cuda(double x);
-__host__ double objective_cuda_streams( double x, cudaStream_t *bf_stream);
 
+__host__ double objective_cuda_streams(double x, struct vertices_t **verts,
+		unsigned char *htype, unsigned char *dtype, int *nframes, int *nviews,
+		int nsets, cudaStream_t *bf_stream);
 __device__ double bf_hotparamval, bf_dummyval;
 __device__ int bf_partype;
 
@@ -264,6 +266,26 @@ __global__ void bf_get_flags_krnl(struct par_t *dpar, unsigned char *flags) {
 		flags[3] = dpar->badposet;
 		flags[4] = dpar->badradar;
 		flags[5] = dpar->baddopscale;
+	}
+}
+__global__ void ocs_get_flags_krnl(struct par_t *dpar, unsigned char *flags,
+		double *dlogfactors) {
+	/* Single-threaded kernel */
+	if (threadIdx.x == 0) {
+		flags[0] = dpar->baddiam;
+		flags[1] = dpar->badphoto;
+		flags[2] = dpar->posbnd;
+		flags[3] = dpar->badposet;
+		flags[4] = dpar->badradar;
+		flags[5] = dpar->baddopscale;
+
+		dlogfactors[0] = dpar->bad_objfactor;
+		dlogfactors[1] = dpar->baddiam_logfactor;
+		dlogfactors[2] = dpar->badphoto_logfactor;
+		dlogfactors[3] = dpar->posbnd_logfactor;
+		dlogfactors[4] = dpar->badposet_logfactor;
+		dlogfactors[5] = dpar->badradar_logfactor;
+		dlogfactors[6] = dpar->baddopscale_logfactor;
 	}
 }
 __global__ void bf_set_hotparam_initial_krnl() {
@@ -874,24 +896,31 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *dat)
 {
 	char hostname[MAXLEN], dofstring[MAXLEN];
-	int i, iter=0, p, cntr, first_fitpar, partype, keep_iterating=1, ilaw, nf;
+	int i, iter=0, p, cntr, first_fitpar, partype, keep_iterating=1, ilaw, nf, term_maxiter;
 	long pid_long;
 	pid_t pid;
-	double beginerr, enderr, ax, bx, cx, obja, objb, objc, xmin,
-	final_chi2, final_redchi2, dummyval2, dummyval3, dummyval4,
-	delta_delcor0, dopscale_factor, radalb_factor, optalb_factor;
-	unsigned char *flags, *htype, *dtype, action;
-	int nsets, *nframes, *lc_n, *nviews, max_frames=0;
+	double beginerr, enderr, ax, bx, cx, obja, objb, objc, xmin, final_chi2,
+		final_redchi2, dummyval2, dummyval3, dummyval4, delta_delcor0,
+		dopscale_factor, radalb_factor, optalb_factor, *hfparstep, *hfpartol,
+		*hfparabstol, objfunc_start, term_prec;
+	unsigned char *flags, *hflags, *htype, *dtype, action, avoid_badpos, term_badmodel;
+	int nsets, *nframes, *lc_n, *nviews, nfpar, *hfpartype, npar_update, max_frames=0;
 	struct vertices_t **verts;
-	cudaStream_t *bf_stream;
 	dim3 THD, BLK;
 
 	/* This section collects parameters used for CUDA kernel launches throughout
 	 * the program.  The cudaStreams created here are used/re-used for the
 	 * lifetime of one program run */
 	nsets = dat->nsets;
+	nfpar = par->nfpar;
 	nf = mod->shape.comp[0].real.nf;
 	action = par->action;
+	npar_update = par->npar_update;
+	avoid_badpos = par->avoid_badpos;
+	objfunc_start = par->objfunc_start;
+	term_prec = par->term_prec;
+	term_badmodel = par->term_badmodel;
+	type = mod->shape.comp[0].type;
 	htype 	= (unsigned char *) malloc(nsets*sizeof(unsigned char));
 	nframes = (int *) malloc(nsets*sizeof(int));
 	lc_n	= (int *) malloc(nsets*sizeof(int));
@@ -927,6 +956,7 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 	}
 	gpuErrchk(cudaMemcpy(dtype, htype, sizeof(unsigned char)*nsets,
 			cudaMemcpyHostToDevice));
+	cudaStream_t bf_stream[max_frames];
 	for (int f=0; f<max_frames; f++)
 		cudaStreamCreate(&bf_stream[f]);
 
@@ -939,13 +969,29 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 	printf("#\n# CUDA fit (pid %ld on %s)\n", pid_long, hostname);
 	fflush(stdout);
 
+	/* Allocate memory for pointers, steps, and tolerances on bothhost and
+	 * device. fpntr remains a cudaMallocManaged allocation because it is a
+	 * double pointer.  */
 	gpuErrchk(cudaMalloc((void**)&sdev_par, sizeof(struct par_t)));
 	gpuErrchk(cudaMemcpy(sdev_par, &par, sizeof(struct par_t), cudaMemcpyHostToDevice));
 	gpuErrchk(cudaMalloc((void**)&sdev_mod, sizeof(struct mod_t)));
 	gpuErrchk(cudaMemcpy(sdev_mod, &mod, sizeof(struct mod_t), cudaMemcpyHostToDevice));
 	gpuErrchk(cudaMalloc((void**)&sdev_dat, sizeof(struct dat_t)));
 	gpuErrchk(cudaMemcpy(sdev_dat, &dat, sizeof(struct dat_t), cudaMemcpyHostToDevice));
-	cudaCalloc1((void**)&flags, sizeof(unsigned char), 7);
+	gpuErrchk(cudaMalloc((void**)&flags, sizeof(unsigned char) * 7));
+	gpuErrchk(cudaMalloc((void**)&fparstep,   sizeof(double)  * nfpar));
+	gpuErrchk(cudaMalloc((void**)&fpartol,    sizeof(double)  * nfpar));
+	gpuErrchk(cudaMalloc((void**)&fparabstol, sizeof(double)  * nfpar));
+	gpuErrchk(cudaMalloc((void**)&fpartype,   sizeof(int) 	  * nfpar));
+	cudaCalloc1((void**)&fpntr,	  sizeof(double*), nfpar);
+	hfparstep 	 = (double *) malloc(nsets*sizeof(double));
+	hfpartol	 = (double *) malloc(nsets*sizeof(double));
+	hfparabstol  = (double *) malloc(nsets*sizeof(double));
+	hfpartype 	 = (int *) 	  malloc(nsets*sizeof(int));
+	hflags 		 = (unsigned char *) malloc(7*sizeof(unsigned char));
+
+	for (i=0; i<nfpar; i++)
+		gpuErrchk(cudaMalloc((void**)&fpntr[i], sizeof(double) * 1));
 
 	/* Set vertices shortcut */
 	set_verts_shortcut_krnl<<<1,1>>>(dmod, verts);
@@ -981,20 +1027,20 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 	/*  Initialize local parameters  */
 	delta_delcor0 = 0.0;
 	dopscale_factor = radalb_factor = optalb_factor = 1.0;
-	type = mod->shape.comp[0].type;
 
-	/* Allocate memory for pointers, steps, and tolerances  */
-	cudaCalloc1((void**)&fparstep,   sizeof(double),   par->nfpar);
-	cudaCalloc1((void**)&fpartol,    sizeof(double), par->nfpar);
-	cudaCalloc1((void**)&fparabstol, sizeof(double), par->nfpar);
-	cudaCalloc1((void**)&fpartype,   sizeof(int), par->nfpar);
-	cudaCalloc1((void**)&fpntr,		sizeof(double*), par->nfpar);
-	for (i=0; i<par->nfpar; i++)
-		cudaCalloc1((void**)&fpntr[i], sizeof(double), 1);
 
-	/* The following call sets up the parameter lists allocated above */
-	mkparlist_cuda(dpar, dmod, ddat, fparstep, fpartol,
-			fparabstol, fpartype, fpntr);
+	/* The following call sets up the parameter lists allocated above and copy
+	 * the device contents to host copies */
+	mkparlist_cuda2(dpar, dmod,	ddat, fparstep, fpartol, fparabstol, fpartype,
+			fpntr, nfpar, nsets);
+	gpuErrchk(cudaMemcpy(hfparstep, 	fparstep, 	sizeof(double)*nfpar
+			, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(hfpartol, 		fpartol, 	sizeof(double)*nfpar,
+			cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(hfparabstol, 	fparabstol, sizeof(double)*nfpar,
+			cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(hfpartype, 	fpartype, 	sizeof(int)*nfpar,
+			cudaMemcpyDeviceToHost));
 
 	/* Compute deldop_zmax_save, cos_subradarlat_save, rad_xsec_save, and
 	 * opt_brightness_save for the initial model  */
@@ -1012,16 +1058,13 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 		else if (STREAMS) {
 			realize_spin_cuda_streams(dpar, dmod, ddat, nsets);
 			realize_photo_cuda(dpar, dmod, 1.0, 1.0, 0);  /* set R_save to R */
-			//			vary_params_cuda_streams(dpar, dmod, ddat, par->action,	&deldop_zmax_save,
-			//					&rad_xsec_save, &opt_brightness_save,
-			//					&cos_subradarlat_save, dat->nsets);
 			vary_params_cuda_streams2(dpar, dmod, ddat, action,
 					&deldop_zmax_save, &rad_xsec_save, &opt_brightness_save,
 					&cos_subradarlat_save, nsets);
 		}
 		else if (STREAMS2){
-			realize_spin_cuda_streams2(dpar, dmod, ddat, htype, dtype, nframes,
-					nviews, nsets, bf_stream);
+			realize_spin_cuda_streams2(dpar, dmod, ddat, htype, nframes, nviews,
+					nsets, bf_stream);
 			realize_photo_cuda(dpar, dmod, 1.0, 1.0, 0);  /* set R_save to R */
 			vary_params_cuda_streams3(dpar, dmod, ddat, action, &deldop_zmax_save,
 					&rad_xsec_save, &opt_brightness_save, &cos_subradarlat_save,
@@ -1039,6 +1082,7 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 
 	printf("rad_xsec: %f\n", rad_xsec_save);
 	printf("deldop_zmax: %f\n", (float)deldop_zmax_save);
+
 	/* Point hotparam to a dummy variable (dummyval) rather than to a model pa-
 	 * rameter; then call objective(0.0) to set dummy variable = 0.0, realize
 	 * the initial model, calculate the fits, return initial model's objective
@@ -1047,7 +1091,8 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 	checkErrorAfterKernelLaunch("bf_set_hotparam_initial_krnl");
 
 	if (STREAMS2)
-		enderr = objective_cuda_streams(0.0, bf_stream);
+		enderr = objective_cuda_streams(0.0, verts, htype, dtype, nframes,
+				nviews, nsets, bf_stream);
 	else
 		enderr = objective_cuda(0.0);
 
@@ -1064,15 +1109,16 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 
 	bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 	checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-	deviceSyncAfterKernelLaunch("bf_get_flags_krnl");
+	gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+			cudaMemcpyDeviceToHost));
 
 	/* Now act on the flags just retrieved from dev_par */
-	if (flags[0])		printf("  (BAD DIAMS)");
-	if (flags[1])		printf("  (BAD PHOTO)");
-	if (flags[2])		printf("  (BAD POS)");
-	if (flags[3])		printf("  (BAD POSET)");
-	if (flags[4])		printf("  (BAD RADAR)");
-	if (flags[5])		printf("  (BAD DOPSCALE)");		printf("\n");
+	if (hflags[0])		printf("  (BAD DIAMS)");
+	if (hflags[1])		printf("  (BAD PHOTO)");
+	if (hflags[2])		printf("  (BAD POS)");
+	if (hflags[3])		printf("  (BAD POSET)");
+	if (hflags[4])		printf("  (BAD RADAR)");
+	if (hflags[5])		printf("  (BAD DOPSCALE)");		printf("\n");
 	fflush(stdout);
 
 	/* Display the region within each delay-Doppler or Doppler frame that, ac-
@@ -1080,12 +1126,13 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 	 * any region extends beyond the data limits: the vignetting is too tight,
 	 * or else some model parameter (such as a delay correction polynomial co-
 	 * efficient) is seriously in error.   */
-	show_deldoplim_cuda(dat, ddat);
+	show_deldoplim_cuda_streams(ddat, htype, nsets, nframes, max_frames);
 
 	/* Set the starting fit parameter for the first iteration only  */
 	first_fitpar = par->first_fitpar;
-	if (first_fitpar < 0 || first_fitpar >= par->nfpar) {
-		printf("ERROR: need 0 <= first_fitpar < nparams (%d)\n", par->nfpar);
+	term_maxiter = par->term_maxiter;
+	if (first_fitpar < 0 || first_fitpar >= nfpar) {
+		printf("ERROR: need 0 <= first_fitpar < nparams (%d)\n", nfpar);
 		bailout("bestfit.c\n");
 	}
 
@@ -1094,7 +1141,7 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 	 * tive function at each step. Stop when fractional decrease in the objec-
 	 * tive function from one iteration to the next is less than term_prec.   */
 
-//	do {
+	do {
 		showvals = 1;        /* show reduced chi-square and penalties at beginning */
 		beginerr = enderr;
 		printf("# iteration %d %f", ++iter, beginerr);
@@ -1102,22 +1149,23 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 		/* Launch single-thread kernel to retrieve flags in dev_par */
 		bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 		checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-		deviceSyncAfterKernelLaunch("bf_get_flags_krnl");
+		gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+				cudaMemcpyDeviceToHost));
 
 		/* Now act on the flags just retrieved from dev_par */
-		if (flags[0])		printf("  (BAD DIAMS)");
-		if (flags[1])		printf("  (BAD PHOTO)");
-		if (flags[2])		printf("  (BAD POS)");
-		if (flags[3])		printf("  (BAD POSET)");
-		if (flags[4])		printf("  (BAD RADAR)");
-		if (flags[5])		printf("  (BAD DOPSCALE)");		printf("\n");
+		if (hflags[0])		printf("  (BAD DIAMS)");
+		if (hflags[1])		printf("  (BAD PHOTO)");
+		if (hflags[2])		printf("  (BAD POS)");
+		if (hflags[3])		printf("  (BAD POSET)");
+		if (hflags[4])		printf("  (BAD RADAR)");
+		if (hflags[5])		printf("  (BAD DOPSCALE)");		printf("\n");
 		fflush(stdout);
 
 		/* Show breakdown of chi-square by data type    */
 		if (AF)
-			chi2_cuda_af(dpar, ddat, 1, dat->nsets);
+			chi2_cuda_af(dpar, ddat, 1, nsets);
 		else if (STREAMS)
-			chi2_cuda_streams(dpar, ddat, 1, dat->nsets);
+			chi2_cuda_streams(dpar, ddat, 1, nsets);
 		else if (STREAMS2)
 			chi2_cuda_streams2(dpar, ddat, htype, dtype, nframes, lc_n, 1,
 					nsets, bf_stream);
@@ -1125,8 +1173,8 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 			chi2_cuda(dpar, ddat, 1);
 
 		/*  Loop through the free parameters  */
-		cntr = first_fitpar % par->npar_update;
-		for (p=first_fitpar; p<1/*par->nfpar*/; p++) {
+		cntr = first_fitpar % npar_update;
+		for (p=first_fitpar; p<nfpar; p++) {
 
 			/*  Adjust only parameter p on this try  */
 			bf_set_hotparam_pntr_krnl<<<1,1>>>(fpntr, fpartype, p);
@@ -1150,10 +1198,11 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 			 * We must start with the redundant model evaluation for the un-
 			 * changed value of the size parameter, in case the first call to
 			 * objective displays reduced chi-square and the penalty functions.  */
-			if (par->avoid_badpos && partype == SIZEPAR) {
+			if (avoid_badpos && partype == SIZEPAR) {
 				bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 				checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-				deviceSyncAfterKernelLaunch("bf_get_flags_krnl");
+				gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+						cudaMemcpyDeviceToHost));
 
 				/* Get value of (*hotparam) */
 				bf_get_hotparam_val_krnl<<<1,1>>>();
@@ -1161,17 +1210,19 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 				gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
 						sizeof(double),	0, cudaMemcpyDeviceToHost));
 
-				while (flags[2]) {
+				while (hflags[2]) {
 					if (STREAMS2)
-						objective_cuda_streams(hotparamval, bf_stream);
+						objective_cuda_streams(hotparamval, verts, htype, dtype,
+								nframes, nviews, nsets, bf_stream);
 					else
 						objective_cuda(hotparamval);
 
 					bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 					checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-					deviceSyncAfterKernelLaunch("bf_get_flags_krnl");
+					gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+							cudaMemcpyDeviceToHost));
 
-					if (flags[2]) {
+					if (hflags[2]) {
 						/* Set the value pointed to by hotparam to 0.95 of its
 						 * previous value */
 						bf_mult_hotparam_val_krnl<<<1,1>>>(0.95);
@@ -1198,11 +1249,12 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 			 * local minimum (but not necessarily *any* global minimum)
 			 * somewhere between ax and cx.          */
 			ax = hotparamval;
-			bx = ax + par->fparstep[p]; /* par usage us fine here */
+			bx = ax + hfparstep[p]; /* par usage us fine here */
 
 			if (STREAMS2)
 				mnbrak_streams(&ax, &bx, &cx, &obja, &objb, &objc,
-						objective_cuda_streams, bf_stream);
+						objective_cuda_streams, verts, htype, dtype, nframes,
+						nviews, nsets, bf_stream);
 			else
 				mnbrak( &ax, &bx, &cx, &obja, &objb, &objc, objective_cuda);
 
@@ -1224,8 +1276,9 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 			 * rance as one of its arguments, in addition to the existing
 			 * fractional tolerance.                                      */
 			if (STREAMS2)
-				enderr = brent_abs_streams(ax, bx, cx, objective_cuda_streams, fpartol[p],
-						fparabstol[p], &xmin, bf_stream);
+				enderr = brent_abs_streams(ax, bx, cx, objective_cuda_streams, hfpartol[p],
+						hfparabstol[p], &xmin, verts, htype, dtype, nframes, nviews, nsets,
+						bf_stream);
 			else
 				enderr = brent_abs( ax, bx, cx, objective_cuda,
 					fpartol[p], fparabstol[p], &xmin);
@@ -1253,21 +1306,21 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 				realize_mod_cuda(dpar, dmod, type);
 			if (newspin) {
 				if (AF)
-					realize_spin_cuda_af(dpar, dmod, ddat, dat->nsets);
+					realize_spin_cuda_af(dpar, dmod, ddat, nsets);
 				else if (STREAMS)
-					realize_spin_cuda_streams(dpar, dmod, ddat, dat->nsets);
+					realize_spin_cuda_streams(dpar, dmod, ddat, nsets);
 				else if (STREAMS2)
-					realize_spin_cuda_streams2(dpar, dmod, ddat, htype, dtype,
-							nframes, nviews, nsets, bf_stream);
+					realize_spin_cuda_streams2(dpar, dmod, ddat, htype, nframes,
+							nviews, nsets, bf_stream);
 				else
-					realize_spin_cuda(dpar, dmod, ddat, dat->nsets);
+					realize_spin_cuda(dpar, dmod, ddat, nsets);
 			}
 			if ((newsize && vary_alb_size) || ((newshape ||
 					newspin) && vary_alb_shapespin))
 				realize_photo_cuda(dpar, dmod, 1.0, 1.0, 1);  /* set R to R_save */
 			if ((newsize && vary_delcor0_size) || ((newshape || newspin)
 					&& vary_delcor0_shapespin))
-				realize_delcor_cuda(ddat, 0.0, 1, dat->nsets);  /* set delcor0 to delcor0_save */
+				realize_delcor_cuda(ddat, 0.0, 1, nsets);  /* set delcor0 to delcor0_save */
 			if ((newspin && vary_dopscale_spin) || ((newsize || newshape)
 					&& vary_dopscale_sizeshape))
 				realize_dopscale_cuda(dpar, ddat, 1.0, 1);  /* set dopscale to dopscale_save */
@@ -1329,9 +1382,9 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 			if ((newsize && vary_delcor0_size) || ((newshape || newspin) &&
 					vary_delcor0_shapespin)) {
 				deldop_zmax_save = deldop_zmax;
-				realize_delcor_cuda(ddat, delta_delcor0, 2, dat->nsets);  /* reset delcor0, then delcor0_save */
+				realize_delcor_cuda(ddat, delta_delcor0, 2, nsets);  /* reset delcor0, then delcor0_save */
 			} else if (newdelcor) {
-				realize_delcor_cuda(ddat, 0.0, 0, dat->nsets);  /* set delcor0_save to delcor0 */
+				realize_delcor_cuda(ddat, 0.0, 0, nsets);  /* set delcor0_save to delcor0 */
 			}
 			if ((newspin && vary_dopscale_spin) || ((newsize || newshape) &&
 					vary_dopscale_sizeshape)) {
@@ -1361,7 +1414,8 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 			 * calc_fits to evaluate the model for all datasets.          */
 			if (check_posbnd || check_badposet || check_badradar) {
 				if (STREAMS2)
-					objective_cuda_streams(hotparamval, bf_stream);
+					objective_cuda_streams(hotparamval, verts, htype, dtype,
+							nframes, nviews, nsets, bf_stream);
 				else
 					objective_cuda(hotparamval);//(*hotparam);
 			}
@@ -1369,16 +1423,16 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 			/* Launch single-thread kernel to retrieve flags in dev_par */
 			bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 			checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-			deviceSyncAfterKernelLaunch("bf_get_flags_krnl");
-
+			gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+					cudaMemcpyDeviceToHost));
 			/* Display the objective function after each parameter adjustment.  */
 			printf("%4d %8.6f %d", p, enderr, iround(par->fpartype[p]));
-			if (flags[0])		printf("  (BAD DIAMS)");
-			if (flags[1])		printf("  (BAD PHOTO)");
-			if (flags[2])		printf("  (BAD POS)");
-			if (flags[3])		printf("  (BAD POSET)");
-			if (flags[4])		printf("  (BAD RADAR)");
-			if (flags[5])		printf("  (BAD DOPSCALE)");
+			if (hflags[0])		printf("  (BAD DIAMS)");
+			if (hflags[1])		printf("  (BAD PHOTO)");
+			if (hflags[2])		printf("  (BAD POS)");
+			if (hflags[3])		printf("  (BAD POSET)");
+			if (hflags[4])		printf("  (BAD RADAR)");
+			if (hflags[5])		printf("  (BAD DOPSCALE)");
 			printf("\n");
 			fflush(stdout);
 
@@ -1392,7 +1446,7 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 			 * Also rewrite model and obs files after every 20th parameter
 			 * adjustment. Most of obs file doesn't change, but some floating
 			 * parameters (i.e. delay correction polynomial coefficients) do.  */
-			if (++cntr >= par->npar_update) {
+			if (++cntr >= npar_update) {
 				cntr = 0;
 				showvals = 1;
 				if (AF) {
@@ -1443,10 +1497,10 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 			//write_mod( par, mod);
 			//write_dat( par, dat);
 		}
-		show_deldoplim_cuda(dat, ddat);
+		show_deldoplim_cuda_streams(ddat, htype, nsets, nframes, max_frames);
 
 		/* Check if we should start a new iteration  */
-		if (iter == par->term_maxiter) {
+		if (iter == term_maxiter) {
 			/* Just completed last iteration permitted by "term_maxiter" para-
 			 * meter, so stop iterating; note that since iter is 1-based, this
 			 * test is always false if "term_maxiter" = 0 (its default value)  */
@@ -1459,14 +1513,14 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 			 * just-completed iteration was larger than term_prec, thus
 			 * justifying a new iteration; if it wasn't specified, definitely
 			 * proceed to a new iteration.                            */
-			if (par->objfunc_start > 0.0)
-				keep_iterating = ((par->objfunc_start - enderr)/enderr >= par->term_prec);
+			if (objfunc_start > 0.0)
+				keep_iterating = ((objfunc_start - enderr)/enderr >= term_prec);
 			else
 				keep_iterating = 1;
 			first_fitpar = 0;     /* for all iterations after the first iteration */
 
-		} else if (par->term_badmodel && (flags[0] || flags[1] || flags[2] ||
-				flags[3] || flags[4] || flags[5]) ) {
+		} else if (term_badmodel && (hflags[0] || hflags[1] || hflags[2] ||
+				hflags[3] || hflags[4] || hflags[5]) ) {
 
 			/* Just completed a full iteration, stop iterating because "term_
 			 * badmodel" parameter is turned on and model has a fatal flaw: it
@@ -1483,10 +1537,10 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 			 * (or else the "term_badmodel" parameter is turned off): keep
 			 * iterating if fractional decrease objective function during the
 			 * just-completed iteration was greater than term_prec         */
-			keep_iterating = ((beginerr - enderr)/enderr >= par->term_prec);
+			keep_iterating = ((beginerr - enderr)/enderr >= term_prec);
 		}
 
-//	} while (keep_iterating);
+	} while (keep_iterating);
 
 	/* Show final values of reduced chi-square, individual penalty functions,
 	 * and the objective function  */
@@ -1507,10 +1561,11 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 		/* Launch single-thread kernel to retrieve flags in dev_par */
 		bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 		checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-		deviceSyncAfterKernelLaunch("bf_get_flags_krnl");
+		gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+				cudaMemcpyDeviceToHost));
 
-		if (par->pen.n > 0 || flags[0] || flags[1] || flags[2]	|| flags[3] ||
-				flags[4] || flags[5]) {
+		if (par->pen.n > 0 || hflags[0] || hflags[1] || hflags[2]	|| hflags[3] ||
+				hflags[4] || hflags[5]) {
 			printf("#\n");
 			printf("# %15s %e\n", "reduced chi2", final_redchi2);
 			if (par->pen.n > 0) {
@@ -1518,24 +1573,24 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 			penalties_cuda(dpar, dmod, ddat);
 			par->showstate = 0;
 		}
-		if (flags[0])
+		if (hflags[0])
 			printf("# objective func multiplied by %.1f: illegal ellipsoid diameters\n",
 					baddiam_factor);
-		if (flags[1])
+		if (hflags[1])
 			printf("# objective func multiplied by %.1f: illegal photometric parameters\n",
 					badphoto_factor);
-		if (flags[2])
+		if (hflags[2])
 			printf("# objective func multiplied by %.1f: model extends beyond POS frame\n",
 					posbnd_factor);
-		if (flags[3])
+		if (hflags[3])
 			printf("# objective func multiplied by %.1f: "
 					"model extends beyond plane-of-sky fit image\n",
 					badposet_factor);
-		if (flags[4])
+		if (hflags[4])
 			printf("# objective func multiplied by %.1f: "
 					"model is too wide in delay-Doppler space to construct fit image\n",
 					badradar_factor);
-		if (flags[5])
+		if (hflags[5])
 			printf("# objective func multiplied by %.1f: illegal Doppler scaling factors\n",
 					baddopscale_factor);
 		printf("# ----------------------------\n");
@@ -1553,7 +1608,15 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 	for (int f=0; f<max_frames; f++)
 		cudaStreamDestroy(bf_stream[f]);
 
-
+	//free(hflags);
+	free(htype);
+	free(nframes);
+	free(lc_n);
+	free(nviews);
+	//free(hfparstep);
+//	free(hfpartol);
+//	free(hfparabstol);
+//	free(fpartype);
 	cudaFree(sdev_par);
 	cudaFree(sdev_mod);
 	cudaFree(sdev_dat);
@@ -1563,7 +1626,10 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 	cudaFree(fpartype);
 	cudaFree(fpntr);
 	cudaFree(flags);
+	cudaFree(dtype);
+	cudaFree(verts);
 	cudaDeviceReset();
+
 	return enderr;
 }
 
@@ -1758,18 +1824,41 @@ __host__ double objective_cuda( double x)
 	showvals = 0;
 	return err;
 }
-__host__ double objective_cuda_streams( double x, cudaStream_t *bf_stream)
+
+/* objective_cuda_streams is a version of objective_cuda that takes an extra
+ * argument - the cudaStreams created in bestfit_cuda2. The goal is to
+ * reduce overhead from stream creation/destruction to a minimum by having
+ * just one set number of streams per program run.  */
+__host__ double objective_cuda_streams(
+		double x,
+		struct vertices_t **verts,
+		unsigned char *htype,
+		unsigned char *dtype,
+		int *nframes,
+		int *nviews,
+		int nsets,
+		cudaStream_t *bf_stream)
 {
 	double err, pens, delta_delcor0, dopscale_factor, radalb_factor,
-	optalb_factor;
+		optalb_factor, *dlogfactors, *hlogfactors;
+	unsigned char *dflags, *hflags;
+
+	gpuErrchk(cudaMalloc((void**)&dflags, sizeof(unsigned char)*7));
+	gpuErrchk(cudaMalloc((void**)&dlogfactors, sizeof(double)*7));
+	hflags 	 	= (unsigned char *) malloc(7*sizeof(unsigned char));
+	hlogfactors	= (double *) malloc(7*sizeof(double));
 
 	/* Initialize local parameters  */
 	delta_delcor0 = 0.0;
 	dopscale_factor = radalb_factor = optalb_factor = 1.0;
 
-	/*  Assign new trial value to the model parameter being adjusted  */
+	/* Assign new trial value to the model parameter being adjusted  */
 	bf_set_hotparam_val_krnl<<<1,1>>>(x);	//(*hotparam) = x;
 	checkErrorAfterKernelLaunch("bf_set_hotparam_val_krnl (in objective_cuda)");
+
+	/* Get relevant parameters from device memory */
+//	ocs_get_params_krnl<<<1,1>>>();
+//	checkErrorAfterKernelLaunch("ocs_get_params_krnl");
 
 	/* Realize whichever part(s) of the model have changed, then calculate root's
 	 * contribution to chi-square.
@@ -1788,16 +1877,19 @@ __host__ double objective_cuda_streams( double x, cudaStream_t *bf_stream)
 		realize_mod_cuda(sdev_par, sdev_mod, type);
 	if (newspin) {
 		if (AF)
-			realize_spin_cuda_af(sdev_par, sdev_mod, sdev_dat, sdat->nsets);
+			realize_spin_cuda_af(sdev_par, sdev_mod, sdev_dat, nsets);
 		else if (STREAMS)
-			realize_spin_cuda_streams(sdev_par, sdev_mod, sdev_dat, sdat->nsets);
+			realize_spin_cuda_streams(sdev_par, sdev_mod, sdev_dat, nsets);
+		else if (STREAMS2)
+			realize_spin_cuda_streams2(sdev_par, sdev_mod, sdev_dat, htype, nframes,
+					nviews, nsets, bf_stream);
 		else
-			realize_spin_cuda(sdev_par, sdev_mod, sdev_dat, sdat->nsets);	}
+			realize_spin_cuda(sdev_par, sdev_mod, sdev_dat, nsets);	}
 
 	if ((newsize && vary_alb_size) || ((newshape || newspin) && vary_alb_shapespin))
 		realize_photo_cuda(sdev_par, sdev_mod, 1.0, 1.0, 1);  /* set R to R_save */
 	if ((newsize && vary_delcor0_size) || ((newshape || newspin) && vary_delcor0_shapespin))
-		realize_delcor_cuda(sdev_dat, 0.0, 1, sdat->nsets);  /* set delcor0 to delcor0_save */
+		realize_delcor_cuda(sdev_dat, 0.0, 1, nsets);  /* set delcor0 to delcor0_save */
 	if ((newspin && vary_dopscale_spin) || ((newsize || newshape) && vary_dopscale_sizeshape))
 		realize_dopscale_cuda(sdev_par, sdev_dat, 1.0, 1);  /* set dopscale to dopscale_save */
 	if (call_vary_params) {
@@ -1808,18 +1900,21 @@ __host__ double objective_cuda_streams( double x, cudaStream_t *bf_stream)
 		if (AF)
 			vary_params_af(sdev_par,sdev_mod,sdev_dat,spar->action,
 					&deldop_zmax,&rad_xsec,&opt_brightness,&cos_subradarlat,
-					sdat->nsets);
+					nsets);
 		else if (STREAMS)
-//			vary_params_cuda_streams(sdev_par, sdev_mod, sdev_dat, spar->action,
-//					&deldop_zmax,&rad_xsec,&opt_brightness,&cos_subradarlat,
-//					sdat->nsets);
 			vary_params_cuda_streams2(sdev_par, sdev_mod, sdev_dat, spar->action,
 					&deldop_zmax, &rad_xsec, &opt_brightness, &cos_subradarlat,
-					sdat->nsets);
+					nsets);
+		else if (STREAMS2)
+			vary_params_cuda_streams3(sdev_par, sdev_mod, sdev_dat, spar->action,
+					&deldop_zmax, &rad_xsec, &opt_brightness, &cos_subradarlat,
+					nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+					bf_stream);
+
 		else
 			vary_params_cuda(sdev_par, sdev_mod, sdev_dat, spar->action,
 					&deldop_zmax, &rad_xsec, &opt_brightness,
-					&cos_subradarlat, sdat->nsets);
+					&cos_subradarlat, nsets);
 
 		delta_delcor0 = (deldop_zmax - deldop_zmax_save)*KM2US;
 		if (cos_subradarlat != 0.0)
@@ -1835,9 +1930,9 @@ __host__ double objective_cuda_streams( double x, cudaStream_t *bf_stream)
 	else if (newphoto)
 		realize_photo_cuda(sdev_par, sdev_mod, 1.0, 1.0, 0);  /* set R_save to R */
 	if ((newsize && vary_delcor0_size) || ((newshape || newspin) && vary_delcor0_shapespin))
-		realize_delcor_cuda(sdev_dat, delta_delcor0, 1, sdat->nsets);  /* adjust delcor0 */
+		realize_delcor_cuda(sdev_dat, delta_delcor0, 1, nsets);  /* adjust delcor0 */
 	else if (newdelcor)
-		realize_delcor_cuda(sdev_dat, 0.0, 0, sdat->nsets);  /* set delcor0_save to delcor0 */
+		realize_delcor_cuda(sdev_dat, 0.0, 0, nsets);  /* set delcor0_save to delcor0 */
 	if ((newspin && vary_dopscale_spin) || ((newsize || newshape) && vary_dopscale_sizeshape))
 		realize_dopscale_cuda(sdev_par, sdev_dat, dopscale_factor, 1);  /* adjust dopscale */
 	else if (newdopscale)
@@ -1846,11 +1941,25 @@ __host__ double objective_cuda_streams( double x, cudaStream_t *bf_stream)
 		realize_xyoff_cuda(sdev_dat);
 	if (AF) {
 		calc_fits_cuda_af(sdev_par, sdev_mod, sdev_dat);
-		err = chi2_cuda_af(sdev_par, sdev_dat, 0, sdat->nsets);
+		err = chi2_cuda_af(sdev_par, sdev_dat, 0, nsets);
 	}
 	else if (STREAMS) {
 		calc_fits_cuda_streams(sdev_par, sdev_mod, sdev_dat);
-		err = chi2_cuda_streams(sdev_par, sdev_dat, 0, sdat->nsets);
+		err = chi2_cuda_streams(sdev_par, sdev_dat, 0, nsets);
+	}
+	else if (STREAMS2) {
+		calc_fits_cuda_streams2(sdev_par,
+				sdev_mod,
+				sdev_dat,
+				verts,
+				nviews,
+				nframes,
+				lc_n,
+				type,
+				nsets,
+				nf,
+				bf_stream);
+		err = chi2_cuda_streams2(sdev_par, sdev_mod, sdev_dat,htype,dtype,hnframes, hlc_n,0,nsets, bf_stream)
 	}
 	else {
 		calc_fits_cuda(sdev_par, sdev_mod, sdev_dat);
@@ -1884,47 +1993,69 @@ __host__ double objective_cuda_streams( double x, cudaStream_t *bf_stream)
 	 * This effectively rules out any models with any of these flaws.         */
 	/* NOTE: TO-DO: baddiam may need to come from elsewhere other than spar.
 	 * However, bestfit gets called only once and spar/smod/sdat gets copied
-	 * only once.	 */
-	if (spar->baddiam) {
-		baddiam_factor = spar->bad_objfactor * exp(spar->baddiam_logfactor);
+	 * only once.
+	 * flags[0] = dpar->baddiam;
+		flags[1] = dpar->badphoto;
+		flags[2] = dpar->posbnd;
+		flags[3] = dpar->badposet;
+		flags[4] = dpar->badradar;
+		flags[5] = dpar->baddopscale;
+
+		dlogfactors[0] = dpar->bad_objfactor;
+		dlogfactors[1] = dpar->baddiam_logfactor;
+		dlogfactors[2] = dpar->badphoto_logfactor;
+		dlogfactors[3] = dpar->posbnd_logfactor;
+		dlogfactors[4] = dpar->badposet_logfactor;
+		dlogfactors[5] = dpar->badradar_logfactor;
+		dlogfactors[6] = dpar->baddopscale_logfactor;
+	 */
+	ocs_get_flags_krnl<<<1,1>>>(sdev_par, dflags, dlogfactors);
+	checkErrorAfterKernelLaunch("bf_get_flags_krnl");
+	gpuErrchk(cudaMemcpy(hflags, dflags, sizeof(unsigned char)*7,
+			cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(hlogfactors, dlogfactors, sizeof(double)*6,
+			cudaMemcpyDeviceToHost));
+
+	if (hflags[0]) {
+		baddiam_factor = hlogfactors[0] * exp(hlogfactors[1]);
 		err *= baddiam_factor;
 		if (showvals)
 			printf("# objective func multiplied by %.1f: illegal ellipsoid diameters\n",
 					baddiam_factor);
 	}
-	if (spar->badphoto) {
-		badphoto_factor = spar->bad_objfactor * exp(spar->badphoto_logfactor);
+	if (hflags[1]) {
+		badphoto_factor = hlogfactors[0] * exp(hlogfactors[2]);
 		err *= badphoto_factor;
 		if (showvals)
 			printf("# objective func multiplied by %.1f: illegal photometric parameters\n",
 					badphoto_factor);
 	}
-	if (spar->posbnd) {
+	if (hflags[2]) {
 		check_posbnd = 1;     /* tells bestfit about this problem */
-		posbnd_factor = spar->bad_objfactor * exp(spar->posbnd_logfactor);
+		posbnd_factor = hlogfactors[0] * exp(hlogfactors[3]);
 		err *= posbnd_factor;
 		if (showvals)
 			printf("# objective func multiplied by %.1f: model extends beyond POS frame\n",
 					posbnd_factor);
 	}
-	if (spar->badposet) {
+	if (hflags[3]) {
 		check_badposet = 1;     /* tells bestfit about this problem */
-		badposet_factor = spar->bad_objfactor * exp(spar->badposet_logfactor);
+		badposet_factor = hlogfactors[0] * exp(hlogfactors[4]);
 		err *= badposet_factor;
 		if (showvals)
 			printf("# objective func multiplied by %.1f: plane-of-sky fit frame too small\n",
 					badposet_factor);
 	}
-	if (spar->badradar) {
+	if (hflags[4]) {
 		check_badradar = 1;     /* tells bestfit about this problem */
-		badradar_factor = spar->bad_objfactor * exp(spar->badradar_logfactor);
+		badradar_factor = hlogfactors[0] * exp(hlogfactors[5]);
 		err *= badradar_factor;
 		if (showvals)
 			printf("# objective func multiplied by %.1f: model too wide in delay-Doppler space\n",
 					badradar_factor);
 	}
-	if (spar->baddopscale) {
-		baddopscale_factor = spar->bad_objfactor * exp(spar->baddopscale_logfactor);
+	if (hflags[5]) {
+		baddopscale_factor = hlogfactors[0] * exp(hlogfactors[6]);
 		err *= baddopscale_factor;
 		if (showvals)
 			printf("# objective func multiplied by %.1f: illegal Doppler scaling factors\n",
@@ -1936,6 +2067,11 @@ __host__ double objective_cuda_streams( double x, cudaStream_t *bf_stream)
 	if (showvals)
 		fflush( stdout);
 	showvals = 0;
+
+	free(hflags);
+	free(hlogfactors);
+	cudaFree(dflags);
+	cudaFree(dlogfactors);
 	return err;
 }
 

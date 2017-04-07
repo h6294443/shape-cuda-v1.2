@@ -786,20 +786,17 @@ __host__ void dbg_print_array1(float *in, int size) {
 		printf("\narray[%i]=%g", i, in[i]);
 	}
 }
-__host__ void dbg_print_pos_z(struct dat_t *ddat, int set, int frm, int n) {
+__host__ void dbg_print_pos_z(struct dat_t *ddat, int set, int frm, int n, char *filename) {
 	/* This debug function prints out each pos->z value from z_s */
 	/* Debug function that prints all Doppler frame fit values to csv */
 
 	int nThreads, i, j, offset, nx;
 	FILE *fp_z;
-	char *filename_z;
 	float *zz;
 	dim3 BLK,THD;
 
 	nx = 2*n + 1;
-	filename_z = "dbg_zz_cuda.csv";
-	printf("\n %sfile created",filename_z);
-	printf("\n\nFilename: %s",filename_z);
+	printf("\n Debug file %s written",filename);
 
 	nThreads = (2*n+1)*(2*n+1);
 	cudaMallocManaged((void**)&zz, sizeof(float)*nThreads, cudaMemAttachHost);
@@ -811,7 +808,7 @@ __host__ void dbg_print_pos_z(struct dat_t *ddat, int set, int frm, int n) {
 	checkErrorAfterKernelLaunch("dbg_print_fit_deldop_krnl_2");
 	deviceSyncAfterKernelLaunch("dbg_print_fit_deldop_krnl_2");
 
-	fp_z = fopen(filename_z, "w+");
+	fp_z = fopen(filename, "w+");
 
 	/* Print top corner label */
 	fprintf(fp_z, "zz , ");
@@ -915,20 +912,17 @@ __host__ void dbg_print_pos_z_af(struct dat_t *ddat, int set, int n) {
 	cudaFree(zz3);
 
 }
-__host__ void dbg_print_pos_cose_s(struct dat_t *ddat, int set, int frm, int n) {
+__host__ void dbg_print_pos_cose_s(struct dat_t *ddat, int set, int frm, int n, char *filename_z) {
 	/* This debug function prints out each pos->z value from z_s */
 	/* Debug function that prints all Doppler frame fit values to csv */
 
 	int nThreads, i, j, offset, nx;
 	FILE *fp_z;
-	char *filename_z;
 	float *cose;
 	dim3 BLK,THD;
 
 	nx = 2*n + 1;
-	filename_z = "dbg_cose_s_cuda.csv";
-	printf("\n %sfile created",filename_z);
-	printf("\n\nFilename: %s",filename_z);
+	printf("\n Debug file %s written",filename_z);
 
 	nThreads = (2*n+1)*(2*n+1);
 	cudaMallocManaged((void**)&cose, sizeof(float)*nThreads, cudaMemAttachHost);

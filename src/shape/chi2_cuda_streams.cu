@@ -1056,7 +1056,7 @@ __host__ double chi2_deldop_cuda_streams2(
 {
 	int f, *ndel, *ndop, hndel[nframes], hndop[nframes], nThreads[nframes];
 	double chi2_set, *chi2_deldop_frame, h_chi2_deldop_frame[nframes];
-	dim3 BLK[f],THD;
+	dim3 BLK[nframes],THD;
 	THD.x = maxThreadsPerBlock;
 
 	/* o2, m2, and om are per-frame radarvariables */

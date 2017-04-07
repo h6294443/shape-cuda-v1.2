@@ -145,19 +145,17 @@ int main(int argc, char *argv[])
 		/* Make CUDA device copies of par, mod, dat (these copies reside
 		 * in device memory and are inaccessible by the host (CPU) code */
 		if (CUDA) {
-//			gpuErrchk(cudaMalloc((void**)&dev_par, sizeof(struct par_t)));
 			gpuErrchk(cudaMallocManaged((void**)&dev_par, sizeof(struct par_t), cudaMemAttachGlobal));
 			gpuErrchk(cudaMemcpy(dev_par, &par, sizeof(struct par_t), cudaMemcpyHostToDevice));
-
-//			gpuErrchk(cudaMalloc((void**)&dev_mod, sizeof(struct mod_t)));
 			gpuErrchk(cudaMallocManaged((void**)&dev_mod, sizeof(struct mod_t), cudaMemAttachGlobal));
 			gpuErrchk(cudaMemcpy(dev_mod, &mod, sizeof(struct mod_t), cudaMemcpyHostToDevice));
-
-//			gpuErrchk(cudaMalloc((void**)&dev_dat, sizeof(struct dat_t)));
 			gpuErrchk(cudaMallocManaged((void**)&dev_dat, sizeof(struct dat_t), cudaMemAttachGlobal));
 			gpuErrchk(cudaMemcpy(dev_dat, &dat, sizeof(struct dat_t), cudaMemcpyHostToDevice));
 
-			bestfit_CUDA(dev_par,dev_mod,dev_dat, &par, &mod, &dat);
+			if (STREAMS2)
+				bestfit_CUDA2(dev_par, dev_mod, dev_dat, &par, &mod, &dat);
+			else
+				bestfit_CUDA(dev_par,dev_mod,dev_dat, &par, &mod, &dat);
 		} else
 			bestfit( &par, &mod, &dat);
 		break;

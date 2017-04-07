@@ -824,9 +824,10 @@ __host__ int posvis_cuda_streams2(
 		frames_alloc = nframes;
 	}
 	float4 hijmm[frames_alloc];
+	int oasize = frames_alloc*3;
 	/* Allocate temporary arrays/structs */
 	gpuErrchk(cudaMalloc((void**)&ijminmax_overall, sizeof(float4) * frames_alloc));
-	gpuErrchk(cudaMalloc((void**)&oa, sizeof(double3) * (frames_alloc*3)));
+	gpuErrchk(cudaMalloc((void**)&oa, sizeof(double3) * oasize));
 	gpuErrchk(cudaMalloc((void**)&usrc, sizeof(double3) * frames_alloc));
 
 	if (TIMING) {
