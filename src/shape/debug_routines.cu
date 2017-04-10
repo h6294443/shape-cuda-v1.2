@@ -60,6 +60,8 @@ __global__ void dbg_print_poz_krnl(struct dat_t *ddat, float *zz, int s, int f, 
 			zz[offset] = ddat->set[s].desc.deldop.frame[f].pos.z_s[offset];
 		if (ddat->set[s].type == DOPPLER)
 			zz[offset] = ddat->set[s].desc.doppler.frame[f].pos.z_s[offset];
+		if (ddat->set[s].type == LGHTCRV)
+			zz[offset] = ddat->set[s].desc.lghtcrv.rend[f].pos.z_s[offset];
 	}
 }
 __global__ void dbg_print_poz_af_krnl(struct dat_t *ddat, float *zz0, float *zz1,

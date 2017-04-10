@@ -336,16 +336,16 @@ C_DEPS += \
 src/shape/%.o: ../src/shape/%.c
 	@echo 'Building file: $<'
 	@echo 'Invoking: NVCC Compiler'
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 -gencode arch=compute_35,code=sm_35 -m64 -odir "src/shape" -M -o "$(@:%.o=%.d)" "$<"
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --compile -m64  -x c -o  "$@" "$<"
+	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --use_fast_math -gencode arch=compute_35,code=sm_35 -m64 -odir "src/shape" -M -o "$(@:%.o=%.d)" "$<"
+	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --use_fast_math --compile -m64  -x c -o  "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
 src/shape/%.o: ../src/shape/%.cu
 	@echo 'Building file: $<'
 	@echo 'Invoking: NVCC Compiler'
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 -gencode arch=compute_35,code=sm_35 -m64 -odir "src/shape" -M -o "$(@:%.o=%.d)" "$<"
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --compile --relocatable-device-code=true -gencode arch=compute_35,code=compute_35 -gencode arch=compute_35,code=sm_35 -m64  -x cu -o  "$@" "$<"
+	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --use_fast_math -gencode arch=compute_35,code=sm_35 -m64 -odir "src/shape" -M -o "$(@:%.o=%.d)" "$<"
+	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --use_fast_math --compile --relocatable-device-code=true -gencode arch=compute_35,code=compute_35 -gencode arch=compute_35,code=sm_35 -m64  -x cu -o  "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 

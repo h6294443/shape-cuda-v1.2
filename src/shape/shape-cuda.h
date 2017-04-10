@@ -79,10 +79,11 @@ __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod, struct dat_
 __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod, struct
 		dat_t *ddat, struct par_t *par, struct mod_t *mod, struct dat_t *dat);
 __host__ double brent_abs_streams(double ax,double bx,double cx,double (*f)(double,
-		struct vertices_t**, unsigned char*, unsigned char*, int*, int*, int,
-		cudaStream_t*), double tol,double abstol,double *xmin, struct
+		struct vertices_t**, unsigned char*, unsigned char*, int*, int*, int*, int,
+		int, cudaStream_t*), double tol,double abstol,double *xmin, struct
 		vertices_t **verts, unsigned char *htype, unsigned char *dtype,
-		int *nframes, int *nviews, int nsets, cudaStream_t *bf_stream);
+		int *nframes, int *nviews, int *lc_n, int nsets, int nf,
+		cudaStream_t *bf_stream);
 __host__ void c2af_deldop_add_o2_m2(float **temp_o2, float **temp_m2,
 		float **temp_om, int size, int nframes);
 __host__ void calc_fits_cuda(struct par_t *dpar, struct mod_t *dmod,
@@ -135,9 +136,10 @@ __host__ void dvdI_reduce_single(struct mod_t *dmod, float *dv, float *dcom0,
 __host__ void gpuAssert(cudaError_t code, const char *file, int line);
 __host__ void mnbrak_streams(double *ax,double *bx,double *cx,double *fa,double *fb,
 	    double *fc,double (*func)(double, struct vertices_t**, unsigned char*,
-	    		unsigned char*, int*, int*, int, cudaStream_t*), struct
+	    		unsigned char*, int*, int*, int*, int, int, cudaStream_t*), struct
 	    		vertices_t **verts, unsigned char *htype, unsigned char *dtype,
-	    		int *nframes, int *nviews, int nsets, cudaStream_t *bf_stream );
+	    		int *nframes, int *nviews, int *lc_n, int nsets, int nf,
+	    		cudaStream_t *bf_stream );
 __host__ void mkparlist_cuda(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, double *fparstep, double *fpartol,
 		double *fparabstol, int *fpartype, double **fpntr);
@@ -230,11 +232,16 @@ __device__ void dev_cotrans2( double y[3], double a[3][3], double x[3], int dir)
 __device__ void dev_cotrans3(double y[3], double a[3][3], double x[3],
 		int dir);
 __device__ void dev_cotrans4(float3 *y, double a[3][3], double x[3], int dir, int f);
-__device__ void dev_cotrans5(double3 *y, double a[3][3], double3 *x, int dir);
+__device__ void dev_cotrans5(double3 *y, double a[3][3], double3 x, int dir);
 __device__ void dev_cotrans6(double y[3], double3 *a, double x[3], int dir, int f);
+__device__ void dev_cotrans7(float3 *y, double3 *a, float3 x, int dir, int frm);
+__device__ void dev_cotrans8(float3 *y, float3 *a, float3 x, int dir, int frm);
+__device__ void dev_cotrans9(float3 *y, double a[3][3], float3 x, int dir);
 __device__ double dev_cross( double z[3], double x[3], double y[3]);
 __device__ double dev_dot( double x[3], double y[3]);
-__device__ double dev_dot2( double x[3], double3 *y);
+__device__ double dev_dot2( double x[3], double3 y);
+__device__ double dev_dot3( float3 x, double3 y);
+__device__ float dev_dot4(float3 x, float3 y);
 __device__ void dev_euler2mat( double m[3][3], double phi, double theta, double psi);
 __device__ void dev_facmom( double fv0[3], double fv1[3], double fv2[3], double fn[3],
         double *dv, double dvr[3], double dI[3][3]);
@@ -247,14 +254,18 @@ __device__ double dev_hapke( double cosi, double cose, double phase,
 __device__ void dev_inteuler( struct spin_t spin, double t[], double impulse[][3], int n,
 		double w[3], double m[3][3], unsigned char pa, unsigned char method, double int_abstol);
 __device__ int dev_vp_iround(double x);
+__device__ int dev_vp_iroundf(float x);
 __device__ void dev_mat2euler( double m[3][3], double *phi, double *theta, double *psi);
 __device__ void dev_mmid( double *y, double *dydx, int nvar1, double xs, double htot,
 		int nstep, double *yout, void (*dev_derivs)( double, double *, double *));
 __device__ void dev_mmmul(double x[3][3], double y[3][3], double z[3][3]);
 __device__ void dev_mmmul2(double3 *x, double y[3][3], double3 *z, int f);
+__device__ void dev_mmmul3(float3 *x, double y[3][3], float3 *z, int frm);
 __device__ void dev_mtrnsps( double a[3][3], double b[3][3]);
 __device__ void dev_mtrnsps2(double3 *a, double b[3][3], int f);
+__device__ void dev_mtrnsps3(float3 *a, double b[3][3], int frm);
 __device__ double dev_normalize(double *u);
+__device__ float dev_normalize2(float3 u);
 __device__ void dev_odeint( double *ystart, int nvar, double x1, double x2, double eps,
 	double h1, double hmin, int *nok, int *nbad, void (*derivs)(double,double *,double *),
 	void (*drkqc)(double *,double *,int,double *,double,double,double
@@ -281,8 +292,12 @@ __global__ void posclr_streams_krnl(struct pos_t **pos, int *posn, int f);
 __global__ void posmask_universal_krnl(struct par_t *dpar, struct pos_t *pos, int nThreads, int xspan);
 __global__ void posmask_init_streams_krnl(struct pos_t **pos, double3 *so,
 		double *pixels_per_km, int f);
+__global__ void posmask_init_streams2_krnl(struct pos_t **pos, double3 *so,
+		float *pixels_per_km, int f);
 __global__ void posmask_streams_krnl(struct par_t *dpar, struct pos_t **pos,
 		double3 *so, double *pixels_per_km,	int *posn, int nThreads, int xspan,	int f);
+__global__ void posmask_streams2_krnl(struct par_t *dpar,struct pos_t **pos,double3 *so,
+		float *pixels_per_km, int *posn, int nThreads, int xspan, int f);
 __global__ void realize_angleoff_krnl(struct dat_t *ddat);
 __global__ void realize_omegaoff_krnl(struct dat_t *ddat);
 __global__ void update_spin_angle_krnl(struct mod_t *dmod);

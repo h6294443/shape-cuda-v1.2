@@ -253,7 +253,7 @@ double objective_cuda(double x);
 
 __host__ double objective_cuda_streams(double x, struct vertices_t **verts,
 		unsigned char *htype, unsigned char *dtype, int *nframes, int *nviews,
-		int nsets, cudaStream_t *bf_stream);
+		int *lc_n, int nsets, int nf, cudaStream_t *bf_stream);
 __device__ double bf_hotparamval, bf_dummyval;
 __device__ int bf_partype;
 
@@ -984,10 +984,10 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 	gpuErrchk(cudaMalloc((void**)&fparabstol, sizeof(double)  * nfpar));
 	gpuErrchk(cudaMalloc((void**)&fpartype,   sizeof(int) 	  * nfpar));
 	cudaCalloc1((void**)&fpntr,	  sizeof(double*), nfpar);
-	hfparstep 	 = (double *) malloc(nsets*sizeof(double));
-	hfpartol	 = (double *) malloc(nsets*sizeof(double));
-	hfparabstol  = (double *) malloc(nsets*sizeof(double));
-	hfpartype 	 = (int *) 	  malloc(nsets*sizeof(int));
+	hfparstep 	 = (double *) malloc(nfpar*sizeof(double));
+	hfpartol	 = (double *) malloc(nfpar*sizeof(double));
+	hfparabstol  = (double *) malloc(nfpar*sizeof(double));
+	hfpartype 	 = (int *) 	  malloc(nfpar*sizeof(int));
 	hflags 		 = (unsigned char *) malloc(7*sizeof(unsigned char));
 
 	for (i=0; i<nfpar; i++)
@@ -1028,19 +1028,15 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 	delta_delcor0 = 0.0;
 	dopscale_factor = radalb_factor = optalb_factor = 1.0;
 
-
 	/* The following call sets up the parameter lists allocated above and copy
 	 * the device contents to host copies */
 	mkparlist_cuda2(dpar, dmod,	ddat, fparstep, fpartol, fparabstol, fpartype,
 			fpntr, nfpar, nsets);
-	gpuErrchk(cudaMemcpy(hfparstep, 	fparstep, 	sizeof(double)*nfpar
-			, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpy(hfpartol, 		fpartol, 	sizeof(double)*nfpar,
-			cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpy(hfparabstol, 	fparabstol, sizeof(double)*nfpar,
-			cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpy(hfpartype, 	fpartype, 	sizeof(int)*nfpar,
-			cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(hfparstep, fparstep, sizeof(double)*nfpar, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(hfpartol, fpartol, sizeof(double)*nfpar, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(hfparabstol, fparabstol, sizeof(double)*nfpar, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(hfpartype,	fpartype, sizeof(int)*nfpar, cudaMemcpyDeviceToHost));
+
 
 	/* Compute deldop_zmax_save, cos_subradarlat_save, rad_xsec_save, and
 	 * opt_brightness_save for the initial model  */
@@ -1092,7 +1088,7 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 
 	if (STREAMS2)
 		enderr = objective_cuda_streams(0.0, verts, htype, dtype, nframes,
-				nviews, nsets, bf_stream);
+				nviews, lc_n, nsets, nf, bf_stream);
 	else
 		enderr = objective_cuda(0.0);
 
@@ -1176,6 +1172,7 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 		cntr = first_fitpar % npar_update;
 		for (p=first_fitpar; p<nfpar; p++) {
 
+			//p = first_fitpar;
 			/*  Adjust only parameter p on this try  */
 			bf_set_hotparam_pntr_krnl<<<1,1>>>(fpntr, fpartype, p);
 			checkErrorAfterKernelLaunch("bf_set_hotparam_pntr_krnl");
@@ -1213,7 +1210,7 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 				while (hflags[2]) {
 					if (STREAMS2)
 						objective_cuda_streams(hotparamval, verts, htype, dtype,
-								nframes, nviews, nsets, bf_stream);
+								nframes, nviews, lc_n, nsets, nf, bf_stream);
 					else
 						objective_cuda(hotparamval);
 
@@ -1254,7 +1251,7 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 			if (STREAMS2)
 				mnbrak_streams(&ax, &bx, &cx, &obja, &objb, &objc,
 						objective_cuda_streams, verts, htype, dtype, nframes,
-						nviews, nsets, bf_stream);
+						nviews, lc_n, nsets, nf, bf_stream);
 			else
 				mnbrak( &ax, &bx, &cx, &obja, &objb, &objc, objective_cuda);
 
@@ -1277,8 +1274,8 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 			 * fractional tolerance.                                      */
 			if (STREAMS2)
 				enderr = brent_abs_streams(ax, bx, cx, objective_cuda_streams, hfpartol[p],
-						hfparabstol[p], &xmin, verts, htype, dtype, nframes, nviews, nsets,
-						bf_stream);
+						hfparabstol[p], &xmin, verts, htype, dtype, nframes, nviews, lc_n,
+						nsets, nf, bf_stream);
 			else
 				enderr = brent_abs( ax, bx, cx, objective_cuda,
 					fpartol[p], fparabstol[p], &xmin);
@@ -1415,7 +1412,7 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 			if (check_posbnd || check_badposet || check_badradar) {
 				if (STREAMS2)
 					objective_cuda_streams(hotparamval, verts, htype, dtype,
-							nframes, nviews, nsets, bf_stream);
+							nframes, nviews, lc_n, nsets, nf, bf_stream);
 				else
 					objective_cuda(hotparamval);//(*hotparam);
 			}
@@ -1542,18 +1539,18 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 
 	} while (keep_iterating);
 
-	/* Show final values of reduced chi-square, individual penalty functions,
-	 * and the objective function  */
-		if (AF)
-			final_chi2 = chi2_cuda_af(dpar, ddat, 1, nsets);
-		else if (STREAMS)
-			final_chi2 = chi2_cuda_streams(dpar, ddat, 1, nsets);
-		else if (STREAMS2)
-			final_chi2 = chi2_cuda_streams2(dpar, ddat, htype, dtype, nframes,
-					lc_n, 1, nsets, bf_stream);
-		else
-			final_chi2 = chi2_cuda(dpar, ddat, 1);
-		final_redchi2 = final_chi2/dat->dof;
+			/* Show final values of reduced chi-square, individual penalty functions,
+			 * and the objective function  */
+			if (AF)
+				final_chi2 = chi2_cuda_af(dpar, ddat, 1, nsets);
+			else if (STREAMS)
+				final_chi2 = chi2_cuda_streams(dpar, ddat, 1, nsets);
+			else if (STREAMS2)
+				final_chi2 = chi2_cuda_streams2(dpar, ddat, htype, dtype, nframes,
+						lc_n, 1, nsets, bf_stream);
+			else
+				final_chi2 = chi2_cuda(dpar, ddat, 1);
+			final_redchi2 = final_chi2/dat->dof;
 		printf("# search completed\n");
 
 		/* Launch single-thread kernel to get these final flags from dev->par:
@@ -1836,7 +1833,9 @@ __host__ double objective_cuda_streams(
 		unsigned char *dtype,
 		int *nframes,
 		int *nviews,
+		int *lc_n,
 		int nsets,
+		int nf,
 		cudaStream_t *bf_stream)
 {
 	double err, pens, delta_delcor0, dopscale_factor, radalb_factor,
@@ -1948,18 +1947,10 @@ __host__ double objective_cuda_streams(
 		err = chi2_cuda_streams(sdev_par, sdev_dat, 0, nsets);
 	}
 	else if (STREAMS2) {
-		calc_fits_cuda_streams2(sdev_par,
-				sdev_mod,
-				sdev_dat,
-				verts,
-				nviews,
-				nframes,
-				lc_n,
-				type,
-				nsets,
-				nf,
-				bf_stream);
-		err = chi2_cuda_streams2(sdev_par, sdev_mod, sdev_dat,htype,dtype,hnframes, hlc_n,0,nsets, bf_stream)
+		calc_fits_cuda_streams2(sdev_par, sdev_mod, sdev_dat, verts, nviews,
+				nframes, lc_n, htype, nsets, nf, bf_stream);
+		err = chi2_cuda_streams2(sdev_par, sdev_dat, htype, dtype, nframes,
+				lc_n, 0, nsets, bf_stream);
 	}
 	else {
 		calc_fits_cuda(sdev_par, sdev_mod, sdev_dat);

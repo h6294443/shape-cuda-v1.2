@@ -55,6 +55,7 @@ void cotrans_cuda(double y[3], double a[3][3], double x[3], int dir)
 	for (i=0;i<=2;i++)
 		y[i] = t[i];
 }
+
 void mmmul_cuda( double *x, double y[3][3], double *z)
 {
 	double t[3][3];
@@ -116,7 +117,45 @@ __device__ void dev_mmmul2(double3 *x, double y[3][3], double3 *z, int frm)
 		x[f+i].z = t[i][2];
 	}
 }
+__device__ void dev_mmmul3(float3 *x, double y[3][3], float3 *z, int frm)
+{ /* This version turns the original double x[3][3] and double z[3][3] into
+   * double3 pointers with nframes entries.  Selection is made via f  */
+	double t[3][3];
+	int i, f;
+	f = 3*frm;
+
+	for (i=0; i<=2; i++) {
+
+		t[i][0] = 0.0;
+		t[i][0] += y[i][0] * z[f+0].x;
+		t[i][0] += y[i][1] * z[f+1].x;
+		t[i][0] += y[i][2] * z[f+2].x;
+
+		t[i][1] = 0.0;
+		t[i][1] += y[i][0] * z[f+0].y;
+		t[i][1] += y[i][1] * z[f+1].y;
+		t[i][1] += y[i][2] * z[f+2].y;
+
+		t[i][2] = 0.0;
+		t[i][2] += y[i][0] * z[f+0].z;
+		t[i][2] += y[i][1] * z[f+1].z;
+		t[i][2] += y[i][2] * z[f+2].z;
+	}
+
+	for (i=0; i<=2; i++) {
+		x[f+i].x = t[i][0];
+		x[f+i].y = t[i][1];
+		x[f+i].z = t[i][2];
+	}
+}
 __device__ int dev_vp_iround(double x)
+{
+  if (x < 0.0)
+    return ((int)(x - 0.5));
+  else
+    return ((int)(x + 0.5));
+}
+__device__ int dev_vp_iroundf(float x)
 {
   if (x < 0.0)
     return ((int)(x - 0.5));
@@ -155,10 +194,20 @@ __device__ double dev_dot( double x[3], double y[3])
 {
 	return x[0]*y[0]+x[1]*y[1]+x[2]*y[2];
 }
-__device__ double dev_dot2( double x[3], double3 *y)
+__device__ double dev_dot2( double x[3], double3 y)
 {
 	/* This version replaces double y[3] with a double3 *y */
-	return x[0]*y->x+x[1]*y->y+x[2]*y->z;
+	return x[0]*y.x + x[1]*y.y + x[2]*y.z;
+}
+__device__ double dev_dot3( float3 x, double3 y)
+{
+	/* This version replaces double x[3] with a float3 *x */
+	return x.x*y.x + x.y*y.y + x.z*y.z;
+}
+__device__ float dev_dot4(float3 x, float3 y)
+{
+	/* This version just uses two float3's and returns a float */
+	return x.x*y.x + x.y*y.y + x.z*y.z;
 }
 __device__ double dev_normalize(double *u)
 {
@@ -175,7 +224,26 @@ __device__ double dev_normalize(double *u)
 	}
 	return norm;
 }
-__device__ void dev_cotrans1( double y[3], double *a, double x[3], int dir)
+__device__ float dev_normalize2(float3 u)
+{
+	int i;
+	float norm;
+
+	norm = 0.0;
+	norm += u.x*u.x;
+	norm += u.y*u.y;
+	norm += u.z*u.z;
+
+	norm = sqrt(norm);
+
+	if (norm != 0.0) {
+		u.x /= norm;
+		u.y /= norm;
+		u.z /= norm;
+	}
+	return norm;
+}
+__device__ void dev_cotrans1(double y[3], double *a, double x[3], int dir)
 {
 	double t[3];
 	int i, j;
@@ -195,7 +263,7 @@ __device__ void dev_cotrans1( double y[3], double *a, double x[3], int dir)
 	for (i=0;i<=2;i++)
 		y[i] = t[i];
 }
-__device__ void dev_cotrans2( double y[3], double a[3][3], double x[3], int dir)
+__device__ void dev_cotrans2(double y[3], double a[3][3], double x[3], int dir)
 {
 	double t[3];
 	int i, j;
@@ -256,7 +324,7 @@ __device__ void dev_cotrans4(float3 *y, double a[3][3], double x[3], int dir, in
 	y[f].y = t[1];
 	y[f].z = t[2];
 }
-__device__ void dev_cotrans5(double3 *y, double a[3][3], double3 *x,
+__device__ void dev_cotrans5(double3 *y, double a[3][3], double3 x,
 		int dir) {
 	/* This version replaces double y[3] and double x[3] with double3 y and double3 x */
 	double t[3];
@@ -265,17 +333,17 @@ __device__ void dev_cotrans5(double3 *y, double a[3][3], double3 *x,
 	if (dir == 1)
 		for (i = 0; i <= 2; i++) {
 			t[i] = 0.0;
-			t[i] += a[i][0] * x->x;
-			t[i] += a[i][1] * x->y;
-			t[i] += a[i][2] * x->z;
+			t[i] += a[i][0] * x.x;
+			t[i] += a[i][1] * x.y;
+			t[i] += a[i][2] * x.z;
 		}
 
 	if (dir == (-1))
 		for (i = 0; i <= 2; i++) {
 			t[i] = 0.0;
-			t[i] += a[0][i] * x->x;
-			t[i] += a[1][i] * x->y;
-			t[i] += a[2][i] * x->z;
+			t[i] += a[0][i] * x.x;
+			t[i] += a[1][i] * x.y;
+			t[i] += a[2][i] * x.z;
 		}
 
 	y->x = t[0];
@@ -322,6 +390,113 @@ __device__ void dev_cotrans6(double y[3], double3 *a, double x[3], int dir, int 
 	for (i = 0; i <= 2; i++)
 		y[i] = t[i];
 }
+__device__ void dev_cotrans7(float3 *y, double3 *a, float3 x, int dir, int frm) {
+	/* dev_cotrans7 is an iteration of dev_cotrans6.  It replaces the double y[3]
+	 * with a float3.  It also replaces the double x[3] with a float3. It also
+	 * replaces double3 *a with a float3 *a
+	 * dev_cotrans6 - This version replaces double a[3][3] with a double3 pointers of lenght
+	 * nframes, selected with 'f'	 */
+	double3 t;
+	int i, j, f;
+	f = frm*3;
+
+	if (dir == 1){
+		t.x = 0.0;
+		t.x += a[f+0].x * x.x;
+		t.x += a[f+0].y * x.y;
+		t.x += a[f+0].z * x.z;
+		t.y = 0.0;
+		t.y += a[f+1].x * x.x;
+		t.y += a[f+1].y * x.y;
+		t.y += a[f+1].z * x.z;
+		t.z = 0.0;
+		t.z += a[f+2].x * x.x;
+		t.z += a[f+2].y * x.y;
+		t.z += a[f+2].z * x.z;
+	}
+
+	if (dir == (-1)) {
+		t.x = 0.0;
+		t.x += a[f+0].x * x.x;
+		t.x += a[f+1].x * x.y;
+		t.x += a[f+2].x * x.z;
+		t.y = 0.0;
+		t.y += a[f+0].y * x.x;
+		t.y += a[f+1].y * x.y;
+		t.y += a[f+2].y * x.z;
+		t.z = 0.0;
+		t.z += a[f+0].z * x.x;
+		t.z += a[f+1].z * x.y;
+		t.z += a[f+2].z * x.z;
+	}
+
+	y->x = t.x;
+	y->y = t.y;
+	y->z = t.z;
+}
+__device__ void dev_cotrans8(float3 *y, float3 *a, float3 x, int dir, int frm)
+{
+	float3 t;
+	int i, j, f=3*frm;
+
+	if (dir==1) {
+		t.x = 0.0;
+		t.x += a[f+0].x * x.x;
+		t.x += a[f+0].y * x.y;
+		t.x += a[f+0].z * x.z;
+		t.y = 0.0;
+		t.y += a[f+1].x * x.x;
+		t.y += a[f+1].y * x.y;
+		t.y += a[f+1].z * x.z;
+		t.z = 0.0;
+		t.z += a[f+2].x * x.x;
+		t.z += a[f+2].y * x.y;
+		t.z += a[f+2].z * x.z;
+	}
+	if (dir==(-1)) {
+		t.x = 0.0;
+		t.x += a[f+0].x * x.x;
+		t.x += a[f+1].x * x.y;
+		t.x += a[f+2].x * x.z;
+		t.y = 0.0;
+		t.y += a[f+0].y * x.x;
+		t.y += a[f+1].y * x.y;
+		t.y += a[f+2].y * x.z;
+		t.z = 0.0;
+		t.z += a[f+0].z * x.x;
+		t.z += a[f+1].z * x.y;
+		t.z += a[f+2].z * x.z;
+	}
+
+	y->x = t.x;
+	y->y = t.y;
+	y->z = t.z;
+}
+__device__ void dev_cotrans9(float3 *y, double a[3][3], float3 x, int dir) {
+	/* This version replaces double y[3] and double x[3] with double3 y and double3 x */
+	double t[3];
+	int i;
+
+	if (dir == 1)
+		for (i = 0; i <= 2; i++) {
+			t[i] = 0.0;
+			t[i] += a[i][0] * x.x;
+			t[i] += a[i][1] * x.y;
+			t[i] += a[i][2] * x.z;
+		}
+
+	if (dir == (-1))
+		for (i = 0; i <= 2; i++) {
+			t[i] = 0.0;
+			t[i] += a[0][i] * x.x;
+			t[i] += a[1][i] * x.y;
+			t[i] += a[2][i] * x.z;
+		}
+
+	y->x = t[0];
+	y->y = t[1];
+	y->z = t[2];
+}
 __device__ void dev_mtrnsps( double a[3][3], double b[3][3])
 {
 	double t[3][3];
@@ -335,6 +510,27 @@ __device__ void dev_mtrnsps( double a[3][3], double b[3][3])
 	  a[i][j] = t[i][j];
 }
 __device__ void dev_mtrnsps2(double3 *a, double b[3][3], int frm)
+{	/* This version splits the double a[3][3] of the original function into
+	 * three separate double3 vector variables. b[3][3] remains unchanged. */
+  double t[3][3];
+  int i, j, f;
+  f = frm *3;
+
+  for (i=0;i<=2;i++)
+	  for (j=0;j<=2;j++)
+		  t[i][j] = b[j][i];
+
+  a[f+0].x = t[0][0];
+  a[f+0].y = t[0][1];
+  a[f+0].z = t[0][2];
+  a[f+1].x = t[1][0];
+  a[f+1].y = t[1][1];
+  a[f+1].z = t[1][2];
+  a[f+2].x = t[2][0];
+  a[f+2].y = t[2][1];
+  a[f+2].z = t[2][2];
+}
+__device__ void dev_mtrnsps3(float3 *a, double b[3][3], int frm)
 {	/* This version splits the double a[3][3] of the original function into
 	 * three separate double3 vector variables. b[3][3] remains unchanged. */
   double t[3][3];

@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
 	printf("Shape-CUDA-v1.0 running\n");
 	/* Check available CUDA devices, if any, before proceeding */
 	CUDACount();
-	maxThreadsPerBlock /= 4.0;
+	maxThreadsPerBlock = 256;
 
 	/* Declare variables */
 	char progname[MAXLEN], errormessage[MAXLEN], localtimestring[MAXLEN];
@@ -153,9 +153,9 @@ int main(int argc, char *argv[])
 			gpuErrchk(cudaMemcpy(dev_dat, &dat, sizeof(struct dat_t), cudaMemcpyHostToDevice));
 
 			if (STREAMS2)
-				bestfit_CUDA2(dev_par, dev_mod, dev_dat, &par, &mod, &dat);
+				bestfit_CUDA2(dev_par,dev_mod,dev_dat, &par,&mod,&dat);
 			else
-				bestfit_CUDA(dev_par,dev_mod,dev_dat, &par, &mod, &dat);
+				bestfit_CUDA( dev_par,dev_mod,dev_dat, &par,&mod,&dat);
 		} else
 			bestfit( &par, &mod, &dat);
 		break;

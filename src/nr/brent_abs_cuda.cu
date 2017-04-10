@@ -11,10 +11,10 @@ extern "C" {
 #define SHFT(a,b,c,d) (a)=(b);(b)=(c);(c)=(d);
 
 __host__ double brent_abs_streams(double ax,double bx,double cx,double (*f)(double,
-		struct vertices_t**, unsigned char*, unsigned char*, int*, int*, int,
-		cudaStream_t*), double tol,double abstol,double *xmin, struct
+		struct vertices_t**, unsigned char*, unsigned char*, int*, int*, int*, int,
+		int, cudaStream_t*), double tol,double abstol,double *xmin, struct
 		vertices_t **verts, unsigned char *htype, unsigned char *dtype,
-		int *nframes, int *nviews, int nsets, cudaStream_t *bf_stream)
+		int *nframes, int *nviews, int *lc_n, int nsets, int nf, cudaStream_t *bf_stream)
 {
 	int iter;
 	double a,b,d,etemp,fu,fv,fw,fx,p,q,r,tol1,tol2,u,v,w,x,xm;
@@ -24,7 +24,7 @@ __host__ double brent_abs_streams(double ax,double bx,double cx,double (*f)(doub
 	a=((ax < cx) ? ax : cx);
 	b=((ax > cx) ? ax : cx);
 	x=w=v=bx;
-	fw=fv=fx=(*f)(x, verts, htype, dtype, nframes, nviews, nsets, bf_stream);
+	fw=fv=fx=(*f)(x, verts, htype, dtype, nframes, nviews, lc_n, nsets, nf, bf_stream);
 	for (iter=1;iter<=ITMAX;iter++) {
 		xm=0.5*(a+b);
 		tol2=2.0*(tol1=tol*fabs(x)+abstol_use);
@@ -53,7 +53,7 @@ __host__ double brent_abs_streams(double ax,double bx,double cx,double (*f)(doub
 			d=CGOLD*(e=(x >= xm ? a-x : b-x));
 		}
 		u=(fabs(d) >= tol1 ? x+d : x+SIGN(tol1,d));
-		fu=(*f)(u, verts, htype, dtype, nframes, nviews, nsets, bf_stream);
+		fu=(*f)(u, verts, htype, dtype, nframes, nviews, lc_n, nsets, nf, bf_stream);
 		if (fu <= fx) {
 			if (u >= x) a=x; else b=x;
 			SHFT(v,w,x,u)

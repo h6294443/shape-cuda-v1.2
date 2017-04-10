@@ -2352,14 +2352,15 @@ __host__ float compute_model_area(struct mod_t *dmod, int c, int size) {
 	/* Function calculates a delay-Doppler frame's radar cross section with
 	 * Nvidia's reduction sample code (simplified and adapted for use with
 	 * shape).  The function returns the cross section as a float 	 */
-
 	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
 	int maxBlocks = 2048;		// max # of blocks per grid
 	int numBlocks = 0;			// initialize numBlocks
 	int numThreads = 0;			// initialize numThreads
 	float area = 0.0;			// radar cross section; return value
+	float test[size];
 	float *d_odata;				// temp. float array for reduction output
 	float *d_idata; 			// temp. float arrays for reduction input
+
 	float2 xblock_ythread;		// used for return value of getNumBlocksAndThreads
 
 	dim3 BLK,THD;

@@ -67,6 +67,7 @@ void CUDACount() {
 	}
 }
 void pickGPU(int gpuid) {
+	cudaSetDeviceFlags(cudaDeviceMapHost);
 	cudaError_t cudaStatus;
 	cudaStatus = cudaSetDevice(gpuid);
 	if (cudaStatus != cudaSuccess) {

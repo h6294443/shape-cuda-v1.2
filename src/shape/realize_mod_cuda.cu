@@ -1126,7 +1126,6 @@ __host__ void compute_moments_cuda( struct mod_t *dmod)
 	 * implemented. A single-component model is assumed, in which case every
 	 * facet is active and area1=area2 */
 	//	for (c=0; c<dmod->shape.ncomp; c++) {
-
 	area1 = compute_model_area(dmod, c, size);
 	/*area2 = compute_model_area2(dmod, c, size);*/
 	area2 = area1;
