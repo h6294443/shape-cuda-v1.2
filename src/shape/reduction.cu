@@ -2357,7 +2357,6 @@ __host__ float compute_model_area(struct mod_t *dmod, int c, int size) {
 	int numBlocks = 0;			// initialize numBlocks
 	int numThreads = 0;			// initialize numThreads
 	float area = 0.0;			// radar cross section; return value
-	float test[size];
 	float *d_odata;				// temp. float array for reduction output
 	float *d_idata; 			// temp. float arrays for reduction input
 

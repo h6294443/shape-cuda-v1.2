@@ -17,6 +17,7 @@ int TIMING 			= 0;			/* Time certain kernel executions 		*/
 int GPU 			= 1;			/* Which GPU will run code 				*/
 int POSVIS_SEPARATE = 0;/* Calculate xlim/ylim separately 		*/
 int DYNPROC 		= 0;		/* Use dynamic processing        		*/
+int FLOAT			= 0;
 
 int main(int argc, char *argv[])
  {

@@ -37,6 +37,7 @@ extern int DYNPROC; 		/* Use dynamic processing (launch child kernels)*/
 extern int POSVIS_SEPARATE;	/* Use separate xlim/ylim calculation 			*/
 extern int AF;				/* Process all frames in a set at once 			*/
 extern int TIMING;			/* Time execution of certain kernels 			*/
+extern int FLOAT;			/* Uses singles (floats) instead of doubles in much of the calculation kernels */
 
 
 extern int maxThreadsPerBlock;
@@ -224,13 +225,13 @@ __host__ void vary_params_cuda_streams3(struct par_t *dpar, struct mod_t *dmod,
 		unsigned char *dtype, int nf, int nsets, cudaStream_t *vp_stream);
 
 __device__ int cubic_realroots_cuda( double *coeff, double *realroot);
+__device__ int cubic_realroots_f_cuda( float4 coeff, float3 *realroot);
 __device__ void dev_bsstep(double *y, double *dydx, int nv, double *xx, double htry, double eps,
 		double *yscal, double *hdid, double *hnext, void (*derivs)(double,double *,double *));
 __device__ double dev_cel(double qqc, double pp, double aa, double bb);
 __device__ void dev_cotrans1( double y[3], double *a, double x[3], int dir);
 __device__ void dev_cotrans2( double y[3], double a[3][3], double x[3], int dir);
-__device__ void dev_cotrans3(double y[3], double a[3][3], double x[3],
-		int dir);
+__device__ void dev_cotrans3(double y[3], double a[3][3], double x[3],		int dir);
 __device__ void dev_cotrans4(float3 *y, double a[3][3], double x[3], int dir, int f);
 __device__ void dev_cotrans5(double3 *y, double a[3][3], double3 x, int dir);
 __device__ void dev_cotrans6(double y[3], double3 *a, double x[3], int dir, int f);
@@ -238,6 +239,7 @@ __device__ void dev_cotrans7(float3 *y, double3 *a, float3 x, int dir, int frm);
 __device__ void dev_cotrans8(float3 *y, float3 *a, float3 x, int dir, int frm);
 __device__ void dev_cotrans9(float3 *y, double a[3][3], float3 x, int dir);
 __device__ double dev_cross( double z[3], double x[3], double y[3]);
+__device__ float dev_cross_f( double z[3], float3 x, float3 y);
 __device__ double dev_dot( double x[3], double y[3]);
 __device__ double dev_dot2( double x[3], double3 y);
 __device__ double dev_dot3( float3 x, double3 y);
@@ -245,7 +247,10 @@ __device__ float dev_dot4(float3 x, float3 y);
 __device__ void dev_euler2mat( double m[3][3], double phi, double theta, double psi);
 __device__ void dev_facmom( double fv0[3], double fv1[3], double fv2[3], double fn[3],
         double *dv, double dvr[3], double dI[3][3]);
+__device__ void dev_facmom_f( float3 fv0, float3 fv1, float3 fv2, float3 fn,
+             float *dv, float3 *dvr, float3 dI[3]);
 __device__ double dev_facnrm( struct vertices_t verts, int fi);
+__device__ float dev_facnrm_f( struct vertices_t verts, int fi);
 __device__ int dev_gamma_trans(float *datum, double gamma);
 __device__ int dev_gamma_trans_float(float *datum, float gamma);
 __device__ double dev_gammln(double xx);
