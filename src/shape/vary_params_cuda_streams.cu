@@ -1793,7 +1793,7 @@ __host__ void vary_params_cuda_streams3(
 			} checkErrorAfterKernelLaunch("clrvect_streams_krnl");
 
 			/* Call the CUDA pos2deldop function */
-			pos2deldop_cuda_streams(dpar, dmod, ddat, pos, ndel, ndop,
+			pos2deldop_cuda_streams_f(dpar, dmod, ddat, pos, ndel, ndop,
 					0.0, 0.0, 0.0, 0, s, hnframes[s], 0, outbndarr, vp_stream);
 
 			for (f=0; f<nfrm_alloc; f++) {
@@ -1880,7 +1880,7 @@ __host__ void vary_params_cuda_streams3(
 				}
 			} checkErrorAfterKernelLaunch("clrvect_streams_krnl");
 
-			pos2doppler_cuda_streams(dpar, dmod, ddat, pos, 0.0, 0.0, 0.0,
+			pos2doppler_cuda_streams_f(dpar, dmod, ddat, pos, 0.0, 0.0, 0.0,
 					ndop, 0, s, hnframes[s], 0, outbndarr, vp_stream);
 
 			/* Calculate the Doppler cross-section if applicable */

@@ -679,7 +679,7 @@ __global__ void perform_rotation_f_krnl(struct par_t *dpar, struct mod_t *dmod)
 	/* nv-threaded kernel */
 	int test, i = blockIdx.x * blockDim.x + threadIdx.x;
 	float3 x, vx;
-	/*__shared__ */float3 m0,m1,m2;
+
 	__shared__ float m[3][3];
 
 	if (i == 0) {
@@ -1027,7 +1027,7 @@ __host__ void realize_coordinates_cuda( struct par_t *dpar, struct mod_t *dmod, 
 	checkErrorAfterKernelLaunch("dev_euler2mat");
 
 	/* If needed, perform rotation on this component  */
-	perform_rotation_f_krnl<<<nvBLK,nvTHD>>>(dpar, dmod);
+	perform_rotation_krnl<<<nvBLK,nvTHD>>>(dpar, dmod);
 	checkErrorAfterKernelLaunch("perform_rotation_krnl");
 
 	/*  If needed, perform translation on this component  */
@@ -1047,7 +1047,7 @@ __host__ void realize_coordinates_cuda( struct par_t *dpar, struct mod_t *dmod, 
 
 	/* Calculate vertex normals for this component as normalized sums of the
 	 * facet normals for all facets attached to each vertex     */
-	calc_vertex_nrmls_f_krnl<<<nvBLK,nvTHD>>>(dmod);
+	calc_vertex_nrmls_krnl<<<nvBLK,nvTHD>>>(dmod);
 	checkErrorAfterKernelLaunch("calc_vertex_nrmls, line 667");
 }
 __host__ void realize_coordinates_f_cuda( struct par_t *dpar, struct mod_t *dmod, unsigned char type)
@@ -1145,6 +1145,7 @@ __host__ void realize_coordinates_f_cuda( struct par_t *dpar, struct mod_t *dmod
 	checkErrorAfterKernelLaunch("dev_euler2mat");
 
 	/* If needed, perform rotation on this component  */
+	/* NOTE:  Still needs to be debugged, doesn't run as is */
 	perform_rotation_f_krnl<<<nvBLK,nvTHD>>>(dpar, dmod);
 	checkErrorAfterKernelLaunch("perform_rotation_krnl");
 

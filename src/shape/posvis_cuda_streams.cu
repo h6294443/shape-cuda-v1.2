@@ -1110,7 +1110,7 @@ __host__ int posvis_cuda_streams2(
 //		cudaDeviceSynchronize();
 
 	}
-	cudaMemcpy(&hijmm, ijminmax_overall, sizeof(float4)*frames_alloc, cudaMemcpyDeviceToHost);
+//	cudaMemcpy(&hijmm, ijminmax_overall, sizeof(float4)*frames_alloc, cudaMemcpyDeviceToHost);
 
 	if (TIMING) {
 		cudaEventRecord(stop1);
