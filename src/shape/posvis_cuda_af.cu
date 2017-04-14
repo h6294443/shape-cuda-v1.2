@@ -208,8 +208,8 @@ __global__ void posvis_facet_af_krnl(struct pos_t **pos, int src, int body,
 				if (pos[frm]->bistatic) {
 					usrc[0] = usrc[1] = 0.0; /* unit vector towards source */
 					usrc[2] = 1.0;
-					dev_cotrans3(usrc, pos[frm]->se, usrc, -1);
-					dev_cotrans3(usrc, pos[frm]->oe, usrc, 1); /* in observer coordinates */
+					dev_cotrans2(usrc, pos[frm]->se, usrc, -1);
+					dev_cotrans2(usrc, pos[frm]->oe, usrc, 1); /* in observer coordinates */
 				}
 			}
 //		}
@@ -224,7 +224,7 @@ __global__ void posvis_facet_af_krnl(struct pos_t **pos, int src, int body,
 		for (i = 0; i <= 2; i++)
 			n[i] = _verts->f[f].n[i];
 
-		dev_cotrans3(n, oa, n, 1);
+		dev_cotrans2(n, oa, n, 1);
 
 		/* Consider this facet further only if its normal points somewhat
 		 * towards the observer rather than away         */
@@ -234,9 +234,9 @@ __global__ void posvis_facet_af_krnl(struct pos_t **pos, int src, int body,
 			 * (in observer coordinates) for this model at this frame's epoch
 			 * due to orbital motion, in case the model is half of a binary
 			 * system.  */
-			dev_cotrans3(v0, oa, _verts->v[fidx.x].x, 1);
-			dev_cotrans3(v1, oa, _verts->v[fidx.y].x, 1);
-			dev_cotrans3(v2, oa, _verts->v[fidx.z].x, 1);
+			dev_cotrans2(v0, oa, _verts->v[fidx.x].x, 1);
+			dev_cotrans2(v1, oa, _verts->v[fidx.y].x, 1);
+			dev_cotrans2(v2, oa, _verts->v[fidx.z].x, 1);
 			for (i = 0; i <= 2; i++) {
 				v0[i] += orbit_offs.x;
 				v1[i] += orbit_offs.y;
@@ -359,7 +359,7 @@ __global__ void posvis_facet_af_krnl(struct pos_t **pos, int src, int body,
 											n[k] =	_verts->v[fidx.x].n[k]
 											 + s * (_verts->v[fidx.y].n[k] - _verts->v[fidx.x].n[k])
 											 + t * (_verts->v[fidx.z].n[k]	- _verts->v[fidx.y].n[k]);
-										dev_cotrans3(n, oa, n, 1);
+										dev_cotrans2(n, oa, n, 1);
 										dev_normalize(n);
 									}
 

@@ -237,8 +237,8 @@ __global__ void posvis_init_krnl(struct par_t *dpar, struct mod_t *dmod,
 			if (pos->bistatic) {
 				usrc[0] = usrc[1] = 0.0; /* unit vector towards source */
 				usrc[2] = 1.0;
-				dev_cotrans3(usrc, pos->se, usrc, -1);
-				dev_cotrans3(usrc, pos->oe, usrc, 1); /* in observer coordinates */
+				dev_cotrans2(usrc, pos->se, usrc, -1);
+				dev_cotrans2(usrc, pos->oe, usrc, 1); /* in observer coordinates */
 			}
 		}
 		/* transfer the host orbit_offset[3] values to the device copy */
@@ -343,7 +343,7 @@ __global__ void posvis_fct_pxl_krnl(int i1, int i2, int j1, int j2,
 							n[k] =	verts->v[f_v[0]].n[k]
 							 + s * (verts->v[f_v[1]].n[k] - verts->v[f_v[0]].n[k])
 							 + t * (verts->v[f_v[2]].n[k] - verts->v[f_v[1]].n[k]);
-						dev_cotrans3(n, oa, n, 1);
+						dev_cotrans2(n, oa, n, 1);
 						dev_normalize(n);
 					}
 
@@ -406,7 +406,7 @@ __global__ void posvis_fct_dynp_krnl(int src, int body, int comp) {
 			f_v[i] = verts->f[f].v[i];
 			n[i] = verts->f[f].n[i];
 		}
-		dev_cotrans3(n, oa, n, 1);
+		dev_cotrans2(n, oa, n, 1);
 
 		/* Consider facet further only if normal points towards observer  */
 		if (n[2] > 0.0) {
@@ -414,9 +414,9 @@ __global__ void posvis_fct_dynp_krnl(int src, int body, int comp) {
 			 * coordinates; orbit_offset is the center-of-mass offset (in obs.
 			 * co.) for model at frame epoch due to orbital motion, in case
 			 * model is half of a binary system.  */
-			dev_cotrans3(v0, oa, verts->v[f_v[0]].x, 1);
-			dev_cotrans3(v1, oa, verts->v[f_v[1]].x, 1);
-			dev_cotrans3(v2, oa, verts->v[f_v[2]].x, 1);
+			dev_cotrans2(v0, oa, verts->v[f_v[0]].x, 1);
+			dev_cotrans2(v1, oa, verts->v[f_v[1]].x, 1);
+			dev_cotrans2(v2, oa, verts->v[f_v[2]].x, 1);
 			for (i = 0; i <= 2; i++) {
 				v0[i] += orbit_offset[i];
 				v1[i] += orbit_offset[i];
@@ -518,7 +518,7 @@ __global__ void posvis_facet_krnl(int src, int body, int comp) {
 		for (i = 0; i <= 2; i++)
 			n[i] = verts->f[f].n[i];
 
-		dev_cotrans3(n, oa, n, 1);
+		dev_cotrans2(n, oa, n, 1);
 
 		/* Consider this facet further only if its normal points somewhat
 		 * towards the observer rather than away         */
@@ -528,9 +528,9 @@ __global__ void posvis_facet_krnl(int src, int body, int comp) {
 			 * (in observer coordinates) for this model at this frame's epoch
 			 * due to orbital motion, in case the model is half of a binary
 			 * system.  */
-			dev_cotrans3(v0, oa, verts->v[f_v0].x, 1);
-			dev_cotrans3(v1, oa, verts->v[f_v1].x, 1);
-			dev_cotrans3(v2, oa, verts->v[f_v2].x, 1);
+			dev_cotrans2(v0, oa, verts->v[f_v0].x, 1);
+			dev_cotrans2(v1, oa, verts->v[f_v1].x, 1);
+			dev_cotrans2(v2, oa, verts->v[f_v2].x, 1);
 			for (i = 0; i <= 2; i++) {
 				v0[i] += orbit_offset[i];
 				v1[i] += orbit_offset[i];
@@ -648,7 +648,7 @@ atomicAdd(&dbg_pxl_occ, 1);
 											n[k] =	verts->v[f_v0].n[k]
 											 + s * (verts->v[f_v1].n[k] - verts->v[f_v0].n[k])
 											 + t * (verts->v[f_v2].n[k]	- verts->v[f_v1].n[k]);
-										dev_cotrans3(n, oa, n, 1);
+										dev_cotrans2(n, oa, n, 1);
 										dev_normalize(n);
 									}
 
@@ -714,7 +714,7 @@ __global__ void posvis_facet_sep_krnl(int src, int body, int comp,
 		for (i = 0; i <= 2; i++)
 			n[i] = verts->f[f].n[i];
 
-		dev_cotrans3(n, oa, n, 1);
+		dev_cotrans2(n, oa, n, 1);
 
 		/* Consider this facet further only if its normal points somewhat
 		 * towards the observer rather than away         */
@@ -724,9 +724,9 @@ __global__ void posvis_facet_sep_krnl(int src, int body, int comp,
 			 * (in observer coordinates) for this model at this frame's epoch
 			 * due to orbital motion, in case the model is half of a binary
 			 * system.  */
-			dev_cotrans3(v0, oa, verts->v[f_v0].x, 1);
-			dev_cotrans3(v1, oa, verts->v[f_v1].x, 1);
-			dev_cotrans3(v2, oa, verts->v[f_v2].x, 1);
+			dev_cotrans2(v0, oa, verts->v[f_v0].x, 1);
+			dev_cotrans2(v1, oa, verts->v[f_v1].x, 1);
+			dev_cotrans2(v2, oa, verts->v[f_v2].x, 1);
 			for (i = 0; i <= 2; i++) {
 				v0[i] += orbit_offset[i];
 				v1[i] += orbit_offset[i];
@@ -841,7 +841,7 @@ __global__ void posvis_facet_sep_krnl(int src, int body, int comp,
 											n[k] =	verts->v[f_v0].n[k]
 											 + s * (verts->v[f_v1].n[k] - verts->v[f_v0].n[k])
 											 + t * (verts->v[f_v2].n[k]	- verts->v[f_v1].n[k]);
-										dev_cotrans3(n, oa, n, 1);
+										dev_cotrans2(n, oa, n, 1);
 										dev_normalize(n);
 									}
 

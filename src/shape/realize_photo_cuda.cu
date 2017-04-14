@@ -1111,7 +1111,7 @@ __host__ void realize_photo_cuda( struct par_t *dpar, struct mod_t *dmod,
 	unsigned char opttype, radtype;
 	dim3 BLK, THD;
 
-	int AF0, Rval;
+	int AF0/*, Rval*/;
 
 	/* Initialize illegal photometric parameters flag & get opttype and radtype */
 	get_photo_types_krnl<<<1,1>>>(dpar, dmod);//, dopttype, radtype);

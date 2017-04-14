@@ -371,7 +371,7 @@ __global__ void pos2deldop_data_sampling_f_krnl(
 		int set,
 		int f,
 		int v,
-		float orbit_dopoff,
+		float3 orbit_xydopoff,
 		int *badradararr) {
 	/* Single-threaded kernel */
 
@@ -471,7 +471,7 @@ __global__ void pos2deldop_data_sampling_f_krnl(
 		 * Doppler adjustment for orbital motion must be done here explicitly.                  */
 		deldopshift[f].x = frame[f]->delcom_vig + frame[f]->view[v].deloff;
 		deldopshift[f].y = frame[f]->dopcom_vig + frame[f]->view[v].dopoff
-						+ orbit_dopoff;
+						+ orbit_xydopoff.z;
 
 		/* Now get pos->xlim[0], pos->xlim[1], pos->ylim[0], pos->ylim[1] */
 		xylim[f].w = pos[f]->xlim[0];
@@ -811,7 +811,7 @@ __global__ void pos2deldop_pixel_streams_f_krnl(
 		int xspan,
 		int nThreads,
 		int body,
-		float2 orbit_xyoff,
+		float3 orbit_xydopoff,
 		int set,
 		int f) {
 	/* nThreads-threaded kernel */
@@ -864,8 +864,8 @@ __global__ void pos2deldop_pixel_streams_f_krnl(
 			delPOS = pos[f]->z_s[zaddr] * p2ds_delfactf + deldopshift[f].x;
 			idel_min = (int) floor(delPOS - p2ds_const1f) + 1;
 			idel_max = (int) ceil(delPOS + p2ds_const1f) - 1;
-			dopPOS = axay[f].x*(x - orbit_xyoff.x) + axay[f].y*
-					(y - orbit_xyoff.y) + deldopshift[f].y;
+			dopPOS = axay[f].x*(x - orbit_xydopoff.x) + axay[f].y*
+					(y - orbit_xydopoff.y) + deldopshift[f].y;
 			idop_min = (int) floor(dopPOS - dop[f].x + 1 - sinc2width/2.0);
 			idop_max = (int) floor(dopPOS + dop[f].x + sinc2width/2.0);
 
@@ -1443,9 +1443,7 @@ __host__ int pos2deldop_cuda_streams_f(
 		struct pos_t **pos,
 		int *ndel,
 		int *ndop,
-		double orbit_xoff,
-		double orbit_yoff,
-		double orbit_dopoff,
+		float3 orbit_xydopoff,
 		int body,
 		int set,
 		int nframes,
@@ -1455,14 +1453,13 @@ __host__ int pos2deldop_cuda_streams_f(
 {
 	int xspan, yspan, nThreads, *idop0, *idel0;
 	struct deldopfrm_t **frame;
-	float2 *axay, *xyincr, *deldopshift, orbit_xyoff;
+	float2 *axay, *xyincr, *deldopshift;
 	float3 *w;
 	float4 *dop, *deldoplim;
 	int4 *xylim;
 	int4 host_xylim[nframes];
 	dim3 BLK[nframes], THD;
 	THD.x = maxThreadsPerBlock;
-	orbit_xyoff.x = orbit_xoff;	orbit_xyoff.y = orbit_yoff;
 
 	cudaCalloc1((void**)&frame, sizeof(struct deldopfrm_t*), nframes);
 	cudaCalloc1((void**)&idop0, sizeof(int), nframes);
@@ -1483,7 +1480,7 @@ __host__ int pos2deldop_cuda_streams_f(
 		/* Launch kernel to determine data sampling/radar parameters.  */
 		pos2deldop_data_sampling_f_krnl<<<1,1,0,p2d_stream[f]>>>(dpar, ddat,
 				frame, pos, axay, xyincr, deldopshift, w, dop, deldoplim,
-				xylim, set, f, v, orbit_dopoff, badradararr);
+				xylim, set, f, v, orbit_xydopoff, badradararr);
 	}
 	checkErrorAfterKernelLaunch("pos2deldop_init_streams_krnl");
 	gpuErrchk(cudaMemcpy(host_xylim, xylim, nframes*sizeof(int4), cudaMemcpyDeviceToHost));
@@ -1500,7 +1497,7 @@ __host__ int pos2deldop_cuda_streams_f(
 	for (int f=0; f<nframes; f++) {
 		pos2deldop_pixel_streams_f_krnl<<<BLK[f],THD,0,p2d_stream[f]>>>(dpar, dmod, ddat, pos,
 				frame, deldoplim, dop, deldopshift, axay, xyincr, idel0, idop0,
-				ndel, ndop, xspan, nThreads, body, orbit_xyoff, set, f);
+				ndel, ndop, xspan, nThreads, body, orbit_xydopoff, set, f);
 
 		/* Launch kernel to copy the deldop limits back to original doubles in
 		 * the frame structures.	 */

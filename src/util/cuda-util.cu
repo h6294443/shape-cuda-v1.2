@@ -120,26 +120,26 @@ __device__ void dev_mmmul2(double3 *x, double y[3][3], double3 *z, int frm)
 __device__ void dev_mmmul3(float3 *x, double y[3][3], float3 *z, int frm)
 { /* This version turns the original double x[3][3] and double z[3][3] into
    * double3 pointers with nframes entries.  Selection is made via f  */
-	double t[3][3];
+	float t[3][3];
 	int i, f;
 	f = 3*frm;
 
 	for (i=0; i<=2; i++) {
 
 		t[i][0] = 0.0;
-		t[i][0] += y[i][0] * z[f+0].x;
-		t[i][0] += y[i][1] * z[f+1].x;
-		t[i][0] += y[i][2] * z[f+2].x;
+		t[i][0] += __double2float_rn(y[i][0]) * z[f+0].x;
+		t[i][0] += __double2float_rn(y[i][1]) * z[f+1].x;
+		t[i][0] += __double2float_rn(y[i][2]) * z[f+2].x;
 
 		t[i][1] = 0.0;
-		t[i][1] += y[i][0] * z[f+0].y;
-		t[i][1] += y[i][1] * z[f+1].y;
-		t[i][1] += y[i][2] * z[f+2].y;
+		t[i][1] += __double2float_rn(y[i][0]) * z[f+0].y;
+		t[i][1] += __double2float_rn(y[i][1]) * z[f+1].y;
+		t[i][1] += __double2float_rn(y[i][2]) * z[f+2].y;
 
 		t[i][2] = 0.0;
-		t[i][2] += y[i][0] * z[f+0].z;
-		t[i][2] += y[i][1] * z[f+1].z;
-		t[i][2] += y[i][2] * z[f+2].z;
+		t[i][2] += __double2float_rn(y[i][0]) * z[f+0].z;
+		t[i][2] += __double2float_rn(y[i][1]) * z[f+1].z;
+		t[i][2] += __double2float_rn(y[i][2]) * z[f+2].z;
 	}
 
 	for (i=0; i<=2; i++) {
@@ -147,6 +147,21 @@ __device__ void dev_mmmul3(float3 *x, double y[3][3], float3 *z, int frm)
 		x[f+i].y = t[i][1];
 		x[f+i].z = t[i][2];
 	}
+}
+__device__ void dev_mmmul4( float x[3][3], double y[3][3], float z[3][3])
+{
+  float t[3][3];
+  int i, j, k;
+
+  for (i=0;i<=2;i++)
+	for (j=0;j<=2;j++) {
+	  t[i][j] = 0.0;
+	  for (k=0;k<=2;k++)
+		t[i][j] += __double2float_rn(y[i][k])*z[k][j];
+	}
+  for (i=0;i<=2;i++)
+	for (j=0;j<=2;j++)
+	  x[i][j] = t[i][j];
 }
 __device__ int dev_vp_iround(double x)
 {
@@ -283,23 +298,43 @@ __device__ void dev_cotrans2(double y[3], double a[3][3], double x[3], int dir)
 	for (i=0;i<=2;i++)
 		y[i] = t[i];
 }
-__device__ void dev_cotrans3(double y[3], double a[3][3], double x[3],
-		int dir) {
-	double t[3];
-	int i, j;
+__device__ void dev_cotrans3(float y[3], float3 *a, float x[3], int dir, int frm) {
+	/* This version replaces double a[3][3] with a double3 pointers of lenght
+	 * nframes, selected with 'f'	 */
+	float t[3];
+	int i, j, f;
+	f = frm*3;
 
 	if (dir == 1)
 		for (i = 0; i <= 2; i++) {
 			t[i] = 0.0;
-			for (j = 0; j <= 2; j++)
-				t[i] += a[i][j] * x[j];
+			t[i] += a[f+i].x * x[0];
+			t[i] += a[f+i].y * x[1];
+			t[i] += a[f+i].z * x[2];
 		}
-	if (dir == (-1))
-		for (i = 0; i <= 2; i++) {
-			t[i] = 0.0;
-			for (j = 0; j <= 2; j++)
-				t[i] += a[j][i] * x[j];
+
+	if (dir == (-1)) {
+
+		t[0] = 0.0;
+		for (j=0; j<=2; j++) {
+			t[0] += a[f+j].x * x[j];
+			t[0] += a[f+j].x * x[j];
+			t[0] += a[f+j].x * x[j];
 		}
+		t[1] = 0.0;
+		for (j=0; j<=2; j++) {
+			t[1] += a[f+j].y * x[j];
+			t[1] += a[f+j].y * x[j];
+			t[1] += a[f+j].y * x[j];
+		}
+		t[2] = 0.0;
+		for (j=0; j<=2; j++) {
+			t[2] += a[f+j].z * x[j];
+			t[2] += a[f+j].z * x[j];
+			t[2] += a[f+j].z * x[j];
+		}
+	}
+
 	for (i = 0; i <= 2; i++)
 		y[i] = t[i];
 }
@@ -533,13 +568,13 @@ __device__ void dev_mtrnsps2(double3 *a, double b[3][3], int frm)
 __device__ void dev_mtrnsps3(float3 *a, double b[3][3], int frm)
 {	/* This version splits the double a[3][3] of the original function into
 	 * three separate double3 vector variables. b[3][3] remains unchanged. */
-  double t[3][3];
+  float t[3][3];
   int i, j, f;
   f = frm *3;
 
   for (i=0;i<=2;i++)
 	  for (j=0;j<=2;j++)
-		  t[i][j] = b[j][i];
+		  t[i][j] = __double2float_rn(b[j][i]);
 
   a[f+0].x = t[0][0];
   a[f+0].y = t[0][1];
@@ -550,9 +585,18 @@ __device__ void dev_mtrnsps3(float3 *a, double b[3][3], int frm)
   a[f+2].x = t[2][0];
   a[f+2].y = t[2][1];
   a[f+2].z = t[2][2];
+}
+__device__ void dev_mtrnsps4( float a[3][3], double b[3][3])
+{
+	float t[3][3];
+	int i, j;
 
-
-
+  for (i=0;i<=2;i++)
+	for (j=0;j<=2;j++)
+	  t[i][j] = __double2float_rn(b[j][i]);
+  for (i=0;i<=2;i++)
+	for (j=0;j<=2;j++)
+	  a[i][j] = t[i][j];
 }
 __device__ double radlaw_cuda(union radscat_t *radar, unsigned char *radtype,
 		int ilaw, double cosinc, int c, int f)

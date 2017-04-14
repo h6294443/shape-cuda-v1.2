@@ -1059,10 +1059,22 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 					&cos_subradarlat_save, nsets);
 		}
 		else if (STREAMS2){
-			realize_spin_cuda_streams2(dpar, dmod, ddat, htype, nframes, nviews,
+			if (FLOAT)
+				realize_spin_cuda_streams2f(dpar, dmod, ddat, htype, nframes,
+						nviews, nsets, bf_stream);
+			else
+				realize_spin_cuda_streams2(dpar, dmod, ddat, htype, nframes, nviews,
 					nsets, bf_stream);
+
 			realize_photo_cuda(dpar, dmod, 1.0, 1.0, 0);  /* set R_save to R */
-			vary_params_cuda_streams3(dpar, dmod, ddat, action, &deldop_zmax_save,
+
+			if (FLOAT)
+				vary_params_cuda_streams3f(dpar, dmod, ddat, action, &deldop_zmax_save,
+					&rad_xsec_save, &opt_brightness_save, &cos_subradarlat_save,
+					nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+					bf_stream);
+			else
+				vary_params_cuda_streams3(dpar, dmod, ddat, action, &deldop_zmax_save,
 					&rad_xsec_save, &opt_brightness_save, &cos_subradarlat_save,
 					nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
 					bf_stream);
@@ -1170,7 +1182,7 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % npar_update;
-		for (p=first_fitpar; p<nfpar; p++) {
+		for (p=first_fitpar; p<1/*nfpar*/; p++) {
 
 			//p = first_fitpar;
 			/*  Adjust only parameter p on this try  */

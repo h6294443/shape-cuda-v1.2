@@ -316,7 +316,7 @@ __global__ void pos2doppler_radar_parameters_streams_f_krnl(
 		float2 *axay,
 		float2 *xyincr,
 		float *dopshift,
-		float orbit_dopoff,
+		float3 orbit_xydopoff,
 		int set,
 		int nframes,
 		int v,
@@ -385,7 +385,7 @@ __global__ void pos2doppler_radar_parameters_streams_f_krnl(
 	}
 	/* Get the COM Doppler bin, corrected for ephemeris drift and adjusted for
 	 * orbital motion                         */
-	dopshift[f] = frame[f]->dopcom_vig + frame[f]->view[v].dopoff + orbit_dopoff;
+	dopshift[f] = frame[f]->dopcom_vig + frame[f]->view[v].dopoff + orbit_xydopoff.z;
 	}
 }
 __global__ void pos2doppler_pixel_streams_krnl(
@@ -1105,9 +1105,7 @@ __host__ int pos2doppler_cuda_streams_f(
 		struct mod_t *dmod,
 		struct dat_t *ddat,
 		struct pos_t **pos,
-		double orbit_xoff,
-		double orbit_yoff,
-		double orbit_dopoff,
+		float3 orbit_xydopoff,
 		int *ndop,
 		int body,
 		int set,
@@ -1125,9 +1123,6 @@ __host__ int pos2doppler_cuda_streams_f(
 	float4 *dop;
 	int4 *xylim, host_xylim[nframes];
 
-	orbit_xyoff.x = (float)orbit_xoff;
-	orbit_xyoff.y = (float)orbit_yoff;
-
 	cudaCalloc1((void**)&frame,    sizeof(struct dopfrm_t*),nframes);
 	cudaCalloc1((void**)&dopshift, sizeof(float), 		  nframes);
 	cudaCalloc1((void**)&axay, 	   sizeof(float2), 		  nframes);
@@ -1144,7 +1139,7 @@ __host__ int pos2doppler_cuda_streams_f(
 				w, doplim, xylim, ndop, idop0, set, v, nframes, f, badradararr);
 
 		pos2doppler_radar_parameters_streams_f_krnl<<<1,1,0,pds_stream[f]>>>(dpar,
-				ddat, frame, pos, dop, w, axay, xyincr, dopshift, orbit_dopoff,
+				ddat, frame, pos, dop, w, axay, xyincr, dopshift, orbit_xydopoff,
 				set, nframes, v, f, badradararr);
 	} checkErrorAfterKernelLaunch("pos2doppler init and radar parameter kernels"
 			"in pos2doppler_cuda_streams_f.cu");

@@ -162,7 +162,7 @@ __host__ int pos2deldop_cuda_streams(struct par_t *dpar, struct mod_t *dmod, str
 		int v, int *badradararr, cudaStream_t *p2d_stream);
 __host__ int pos2deldop_cuda_streams_f(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, struct pos_t **pos, int *ndel, int *ndop,
-		double orbit_xoff, double orbit_yoff, double orbit_dopoff, int body,
+		float3 orbit_xydopoff, int body,
 		int set, int nframes, int v, int *badradararr, cudaStream_t *p2d_stream);
 __host__ int pos2doppler_cuda_2( struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, double orbit_xoff, double orbit_yoff, double
@@ -175,9 +175,8 @@ __host__ int pos2doppler_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 		orbit_yoff, double orbit_dopoff, int *ndop, int body, int set,
 		int nframes, int v,	int *badradararr, cudaStream_t *pds_stream);
 __host__ int pos2doppler_cuda_streams_f(struct par_t *dpar, struct mod_t *dmod,
-		struct dat_t *ddat, struct pos_t **pos, double orbit_xoff, double orbit_yoff,
-		double orbit_dopoff, int *ndop, int body, int set, int nframes,
-		int v, int *badradararr, cudaStream_t *pds_stream);
+		struct dat_t *ddat, struct pos_t **pos, float3 orbit_xydopoff, int *ndop,
+		int body, int set, int nframes, int v, int *badradararr, cudaStream_t *pds_stream);
 __host__ int posvis_cuda_2(struct par_t *dpar, struct mod_t *dmod, struct
 		dat_t *ddat, double orbit_offset[3], int set, int frame, int src,
 		int body, int comp);
@@ -209,6 +208,9 @@ __host__ void realize_spin_cuda_streams( struct par_t *dpar,
 __host__ void realize_spin_cuda_streams2(struct par_t *dpar,struct mod_t *dmod,
 		struct dat_t *ddat, unsigned char *htype, int *nframes, int *nviews,
 		int nsets, cudaStream_t *rs_stream);
+__host__ void realize_spin_cuda_streams2f(struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat, unsigned char *htype, int *nframes, int *nviews,
+		int nsets, cudaStream_t *rs_stream);
 __host__ void realize_xyoff_cuda( struct dat_t *ddat);
 __host__ void show_deldoplim_cuda(struct dat_t *dat, struct dat_t *ddat);
 __host__ void show_deldoplim_cuda_streams(struct dat_t *ddat,
@@ -231,6 +233,11 @@ __host__ void vary_params_cuda_streams3(struct par_t *dpar, struct mod_t *dmod,
 		double *opt_brightness, double *cos_subradarlat, int *hnframes, int *hlc_n,
 		int *nviews, struct vertices_t **verts, unsigned char *htype,
 		unsigned char *dtype, int nf, int nsets, cudaStream_t *vp_stream);
+__host__ void vary_params_cuda_streams3f(struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat, int action, double *deldop_zmax, double *rad_xsec,
+		double *opt_brightness, double *cos_subradarlat, int *hnframes, int *hlc_n,
+		int *nviews, struct vertices_t **verts, unsigned char *htype,
+		unsigned char *dtype, int nf, int nsets, cudaStream_t *vp_stream);
 
 __device__ int cubic_realroots_cuda( double *coeff, double *realroot);
 __device__ int cubic_realroots_f_cuda( float4 coeff, float3 *realroot);
@@ -239,7 +246,7 @@ __device__ void dev_bsstep(double *y, double *dydx, int nv, double *xx, double h
 __device__ double dev_cel(double qqc, double pp, double aa, double bb);
 __device__ void dev_cotrans1( double y[3], double *a, double x[3], int dir);
 __device__ void dev_cotrans2( double y[3], double a[3][3], double x[3], int dir);
-__device__ void dev_cotrans3(double y[3], double a[3][3], double x[3],		int dir);
+__device__ void dev_cotrans3(float y[3], float3 *a, float x[3], int dir, int frm);
 __device__ void dev_cotrans4(float3 *y, double a[3][3], double x[3], int dir, int f);
 __device__ void dev_cotrans5(double3 *y, double a[3][3], double3 x, int dir);
 __device__ void dev_cotrans6(double y[3], double3 *a, double x[3], int dir, int f);
@@ -274,9 +281,11 @@ __device__ void dev_mmid( double *y, double *dydx, int nvar1, double xs, double 
 __device__ void dev_mmmul(double x[3][3], double y[3][3], double z[3][3]);
 __device__ void dev_mmmul2(double3 *x, double y[3][3], double3 *z, int f);
 __device__ void dev_mmmul3(float3 *x, double y[3][3], float3 *z, int frm);
+__device__ void dev_mmmul4( float x[3][3], double y[3][3], float z[3][3]);
 __device__ void dev_mtrnsps( double a[3][3], double b[3][3]);
 __device__ void dev_mtrnsps2(double3 *a, double b[3][3], int f);
 __device__ void dev_mtrnsps3(float3 *a, double b[3][3], int frm);
+__device__ void dev_mtrnsps4( float a[3][3], double b[3][3]);
 __device__ double dev_normalize(double *u);
 __device__ float dev_normalize2(float3 u);
 __device__ void dev_odeint( double *ystart, int nvar, double x1, double x2, double eps,

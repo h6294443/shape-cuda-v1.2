@@ -2280,6 +2280,9 @@ int read_lghtcrv( struct dat_t *dat, FILE *fp, struct par_t *par, struct lghtcrv
 			cudaCalloc1((void**)&lghtcrv->rotphase_calc, sizeof(double), ncalc);
 			cudaCalloc1((void**)&lghtcrv->solar_phase,   sizeof(double), ncalc);
 			cudaCalloc1((void**)&lghtcrv->solar_azimuth, sizeof(double), ncalc);
+			cudaCalloc1((void**)&lghtcrv->x_s, sizeof(float), ncalc);
+			cudaCalloc1((void**)&lghtcrv->y_s, sizeof(float), ncalc);
+			cudaCalloc1((void**)&lghtcrv->y2_s, sizeof(float), ncalc);
 
 			lghtcrv->x0 		   -= 1;
 			lghtcrv->x  		   -= 1;
@@ -2288,6 +2291,9 @@ int read_lghtcrv( struct dat_t *dat, FILE *fp, struct par_t *par, struct lghtcrv
 			lghtcrv->rotphase_calc -= 1;
 			lghtcrv->solar_phase   -= 1;
 			lghtcrv->solar_azimuth -= 1;
+			lghtcrv->x_s 		   -= 1;
+			lghtcrv->y_s		   -= 1;
+			lghtcrv->y2_s		   -= 1;
 		}
 		else {
 			lghtcrv->x0 = vector( 1, lghtcrv->ncalc);
@@ -2303,7 +2309,6 @@ int read_lghtcrv( struct dat_t *dat, FILE *fp, struct par_t *par, struct lghtcrv
 		if (CUDA) {
 			cudaMallocManaged((void**)&lghtcrv->rend, sizeof(struct crvrend_t)*
 					(lghtcrv->ncalc+1), cudaMemAttachGlobal);
-		//	lghtcrv->rend -= 1;
 		}
 		else
 			lghtcrv->rend = (struct crvrend_t *) calloc( lghtcrv->ncalc+1,
@@ -2483,6 +2488,9 @@ int read_lghtcrv( struct dat_t *dat, FILE *fp, struct par_t *par, struct lghtcrv
 			cudaCalloc1((void**)&lghtcrv->rotphase_calc, sizeof(double), ncalc);
 			cudaCalloc1((void**)&lghtcrv->solar_phase,   sizeof(double), ncalc);
 			cudaCalloc1((void**)&lghtcrv->solar_azimuth, sizeof(double), ncalc);
+			cudaCalloc1((void**)&lghtcrv->x_s, sizeof(float), ncalc);
+			cudaCalloc1((void**)&lghtcrv->y_s, sizeof(float), ncalc);
+			cudaCalloc1((void**)&lghtcrv->y2_s, sizeof(float), ncalc);
 
 			lghtcrv->x0 		   -= 1;
 			lghtcrv->x  		   -= 1;
@@ -2491,6 +2499,9 @@ int read_lghtcrv( struct dat_t *dat, FILE *fp, struct par_t *par, struct lghtcrv
 			lghtcrv->rotphase_calc -= 1;
 			lghtcrv->solar_phase   -= 1;
 			lghtcrv->solar_azimuth -= 1;
+			lghtcrv->x_s		   -= 1;
+			lghtcrv->y_s		   -= 1;
+			lghtcrv->y2_s		   -= 1;
 		}
 		else {
 			lghtcrv->x0 = vector( 1, lghtcrv->ncalc);
@@ -2506,7 +2517,6 @@ int read_lghtcrv( struct dat_t *dat, FILE *fp, struct par_t *par, struct lghtcrv
 		if (CUDA) {
 			cudaCalloc1((void**)&lghtcrv->rend, sizeof(struct crvrend_t),
 					lghtcrv->ncalc+1);
-		//	lghtcrv->rend -= 1;
 		} else
 			lghtcrv->rend = (struct crvrend_t *) calloc( lghtcrv->ncalc+1,
 					sizeof( struct crvrend_t));

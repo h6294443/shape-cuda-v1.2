@@ -1170,7 +1170,7 @@ __host__ void calc_deldop_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 	}
 
 	for (v2=v0_index+1; v2<=v0_index+nviews; v2++)
-		pos2deldop_cuda_streams_f(dpar,dmod,ddat, pos, ndel, ndop, 0.0,0.0,0.0,0,
+		pos2deldop_cuda_streams(dpar,dmod,ddat, pos, ndel, ndop, 0.0,0.0,0.0,0,
 				s, nframes, v[v2], outbndarr, cf_stream);
 
 	/* Copy the badradar flag returns for all frames to a host copy */
@@ -1357,7 +1357,7 @@ __host__ void calc_doppler_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 	}
 	/* Call pos2deldop to calculate the Doppler radar fit image */
 	for (v2=v0_index+1; v2<=v0_index+nviews; v2++)
-		pos2doppler_cuda_streams_f(dpar, dmod, ddat, pos, 0.0, 0.0, 0.0, ndop, 0, s, nframes, v[v2],	outbndarr, cf_stream);
+		pos2doppler_cuda_streams(dpar, dmod, ddat, pos, 0.0, 0.0, 0.0, ndop, 0, s, nframes, v[v2],	outbndarr, cf_stream);
 
 	/* Copy the badradar flag returns for all frames to a host copy */
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
