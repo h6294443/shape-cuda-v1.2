@@ -351,6 +351,9 @@ __host__ void calc_lghtcrv_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 __host__ void calc_lghtcrv_cuda_streams2(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, struct vertices_t **verts, int s, int nframes,
 		int nviews, unsigned char type, int lc_n, int nf, cudaStream_t *cf_stream);
+__host__ void calc_lghtcrv_cuda_streams2f(struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat, struct vertices_t **verts, int s, int nframes,
+		int nviews, unsigned char type, int lc_n, int nf, cudaStream_t *cf_stream);
 
 __device__ int cfs_nf, cfs_nsets, cfs_v0_index, cfs_exclude_seen, cfs_ncalc, cfs_n;
 __device__ double cfs_lghtcrv_posbnd_logfactor;
@@ -644,7 +647,11 @@ __host__ void calc_fits_cuda_streams2(
 //			calc_poset_cuda(dpar, dmod, s);
 			break;
 		case LGHTCRV:
-			calc_lghtcrv_cuda_streams2(dpar, dmod, ddat, verts, s, nframes[s],
+			if (FLOAT)
+				calc_lghtcrv_cuda_streams2f(dpar, dmod, ddat, verts, s, nframes[s],
+						nviews[s], type[s], lc_n[s], nf, cf_stream);
+			else
+				calc_lghtcrv_cuda_streams2(dpar, dmod, ddat, verts, s, nframes[s],
 					nviews[s], type[s], lc_n[s],nf, cf_stream);
 			break;
 		default:
@@ -1017,7 +1024,7 @@ __global__ void cf_finish_fit_streams_krnl2(float *overflow, int f, unsigned cha
 	}
 }
 __global__ void cf_gamma_trans_streams_krnl(struct par_t *dpar, struct dat_t *ddat,
-		int s, int f, int nThreads, unsigned char type) {
+		int s, int f, int nThreads, unsigned char type, int flt) {
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
 	if (offset < nThreads) {
@@ -1025,7 +1032,11 @@ __global__ void cf_gamma_trans_streams_krnl(struct par_t *dpar, struct dat_t *dd
 		if (dpar->dd_gamma != 1.0) {
 			switch (type) {
 			case DELAY:
-				dev_gamma_trans(&ddat->set[s].desc.deldop.frame[f].fit_s[offset],
+				if (flt)
+					dev_gamma_trans_f(&ddat->set[s].desc.deldop.frame[f].fit_s[offset],
+							__double2float_rn(dpar->dd_gamma));
+				else
+					dev_gamma_trans(&ddat->set[s].desc.deldop.frame[f].fit_s[offset],
 						dpar->dd_gamma);
 				break;
 			case DOPPLER:
@@ -1040,9 +1051,10 @@ __host__ void calc_deldop_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, struct vertices_t **verts, int s, int nframes,
 		int nviews, unsigned char type, int nf, cudaStream_t *cf_stream)
 {
-	double orbit_offset[3] = {0.0, 0.0, 0.0};
-	float3 orbit_off3;
+	//double orbit_offset[3] = {0.0, 0.0, 0.0};
+	float3 orbit_off3, orb_xydopoff;
 	orbit_off3.x = orbit_off3.y = orbit_off3.z = 0.0;
+	orb_xydopoff.x = orb_xydopoff.y = orb_xydopoff.z = 0.0;
 	int *ndel, *ndop, *posn, *bistatic, v0_index, exclude_seen, f, v2, c=0, yspan,
 			*outbndarr;
 	float **fit_store, *overflow;
@@ -1169,9 +1181,14 @@ __host__ void calc_deldop_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 		} checkErrorAfterKernelLaunch("clrvect_krnl and cf_mark_pixels_seen_streams_krnl");
 	}
 
-	for (v2=v0_index+1; v2<=v0_index+nviews; v2++)
-		pos2deldop_cuda_streams(dpar,dmod,ddat, pos, ndel, ndop, 0.0,0.0,0.0,0,
-				s, nframes, v[v2], outbndarr, cf_stream);
+	for (v2=v0_index+1; v2<=v0_index+nviews; v2++) {
+		if (FLOAT)
+			pos2deldop_cuda_streams_f(dpar,dmod,ddat, pos, ndel, ndop, orb_xydopoff,0,
+					s, nframes, v[v2], outbndarr, cf_stream);
+		else
+			pos2deldop_cuda_streams(dpar,dmod,ddat, pos, ndel, ndop, 0.0,0.0,0.0,0,
+					s, nframes, v[v2], outbndarr, cf_stream);
+	}
 
 	/* Copy the badradar flag returns for all frames to a host copy */
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
@@ -1213,7 +1230,7 @@ __host__ void calc_deldop_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 
 			cf_finish_fit_streams_krnl2<<<1,1,0,cf_stream[f]>>>(overflow, f, type);
 
-			cf_gamma_trans_streams_krnl<<<BLKdd[f],THD,0,cf_stream[f]>>>(dpar, ddat, s, f, nThreadsdd[f], type);
+			cf_gamma_trans_streams_krnl<<<BLKdd[f],THD,0,cf_stream[f]>>>(dpar, ddat, s, f, nThreadsdd[f], type, FLOAT);
 		} checkErrorAfterKernelLaunch("cf_finish_fit_store_streams kernels and "
 				"cf_gamma_trans_krnl");
 		cudaFree(fit_store);
@@ -1231,11 +1248,11 @@ __host__ void calc_doppler_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, struct vertices_t **verts, int s, int nframes,
 		int nviews, unsigned char type, int nf, cudaStream_t *cf_stream)
 {
-	double orbit_offset[3] = {0.0, 0.0, 0.0};
+	//double orbit_offset[3] = {0.0, 0.0, 0.0};
 	float3 orbit_off3;
 	orbit_off3.x = orbit_off3.y = orbit_off3.z = 0.0;
 	float **fit_store, *overflow;
-	int *ndop, *posn, *bistatic, v0_index, exclude_seen, nx, f, v2, c=0, yspan,
+	int *ndop, *posn, *bistatic, v0_index, exclude_seen, f, v2, c=0, yspan,
 			*outbndarr;
 	dim3 BLKd[nframes], BLKpx[nframes],THD,THD9;
 	THD.x = maxThreadsPerBlock; THD9.x = 9;
@@ -1302,12 +1319,10 @@ __host__ void calc_doppler_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 	} checkErrorAfterKernelLaunch("cfs_set_pos_ae_streams and posclr_streams_krnl");
 
 	/* Call posvis_cuda_2 to get facet number, scattering angle, distance
-	 * toward Earth at center of each POS pixel; set flag posbnd if any
-	 * model portion extends beyond POS frame limits.*/
+	 * toward Earth at center of each POS pixel; set flag posbnd if any model
+	 * portion extends beyond POS frame limits.*/
 	/* NOTE: Limited to single component for now */
 	//for (v2=v0_index+1; v2<=v0_index+nviews; v2++) {
-//	posvis_cuda_streams(dpar, dmod, ddat, orbit_offset, s, nframes, 0, 0, c,
-//			outbndarr, cf_stream);
 	posvis_cuda_streams2(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
 			outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream);
 
@@ -1356,9 +1371,14 @@ __host__ void calc_doppler_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 		} checkErrorAfterKernelLaunch("clrvect_krnl and cf_mark_pixels_seen_streams_krnl");
 	}
 	/* Call pos2deldop to calculate the Doppler radar fit image */
-	for (v2=v0_index+1; v2<=v0_index+nviews; v2++)
-		pos2doppler_cuda_streams(dpar, dmod, ddat, pos, 0.0, 0.0, 0.0, ndop, 0, s, nframes, v[v2],	outbndarr, cf_stream);
-
+	for (v2=v0_index+1; v2<=v0_index+nviews; v2++) {
+		if (FLOAT)
+			pos2doppler_cuda_streams_f(dpar, dmod, ddat, pos, orbit_off3,
+					ndop, 0, s, nframes, v[v2],	outbndarr, cf_stream);
+		else
+			pos2doppler_cuda_streams(dpar, dmod, ddat, pos, 0.0, 0.0, 0.0,
+					ndop, 0, s, nframes, v[v2],	outbndarr, cf_stream);
+	}
 	/* Copy the badradar flag returns for all frames to a host copy */
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
 			cudaMemcpyDeviceToHost));
@@ -1380,7 +1400,6 @@ __host__ void calc_doppler_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 		if (nviews > 1) {
 			/* Launch ndop-threaded kernel to add fit[i][j] to
 			 * fit_store[i][j]*/
-
 			cf_add_fit_store_streams_krnl1<<<BLKd[f],THD,0,cf_stream[f]>>>(
 					ddat, fit_store, ndop[f], s, f, type);
 
@@ -1401,7 +1420,7 @@ __host__ void calc_doppler_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 			cf_finish_fit_streams_krnl2<<<1,1,0,cf_stream[f]>>>(overflow, f, type);
 
 			cf_gamma_trans_streams_krnl<<<BLKd[f],THD,0,cf_stream[f]>>>(dpar,
-					ddat, s, f, ndop[f], type);
+					ddat, s, f, ndop[f], type, FLOAT);
 		} checkErrorAfterKernelLaunch("cf_finish_fit_store_streams kernels and "
 				"cf_gamma_trans_krnl (calc_doppler_cuda_streams");
 		cudaFree(fit_store);
@@ -1876,10 +1895,15 @@ __host__ void calc_lghtcrv_cuda_streams2(
 	 * angle, distance toward Earth at center of each POS pixel; set posbnd
 	 * parameter = 1 if any model portion extends beyond POS frame limits*/
 
-//	posvis_cuda_streams(dpar, dmod, ddat, orbit_offset, s, nframes, 0, 0, c,
-//			outbndarr, cf_stream);
+	//dbg_print_facet_normals(dmod, nf, "STR2_facet_normals.csv");
+
+
 	posvis_cuda_streams2(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
 				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream);
+//	int npixels = (2*hposn[1]+1)*(2*hposn[1]+1);
+//	dbg_print_pos_arrays_full(pos, 1, npixels, hposn[1]);
+//	dbg_print_pos_arrays_full(pos, 2, npixels, hposn[2]);
+//	dbg_print_pos_arrays_full(pos, 3, npixels, hposn[3]);
 
 	/* Copy the posbnd flag returns for all frames to a host copy */
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*(nfplus),
@@ -1905,8 +1929,6 @@ __host__ void calc_lghtcrv_cuda_streams2(
 			bistatic_all = 1;
 
 	if (bistatic_all) {
-//		posvis_cuda_streams(dpar, dmod, ddat, orbit_offset, s, nframes, 1, 0, c,
-//				outbndarr, cf_stream);
 		posvis_cuda_streams2(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
 				outbndarr, s, nframes, 1, nf, 0, c, type, cf_stream);
 
@@ -1930,6 +1952,8 @@ __host__ void calc_lghtcrv_cuda_streams2(
 
 		} checkErrorAfterKernelLaunch("posmask_streams_krnl");
 	}
+//	for (f=21; f<=22; f++)
+//		dbg_print_lghtcrv_pos_arrays(ddat, 0, f, nThreadspx[f], hposn[f]);
 	/* Go through all visible and unshadowed POS pixels with low enough
 	 * scattering and incidence angles, and mark facets which project onto
 	 * their centers as having been "seen" at least once   */
@@ -1985,13 +2009,24 @@ __host__ void calc_lghtcrv_cuda_streams2(
 
 	nThreads = nframes;
 	double *u;
-	cudaCalloc1((void**)&u, sizeof(double), ncalc);
-	int threads = 128;
-	BLKpx[0].x = floor((threads-1+nThreads)/threads);
-	THD.x = threads;
-	//cf_spline_lghtcrv_krnl<<<BLK,THD>>>(2.0e30, 2.0e30, u);
-	cfs_spline_lghtcrv_serial_krnl<<<1,1>>>(u);
-	checkErrorAfterKernelLaunch("cf_spline_lghtcrv_krnl");
+	THD.x = maxThreadsPerBlock;
+	gpuErrchk(cudaMalloc((void**)&u, sizeof(double)*nframes));
+	BLKpx[0].x = floor((THD.x - 1 + nThreads)/THD.x);
+	lghtcrv_spline_streams_krnl<<<BLKpx[0],THD>>>(ddat, s, 2.0e30,
+			2.0e30, u, nframes);
+	checkErrorAfterKernelLaunch("lghtcrv_spline_streams_krnl");
+
+	/* Change launch parameters from ncalc threads to n threads */
+	BLKpx[0].x = floor((THD.x - 1 + n) / THD.x);
+	lghtcrv_splint_streams3_krnl<<<BLKpx[0],THD>>>(ddat, s, n);
+	checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
+
+//	int threads = 128;
+//	BLKpx[0].x = floor((threads-1+nThreads)/threads);
+//	THD.x = threads;
+//	//cf_spline_lghtcrv_krnl<<<BLK,THD>>>(2.0e30, 2.0e30, u);
+//	cfs_spline_lghtcrv_serial_krnl<<<1,1>>>(u);
+//	checkErrorAfterKernelLaunch("cf_spline_lghtcrv_krnl");
 
 	/* Start debug */
 	/* Pull out lghtcrv->x, lghtcrv->y, lghtcrv->y2 (all of length ncalc) */
@@ -2004,10 +2039,225 @@ __host__ void calc_lghtcrv_cuda_streams2(
 	 * 	- add interp to fit[i]
 	 * 	- divide final fit[i] over nviews
 	 */
-	BLKpx[0].x = floor((threads-1+n)/threads);
-	THD.x = threads;
-	cfs_splint_lghtcrv_krnl<<<BLKpx[0],THD>>>(dpar);
-	checkErrorAfterKernelLaunch("cf_splint_lghtcrv_krnl");
+//	BLKpx[0].x = floor((threads-1+n)/threads);
+//	THD.x = threads;
+//	cfs_splint_lghtcrv_krnl<<<BLKpx[0],THD>>>(dpar);
+	//	checkErrorAfterKernelLaunch("cf_splint_lghtcrv_krnl");
+//
+//	int npixels = (2*hposn[1]+1)*(2*hposn[1]+1);
+//
+//	dbg_print_pos_arrays_full(pos, 1, npixels, hposn[1]);
+//	dbg_print_pos_arrays_full(pos, 2, npixels, hposn[2]);
+//	dbg_print_pos_arrays_full(pos, 3, npixels, hposn[3]);
+
+	cudaFree(pos);
+	cudaFree(rend);
+	cudaFree(posn);
+	cudaFree(bistatic);
+	cudaFree(pxlpkm);
+	cudaFree(overflow);
+	cudaFree(xylim);
+	cudaFree(outbndarr);
+	cudaFree(so);
+	cudaFree(u);
+}
+__host__ void calc_lghtcrv_cuda_streams2f(
+		struct par_t *dpar,
+		struct mod_t *dmod,
+		struct dat_t *ddat,
+		struct vertices_t **verts,
+		int s,
+		int nframes,
+		int nviews,
+		unsigned char type,
+		int lc_n,
+		int nf,
+		cudaStream_t *cf_stream)
+{
+	int nfplus = nframes+1; /* This is to accomodate the +1 start in lghtcrv */
+	int ncalc, c=0, i, *posn, *bistatic, n, nThreads, exclude_seen, f,
+			bistatic_all, *outbndarr, hbistatic[nfplus], houtbndarr[nfplus],
+		nThreadspx[nfplus], nThreadspx1[nfplus], hposn[nfplus] ;
+	float *pxlpkm, posbnd_logfactor;
+	float3 orbit_off3, *so;
+	int2 span[nfplus];
+	int4 *xylim, hxylim[nfplus];
+	dim3 BLKpx[nfplus],THD,THD9;
+	THD.x = maxThreadsPerBlock; THD9.x = 9;
+	struct pos_t **pos;
+	struct crvrend_t **rend;
+	float *overflow;
+
+	ncalc = nframes;
+	n = lc_n;
+	orbit_off3.x = orbit_off3.y = orbit_off3.z = 0.0;
+
+	gpuErrchk(cudaMalloc((void**)&pos, 	  sizeof(struct pos_t*) * nfplus));
+	gpuErrchk(cudaMalloc((void**)&rend, 	  sizeof(struct crvrend_t*) * nfplus));
+	gpuErrchk(cudaMalloc((void**)&posn, 	  sizeof(int) * nfplus));
+	gpuErrchk(cudaMalloc((void**)&bistatic, sizeof(int) * nfplus));
+	gpuErrchk(cudaMalloc((void**)&pxlpkm,   sizeof(float) * nfplus));
+	gpuErrchk(cudaMalloc((void**)&overflow, sizeof(float) * nfplus));
+	gpuErrchk(cudaMalloc((void**)&xylim, 	  sizeof(int4) * nfplus));
+	gpuErrchk(cudaMalloc((void**)&outbndarr,sizeof(int) * nfplus));
+	gpuErrchk(cudaMalloc((void**)&so, 	  sizeof(double3) * ((nframes*3)+1)));
+
+	/* Set shortcuts and copy pos->n back for all frames */
+	for (f=1; f<=nframes; f++){
+		cfs_set_lghtcrv_shortcuts_streams_krnl<<<1,1,0,cf_stream[f-1]>>>(ddat,
+				rend, pos, overflow, posn, s, f);
+	checkErrorAfterKernelLaunch("cfs_set_lghtcrv_shortcuts_streams_krnl");
+	}
+	gpuErrchk(cudaMemcpy(&hposn, posn, sizeof(int)* nfplus,
+			cudaMemcpyDeviceToHost));
+
+	/* Calculate launch parameters for later */
+	for (f=1; f<=nframes; f++) {
+		span[f].x = (2 * hposn[f] + 1);
+		nThreadspx[f] =  span[f].x * span[f].x;
+		BLKpx[f] = floor((THD.x - 1 + nThreadspx[f]) / THD.x);
+	}
+	/* Calculate model lightcurve values at each user-specified epochs x[i],
+	 * with i=1,2,...,ncalc; these may/may not be the same as epochs t[i]
+	 * (i=1,2,...,n) at which actual lightcurve observations were made.  */
+
+	for (f=1; f<=ncalc; f++) {
+		/* Launch 9-threaded kernel to set pos->ae,pos->oe,pos->bistatic.*/
+		cfs_set_pos_ae_streams_krnl<<<1,THD9,0,cf_stream[f-1]>>>(pos, f,
+				bistatic, type, 0);
+
+		/* Clear the POS-view to initialize */
+		posclr_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn, f);
+	} checkErrorAfterKernelLaunch("cfs_set_pos_ae_streams and posclr_streams_krnl");
+
+	/* Call routine posvis to get  facet number, scattering & incidence
+	 * angle, distance toward Earth at center of each POS pixel; set posbnd
+	 * parameter = 1 if any model portion extends beyond POS frame limits*/
+
+//	posvis_cuda_streams(dpar, dmod, ddat, orbit_offset, s, nframes, 0, 0, c,
+//			outbndarr, cf_stream);
+	posvis_cuda_streams2(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
+				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream);
+
+	/* Copy the posbnd flag returns for all frames to a host copy */
+	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*(nfplus),
+			cudaMemcpyDeviceToHost));
+
+	/* Now check the outbndarr for the posbnd flag for each frame */
+	for (f=1; f<=nframes; f++) {
+		if (houtbndarr[f]) {
+			/* Call single-threaded kernel to set dpar->posbnd and dpar->posbnd_logfactor */
+			cfs_set_posbnd_streams_krnl<<<1,1,0,cf_stream[f-1]>>>(dpar, pos, f, type);
+			houtbndarr[f]=0;
+		}
+	}
+	gpuErrchk(cudaMemcpy(&hbistatic, bistatic, sizeof(int)*(nfplus), cudaMemcpyDeviceToHost));
+
+	/* Now view model from source (sun) and get facet number and distance
+	 * toward source of each pixel in this projected view; use this
+	 * information to determine which POS pixels are shadowed       */
+	/* Because posvis_cuda_streams processes all frames at the same time, if
+	 * any of the frames are bistatic, all of them get calculated again  */
+	for (f=1; f<=nframes; f++)
+		if (hbistatic[f])	bistatic_all = 1;
+
+	if (bistatic_all) {
+//		posvis_cuda_streams(dpar, dmod, ddat, orbit_offset, s, nframes, 1, 0, c,
+//				outbndarr, cf_stream);
+		posvis_cuda_streams2(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
+				outbndarr, s, nframes, 1, nf, 0, c, type, cf_stream);
+
+		/* Copy the posbnd flag returns for all frames to a host copy */
+		gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nfplus,
+				cudaMemcpyDeviceToHost));
+
+		/* Now check the outbndarr for the posbnd flag for each frame */
+		for (f=1; f<=nframes; f++) {
+			if (houtbndarr[f]) {
+				/* Call single-threaded kernel to set dpar->posbnd and dpar->posbnd_logfactor */
+				cfs_set_posbnd_streams_krnl<<<1,1,0,cf_stream[f-1]>>>(dpar, pos, f, type);
+			}
+			/* Initialize this stream for the posmask kernel to follow */
+			posmask_init_streams_f_krnl<<<1,1,0,cf_stream[f-1]>>>(pos, so, pxlpkm, f);
+
+			/* Now call posmask kernel for this stream, then loop
+			 * to next stream and repeat 	 */
+			posmask_streams_f_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(
+					dpar, pos, so, pxlpkm, nThreadspx[f], span[f].x, f);
+		} checkErrorAfterKernelLaunch("posmask_streams_krnl");
+	}
+	/* Go through all visible and unshadowed POS pixels with low enough
+	 * scattering and incidence angles, and mark facets which project onto
+	 * their centers as having been "seen" at least once   */
+	/* Get xlim and ylim and exclude_seen flag */
+	for (f=1; f<=nframes; f++)
+		cfs_get_exclude_seen_streams_krnl<<<1,1,0,cf_stream[f-1]>>>(dpar,pos,xylim,f);
+	checkErrorAfterKernelLaunch("cfs_get_exclude_seen_streams_krnl (calc_lghtcrv_cuda_streams");
+
+	/* Now copy the flag and all frame pos's xlim and ylim values back from GPU */
+	gpuErrchk(cudaMemcpyFromSymbol(&exclude_seen, cfs_exclude_seen, sizeof(int),
+			0, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(&hxylim, xylim, sizeof(int4)*nfplus, cudaMemcpyDeviceToHost));
+
+	/* Calculate launch parameters for all frames */
+	for (f=1; f<=nframes; f++) {
+		span[f].x = hxylim[f].x - hxylim[f].w + 1;
+		span[f].y = hxylim[f].z - hxylim[f].y + 1;
+		nThreadspx1[f] = span[f].x * span[f].y;
+		BLKpx[f].x = floor ((THD.x -1 + nThreadspx1[f]) / THD.x);
+	}
+
+	for (f=1; f<=nframes; f++) {
+		/* Go through all POS pixels which are visible with low enough
+		 * scattering angle and mark the facets which project onto
+		 * their centers as having been "seen" at least once           */
+		if (s != exclude_seen)
+			cf_mark_pixels_seen_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(
+					dpar, dmod, pos, xylim, nThreadspx1[f], span[f].x, f);
+	} checkErrorAfterKernelLaunch("cf_mark_pixels_krnl (calc_lghtcrv_cuda)");
+
+	/* Compute model brightness for this lightcurve point then copy to device  */
+	apply_photo_cuda_streams_f(dmod, ddat, pos, xylim, span, BLKpx, nThreadspx1,
+			0, s, nframes, cf_stream);
+
+//	dbg_print_lghtcrv_xyy2(ddat, s, nframes, "streams2_x_y_y2_arrays.csv");
+//	dbg_print_lghtcrv_pos_arrays(ddat, s, 1, nThreadspx[1], hposn[1]);
+
+	/* Now that we have calculated the model lightcurve brightnesses y at each
+	 * of the epochs x, we use cubic spline interpolation (Numerical Recipes
+	 * routines spline and splint) to get model lightcurve brightness fit[i] at
+	 * each OBSERVATION epoch t[i], with i=1,2,...,n. This will allow us (in
+	 * routine chi2) to compare model to data (fit[i] to obs[i]) to get chi-
+	 * square. Note that vector y2 contains the second derivatives of the
+	 * interpolating function at the calculation epochs x. Smearing is handled
+	 * by interpolating the brightness at the time t of each individual view
+	 * and then taking the mean of all views that correspond to a given
+	 * observed lightcurve point.                         */
+	/* Configure and launch an ncalc-threaded kernel that performs what NR
+	 * function spline does.  Original call:
+	 *
+	 * spline( lghtcrv->x, lghtcrv->y, ncalc, 2.0e30, 2.0e30, lghtcrv->y2);
+	 */
+
+	nThreads = nframes;
+	float *u;
+	gpuErrchk(cudaMalloc((void**)&u, sizeof(float) * (nframes+1)));
+
+	THD.x = maxThreadsPerBlock;
+	BLKpx[0].x = floor((THD.x-1+nThreads)/THD.x);
+	//cf_spline_lghtcrv_krnl<<<BLK,THD>>>(2.0e30, 2.0e30, u);
+	lghtcrv_spline_streams_f_krnl<<<BLKpx[0],THD>>>(ddat, s, 2.0e30, 2.0e30, u, nframes);
+	checkErrorAfterKernelLaunch("lghtcrv_spline_streams_f_krnl in calc_fits_cuda_streams");
+
+	/* Change launch parameters from ncalc threads to n threads */
+	BLKpx[0].x = floor((THD.x - 1 + lc_n) / THD.x);
+	lghtcrv_splint_streams3f_krnl<<<BLKpx[0],THD>>>(ddat, s, n);
+	checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
+
+
+	/* Start debug */
+	/* Pull out lghtcrv->x, lghtcrv->y, lghtcrv->y2 (all of length ncalc) */
+	//dbg_print_lghtcrv_xyy2(ddat, s, ncalc, "xyy2_arrays_CUDA.csv");
 
 	cudaFree(pos);
 	cudaFree(rend);

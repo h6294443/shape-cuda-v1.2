@@ -914,7 +914,7 @@ __host__ void realize_mod_cuda( struct par_t *dpar, struct mod_t *dmod,
       some scattering laws) the corresponding angular coordinates.        */
 
 	if (FLOAT)
-		realize_coordinates_f_cuda(dpar, dmod, type);
+		realize_coordinates_cuda(dpar, dmod, type);
 	else
 		realize_coordinates_cuda(dpar, dmod, type);
 
@@ -1461,10 +1461,10 @@ __host__ void compute_moments_cuda( struct mod_t *dmod)
 	checkErrorAfterKernelLaunch("comp_moments_2ndinit_krnl (compute_moments_cuda)");
 
 	/* Load the temporary arrays with data */
-	if (FLOAT)
-		comp_moments_facet_f_krnl<<<nfBLK,nfTHD>>>(dmod, c, dv, dcom0, dcom1, dcom2,
-				dI00, dI01, dI02, dI10, dI11, dI12, dI20, dI21, dI22);
-	else
+//	if (FLOAT)
+//		comp_moments_facet_f_krnl<<<nfBLK,nfTHD>>>(dmod, c, dv, dcom0, dcom1, dcom2,
+//				dI00, dI01, dI02, dI10, dI11, dI12, dI20, dI21, dI22);
+//	else
 		comp_moments_facet_krnl<<<nfBLK,nfTHD>>>(dmod, c, dv, dcom0, dcom1, dcom2,
 				dI00, dI01, dI02, dI10, dI11, dI12, dI20, dI21, dI22);
 	checkErrorAfterKernelLaunch("comp_moments_facets_krnl (compute_moments_cuda)");

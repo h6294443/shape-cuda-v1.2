@@ -1182,7 +1182,8 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % npar_update;
-		for (p=first_fitpar; p<1/*nfpar*/; p++) {
+		//first_fitpar = 1;
+		for (p=first_fitpar; p<nfpar; p++) {
 
 			//p = first_fitpar;
 			/*  Adjust only parameter p on this try  */
@@ -1328,11 +1329,15 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 					newspin) && vary_alb_shapespin))
 				realize_photo_cuda(dpar, dmod, 1.0, 1.0, 1);  /* set R to R_save */
 			if ((newsize && vary_delcor0_size) || ((newshape || newspin)
-					&& vary_delcor0_shapespin))
-				realize_delcor_cuda(ddat, 0.0, 1, nsets);  /* set delcor0 to delcor0_save */
+					&& vary_delcor0_shapespin)) {
+				if (FLOAT)
+					realize_delcor_cuda_f(ddat, 0.0, 1, nsets, htype, nframes);  /* set delcor0 to delcor0_save */
+				else
+					realize_delcor_cuda(ddat, 0.0, 1, nsets);  /* set delcor0 to delcor0_save */
+			}
 			if ((newspin && vary_dopscale_spin) || ((newsize || newshape)
 					&& vary_dopscale_sizeshape))
-				realize_dopscale_cuda(dpar, ddat, 1.0, 1);  /* set dopscale to dopscale_save */
+				realize_dopscale_cuda_streams(dpar, ddat, 1.0, 1, nsets, dtype);  /* set dopscale to dopscale_save */
 			if (call_vary_params) {
 				/* Call vary_params to get the adjustments to 0th-order delay
 				 * correction polynomial coefficients, to Doppler scaling fac-
@@ -1391,19 +1396,25 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 			if ((newsize && vary_delcor0_size) || ((newshape || newspin) &&
 					vary_delcor0_shapespin)) {
 				deldop_zmax_save = deldop_zmax;
-				realize_delcor_cuda(ddat, delta_delcor0, 2, nsets);  /* reset delcor0, then delcor0_save */
+				if (FLOAT)
+					realize_delcor_cuda_f(ddat, delta_delcor0, 2, nsets, htype, nframes);  /* reset delcor0, then delcor0_save */
+				else
+					realize_delcor_cuda(ddat, delta_delcor0, 2, nsets);  /* reset delcor0, then delcor0_save */
 			} else if (newdelcor) {
-				realize_delcor_cuda(ddat, 0.0, 0, nsets);  /* set delcor0_save to delcor0 */
+				if (FLOAT)
+					realize_delcor_cuda_f(ddat, 0.0, 0, nsets, htype, nframes);  /* set delcor0_save to delcor0 */
+				else
+					realize_delcor_cuda(ddat, 0.0, 0, nsets);  /* set delcor0_save to delcor0 */
 			}
 			if ((newspin && vary_dopscale_spin) || ((newsize || newshape) &&
 					vary_dopscale_sizeshape)) {
 				cos_subradarlat_save = cos_subradarlat;
-				realize_dopscale_cuda(dpar, ddat, dopscale_factor, 2);  /* reset dopscale, then dopscale_save */
+				realize_dopscale_cuda_streams(dpar, ddat, dopscale_factor, 2, nsets, dtype);  /* reset dopscale, then dopscale_save */
 			} else if (newdopscale) {
-				realize_dopscale_cuda(dpar, ddat, 1.0, 0);  /* set dopscale_save to dopscale */
+				realize_dopscale_cuda_streams(dpar, ddat, 1.0, 0, nsets, dtype);  /* set dopscale_save to dopscale */
 			}
 			if (newxyoff)
-				realize_xyoff_cuda(ddat);
+				realize_xyoff_cuda_streams(ddat, nsets, dtype);
 
 			/* If the model extended beyond POS frame (sky rendering) for any
 			 * trial parameter value(s), if it extended beyond any plane-of-
@@ -1867,10 +1878,6 @@ __host__ double objective_cuda_streams(
 	bf_set_hotparam_val_krnl<<<1,1>>>(x);	//(*hotparam) = x;
 	checkErrorAfterKernelLaunch("bf_set_hotparam_val_krnl (in objective_cuda)");
 
-	/* Get relevant parameters from device memory */
-//	ocs_get_params_krnl<<<1,1>>>();
-//	checkErrorAfterKernelLaunch("ocs_get_params_krnl");
-
 	/* Realize whichever part(s) of the model have changed, then calculate root's
 	 * contribution to chi-square.
 	 * The code here is somewhat opaque because more than one part of the model
@@ -1891,18 +1898,29 @@ __host__ double objective_cuda_streams(
 			realize_spin_cuda_af(sdev_par, sdev_mod, sdev_dat, nsets);
 		else if (STREAMS)
 			realize_spin_cuda_streams(sdev_par, sdev_mod, sdev_dat, nsets);
-		else if (STREAMS2)
-			realize_spin_cuda_streams2(sdev_par, sdev_mod, sdev_dat, htype, nframes,
-					nviews, nsets, bf_stream);
+		else if (STREAMS2) {
+			if (FLOAT)
+				realize_spin_cuda_streams2f(sdev_par, sdev_mod, sdev_dat, htype, nframes,
+						nviews, nsets, bf_stream);
+			else
+				realize_spin_cuda_streams2(sdev_par, sdev_mod, sdev_dat, htype, nframes,
+						nviews, nsets, bf_stream);
+		}
 		else
-			realize_spin_cuda(sdev_par, sdev_mod, sdev_dat, nsets);	}
+			realize_spin_cuda(sdev_par, sdev_mod, sdev_dat, nsets);
+	}
 
 	if ((newsize && vary_alb_size) || ((newshape || newspin) && vary_alb_shapespin))
 		realize_photo_cuda(sdev_par, sdev_mod, 1.0, 1.0, 1);  /* set R to R_save */
-	if ((newsize && vary_delcor0_size) || ((newshape || newspin) && vary_delcor0_shapespin))
-		realize_delcor_cuda(sdev_dat, 0.0, 1, nsets);  /* set delcor0 to delcor0_save */
+	if ((newsize && vary_delcor0_size) || ((newshape || newspin) && vary_delcor0_shapespin)) {
+		if (FLOAT)
+			realize_delcor_cuda_f(sdev_dat, 0.0, 1, nsets, htype, nframes);  /* set delcor0 to delcor0_save */
+		else
+			realize_delcor_cuda(sdev_dat, 0.0, 1, nsets);  /* set delcor0 to delcor0_save */
+	}
+
 	if ((newspin && vary_dopscale_spin) || ((newsize || newshape) && vary_dopscale_sizeshape))
-		realize_dopscale_cuda(sdev_par, sdev_dat, 1.0, 1);  /* set dopscale to dopscale_save */
+		realize_dopscale_cuda_streams(sdev_par, sdev_dat, 1.0, 1, nsets, dtype);  /* set dopscale to dopscale_save */
 	if (call_vary_params) {
 		/* Call vary_params to get the trial adjustments to 0th-order delay correc-
 		 * tion polynomial coefficients, to Doppler scaling factors,and to radar
@@ -1916,11 +1934,17 @@ __host__ double objective_cuda_streams(
 			vary_params_cuda_streams2(sdev_par, sdev_mod, sdev_dat, spar->action,
 					&deldop_zmax, &rad_xsec, &opt_brightness, &cos_subradarlat,
 					nsets);
-		else if (STREAMS2)
-			vary_params_cuda_streams3(sdev_par, sdev_mod, sdev_dat, spar->action,
+		else if (STREAMS2) {
+			if (FLOAT)
+				vary_params_cuda_streams3f(sdev_par, sdev_mod, sdev_dat, spar->action,
+						&deldop_zmax, &rad_xsec, &opt_brightness, &cos_subradarlat,
+						nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+						bf_stream);
+			else
+				vary_params_cuda_streams3(sdev_par, sdev_mod, sdev_dat, spar->action,
 					&deldop_zmax, &rad_xsec, &opt_brightness, &cos_subradarlat,
 					nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-					bf_stream);
+					bf_stream);		}
 
 		else
 			vary_params_cuda(sdev_par, sdev_mod, sdev_dat, spar->action,
@@ -1940,16 +1964,24 @@ __host__ double objective_cuda_streams(
 		realize_photo_cuda(sdev_par, sdev_mod, radalb_factor, optalb_factor, 1);  /* adjust R */
 	else if (newphoto)
 		realize_photo_cuda(sdev_par, sdev_mod, 1.0, 1.0, 0);  /* set R_save to R */
-	if ((newsize && vary_delcor0_size) || ((newshape || newspin) && vary_delcor0_shapespin))
-		realize_delcor_cuda(sdev_dat, delta_delcor0, 1, nsets);  /* adjust delcor0 */
-	else if (newdelcor)
-		realize_delcor_cuda(sdev_dat, 0.0, 0, nsets);  /* set delcor0_save to delcor0 */
+	if ((newsize && vary_delcor0_size) || ((newshape || newspin) && vary_delcor0_shapespin)) {
+		if (FLOAT)
+			realize_delcor_cuda_f(sdev_dat, delta_delcor0, 1, nsets, htype, nframes);  /* adjust delcor0 */
+		else
+			realize_delcor_cuda(sdev_dat, delta_delcor0, 1, nsets);  /* adjust delcor0 */
+	}
+	else if (newdelcor) {
+		if (FLOAT)
+			realize_delcor_cuda_f(sdev_dat, 0.0, 0, nsets, htype, nframes);  /* set delcor0_save to delcor0 */
+		else
+			realize_delcor_cuda(sdev_dat, 0.0, 0, nsets);  /* set delcor0_save to delcor0 */
+	}
 	if ((newspin && vary_dopscale_spin) || ((newsize || newshape) && vary_dopscale_sizeshape))
-		realize_dopscale_cuda(sdev_par, sdev_dat, dopscale_factor, 1);  /* adjust dopscale */
+		realize_dopscale_cuda_streams(sdev_par, sdev_dat, dopscale_factor, 1, nsets, dtype);  /* adjust dopscale */
 	else if (newdopscale)
-		realize_dopscale_cuda(sdev_par, sdev_dat, 1.0, 0);  /* set dopscale_save to dopscale */
+		realize_dopscale_cuda_streams(sdev_par, sdev_dat, 1.0, 0, nsets, dtype);  /* set dopscale_save to dopscale */
 	if (newxyoff)
-		realize_xyoff_cuda(sdev_dat);
+		realize_xyoff_cuda_streams(sdev_dat, nsets, dtype);
 	if (AF) {
 		calc_fits_cuda_af(sdev_par, sdev_mod, sdev_dat);
 		err = chi2_cuda_af(sdev_par, sdev_dat, 0, nsets);

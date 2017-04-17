@@ -110,6 +110,42 @@ __device__ double st_deldop_zmax=0.0, st_rad_xsec=0.0, st_opt_brightness=0.0,
 __device__ int vpst_n, vpst_nf, vps_weight, vpst_dd_compute_zmax, vps_ncalc,
 		vpst_dd_compute_cosdelta;
 
+__device__ void dev_lghtcrv_splint(double *xa,double *ya,double *y2a,int n,double x,double *y)
+{
+	int klo,khi,k;
+	double h,b,a;
+
+	klo=1;
+	khi=n;
+	while (khi-klo > 1) {
+		k=(khi+klo) >> 1;
+		if (xa[k] > x) khi=k;
+		else klo=k;
+	}
+	h=xa[khi]-xa[klo];
+	if (h == 0.0) printf("Bad XA input to routine SPLINT (dev_lghtcrv_splint)\n");
+	a=(xa[khi]-x)/h;
+	b=(x-xa[klo])/h;
+	*y=a*ya[klo]+b*ya[khi]+((a*a*a-a)*y2a[klo]+(b*b*b-b)*y2a[khi])*(h*h)/6.0;
+}
+__device__ void dev_lghtcrv_splintf(float *xa,float *ya,float *y2a,int n,float x,double *y)
+{
+	int klo,khi,k;
+	float h,b,a;
+
+	klo=1;
+	khi=n;
+	while (khi-klo > 1) {
+		k=(khi+klo) >> 1;
+		if (xa[k] > x) khi=k;
+		else klo=k;
+	}
+	h=xa[khi]-xa[klo];
+	if (h == 0.0) printf("Bad XA input to routine SPLINT (dev_lghtcrv_splintf)\n");
+	a=(xa[khi]-x)/h;
+	b=(x-xa[klo])/h;
+	*y=a*ya[klo]+b*ya[khi]+((a*a*a-a)*y2a[klo]+(b*b*b-b)*y2a[khi])*(h*h)/6.0;
+}
 __global__ void vps_get_lghtcrv_params_krnl(struct dat_t *ddat, int s) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
@@ -255,27 +291,7 @@ __global__ void set_ae_oe_streams_krnl(struct pos_t *pos, double ae[3][3],
 
 		if (type == LGHTCRV)
 			pos->se[i][j] = se[i][j];
-		//			pos->se[i][j] = ddat->set[s].desc.lghtcrv.rend[f].se[i][j];
 
-		//
-		//		switch(type) {
-		//
-		//		case DOPPLER:
-		//			vp_pos->ae[i][j] =	ddat->set[s].desc.doppler.frame[f].view[ddat->set[s].desc.doppler.v0].ae[i][j];
-		//			vp_pos->oe[i][j] =	ddat->set[s].desc.doppler.frame[f].view[ddat->set[s].desc.doppler.v0].oe[i][j];
-		//			break;
-		//		case LGHTCRV:
-		//			vp_pos->ae[i][j] = ddat->set[s].desc.lghtcrv.rend[f].ae[i][j];
-		//			vp_pos->oe[i][j] = ddat->set[s].desc.lghtcrv.rend[f].oe[i][j];
-		//
-		//		}
-		//		/* The following is a single-thread task */
-		//		if (threadIdx.x == 0) {
-		//			if (ddat->set[s].type == LGHTCRV)
-		//				vp_pos->bistatic = 1;
-		//			else
-		//				vp_pos->bistatic = 0;
-		//		}
 	}
 }
 __global__ void clrvect_streams_krnl(struct dat_t *ddat, int size, int s, int f) {
@@ -595,8 +611,8 @@ __global__ void posmask_streams_f_krnl(
 	/* multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
 	__shared__ int n, kmpxl;
-	int i = offset % xspan - n;
-	int j = offset / xspan - n;
+	int i = offset % xspan - pos[f]->n;
+	int j = offset / xspan - pos[f]->n;
 	float tol = dpar->mask_tol;
 	int im, jm, i1, j1, i2, j2, i_sign, j_sign, pxa, pxa1, pxa2;
 	float xk[3], i0_dbl, j0_dbl, zill, t, u, bignum;
@@ -632,9 +648,10 @@ __global__ void posmask_streams_f_krnl(
 			 * a body, component, and facet different from those seen in the
 			 * POS, calculate distance from mask pixel to source and compare to
 			 * distance from POS pixel to source.                             */
-			if (fabs(i0_dbl) < n && fabs(j0_dbl) < n
+			if (abs(j0_dbl) < n &&
+					abs(i0_dbl) < n
 					&& pos[f]->zill_s[pxa] > -bignum
-					&&(pos[f]->f[i][j]    != pos[f]->fill[im][jm]    ||
+					&&(pos[f]->f[i][j] != pos[f]->fill[im][jm]    ||
 							pos[f]->comp[i][j] != pos[f]->compill[im][jm] ||
 							pos[f]->body[i][j] != pos[f]->bodyill[im][jm]    )) {
 
@@ -852,7 +869,7 @@ __global__ void lghtcrv_copy_y_streams_f_krnl(struct dat_t *ddat, float *host_va
 	}
 }
 __global__ void lghtcrv_spline_streams_krnl(struct dat_t *ddat, int set, double
-		yp1, double ypn, double *u) {
+		yp1, double ypn, double *u, int ncalc) {
 	/*(double *x  - lghtcrv->x
 	 * double *y  - lghtcrv->y
 	 * int n      - calc
@@ -862,7 +879,7 @@ __global__ void lghtcrv_spline_streams_krnl(struct dat_t *ddat, int set, double
 
 	/* Multi-threaded kernel */
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
-	int n = vps_ncalc;
+	int n = ncalc;
 	int k = n - 1 - i;
 	double *x = ddat->set[set].desc.lghtcrv.x;
 	double *y = ddat->set[set].desc.lghtcrv.y;
@@ -908,7 +925,7 @@ __global__ void lghtcrv_spline_streams_krnl(struct dat_t *ddat, int set, double
 	__syncthreads();
 }
 __global__ void lghtcrv_spline_streams_f_krnl(struct dat_t *ddat, int set, float
-		yp1, float ypn, float *u) {
+		yp1, float ypn, float *u, int ncalc) {
 	/*(double *x  - lghtcrv->x
 	 * double *y  - lghtcrv->y
 	 * int n      - calc
@@ -918,7 +935,7 @@ __global__ void lghtcrv_spline_streams_f_krnl(struct dat_t *ddat, int set, float
 
 	/* Multi-threaded kernel */
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
-	int n = vps_ncalc;
+	int n = ncalc;
 	int k = n - 1 - i;
 
 	/* The following will be turned into floats */
@@ -965,7 +982,7 @@ __global__ void lghtcrv_spline_streams_f_krnl(struct dat_t *ddat, int set, float
 
 	__syncthreads();
 }
-__global__ void lghtcrv_splint_streams2_krnl(struct dat_t *ddat, int set)
+__global__ void lghtcrv_splint_streams2_krnl(struct dat_t *ddat, int set, int n)
 {
 	/* This is an n-threaded kernel where n = lghtcrv-> */
 	/* Parameters:
@@ -977,19 +994,17 @@ __global__ void lghtcrv_splint_streams2_krnl(struct dat_t *ddat, int set)
 	 * double *y   - lghtcrv->fit[i]	 *
 	 */
 
-	int i = blockIdx.x * blockDim.x + threadIdx.x;
+	int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
 	double *xa	= ddat->set[set].desc.lghtcrv.x;
 	double *ya	= ddat->set[set].desc.lghtcrv.y;
 	double *y2a	= ddat->set[set].desc.lghtcrv.y2;
-	double x 	= ddat->set[set].desc.lghtcrv.t[i][ddat->set[set].desc.lghtcrv.v0];
-	double *y 	= &ddat->set[set].desc.lghtcrv.t[i][ddat->set[set].desc.lghtcrv.v0];
-	int n = vps_ncalc;
 
 	int klo,khi,k;
 	double h,b,a;
 
-	if (i < vpst_n) {
-
+	if (i <= n) {
+		double x 	= ddat->set[set].desc.lghtcrv.t[i][ddat->set[set].desc.lghtcrv.v0];
+		double *y 	= &ddat->set[set].desc.lghtcrv.t[i][ddat->set[set].desc.lghtcrv.v0];
 		klo=1;
 		khi=n;
 		while (khi-klo > 1) {
@@ -1004,36 +1019,53 @@ __global__ void lghtcrv_splint_streams2_krnl(struct dat_t *ddat, int set)
 		*y=a*ya[klo] + b*ya[khi] + ((a*a*a-a) * y2a[klo] + (b*b*b-b) * y2a[khi]) * (h*h) /6.0;
 	}
 }
-__global__ void lghtcrv_splint_streams_f_krnl(struct dat_t *ddat, int set)
+__global__ void lghtcrv_splint_streams3_krnl(struct dat_t *ddat, int set, int n)
+{
+	/* This is an n-threaded kernel where n = lghtcrv->n */
+	/* Parameters:
+	 * double *xa  - lghtcrv->x
+	 * double *ya  - lghtcrv->y
+	 * double *y2a - lghtcrv->y2
+	 * int n       - ncalc
+	 * double x    - lghtcrv->t[i][lghtcrv->v0]
+	 * double *y   - lghtcrv->fit[i]	 *
+	 *
+	 * This is a wrapper kernel that launches the device function. This is done
+	 * for memory access reasons.	 */
+
+	int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+
+	if (i <= n) {
+
+		dev_lghtcrv_splint(ddat->set[set].desc.lghtcrv.x,
+				ddat->set[set].desc.lghtcrv.y,
+				ddat->set[set].desc.lghtcrv.y2,
+				n,
+				ddat->set[set].desc.lghtcrv.t[i][ddat->set[set].desc.lghtcrv.v0],
+				&ddat->set[set].desc.lghtcrv.fit[i]);
+
+		st_opt_brightness += ddat->set[set].desc.lghtcrv.fit[i] *
+				ddat->set[set].desc.lghtcrv.weight;
+	}
+}
+__global__ void lghtcrv_splint_streams3f_krnl(struct dat_t *ddat, int set, int n)
 {
 	/* This is an n-threaded kernel where n = lghtcrv->ncalc */
 	/* This version uses floats instead of doubles */
 
-	int i = blockIdx.x * blockDim.x + threadIdx.x;
-	float *xa	= ddat->set[set].desc.lghtcrv.x_s;
-	float *ya	= ddat->set[set].desc.lghtcrv.y_s;
-	float *y2a	= ddat->set[set].desc.lghtcrv.y2_s;
-	float x 	= __double2float_rn(ddat->set[set].desc.lghtcrv.t[i][ddat->set[set].desc.lghtcrv.v0]);
-	double *y 	= &ddat->set[set].desc.lghtcrv.t[i][ddat->set[set].desc.lghtcrv.v0];
-	int n = vps_ncalc;
+	int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
 
-	int klo,khi,k;
-	float h,b,a;
+	if (i <= n) {
 
-	if (i < vpst_n) {
+		dev_lghtcrv_splintf(ddat->set[set].desc.lghtcrv.x_s,
+				ddat->set[set].desc.lghtcrv.y_s,
+				ddat->set[set].desc.lghtcrv.y2_s,
+				n,
+				__double2float_rn(ddat->set[set].desc.lghtcrv.t[i][ddat->set[set].desc.lghtcrv.v0]),
+				&ddat->set[set].desc.lghtcrv.fit[i]);
 
-		klo=1;
-		khi=n;
-		while (khi-klo > 1) {
-			k=(khi + klo) >> 1;
-			if (xa[k] > x) khi=k;
-			else klo=k;
-		}
-		h = xa[khi] - xa[klo];
-		if (h == 0.0) printf("Bad XA input to routine SPLINT");
-		a=(xa[khi] - x) / h;
-		b=(x - xa[klo]) / h;
-		*y=a*ya[klo] + b*ya[khi] + ((a*a*a-a) * y2a[klo] + (b*b*b-b) * y2a[khi]) * (h*h) /6.0;
+		st_opt_brightness += ddat->set[set].desc.lghtcrv.fit[i] *
+				ddat->set[set].desc.lghtcrv.weight;
 	}
 }
 __global__ void vps_set_four_parameters_krnl(struct dat_t *ddat) {
@@ -1057,7 +1089,7 @@ __global__ void vps_set_four_parameters_krnl(struct dat_t *ddat) {
 			st_cos_subradarlat = 0.0;
 	}
 }
-
+/* Don't use */
 __host__ void vary_params_cuda_streams( struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int action, double *deldop_zmax, double
 		*rad_xsec, double *opt_brightness, double *cos_subradarlat, int nsets)
@@ -1390,12 +1422,12 @@ __host__ void vary_params_cuda_streams( struct par_t *dpar, struct mod_t *dmod,
 				double *u;
 				gpuErrchk(cudaMalloc((void**)&u, sizeof(double) * n));
 
-				lghtcrv_spline_streams_krnl<<<BLKncalc,THD>>>(ddat, s, 2.0e30, 2.0e30, u);
+				lghtcrv_spline_streams_krnl<<<BLKncalc,THD>>>(ddat, s, 2.0e30, 2.0e30, u, n);
 				checkErrorAfterKernelLaunch("lghtcrv_spline_streams_krnl");
 
 				/* Change launch parameters from ncalc threads to n threads */
 				BLKncalc.x = floor((THD.x - 1 + n) / THD.x);
-				lghtcrv_splint_streams2_krnl<<<BLKncalc,THD>>>(ddat, s);
+				lghtcrv_splint_streams3_krnl<<<BLKncalc,THD>>>(ddat, s, n);
 				checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
 				/* Cleanup */
 				cudaFree(u);
@@ -1514,6 +1546,17 @@ __global__ void vpst_set_posmtrx_streams_krnl(struct dat_t *ddat,
 				pos[f]->bistatic = 1;
 			break;
 		}
+	}
+}
+__global__ void vpst_get_xylim_krnl(struct par_t *dpar, struct pos_t **pos,
+		int4 *xylim, int nframes) {
+	/* nframes-threaded kernel */
+	int f = blockIdx.x * blockDim.x + threadIdx.x;
+	if (f < nframes) {
+		xylim[f].w = pos[f]->xlim[0];
+		xylim[f].x = pos[f]->xlim[1];
+		xylim[f].y = pos[f]->ylim[0];
+		xylim[f].z = pos[f]->ylim[1];
 	}
 }
 
@@ -1864,12 +1907,12 @@ __host__ void vary_params_cuda_streams2(struct par_t *dpar, struct mod_t *dmod,
 				double *u;
 				gpuErrchk(cudaMalloc((void**)&u, sizeof(double) * n));
 
-				lghtcrv_spline_streams_krnl<<<BLKncalc,THD>>>(ddat, s, 2.0e30, 2.0e30, u);
+				lghtcrv_spline_streams_krnl<<<BLKncalc,THD>>>(ddat, s, 2.0e30, 2.0e30, u, n);
 				checkErrorAfterKernelLaunch("lghtcrv_spline_streams_krnl");
 
 				/* Change launch parameters from ncalc threads to n threads */
 				BLKncalc.x = floor((THD.x - 1 + n) / THD.x);
-				lghtcrv_splint_streams2_krnl<<<BLKncalc,THD>>>(ddat, s);
+				lghtcrv_splint_streams3_krnl<<<BLKncalc,THD>>>(ddat, s, n);
 				checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
 				/* Cleanup */
 				cudaFree(u);
@@ -1958,8 +2001,9 @@ __host__ void vary_params_cuda_streams3(
 	float3 orbit_offset;
 	int c=0, f, s, *compute_brightness, *compute_zmax, *bistatic, bistatic_all,
 			*compute_cosdelta, *compute_xsec, n, ncalc, nx, lghtcrv_bistatic,
-			nfrm_alloc, nThreads, *posn, *ndel, *ndop;
-	dim3 pxBLK,THD,BLKncalc,THD9;
+			nfrm_alloc, nThreads, *posn, *ndel, *ndop, nThreadspx1[hnframes[s]+1];
+	int2 span[hnframes[s]+1];
+	dim3 pxBLK,THD,BLKncalc,THD9,BLKpx1;
 	THD.x = maxThreadsPerBlock;	THD9.x = 9;
 	int hcomp_cosdelta[nsets], hcomp_zmax[nsets+1], hcomp_brightness[nsets+1];
 
@@ -1967,7 +2011,7 @@ __host__ void vary_params_cuda_streams3(
 	double weight, *pixels_per_km, *lghtcrv_y;
 	double3 *so;
 	struct pos_t **pos;
-	double orbt_off[3] = {0.0, 0.0, 0.0};
+int4 *xylim, hxylim[hnframes[s]+1];
 
 	/* Initialize */
 	orbit_offset.x = orbit_offset.y = orbit_offset.z = 0.0;
@@ -1976,6 +2020,7 @@ __host__ void vary_params_cuda_streams3(
 	gpuErrchk(cudaMalloc((void**)&compute_brightness, sizeof(int) * (nsets+1)));
 	gpuErrchk(cudaMalloc((void**)&compute_zmax, sizeof(int) * (nsets+1)));
 	gpuErrchk(cudaMalloc((void**)&compute_cosdelta, sizeof(int) * (nsets+1)));
+	gpuErrchk(cudaMalloc((void**)&xylim, sizeof(int4) * (hnframes[s]+1)));
 
 	/* Initialize the device file-scope variables */
 	vpst_init_krnl3<<<1,1>>>(dpar, ddat, compute_zmax, compute_cosdelta,
@@ -2208,7 +2253,7 @@ __host__ void vary_params_cuda_streams3(
 
 				/* Determine which POS pixels cover the target */
 				posvis_cuda_streams2(dpar, dmod, ddat, pos, verts, orbit_offset,
-						hposn, outbndarr, s,	hnframes[s], 0, nf, 0, c, htype[s],
+						hposn, outbndarr, s, hnframes[s], 0, nf, 0, c, htype[s],
 						vp_stream);
 
 				/* Now view the model from the source (sun) and get the facet
@@ -2216,8 +2261,8 @@ __host__ void vary_params_cuda_streams3(
 				 * projected view; use this information to determine which POS
 				 * pixels are shadowed */
 				for (f=1; f<nfrm_alloc; f++)
-					if (hbistatic[f])
-						bistatic_all = 1;
+					if (hbistatic[f])	bistatic_all = 1;
+
 				if (bistatic_all)
 					posvis_cuda_streams2(dpar, dmod, ddat, pos, verts,
 							orbit_offset, hposn, outbndarr, s, hnframes[s], 1,
@@ -2238,16 +2283,27 @@ __host__ void vary_params_cuda_streams3(
 					} checkErrorAfterKernelLaunch("posmask_streams_ krnl");
 				}
 
+				BLKpx1.x = floor((THD.x - 1 + hnframes[s])/THD.x);
+				vpst_get_xylim_krnl<<<BLKpx1,THD>>>(dpar, pos, xylim, hnframes[s]);
+				checkErrorAfterKernelLaunch("vpst_get_xylim_krnl");
+				gpuErrchk(cudaMemcpy(&hxylim, xylim, sizeof(int4)*(hnframes[s]+1),
+						cudaMemcpyDeviceToHost));
+
+				/* Calculate launch parameters for all frames */
+				for (f=1; f<=hnframes[s]; f++) {
+					span[f].x = hxylim[f].x - hxylim[f].w + 1;
+					span[f].y = hxylim[f].z - hxylim[f].y + 1;
+					nThreadspx1[f] = span[f].x * span[f].y;
+					BLK[f].x = floor ((THD.x -1 + nThreadspx1[f]) / THD.x);
+				}
+
 				/* Compute model brightness for this lightcurve point */
 				/* lghtcrv->y[ncalc]: calculated points for interpolation,
 				 * ncalc-points total 					 */
-				for (f=1; f<nfrm_alloc; f++)
-					lghtcrv_y[f] = apply_photo_cuda(dmod, ddat, 0, s, f);
-
-				/* Now launch a kernel to copy it over to the actual lghtcrv */
-				BLKncalc.x = floor((THD.x - 1 + hnframes[s]) / THD.x);
-				lghtcrv_copy_y_streams_krnl<<<BLKncalc,THD>>>(ddat, lghtcrv_y, s, hnframes[s]);
-				checkErrorAfterKernelLaunch("lghtcrv_copy_y_streams_krnl");
+//				for (f=1; f<nfrm_alloc; f++)
+//					lghtcrv_y[f] = apply_photo_cuda(dmod, ddat, 0, s, f);
+				apply_photo_cuda_streams(dmod, ddat, pos, xylim, span, BLK, nThreadspx1,
+							0, s, hnframes[s], vp_stream);
 
 				/* Now that we have calculated the model lightcurve brightnesses
 				 * y at each of the epochs x, we use cubic spline interpolation
@@ -2260,30 +2316,26 @@ __host__ void vary_params_cuda_streams3(
 
 				/* First make a pointer for u and cudaMalloc device memory for it */
 				double *u;
-				gpuErrchk(cudaMalloc((void**)&u, sizeof(double) * n));
+				gpuErrchk(cudaMalloc((void**)&u, sizeof(double) * hnframes[s]));
 
-				lghtcrv_spline_streams_krnl<<<BLKncalc,THD>>>(ddat, s, 2.0e30, 2.0e30, u);
+				lghtcrv_spline_streams_krnl<<<BLKncalc,THD>>>(ddat, s, 2.0e30,
+						2.0e30, u, hnframes[s]);
 				checkErrorAfterKernelLaunch("lghtcrv_spline_streams_krnl");
 
 				/* Change launch parameters from ncalc threads to n threads */
-				BLKncalc.x = floor((THD.x - 1 + n) / THD.x);
-				lghtcrv_splint_streams2_krnl<<<BLKncalc,THD>>>(ddat, s);
+				BLKncalc.x = floor((THD.x - 1 + hlc_n[s]) / THD.x);
+				lghtcrv_splint_streams3_krnl<<<BLKncalc,THD>>>(ddat, s, hlc_n[s]);
 				checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
 				/* Cleanup */
 				cudaFree(u);
 				cudaFree(so);
 				cudaFree(pixels_per_km);
 				free(lghtcrv_y);
-				/* Destroy streams and free memory */
-				for (f=0; f<hnframes[s]; f++)
-					cudaStreamDestroy(vp_stream[f]);
 			}
 			break;
 		default:
 			bailout("vary_params.c: can't handle this dataset type yet\n");
 		}
-
-
 
 		cudaFree(pos);
 		cudaFree(posn);
@@ -2355,17 +2407,19 @@ __host__ void vary_params_cuda_streams3f(
 
 	float3 orbit_offset;
 	int c=0, f, s, *compute_brightness, *compute_zmax, *bistatic, bistatic_all,
-			*compute_cosdelta, *compute_xsec, n, ncalc, nx, lghtcrv_bistatic,
+			*compute_cosdelta, *compute_xsec, ncalc, nx, lghtcrv_bistatic,
 			nfrm_alloc, nThreads, *posn, *ndel, *ndop;
-	dim3 pxBLK,THD,BLKncalc,THD9;
+	dim3 pxBLK,THD,BLKncalc,THD9, BLKpx1;
 	THD.x = maxThreadsPerBlock;	THD9.x = 9;
 	int hcomp_cosdelta[nsets], hcomp_zmax[nsets+1], hcomp_brightness[nsets+1];
+	int4 *xylim, hxylim[hnframes[s]+1];
+	int nThreadspx1[hnframes[s]+1];
+	int2 span[hnframes[s]+1];
 
 	float zmax;
 	float weight, *pixels_per_km, *lghtcrv_y;
 	float3 *so, orbit_xydopoff;
 	struct pos_t **pos;
-	//double orbt_off[3] = {0.0, 0.0, 0.0};
 
 	/* Initialize */
 	orbit_offset.x = orbit_offset.y = orbit_offset.z = 0.0;
@@ -2375,6 +2429,7 @@ __host__ void vary_params_cuda_streams3f(
 	gpuErrchk(cudaMalloc((void**)&compute_brightness, sizeof(int) * (nsets+1)));
 	gpuErrchk(cudaMalloc((void**)&compute_zmax, sizeof(int) * (nsets+1)));
 	gpuErrchk(cudaMalloc((void**)&compute_cosdelta, sizeof(int) * (nsets+1)));
+	gpuErrchk(cudaMalloc((void**)&xylim, sizeof(int4) * (hnframes[s]+1)));
 
 	/* Initialize the device file-scope variables */
 	vpst_init_krnl3<<<1,1>>>(dpar, ddat, compute_zmax, compute_cosdelta,
@@ -2579,7 +2634,7 @@ __host__ void vary_params_cuda_streams3f(
 
 			if (hcomp_brightness[s]) {
 				cudaCalloc1((void**)&so, sizeof(float3), (nfrm_alloc*3));
-				cudaCalloc1((void**)&pixels_per_km, sizeof(float), nfrm_alloc);
+				cudaCalloc1((void**)&pixels_per_km, sizeof(int), nfrm_alloc);
 
 				/* Launch nframes-threaded kernel to get all relevant parameters */
 				vpst_lghtcrv_params_krnl<<<BLK[0],THD>>>(dpar, ddat, pos,
@@ -2609,7 +2664,7 @@ __host__ void vary_params_cuda_streams3f(
 
 				/* Determine which POS pixels cover the target */
 				posvis_cuda_streams2(dpar, dmod, ddat, pos, verts, orbit_offset,
-						hposn, outbndarr, s,	hnframes[s], 0, nf, 0, c, htype[s],
+						hposn, outbndarr, s, hnframes[s], 0, nf, 0, c, htype[s],
 						vp_stream);
 
 				/* Now view the model from the source (sun) and get the facet
@@ -2617,8 +2672,8 @@ __host__ void vary_params_cuda_streams3f(
 				 * projected view; use this information to determine which POS
 				 * pixels are shadowed */
 				for (f=1; f<nfrm_alloc; f++)
-					if (hbistatic[f])
-						bistatic_all = 1;
+					if (hbistatic[f])	bistatic_all = 1;
+
 				if (bistatic_all)
 					posvis_cuda_streams2(dpar, dmod, ddat, pos, verts,
 							orbit_offset, hposn, outbndarr, s, hnframes[s], 1,
@@ -2639,16 +2694,25 @@ __host__ void vary_params_cuda_streams3f(
 					} checkErrorAfterKernelLaunch("posmask_streams_ krnl");
 				}
 
+				BLKpx1.x = floor((THD.x - 1 + hnframes[s])/THD.x);
+				vpst_get_xylim_krnl<<<BLKpx1,THD>>>(dpar, pos, xylim, hnframes[s]);
+				checkErrorAfterKernelLaunch("vpst_get_xylim_krnl");
+				gpuErrchk(cudaMemcpy(&hxylim, xylim, sizeof(int4)*(hnframes[s]+1),
+						cudaMemcpyDeviceToHost));
+
+				/* Calculate launch parameters for all frames */
+				for (f=1; f<=hnframes[s]; f++) {
+					span[f].x = hxylim[f].x - hxylim[f].w + 1;
+					span[f].y = hxylim[f].z - hxylim[f].y + 1;
+					nThreadspx1[f] = span[f].x * span[f].y;
+					BLK[f].x = floor ((THD.x -1 + nThreadspx1[f]) / THD.x);
+				}
+
 				/* Compute model brightness for this lightcurve point */
 				/* lghtcrv->y[ncalc]: calculated points for interpolation,
 				 * ncalc-points total 					 */
-				for (f=1; f<nfrm_alloc; f++)
-					lghtcrv_y[f] = apply_photo_cuda(dmod, ddat, 0, s, f);
-
-				/* Now launch a kernel to copy it over to the actual lghtcrv */
-				BLKncalc.x = floor((THD.x - 1 + hnframes[s]) / THD.x);
-				lghtcrv_copy_y_streams_f_krnl<<<BLKncalc,THD>>>(ddat, lghtcrv_y, s, hnframes[s]);
-				checkErrorAfterKernelLaunch("lghtcrv_copy_y_streams_krnl");
+				apply_photo_cuda_streams_f(dmod, ddat, pos, xylim, span, BLK, nThreadspx1,
+						0, s, hnframes[s], vp_stream);
 
 				/* Now that we have calculated the model lightcurve brightnesses
 				 * y at each of the epochs x, we use cubic spline interpolation
@@ -2661,14 +2725,15 @@ __host__ void vary_params_cuda_streams3f(
 
 				/* First make a pointer for u and cudaMalloc device memory for it */
 				float *u;
-				gpuErrchk(cudaMalloc((void**)&u, sizeof(float) * n));
+				gpuErrchk(cudaMalloc((void**)&u, sizeof(float) * nfrm_alloc));
 
-				lghtcrv_spline_streams_f_krnl<<<BLKncalc,THD>>>(ddat, s, 2.0e30, 2.0e30, u);
+				lghtcrv_spline_streams_f_krnl<<<BLKncalc,THD>>>(ddat, s, 2.0e30,
+						2.0e30, u, hnframes[s]);
 				checkErrorAfterKernelLaunch("lghtcrv_spline_streams_f_krnl");
 
 				/* Change launch parameters from ncalc threads to n threads */
-				BLKncalc.x = floor((THD.x - 1 + n) / THD.x);
-				lghtcrv_splint_streams_f_krnl<<<BLKncalc,THD>>>(ddat, s);
+				BLKncalc.x = floor((THD.x - 1 + hlc_n[s]) / THD.x);
+				lghtcrv_splint_streams3f_krnl<<<BLKncalc,THD>>>(ddat, s, hlc_n[s]);
 				checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
 				/* Cleanup */
 				cudaFree(u);
@@ -2677,6 +2742,7 @@ __host__ void vary_params_cuda_streams3f(
 				free(lghtcrv_y);
 			}
 			break;
+
 		default:
 			bailout("vary_params.c: can't handle this dataset type yet\n");
 		}

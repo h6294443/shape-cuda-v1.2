@@ -80,6 +80,42 @@ __device__ void dev_checkdopscale(double parval, double parmin, double parmax,
       }
   }
 }
+__device__ void dev_checkdopscale_f(float parval, float parmin, float parmax,
+		int mode, unsigned char *baddopscale, double *baddopscale_logfactor)
+{
+	/*  Flag Doppler scaling factor as bad if
+	 *           mode = 0:  parval <  parmin  or  parval >  parmax
+	 *           mode = 1:  parval <= parmin  or  parval >  parmax
+	 *           mode = 2:  parval <  parmin  or  parval >= parmax
+	 *           mode = 3:  parval <= parmin  or  parval >= parmax  */
+
+	if (mode < 0 || mode > 3)
+		printf("realize_dopscale.c: checkdopscale mode must be between 0 and 3\n");
+
+	if (mode == 0 || mode == 2) {
+		if (parval < parmin) {
+			*baddopscale = 1;
+			*baddopscale_logfactor += log(1 + parmin - parval);
+      }
+  } else {
+      if (parval <= parmin) {
+        *baddopscale = 1;
+        *baddopscale_logfactor += log(1 + parmin - parval);
+      }
+  }
+
+  if (mode == 0 || mode == 1) {
+      if (parval > parmax) {
+        *baddopscale = 1;
+        *baddopscale_logfactor += log(1 + parval - parmax);
+      }
+  } else {
+      if (parval >= parmax) {
+        *baddopscale = 1;
+        *baddopscale_logfactor += log(1 + parval - parmax);
+      }
+  }
+}
 __global__ void realize_dopscale_devpar_init_krnl(struct par_t *dpar,
 		struct dat_t *ddat) {
 	/* Single-threaded kernel */
@@ -148,7 +184,144 @@ __global__ void realize_dopscale_cuda_krnl(struct par_t *dpar, struct dat_t
 		}
 	}
 }
+__global__ void realize_dopscale_cuda_streams_krnl(struct par_t *dpar, struct dat_t
+		*ddat, double dopscale_factor, int dopscale_mode, int nsets, unsigned char *type) {
 
+	/* nset-threaded kernel */
+	int s = blockIdx.x * blockDim.x + threadIdx.x;
+	int s_dopscale = -1, type_dopscale = -1;
+
+	if (s==0) {
+		dpar->baddopscale = 0;
+		dpar->baddopscale_logfactor = 0.0;
+	}
+	__syncthreads();
+
+	if (s < nsets) {
+		switch(type[s]) {
+		case DELAY:
+			if (ddat->set[s].desc.deldop.dopscale.state != '=') {
+				s_dopscale = s;
+				type_dopscale = DELAY;
+				if (ddat->set[s].desc.deldop.dopscale.state == 'f') {
+					if (dopscale_mode != 0)
+						ddat->set[s].desc.deldop.dopscale.val =
+								ddat->set[s].desc.deldop.dopscale_save * dopscale_factor;
+					if (dopscale_mode != 1)
+						ddat->set[s].desc.deldop.dopscale_save =
+								ddat->set[s].desc.deldop.dopscale.val;
+				}
+				dev_checkdopscale( ddat->set[s].desc.deldop.dopscale.val,
+						dpar->dopscale_min, dpar->dopscale_max, 3,
+						&dpar->baddopscale, &dpar->baddopscale_logfactor);
+			} else if (s_dopscale < 0) {
+				printf("can't use \"=\" state for the first (delay-)Doppler dataset\n");
+			} else if (type_dopscale == DELAY) {
+				ddat->set[s].desc.deldop.dopscale.val =
+						ddat->set[s_dopscale].desc.deldop.dopscale.val;
+			} else {
+				ddat->set[s].desc.deldop.dopscale.val =
+						ddat->set[s_dopscale].desc.doppler.dopscale.val;
+			}
+			break;
+		case DOPPLER:
+			if (ddat->set[s].desc.doppler.dopscale.state != '=') {
+				s_dopscale = s;
+				type_dopscale = DOPPLER;
+				if (ddat->set[s].desc.doppler.dopscale.state == 'f') {
+					if (dopscale_mode != 0)
+						ddat->set[s].desc.doppler.dopscale.val =
+								ddat->set[s].desc.doppler.dopscale_save * dopscale_factor;
+					if (dopscale_mode != 1)
+						ddat->set[s].desc.doppler.dopscale_save =
+								ddat->set[s].desc.doppler.dopscale.val;
+				}
+				dev_checkdopscale( ddat->set[s].desc.doppler.dopscale.val,
+						dpar->dopscale_min, dpar->dopscale_max, 3,
+						&dpar->baddopscale, &dpar->baddopscale_logfactor);
+			} else if (s_dopscale < 0) {
+				printf("can't use \"=\" state for the first (delay-)Doppler dataset\n");
+			} else if (type_dopscale == DELAY) {
+				ddat->set[s].desc.doppler.dopscale.val =
+						ddat->set[s_dopscale].desc.deldop.dopscale.val;
+			} else {
+				ddat->set[s].desc.doppler.dopscale.val =
+						ddat->set[s_dopscale].desc.doppler.dopscale.val;
+			}
+			break;
+		}
+	}
+}
+__global__ void realize_dopscale_cuda_streams_f_krnl(struct par_t *dpar, struct dat_t
+		*ddat, float dopscale_factor, int dopscale_mode, int nsets, unsigned char *type) {
+
+	/* nset-threaded kernel */
+	int s = blockIdx.x * blockDim.x + threadIdx.x;
+	int s_dopscale = -1, type_dopscale = -1;
+
+	if (s==0) {
+		dpar->baddopscale = 0;
+		dpar->baddopscale_logfactor = 0.0;
+	}
+	__syncthreads();
+
+	if (s < nsets) {
+		switch(type[s]) {
+		case DELAY:
+			if (ddat->set[s].desc.deldop.dopscale.state != '=') {
+				s_dopscale = s;
+				type_dopscale = DELAY;
+				if (ddat->set[s].desc.deldop.dopscale.state == 'f') {
+					if (dopscale_mode != 0)
+						ddat->set[s].desc.deldop.dopscale.val =
+								ddat->set[s].desc.deldop.dopscale_save * dopscale_factor;
+					if (dopscale_mode != 1)
+						ddat->set[s].desc.deldop.dopscale_save =
+								ddat->set[s].desc.deldop.dopscale.val;
+				}
+				dev_checkdopscale_f(__double2float_rn(ddat->set[s].desc.deldop.dopscale.val),
+						__double2float_rn(dpar->dopscale_min),
+						__double2float_rn(dpar->dopscale_max), 3,
+						&dpar->baddopscale, &dpar->baddopscale_logfactor);
+			} else if (s_dopscale < 0) {
+				printf("can't use \"=\" state for the first (delay-)Doppler dataset\n");
+			} else if (type_dopscale == DELAY) {
+				ddat->set[s].desc.deldop.dopscale.val =
+						ddat->set[s_dopscale].desc.deldop.dopscale.val;
+			} else {
+				ddat->set[s].desc.deldop.dopscale.val =
+						ddat->set[s_dopscale].desc.doppler.dopscale.val;
+			}
+			break;
+		case DOPPLER:
+			if (ddat->set[s].desc.doppler.dopscale.state != '=') {
+				s_dopscale = s;
+				type_dopscale = DOPPLER;
+				if (ddat->set[s].desc.doppler.dopscale.state == 'f') {
+					if (dopscale_mode != 0)
+						ddat->set[s].desc.doppler.dopscale.val =
+								ddat->set[s].desc.doppler.dopscale_save * dopscale_factor;
+					if (dopscale_mode != 1)
+						ddat->set[s].desc.doppler.dopscale_save =
+								ddat->set[s].desc.doppler.dopscale.val;
+				}
+				dev_checkdopscale(__double2float_rn(ddat->set[s].desc.doppler.dopscale.val),
+						__double2float_rn(dpar->dopscale_min),
+						__double2float_rn(dpar->dopscale_max), 3,
+						&dpar->baddopscale, &dpar->baddopscale_logfactor);
+			} else if (s_dopscale < 0) {
+				printf("can't use \"=\" state for the first (delay-)Doppler dataset\n");
+			} else if (type_dopscale == DELAY) {
+				ddat->set[s].desc.doppler.dopscale.val =
+						ddat->set[s_dopscale].desc.deldop.dopscale.val;
+			} else {
+				ddat->set[s].desc.doppler.dopscale.val =
+						ddat->set[s_dopscale].desc.doppler.dopscale.val;
+			}
+			break;
+		}
+	}
+}
 __host__ void realize_dopscale_cuda(struct par_t *dpar, struct dat_t
 		*ddat, double dopscale_factor, int dopscale_mode)
 {
@@ -176,5 +349,30 @@ __host__ void realize_dopscale_cuda(struct par_t *dpar, struct dat_t
 
 }
 
+__host__ void realize_dopscale_cuda_streams(struct par_t *dpar, struct dat_t
+		*ddat, double dopscale_factor, int dopscale_mode, int nsets,
+		unsigned char *dtype)
+{
+	/* This version doesn't use streams itself, but it is meant to be used with
+	 * bestfit_cuda2 which uses streams versions to pass launch parameters to */
+	dim3 BLK,THD;
+	THD.x = maxThreadsPerBlock;
+	BLK.x = floor((THD.x - 1 + nsets)/THD.x);
 
+		/* If a dataset has a Doppler scaling factor with state = '=', go backwards
+	 * in the datafile until we reach a delay-Doppler or Doppler dataset whose
+	 * Doppler scaling factor has state 'f' or 'c' rather than '='.
+	 *   s_dopscale is the number of the dataset we find.
+	 *   type_dopscale tells whether that dataset is delay-Doppler or Doppler. */
+
+	/* Launch nset-threaded kernel */
+	if (FLOAT)
+		realize_dopscale_cuda_streams_f_krnl<<<BLK,THD>>>(dpar, ddat, (float)dopscale_factor,
+			dopscale_mode, nsets, dtype);
+	else
+		realize_dopscale_cuda_streams_krnl<<<BLK,THD>>>(dpar, ddat, dopscale_factor,
+					dopscale_mode, nsets, dtype);
+	checkErrorAfterKernelLaunch("realize_dopscale_cuda_krnl (realize_dopscale)");
+
+}
 

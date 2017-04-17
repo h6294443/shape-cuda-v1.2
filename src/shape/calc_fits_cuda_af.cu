@@ -854,7 +854,7 @@ __global__ void cf_gamma_trans_deldop_af_krnl(
 
 	if ((offset < frame_size) && (frm < nframes) && (dd_gamma != 0)) {
 		/*  Carry out a gamma transformation on the fit image if requested  */
-		dev_gamma_trans_float(&ddat->set[s].desc.deldop.frame[frm].fit_s[offset],
+		dev_gamma_trans_f(&ddat->set[s].desc.deldop.frame[frm].fit_s[offset],
 				dd_gamma);
 	}
 }

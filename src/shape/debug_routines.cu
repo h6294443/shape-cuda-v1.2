@@ -162,6 +162,29 @@ __global__ void dbg_copy_lghtcrv_pos_arrays_krnl(struct dat_t *ddat, int set,
 		cose[offset] = ddat->set[set].desc.lghtcrv.rend[i].pos.cose_s[offset];
 	}
 }
+__global__ void dbg_copy_lghtcrv_pos_arrays2_krnl(struct pos_t **pos, int f,
+		int npixels, float *b, float *cosi, float *cose) {
+	/* npixels-threaded debug kernel */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (offset < npixels) {
+		b[offset] = pos[f]->b_s[offset];
+		cosi[offset] = pos[f]->cosi_s[offset];
+		cose[offset] = pos[f]->cose_s[offset];
+	}
+}
+__global__ void dbg_copy_lghtcrv_pos_arrays_full_krnl(struct pos_t **pos, int f,
+		int npixels, float *b, float *cosi, float *cose, float *zz) {
+	/* npixels-threaded debug kernel */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (offset < npixels) {
+		b[offset] = pos[f]->b_s[offset];
+		cosi[offset] = pos[f]->cosi_s[offset];
+		cose[offset] = pos[f]->cose_s[offset];
+		zz[offset] = pos[f]->z_s[offset];
+	}
+}
 __global__ void dbg_sum_up_pos_krnl(struct dat_t *ddat, int s, int f) {
 	/* Single-threaded kernel */
 	int n, size, i = 0;
@@ -191,6 +214,17 @@ __global__ void dbg_sum_up_pos_krnl(struct dat_t *ddat, int s, int f) {
 			printf("sum of cosa_s for Doppler frame #%i is %g\n", f, cosa_sum);
 			break;
 		}
+	}
+}
+__global__ void dbg_copy_facet_normals_krnl(struct mod_t *dmod, int nf, float3 *dnormals)
+{
+	/* nf-threaded kernel */
+	int f = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (f<nf) {
+		dnormals[f].x = __double2float_rn(dmod->shape.comp[0].real.f[f].n[0]);
+		dnormals[f].y = __double2float_rn(dmod->shape.comp[0].real.f[f].n[1]);
+		dnormals[f].z = __double2float_rn(dmod->shape.comp[0].real.f[f].n[2]);
 	}
 }
 
@@ -651,6 +685,70 @@ __host__ void dbg_print_lghtcrv_pos_arrays(struct dat_t *ddat, int set, int f, i
 	fclose(fp_cosi);
 	fclose(fp_cose);
 }
+__host__ void dbg_print_pos_arrays2(struct pos_t **pos, int f, int npixels, int n) {
+	/* This debug function prints the GPU arrays:
+	 *  - pos->cosi_s
+	 *  - pos->cose_s
+	 *  - pos->b_s,
+	 *
+	 *  all of length nPixels in the lghtcrv specified by 'set' in 'ddat' */
+	float *b, *cosi, *cose;
+	FILE *fp_b, *fp_cosi, *fp_cose;
+	dim3 BLK,THD;
+	char *filename;
+	int i, j, pxa, thd = 256;
+
+	cudaCalloc((void**)&b, sizeof(float), npixels);
+	cudaCalloc((void**)&cosi, sizeof(float), npixels);
+	cudaCalloc((void**)&cose, sizeof(float), npixels);
+
+	BLK.x = floor((thd-1+npixels)/thd);	THD.x = thd;
+	dbg_copy_lghtcrv_pos_arrays2_krnl<<<BLK,THD>>>(pos, f, npixels, b, cosi, cose);
+	checkErrorAfterKernelLaunch("dbg_copy_lghtcrv_pos_arrays_krnl");
+	deviceSyncAfterKernelLaunch("dbg_copy_lghtcrv_pos_arrays_krnl");
+
+	filename = "dbg_pos_b.csv";
+	fp_b = fopen(filename, "w+");
+	filename = "dbg_pos_cosi_s.csv";
+	fp_cosi = fopen(filename, "w+");
+	filename = "dbg_pos_cose_s.csv";
+	fp_cose = fopen(filename, "w+");
+
+	/* Print top corner set label */
+	fprintf(fp_cosi,"i%i , ", f);
+	fprintf(fp_cose,"i%i , ", f);
+	fprintf(fp_b, 	"i%i , ", f);
+
+	/* Print i values along top of table */
+	for (i=-n; i<=n; i++) {
+		fprintf(fp_cosi, "%i, ", i);
+		fprintf(fp_cose, "%i, ", i);
+		fprintf(fp_b, "%i, ", i);
+	}
+	fprintf(fp_cosi, "\n");
+	fprintf(fp_cose, "\n");
+	fprintf(fp_b, "\n");
+
+	for (j=-n; j<=n; j++) {
+		fprintf(fp_b, "%i, ", j);	/* j-entry on far left */
+		fprintf(fp_cosi, "%i, ", j);
+		fprintf(fp_cose, "%i, ", j);
+
+		for (i=-n; i<=n; i++) {
+			pxa = (j+n)*(2*n+1) + (i+n);
+			fprintf(fp_b, "%g, ", b[pxa]);
+			fprintf(fp_cosi, "%g, ", cosi[pxa]);
+			fprintf(fp_cose, "%g, ", cose[pxa]);
+		}
+		fprintf(fp_b, "\n");
+		fprintf(fp_cosi, "\n");
+		fprintf(fp_cose, "\n");
+	}
+
+	fclose(fp_b);
+	fclose(fp_cosi);
+	fclose(fp_cose);
+}
 __host__ void dbg_print_lghtcrv_pos_arrays_host(struct lghtcrv_t *lghtcrv,
 		int f, int set) {
 	/* This debug function prints the CPU arrays:
@@ -706,6 +804,87 @@ __host__ void dbg_print_lghtcrv_pos_arrays_host(struct lghtcrv_t *lghtcrv,
 	fclose(fp_b);
 	fclose(fp_cosi);
 	fclose(fp_cose);
+}
+__host__ void dbg_print_pos_arrays2_host(struct pos_t *pos) {
+	/* This debug function prints the CPU arrays:
+	 *  - pos->cosi
+	 *  - pos->cose
+	 *  - pos->b,
+	 *
+	 *  all of length nPixels in the lghtcrv specified by 'set' in 'ddat' */
+	int i, j, n;
+	FILE *fp_cosi, *fp_cose, *fp_b;
+	char *fn;
+	n = pos->n;
+
+	fn = "dbg_pos_cosi_CPU.csv";
+	fp_cosi = fopen(fn, "w+");
+	fn = "dbg_pos_cose_CPU.csv";
+	fp_cose = fopen(fn, "w+");
+	fn = "dbg_pos_b_CPU.csv";
+	fp_b = fopen(fn, "w+");
+
+	/* Print top corner set label */
+	fprintf(fp_cosi, "set , ");
+	fprintf(fp_cose, "set , ");
+	fprintf(fp_b, "set , ");
+
+	/* Print i values along top of table */
+	for (i=-n; i<=n; i++) {
+		fprintf(fp_cosi, "%i, ", i);
+		fprintf(fp_cose, "%i, ", i);
+		fprintf(fp_b, "%i, ", i);
+	}
+	fprintf(fp_cosi, "\n");
+	fprintf(fp_cose, "\n");
+	fprintf(fp_b, "\n");
+
+	for (j=-n; j<=n; j++) {
+		fprintf(fp_b, "%i, ", j);	/* j-entry on far left */
+		fprintf(fp_cosi, "%i, ", j);
+		fprintf(fp_cose, "%i, ", j);
+
+		for (i=-n; i<=n; i++) {
+			fprintf(fp_b, "%g, ", pos->b[i][j]);
+			fprintf(fp_cosi, "%g, ", pos->cosi[i][j]);
+			fprintf(fp_cose, "%g, ", pos->cose[i][j]);
+		}
+		fprintf(fp_b, "\n");
+		fprintf(fp_cosi, "\n");
+		fprintf(fp_cose, "\n");
+	}
+
+	fclose(fp_b);
+	fclose(fp_cosi);
+	fclose(fp_cose);
+}
+__host__ void dbg_print_pos_z_host(struct pos_t *pos, char *fn) {
+	/* This debug function prints the CPU arrays:
+	 *  - pos->cosi
+	 *  - pos->cose
+	 *  - pos->b,
+	 *
+	 *  all of length nPixels in the lghtcrv specified by 'set' in 'ddat' */
+	int i, j, n;
+	FILE *fp_z;
+	n = pos->n;
+	fp_z = fopen(fn, "w+");
+
+	/* Print top corner set label */
+	fprintf(fp_z, "s?f?, ");
+
+	/* Print i values along top of table */
+	for (i=-n; i<=n; i++)
+		fprintf(fp_z, "%i, ", i);
+	fprintf(fp_z, "\n");
+
+	for (j=-n; j<=n; j++) {
+		fprintf(fp_z, "%i, ", j);	/* j-entry on far left */
+		for (i=-n; i<=n; i++)
+			fprintf(fp_z, "%g, ", pos->z[i][j]);
+		fprintf(fp_z, "\n");
+	}
+	fclose(fp_z);
 }
 __host__ void dbg_print_array1D_dbl(double *data, int size, int offset,
 		char *filename) {
@@ -816,16 +995,16 @@ __host__ void dbg_print_pos_z(struct dat_t *ddat, int set, int frm, int n, char 
 	fprintf(fp_z, "zz , ");
 
 	/* Print top row pos->z index values */
-	for (int i=0; i<nx; i++)
+	for (int i=-n; i<=n; i++)
 		fprintf(fp_z, "%i , ", i);
 
 	/* Print first entry in every row (except 1st): j */
-	for (j=0; j<nx; j++) {
+	for (j=-n; j<=n; j++) {
 		fprintf(fp_z,	"\n%i , ", j);
 
 		/* Write the rest of the row values: fit[idel][idop] */
-		for (i=0; i<nx; i++) {
-			offset = j*nx + i;
+		for (i=-n; i<=n; i++) {
+			offset = (j+n)*(2*n+1) + (i+n);
 			fprintf(fp_z, " %g , ", zz[offset]);
 		}
 
@@ -1039,5 +1218,187 @@ __host__ void dbg_print_cose_af(struct dat_t *ddat, int set, int n) {
 	cudaFree(cos3);
 
 }
+__host__ void dbg_print_pos_arrays_full(struct pos_t **pos, int f, int npixels, int n) {
+	/* This debug function prints the GPU arrays:
+	 *  - pos->cosi_s
+	 *  - pos->cose_s
+	 *  - pos->b_s,
+	 *
+	 *  all of length nPixels in the lghtcrv specified by 'set' in 'ddat' */
+	float *b, *cosi, *cose, *zz;
+	FILE *fp_b, *fp_cosi, *fp_cose, *fp_z;
+	dim3 BLK,THD;
+	char *filename;
+	int i, j, pxa, thd = 256;
 
+	cudaCalloc((void**)&b, sizeof(float), npixels);
+	cudaCalloc((void**)&cosi, sizeof(float), npixels);
+	cudaCalloc((void**)&cose, sizeof(float), npixels);
+	cudaCalloc((void**)&zz, sizeof(float), npixels);
 
+	BLK.x = floor((thd-1+npixels)/thd);	THD.x = thd;
+	dbg_copy_lghtcrv_pos_arrays_full_krnl<<<BLK,THD>>>(pos, f, npixels, b, cosi, cose, zz);
+	checkErrorAfterKernelLaunch("dbg_copy_lghtcrv_pos_arrays_krnl");
+	deviceSyncAfterKernelLaunch("dbg_copy_lghtcrv_pos_arrays_krnl");
+
+	filename = "STR2_pos-b_s.csv";
+	fp_b = fopen(filename, "w+");
+	filename = "STR2_pos-cosi_s.csv";
+	fp_cosi = fopen(filename, "w+");
+	filename = "STR2_pos-cose_s.csv";
+	fp_cose = fopen(filename, "w+");
+	filename = "STR2_pos-z_s.csv";
+	fp_z = fopen(filename, "w+");
+
+	/* Print top corner set label */
+	fprintf(fp_cosi,"i%i , ", f);
+	fprintf(fp_cose,"i%i , ", f);
+	fprintf(fp_b, 	"i%i , ", f);
+	fprintf(fp_z,   "i%i , ", f);
+
+	/* Print i values along top of table */
+	for (i=-n; i<=n; i++) {
+		fprintf(fp_cosi, "%i, ", i);
+		fprintf(fp_cose, "%i, ", i);
+		fprintf(fp_b, "%i, ", i);
+		fprintf(fp_z, "%i, ", i);
+	}
+	fprintf(fp_cosi, "\n");
+	fprintf(fp_cose, "\n");
+	fprintf(fp_b, "\n");
+	fprintf(fp_z, "\n");
+
+	for (j=-n; j<=n; j++) {
+		fprintf(fp_b, "%i, ", j);	/* j-entry on far left */
+		fprintf(fp_cosi, "%i, ", j);
+		fprintf(fp_cose, "%i, ", j);
+		fprintf(fp_z, "%i, ", j);
+
+		for (i=-n; i<=n; i++) {
+			pxa = (j+n)*(2*n+1) + (i+n);
+			fprintf(fp_b, "%g, ", b[pxa]);
+			fprintf(fp_cosi, "%g, ", cosi[pxa]);
+			fprintf(fp_cose, "%g, ", cose[pxa]);
+			fprintf(fp_z, "%g, ", zz[pxa]);
+		}
+		fprintf(fp_b, "\n");
+		fprintf(fp_cosi, "\n");
+		fprintf(fp_cose, "\n");
+		fprintf(fp_z, "\n");
+	}
+
+	fclose(fp_b);
+	fclose(fp_cosi);
+	fclose(fp_cose);
+	fclose(fp_z);
+	cudaFree(zz);
+	cudaFree(cosi);
+	cudaFree(cose);
+	cudaFree(b);
+}
+__host__ void dbg_print_pos_arrays_full_host(struct pos_t *pos) {
+	/* This debug function prints the CPU arrays:
+	 *  - pos->cosi
+	 *  - pos->cose
+	 *  - pos->b,
+	 *
+	 *  all of length nPixels in the lghtcrv specified by 'set' in 'ddat' */
+	int i, j, n;
+	FILE *fp_cosi, *fp_cose, *fp_b, *fp_z;
+	char *fn;
+	n = pos->n;
+
+	fn = "CPU_pos-cosi.csv";
+	fp_cosi = fopen(fn, "w+");
+	fn = "CPU_pos-cose.csv";
+	fp_cose = fopen(fn, "w+");
+	fn = "CPU_pos-b.csv";
+	fp_b = fopen(fn, "w+");
+	fn = "CPU_pos-z.csv";
+	fp_z = fopen(fn, "w+");
+
+	/* Print top corner set label */
+	fprintf(fp_cosi, "set , ");
+	fprintf(fp_cose, "set , ");
+	fprintf(fp_b, "set , ");
+	fprintf(fp_z, "set , ");
+
+	/* Print i values along top of table */
+	for (i=-n; i<=n; i++) {
+		fprintf(fp_cosi, "%i, ", i);
+		fprintf(fp_cose, "%i, ", i);
+		fprintf(fp_b, "%i, ", i);
+		fprintf(fp_z, "%i, ", i);
+	}
+	fprintf(fp_cosi, "\n");
+	fprintf(fp_cose, "\n");
+	fprintf(fp_b, "\n");
+	fprintf(fp_z, "\n");
+
+	for (j=-n; j<=n; j++) {
+		fprintf(fp_b, "%i, ", j);	/* j-entry on far left */
+		fprintf(fp_cosi, "%i, ", j);
+		fprintf(fp_cose, "%i, ", j);
+		fprintf(fp_z, "%i, ", j);
+
+		for (i=-n; i<=n; i++) {
+			fprintf(fp_b, "%g, ", pos->b[i][j]);
+			fprintf(fp_z, "%g, ", pos->z[i][j]);
+			fprintf(fp_cosi, "%g, ", pos->cosi[i][j]);
+			fprintf(fp_cose, "%g, ", pos->cose[i][j]);
+		}
+		fprintf(fp_b, "\n");
+		fprintf(fp_z, "\n");
+		fprintf(fp_cosi, "\n");
+		fprintf(fp_cose, "\n");
+	}
+
+	fclose(fp_b);
+	fclose(fp_z);
+	fclose(fp_cosi);
+	fclose(fp_cose);
+}
+__host__ void dbg_print_facet_normals_host(struct mod_t *mod, char *fn) {
+	/* This debug function prints all facet normals in a given model */
+	int nf;
+	FILE *fp_n;
+	nf = mod->shape.comp[0].real.nf;
+	fp_n = fopen(fn, "w+");
+
+	/* Print top row */
+	fprintf(fp_n, ", value, \n");
+
+	for (int f=0; f<nf; f++) {
+		fprintf(fp_n, "%i, %g, \n", f, mod->shape.comp[0].real.f[f].n[0]);
+		fprintf(fp_n, "%i, %g, \n", f, mod->shape.comp[0].real.f[f].n[1]);
+		fprintf(fp_n, "%i, %g, \n", f, mod->shape.comp[0].real.f[f].n[2]);
+	}
+	fclose(fp_n);
+}
+__host__ void dbg_print_facet_normals(struct mod_t *dmod, int nf, char *fn) {
+	/* This debug function prints all facet normals in a given model */
+	FILE *fp_n;
+	float3 *dnormals, *hnormals;
+	dim3 BLK,THD;
+	fp_n = fopen(fn, "w+");
+
+	/* Allocate memory */
+	gpuErrchk(cudaMalloc((void**)&dnormals, sizeof(float3) * nf));
+	hnormals = (float3 *) malloc(nf*sizeof(float3));
+
+	THD.x = maxThreadsPerBlock;
+	BLK.x = floor((THD.x - 1 + nf)/THD.x);
+	dbg_copy_facet_normals_krnl<<<BLK,THD>>>(dmod, nf, dnormals);
+	checkErrorAfterKernelLaunch("copy_facet_normals_krnl");
+	gpuErrchk(cudaMemcpy(hnormals, dnormals, sizeof(float3)*nf, cudaMemcpyDeviceToHost));
+
+	/* Print top row */
+	fprintf(fp_n, ", value, \n");
+
+	for (int f=0; f<nf; f++) {
+		fprintf(fp_n, "%i, %g, \n", f, hnormals[f].x);
+		fprintf(fp_n, "%i, %g, \n", f, hnormals[f].y);
+		fprintf(fp_n, "%i, %g, \n", f, hnormals[f].z);
+	}
+	fclose(fp_n);
+}

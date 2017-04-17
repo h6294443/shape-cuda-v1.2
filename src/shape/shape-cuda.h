@@ -75,6 +75,9 @@ __host__ double apply_photo_cuda(struct mod_t *dmod, struct dat_t *ddat,
 __host__ void apply_photo_cuda_streams(struct mod_t *dmod, struct dat_t *ddat,
 		struct pos_t **pos, int4 *xylim, int2 *span, dim3 *BLKpx, int *nThreads,
 		int body, int set, int nframes, cudaStream_t *ap_stream);
+__host__ void apply_photo_cuda_streams_f(struct mod_t *dmod, struct dat_t *ddat,
+		struct pos_t **pos,	int4 *xylim, int2 *span, dim3 *BLKpx, int *nThreads,
+		int body, int set, int nframes, cudaStream_t *ap_stream);
 __host__ double bestfit_CUDA(struct par_t *dpar, struct mod_t *dmod, struct dat_t
 		*ddat, struct par_t *par, struct mod_t *mod, struct dat_t *dat);
 __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod, struct
@@ -129,7 +132,9 @@ __host__ void compute_xlim_ylim(struct dat_t *ddat, int size, int set, int frm,
 		int src, float *iminflt, float *imaxflt, float *jminflt,float *jmaxflt,
 		float *minmax_overall);
 __host__ void deldopoffs_cuda(struct dat_t *ddat, int s);
+__host__ void deldopoffs_cuda_f(struct dat_t *ddat, int s, int nframes);
 __host__ void dopoffs_cuda(struct dat_t *ddat, int s);
+__host__ void dopoffs_cuda_f(struct dat_t *ddat, int s, int nframes);
 __host__ void dvdI_reduce_single(struct mod_t *dmod, float *dv, float *dcom0,
 		float *dcom1, float *dcom2, float *dI00, float *dI01, float *dI02,
 		float *dI10, float *dI11, float *dI12, float *dI20, float *dI21,
@@ -193,8 +198,13 @@ __host__ int posvis_cuda_streams2(struct par_t *dpar, struct mod_t *dmod,
 		cudaStream_t *posvis_stream);
 __host__ void realize_delcor_cuda(struct dat_t *ddat, double delta_delcor0,
 		int delcor0_mode, int nsets);
+__host__ void realize_delcor_cuda_f(struct dat_t *ddat, double delta_delcor0,
+		int delcor0_mode, int nsets, unsigned char *type, int *nframes);
 __host__ void realize_dopscale_cuda(struct par_t *dpar, struct dat_t *ddat,
 		double dopscale_factor, int dopscale_mode);
+__host__ void realize_dopscale_cuda_streams(struct par_t *dpar, struct dat_t
+		*ddat, double dopscale_factor, int dopscale_mode, int nsets,
+		unsigned char *dtype);
 __host__ void realize_mod_cuda( struct par_t *dpar, struct mod_t *dmod,
 		unsigned char type);
 __host__ void realize_photo_cuda( struct par_t *dpar, struct mod_t *dmod,
@@ -212,6 +222,8 @@ __host__ void realize_spin_cuda_streams2f(struct par_t *dpar, struct mod_t *dmod
 		struct dat_t *ddat, unsigned char *htype, int *nframes, int *nviews,
 		int nsets, cudaStream_t *rs_stream);
 __host__ void realize_xyoff_cuda( struct dat_t *ddat);
+__host__ void realize_xyoff_cuda_streams( struct dat_t *ddat, int nsets,
+		unsigned char *dtype);
 __host__ void show_deldoplim_cuda(struct dat_t *dat, struct dat_t *ddat);
 __host__ void show_deldoplim_cuda_streams(struct dat_t *ddat,
 		unsigned char *type, int nsets, int *nframes, int maxframes);
@@ -267,10 +279,12 @@ __device__ void dev_facmom_f( float3 fv0, float3 fv1, float3 fv2, float3 fn,
 __device__ double dev_facnrm( struct vertices_t verts, int fi);
 __device__ float dev_facnrm_f( struct vertices_t verts, int fi);
 __device__ int dev_gamma_trans(float *datum, double gamma);
-__device__ int dev_gamma_trans_float(float *datum, float gamma);
+__device__ int dev_gamma_trans_f(float *datum, float gamma);
 __device__ double dev_gammln(double xx);
 __device__ double dev_hapke( double cosi, double cose, double phase,
         double w, double h, double B0, double g, double theta);
+__device__ double dev_hapke_f(float cosi, float cose, float phase,
+		float w, float h, float B0, float g, float theta);
 __device__ void dev_inteuler( struct spin_t spin, double t[], double impulse[][3], int n,
 		double w[3], double m[3][3], unsigned char pa, unsigned char method, double int_abstol);
 __device__ int dev_vp_iround(double x);
@@ -311,14 +325,25 @@ __global__ void clrvect_af_krnl(struct dat_t *ddat, int s, int nframes,	int nThr
 __global__ void euler2mat_krnl( double m[3][3], double phi, double theta, double psi);
 __global__ void euler2mat_realize_mod_krnl(struct mod_t *dmod);
 __global__ void get_types_krnl(struct dat_t *ddat, unsigned char *dtype);
+__global__ void lghtcrv_spline_streams_krnl(struct dat_t *ddat, int set, double
+		yp1, double ypn, double *u, int ncalc);
+__global__ void lghtcrv_spline_streams_f_krnl(struct dat_t *ddat, int set,
+		float yp1, float ypn, float *u, int ncalc);
+__global__ void lghtcrv_splint_streams3_krnl(struct dat_t *ddat, int set, int ncalc);
+__global__ void lghtcrv_splint_streams3f_krnl(struct dat_t *ddat, int set, int ncalc);
 __global__ void posclr_streams_krnl(struct pos_t **pos, int *posn, int f);
-__global__ void posmask_universal_krnl(struct par_t *dpar, struct pos_t *pos, int nThreads, int xspan);
+__global__ void posmask_universal_krnl(struct par_t *dpar, struct pos_t *pos,
+		int nThreads, int xspan);
 __global__ void posmask_init_streams_krnl(struct pos_t **pos, double3 *so,
 		double *pixels_per_km, int f);
+__global__ void posmask_init_streams_f_krnl(struct pos_t **pos, float3 *so,
+		float *pixels_per_km, int f);
 __global__ void posmask_init_streams2_krnl(struct pos_t **pos, double3 *so,
 		float *pixels_per_km, int f);
 __global__ void posmask_streams_krnl(struct par_t *dpar, struct pos_t **pos,
 		double3 *so, double *pixels_per_km,	int *posn, int nThreads, int xspan,	int f);
+__global__ void posmask_streams_f_krnl(struct par_t *dpar, struct pos_t **pos,
+		float3 *so,	float *pixels_per_km, int nThreads,	int xspan,	int f);
 __global__ void posmask_streams2_krnl(struct par_t *dpar,struct pos_t **pos,double3 *so,
 		float *pixels_per_km, int *posn, int nThreads, int xspan, int f);
 __global__ void realize_angleoff_krnl(struct dat_t *ddat);
@@ -354,3 +379,10 @@ __host__ void dbg_print_lghtcrv_xyy2(struct dat_t *ddat, int set, int ncalc, cha
 __host__ void dbg_print_lghtcrv_xyy2_host(struct lghtcrv_t *lghtcrv, int set, int ncalc, char *filename);
 __host__ void dbg_print_lghtcrv_pos_arrays(struct dat_t *ddat, int set, int f, int npixels, int n);
 __host__ void dbg_print_lghtcrv_pos_arrays_host(struct lghtcrv_t *lghtcrv, int f, int set);
+__host__ void dbg_print_pos_arrays2(struct pos_t **pos, int f, int npixels, int n);
+__host__ void dbg_print_pos_arrays2_host(struct pos_t *pos);
+__host__ void dbg_print_pos_z_host(struct pos_t *pos, char *fn);
+__host__ void dbg_print_pos_arrays_full(struct pos_t **pos, int f, int npixels, int n);
+__host__ void dbg_print_pos_arrays_full_host(struct pos_t *pos);
+__host__ void dbg_print_facet_normals_host(struct mod_t *mod, char *fn);
+__host__ void dbg_print_facet_normals(struct mod_t *dmod, int nf, char *fn);

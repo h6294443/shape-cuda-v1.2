@@ -788,26 +788,29 @@ __global__ void posvis_facet_streams3_krnl(
 	int pxa, i, i1, i2, j, j1, j2, imin, imax, jmin, jmax;
 	float imin_dbl, imax_dbl, jmin_dbl, jmax_dbl, old, kmpxl;
 	int3 fidx;
-
+	__shared__ int pn;
 	float3 n, v0, v1, v2, tv0, tv1, tv2, x;
 	float s, t, z, den;
+
+	if (threadIdx.x == 0)
+		pn = pos[frm]->n;
 
 	if (f < nfacets) {
 		/* The following section transfers vertex coordinates from double[3]
 		 * storage to float3		 */
-		kmpxl = (float)pos[frm]->km_per_pixel;
+		kmpxl = __double2float_rn(pos[frm]->km_per_pixel);
 		fidx.x = verts[0]->f[f].v[0];
 		fidx.y = verts[0]->f[f].v[1];
 		fidx.z = verts[0]->f[f].v[2];
-		tv0.x = (float) verts[0]->v[fidx.x].x[0];
-		tv0.y = (float) verts[0]->v[fidx.x].x[1];
-		tv0.z = (float) verts[0]->v[fidx.x].x[2];
-		tv1.x = (float) verts[0]->v[fidx.y].x[0];
-		tv1.y = (float) verts[0]->v[fidx.y].x[1];
-		tv1.z = (float) verts[0]->v[fidx.y].x[2];
-		tv2.x = (float) verts[0]->v[fidx.z].x[0];
-		tv2.y = (float) verts[0]->v[fidx.z].x[1];
-		tv2.z = (float) verts[0]->v[fidx.z].x[2];
+		tv0.x = __double2float_rn( verts[0]->v[fidx.x].x[0]);
+		tv0.y = __double2float_rn(verts[0]->v[fidx.x].x[1]);
+		tv0.z = __double2float_rn(verts[0]->v[fidx.x].x[2]);
+		tv1.x = __double2float_rn(verts[0]->v[fidx.y].x[0]);
+		tv1.y = __double2float_rn(verts[0]->v[fidx.y].x[1]);
+		tv1.z = __double2float_rn(verts[0]->v[fidx.y].x[2]);
+		tv2.x = __double2float_rn(verts[0]->v[fidx.z].x[0]);
+		tv2.y = __double2float_rn(verts[0]->v[fidx.z].x[1]);
+		tv2.z = __double2float_rn(verts[0]->v[fidx.z].x[2]);
 		v0.x = v0.y = v0.z = v1.x = v1.y = v1.z = v2.x = v2.y = v2.z = 0.0;
 
 		/* Get the normal to this facet in body-fixed (asteroid) coordinates
@@ -857,8 +860,7 @@ __global__ void posvis_facet_streams3_krnl(
 			jmax = (jmax_dbl > INT_MAX) ? INT_MAX : (int) jmax_dbl;
 
 			/*  Set the outbnd flag if the facet extends beyond the POS window  */
-			if ((imin < (-pos[frm]->n)) || (imax > pos[frm]->n) ||
-					(jmin < (-pos[frm]->n))	|| (jmax > pos[frm]->n)) {
+			if ((imin < (-pn)) || (imax > pn) || (jmin < (-pn))	|| (jmax > pn)) {
 				posvis_streams_outbnd = 1;
 				outbndarr[f] = 1;
 			}
@@ -866,10 +868,10 @@ __global__ void posvis_facet_streams3_krnl(
 			/* Figure out if facet projects at least partly within POS window;
 			 * if it does, look at each "contained" POS pixel and get the
 			 * z-coordinate and cos(scattering angle)           */
-			i1 = MAX(imin, -pos[frm]->n);		j1 = MAX(jmin, -pos[frm]->n);
-			i2 = MIN(imax,  pos[frm]->n);		j2 = MIN(jmax,  pos[frm]->n);
+			i1 = MAX(imin, -pn);		j1 = MAX(jmin, -pn);
+			i2 = MIN(imax,  pn);		j2 = MIN(jmax,  pn);
 
-			if (i1 > pos[frm]->n || i2 < -pos[frm]->n || j1 > pos[frm]->n || j2 < -pos[frm]->n) {
+			if (i1 > pn || i2 < -pn || j1 > pn || j2 < -pn) {
 
 				/* Facet is entirely outside the POS frame: just keep track of
 				 * changed POS region     */
@@ -878,8 +880,9 @@ __global__ void posvis_facet_streams3_krnl(
 
 			} else {
 
-				dev_POSrect_streams(pos, src, (float)i1, (float)i2, (float)j1,
-						(float)j2, ijminmax_overall, frm);
+				dev_POSrect_streams(pos, src, __double2float_rn(i1),
+						__double2float_rn(i2), __double2float_rn(j1),
+						__double2float_rn(j2), ijminmax_overall, frm);
 
 				/* Facet is at least partly within POS frame: find all POS
 				 * pixels whose centers project onto this facet  */
@@ -889,7 +892,7 @@ __global__ void posvis_facet_streams3_krnl(
 						x.y = j * kmpxl;
 
 						/* Calculate the pixel address for 1D arrays */
-						pxa = (j+pos[frm]->n) * (2*pos[frm]->n + 1) + (i+pos[frm]->n);
+						pxa = (j+pn) * (2*pn + 1) + (i+pn);
 
 						/* Compute parameters s(x,y) and t(x,y) which define a
 						 * facet's surface as
@@ -948,15 +951,15 @@ __global__ void posvis_facet_streams3_krnl(
 
 									if (smooth) {
 										/* Assign temp. normal components as float3 */
-										tv0.x = (float)verts[0]->v[fidx.x].n[0];
-										tv0.y = (float)verts[0]->v[fidx.x].n[1];
-										tv0.z = (float)verts[0]->v[fidx.x].n[2];
-										tv1.x = (float)verts[0]->v[fidx.y].n[0];
-										tv1.y = (float)verts[0]->v[fidx.y].n[1];
-										tv1.z = (float)verts[0]->v[fidx.y].n[2];
-										tv2.x = (float)verts[0]->v[fidx.z].n[0];
-										tv2.y = (float)verts[0]->v[fidx.z].n[1];
-										tv2.z = (float)verts[0]->v[fidx.z].n[2];
+										tv0.x = __double2float_rn(verts[0]->v[fidx.x].n[0]);
+										tv0.y = __double2float_rn(verts[0]->v[fidx.x].n[1]);
+										tv0.z = __double2float_rn(verts[0]->v[fidx.x].n[2]);
+										tv1.x = __double2float_rn(verts[0]->v[fidx.y].n[0]);
+										tv1.y = __double2float_rn(verts[0]->v[fidx.y].n[1]);
+										tv1.z = __double2float_rn(verts[0]->v[fidx.y].n[2]);
+										tv2.x = __double2float_rn(verts[0]->v[fidx.z].n[0]);
+										tv2.y = __double2float_rn(verts[0]->v[fidx.z].n[1]);
+										tv2.z = __double2float_rn(verts[0]->v[fidx.z].n[2]);
 
 										/* Get pvs_smoothed version of facet unit
 										 * normal: Take the linear combination
@@ -979,10 +982,12 @@ __global__ void posvis_facet_streams3_krnl(
 									 * we are viewing from Earth (src = 0),
 									 * pos->cosi is also changed.                 */
 									if (n.z > 0.0) {
-										if (src) atomicExch(&pos[frm]->cosill_s[pxa], n.z);
-										else	 atomicExch(&pos[frm]->cose_s[pxa], n.z);
+										if (src)
+											atomicExch(&pos[frm]->cosill_s[pxa], n.z);
+										else
+											atomicExch(&pos[frm]->cose_s[pxa], n.z);
 										if ((!src) && (pos[frm]->bistatic)) {
-											float temp = (float)dev_dot4(n,usrc[frm]);
+											float temp = dev_dot4(n,usrc[frm]);
 											atomicExch(&pos[frm]->cosi_s[pxa], temp);
 											if (pos[frm]->cosi_s[pxa] <= 0.0)
 												pos[frm]->cose_s[pxa] = 0.0;
@@ -1129,7 +1134,11 @@ __host__ int posvis_cuda_streams2(
 //	dbg_print_lghtcrv_pos_arrays(ddat, s, 1, nThreadspx[1], hposn[1]);
 	/* Free temp arrays, destroy streams and timers, as applicable */
 
-
+	int npixels = (2*posn[1]+1)*(2*posn[1]+1);
+//	dbg_print_pos_arrays_full(pos, 0, npixels, posn[0]);
+	dbg_print_pos_arrays_full(pos, 1, npixels, posn[1]);
+//	dbg_print_pos_arrays_full(pos, 2, npixels, posn[2]);
+//	dbg_print_pos_arrays_full(pos, 3, npixels, posn[3]);
 	cudaFree(ijminmax_overall);
 	cudaFree(oa);
 	cudaFree(usrc);

@@ -1223,6 +1223,10 @@ void set_up_pos( struct par_t *par, struct dat_t *dat)
       If pos_scope = "local" then each data frame or lightcurve point gets its own
       pos_t structure in memory, so the POS images and associated variables persist
       rather than being overwritten by other frames/points.                            */
+	if (par->pos_scope == GLOBAL)
+		printf("POS-SCOPE is GLOBAL (less memory)\n");
+	else
+		printf("POS-SCOPE is LOCAL (more memory)\n");
 
 	switch (par->pos_scope) {
 	case GLOBAL:
@@ -1430,7 +1434,13 @@ void set_up_pos_cuda( struct par_t *par, struct dat_t *dat)
       If pos_scope = "local" then each data frame or lightcurve point gets its own
       pos_t structure in memory, so the POS images and associated variables persist
       rather than being overwritten by other frames/points.                            */
-	if (AF || STREAMS)	par->pos_scope = LOCAL;
+	if (AF || STREAMS || STREAMS2) {
+		par->pos_scope = LOCAL;
+		printf("POS-SCOPE is LOCAL (more memory)\n");
+	}
+	else
+		printf("POS-SCOPE is GLOBAL (less memory)\n");
+
 	switch (par->pos_scope) {
 	case GLOBAL:
 		for (s=0; s<dat->nsets; s++) {
@@ -2392,7 +2402,7 @@ int read_lghtcrv( struct dat_t *dat, FILE *fp, struct par_t *par, struct lghtcrv
 
 		/* Do inner loop for double pointers */
 		for (int j=1; j<=lghtcrv->n; j++)
-			cudaCalloc1((void**)&lghtcrv->t[j], sizeof(double), lghtcrv->nviews);
+			cudaCalloc1((void**)&lghtcrv->t[j], sizeof(double), (lghtcrv->nviews+1));
 	}
 	else {
 		lghtcrv->t0 = vector( 1, lghtcrv->n);

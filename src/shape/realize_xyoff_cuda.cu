@@ -44,6 +44,26 @@ __global__ void realize_xyoff_cuda_krnl(struct dat_t *ddat) {
 					if (ddat->set[s].desc.poset.frame[f].off[j].state == '=')
 						ddat->set[s].desc.poset.frame[f].off[j].val =
 								ddat->set[s].desc.poset.frame[f-1].off[j].val;
+		}
+	}
+}
+__global__ void realize_xyoff_cuda_streams_krnl(struct dat_t *ddat, int nsets,
+		unsigned char *type) {
+	/* nset-threaded kernel */
+	int s = blockIdx.x * blockDim.x + threadIdx.x;
+	int j, f;
+	if (s < nsets) {
+		if (type[s] == POS) {
+
+			for (j=0; j<=1; j++)
+				if (ddat->set[s].desc.poset.frame[0].off[j].state == '=')
+					printf("can't use \"=\" state for the first frame in a plane-of-sky dataset\n");
+
+			for (f=1; f<ddat->set[s].desc.poset.nframes; f++)
+				for (j=0; j<=1; j++)
+					if (ddat->set[s].desc.poset.frame[f].off[j].state == '=')
+						ddat->set[s].desc.poset.frame[f].off[j].val =
+								ddat->set[s].desc.poset.frame[f-1].off[j].val;
 
 		}
 	}
@@ -62,5 +82,16 @@ __host__ void realize_xyoff_cuda( struct dat_t *ddat)
 	THD.x = nsets;
 	realize_xyoff_cuda_krnl<<<1,THD>>>(ddat);
 	checkErrorAfterKernelLaunch("realize_xyoff_cuda_krnl (realize_xyoff_cuda");
+}
+__host__ void realize_xyoff_cuda_streams( struct dat_t *ddat, int nsets,
+		unsigned char *dtype)
+{
+	dim3 BLK,THD;
+	THD.x = maxThreadsPerBlock;
+	BLK.x = floor((THD.x - 1 + nsets)/THD.x);
+
+	/* Launch nset-threaded kernel */
+	realize_xyoff_cuda_streams_krnl<<<1,THD>>>(ddat, nsets, dtype);
+	checkErrorAfterKernelLaunch("realize_xyoff_cuda_streams_krnl (realize_xyoff_cuda_streams");
 
 }

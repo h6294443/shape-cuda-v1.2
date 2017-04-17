@@ -1634,6 +1634,10 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
         each POS pixel; set the posbnd parameter to 1 if any portion
         of the model extends beyond the POS frame limits.              */
 
+
+		//dbg_print_facet_normals_host(mod, "CPU_facet_normals.csv");
+
+
 		for (c=0; c<mod->shape.ncomp; c++)
 			if (posvis( &mod->shape.comp[c].real, orbit_offset, pos,
 					(int) par->pos_smooth, 0, 0, c)) {
@@ -1661,6 +1665,8 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 			posmask( pos, par->mask_tol);
 		}
 
+		//dbg_print_pos_arrays_full_host(pos);
+		//dbg_print_lghtcrv_pos_arrays_host(lghtcrv, i, 0);
 		/*  Go through all POS pixels which are visible and unshadowed with
         sufficiently low scattering and incidence angles, and mark the facets
         which project onto their centers as having been "seen" at least once   */
