@@ -786,19 +786,20 @@ __global__ void posvis_facet_streams3_krnl(
 
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
 	int pxa, i, i1, i2, j, j1, j2, imin, imax, jmin, jmax;
-	float imin_dbl, imax_dbl, jmin_dbl, jmax_dbl, old, kmpxl;
+	float imin_dbl, imax_dbl, jmin_dbl, jmax_dbl, old, s, t, z, den;
 	int3 fidx;
-	__shared__ int pn;
 	float3 n, v0, v1, v2, tv0, tv1, tv2, x;
-	float s, t, z, den;
+	__shared__ int pn;
+	__shared__ float kmpxl;
 
-	if (threadIdx.x == 0)
+	if (threadIdx.x == 0) {
 		pn = pos[frm]->n;
+		kmpxl = __double2float_rn(pos[frm]->km_per_pixel);
+	}
 
 	if (f < nfacets) {
 		/* The following section transfers vertex coordinates from double[3]
 		 * storage to float3		 */
-		kmpxl = __double2float_rn(pos[frm]->km_per_pixel);
 		fidx.x = verts[0]->f[f].v[0];
 		fidx.y = verts[0]->f[f].v[1];
 		fidx.z = verts[0]->f[f].v[2];
@@ -880,9 +881,9 @@ __global__ void posvis_facet_streams3_krnl(
 
 			} else {
 
-				dev_POSrect_streams(pos, src, __double2float_rn(i1),
-						__double2float_rn(i2), __double2float_rn(j1),
-						__double2float_rn(j2), ijminmax_overall, frm);
+//				dev_POSrect_streams(pos, src, __double2float_rn(i1),
+//						__double2float_rn(i2), __double2float_rn(j1),
+//						__double2float_rn(j2), ijminmax_overall, frm);
 
 				/* Facet is at least partly within POS frame: find all POS
 				 * pixels whose centers project onto this facet  */
@@ -993,6 +994,15 @@ __global__ void posvis_facet_streams3_krnl(
 												pos[frm]->cose_s[pxa] = 0.0;
 										}
 									}
+
+									dev_POSrect_streams(pos, src, __int2float_rn(i),
+											__int2float_rn(i), __int2float_rn(j),
+											__int2float_rn(j), ijminmax_overall, frm);
+
+//									POSrect( pos, src, (double) i, (double) i,
+//											(double) j, (double) j, &imin_overall,
+//											&imax_overall, &jmin_overall, &jmax_overall);
+
 
 									/* Next lines change pos->body/bodyill,
 									 * pos->comp/compill, pos->f/fill          */
@@ -1134,11 +1144,13 @@ __host__ int posvis_cuda_streams2(
 //	dbg_print_lghtcrv_pos_arrays(ddat, s, 1, nThreadspx[1], hposn[1]);
 	/* Free temp arrays, destroy streams and timers, as applicable */
 
-	int npixels = (2*posn[1]+1)*(2*posn[1]+1);
+	f = 1;
+	int npixels = (2*posn[f]+1)*(2*posn[f]+1);
 //	dbg_print_pos_arrays_full(pos, 0, npixels, posn[0]);
-	dbg_print_pos_arrays_full(pos, 1, npixels, posn[1]);
+//	dbg_print_pos_arrays_full(pos, 1, npixels, posn[1]);
 //	dbg_print_pos_arrays_full(pos, 2, npixels, posn[2]);
 //	dbg_print_pos_arrays_full(pos, 3, npixels, posn[3]);
+	dbg_print_posfacets(pos, f, posn[f], "dbg_STR2_pos-fac.csv");
 	cudaFree(ijminmax_overall);
 	cudaFree(oa);
 	cudaFree(usrc);

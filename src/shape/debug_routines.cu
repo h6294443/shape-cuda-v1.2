@@ -51,6 +51,28 @@ __global__ void dbg_print_fit_krnl2(struct dat_t *ddat, double *fit, int s, int 
 		fit[idop] = ddat->set[s].desc.doppler.frame[f].fit_s[idop];
 	}
 }
+__global__ void dbg_print_fac_krnl(struct pos_t **pos, int **ff, int f, int size, int xspan) {
+	/* ndop-threaded kernel */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int n = pos[f]->n;
+	int i = offset % xspan - n;
+	int j = offset / xspan - n;
+
+	if ((i>=-n) && (i<=n) && (j>=-n) && (j<=n)) {
+		ff[i][j] = pos[f]->f[i][j];
+	}
+}
+__global__ void dbg_print_fac2_krnl(struct pos_t **pos, int *fac, int f, int size, int xspan) {
+	/* ndop-threaded kernel */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int n = pos[f]->n;
+	int i = offset % xspan - n;
+	int j = offset / xspan - n;
+
+	if ((i>=-n) && (i<=n) && (j>=-n) && (j<=n)) {
+		fac[offset] = pos[f]->f[i][j];
+	}
+}
 __global__ void dbg_print_poz_krnl(struct dat_t *ddat, float *zz, int s, int f, int size) {
 	/* ndop-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
@@ -860,9 +882,7 @@ __host__ void dbg_print_pos_arrays2_host(struct pos_t *pos) {
 }
 __host__ void dbg_print_pos_z_host(struct pos_t *pos, char *fn) {
 	/* This debug function prints the CPU arrays:
-	 *  - pos->cosi
-	 *  - pos->cose
-	 *  - pos->b,
+	 *	 - pos->z
 	 *
 	 *  all of length nPixels in the lghtcrv specified by 'set' in 'ddat' */
 	int i, j, n;
@@ -1401,4 +1421,80 @@ __host__ void dbg_print_facet_normals(struct mod_t *dmod, int nf, char *fn) {
 		fprintf(fp_n, "%i, %g, \n", f, hnormals[f].z);
 	}
 	fclose(fp_n);
+}
+__host__ void dbg_print_posfacets(struct pos_t **pos, int f, int n, char *filename) {
+
+	/* This debug function prints out pos->f[i][j] for the entire POS */
+	int nThreads, i, j, offset, nx, msz1, msz2, pxa;
+	FILE *fp_f;
+	int **ff, *fac;
+	dim3 BLK,THD;
+	THD.x = maxThreadsPerBlock;
+
+	nx = 2*n + 1;
+	printf("\n Debug file %s written",filename);
+	msz1 = sizeof(int*)*nx;
+	msz2 = sizeof(int)*nx;
+	nThreads = (2*n+1)*(2*n+1);
+
+	cudaMallocManaged((void**)&ff, msz1, cudaMemAttachGlobal);
+	ff -= n;
+	for (i=-n; i<=n; i++){
+		cudaMallocManaged((void**)&ff[i], msz2, cudaMemAttachGlobal);
+		ff[i] -= n;
+	}
+	cudaCalloc((void**)&fac, sizeof(int), nThreads);
+
+	BLK.x = floor((THD.x - 1 + nThreads)/THD.x);
+
+	dbg_print_fac2_krnl<<<BLK,THD>>>(pos, fac, f, nThreads, nx);
+	checkErrorAfterKernelLaunch("dbg_print_fac_krnl");
+	deviceSyncAfterKernelLaunch("dbg_print_fac_krnl");
+
+	fp_f = fopen(filename, "w+");
+
+	/* Print top corner label */
+	fprintf(fp_f, "ff , ");
+
+	/* Print top row pos->z index values */
+	for (int i=-n; i<=n; i++)
+		fprintf(fp_f, "%i , ", i);
+
+	/* Print first entry in every row (except 1st): j */
+	for (j=-n; j<=n; j++) {
+		fprintf(fp_f,	"\n%i , ", j);
+
+		/* Write the rest of the row values: fit[idel][idop] */
+		for (i=-n; i<=n; i++) {
+			pxa = (j+n)*(2*n+1) + (i+n);
+			fprintf(fp_f, " %i , ", fac[pxa]);
+		}
+	}
+
+	fclose(fp_f);
+	cudaFree(ff);
+}
+__host__ void dbg_print_posfacets_host(struct pos_t *pos, char *fn)
+{
+	/* This debug function prints out pos->f[i][j] for the entire POS */
+	int i, j, n;
+	FILE *fp_f;
+	n = pos->n;
+	fp_f = fopen(fn, "w+");
+
+	/* Print top corner set label */
+	fprintf(fp_f, "s?f?, ");
+
+	/* Print i values along top of table */
+	for (i=-n; i<=n; i++)
+		fprintf(fp_f, "%i, ", i);
+	fprintf(fp_f, "\n");
+
+	for (j=-n; j<=n; j++) {
+		fprintf(fp_f, "%i, ", j);	/* j-entry on far left */
+		for (i=-n; i<=n; i++)
+			fprintf(fp_f, "%i, ", pos->f[i][j]);
+		fprintf(fp_f, "\n");
+	}
+	fclose(fp_f);
 }

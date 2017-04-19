@@ -386,3 +386,5 @@ __host__ void dbg_print_pos_arrays_full(struct pos_t **pos, int f, int npixels, 
 __host__ void dbg_print_pos_arrays_full_host(struct pos_t *pos);
 __host__ void dbg_print_facet_normals_host(struct mod_t *mod, char *fn);
 __host__ void dbg_print_facet_normals(struct mod_t *dmod, int nf, char *fn);
+__host__ void dbg_print_posfacets(struct pos_t **pos, int f, int posn, char *filename);
+__host__ void dbg_print_posfacets_host(struct pos_t *pos, char *fn);
