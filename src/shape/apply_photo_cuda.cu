@@ -976,14 +976,14 @@ __global__ void ap_kaas_streams2_krnl(
 	int pos_spn = 2*n+1;
 	int pxa = (j+n)*pos_spn + (i+n);
 
-	if (threadIdx.x == 0) {
+	if (offset == 0) {
 		phasefuncd[frm] = dmod->photo.optical[ap_ilaw].kaas.A0.val
 				* exp( -phase_d[frm] / dmod->photo.optical[ap_ilaw].kaas.D.val)
 		+ dmod->photo.optical[ap_ilaw].kaas.k.val * phase_d[frm] + 1;
 	}
 	__syncthreads();
 
-	if (offset == 0 && frm == 0) {
+	if (offset == 0 && frm == 1) {
 		scale_lommsee = (1 - dmod->photo.optical[ap_ilaw].kaas.wt.val)
 		 	   * phasefuncd[frm] * dmod->photo.optical[ap_ilaw].kaas.R.val/(4*PIE);
 		scale_lambert = dmod->photo.optical[ap_ilaw].kaas.wt.val

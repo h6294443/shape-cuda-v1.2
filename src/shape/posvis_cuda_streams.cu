@@ -881,9 +881,9 @@ __global__ void posvis_facet_streams3_krnl(
 
 			} else {
 
-//				dev_POSrect_streams(pos, src, __double2float_rn(i1),
-//						__double2float_rn(i2), __double2float_rn(j1),
-//						__double2float_rn(j2), ijminmax_overall, frm);
+				dev_POSrect_streams(pos, src, __double2float_rn(i1),
+						__double2float_rn(i2), __double2float_rn(j1),
+						__double2float_rn(j2), ijminmax_overall, frm);
 
 				/* Facet is at least partly within POS frame: find all POS
 				 * pixels whose centers project onto this facet  */
@@ -950,7 +950,7 @@ __global__ void posvis_facet_streams3_krnl(
 										else 		atomicExch(&pos[frm]->z_s[pxa], z);
 									}
 
-									if (smooth) {
+									if (pvst_smooth) {
 										/* Assign temp. normal components as float3 */
 										tv0.x = __double2float_rn(verts[0]->v[fidx.x].n[0]);
 										tv0.y = __double2float_rn(verts[0]->v[fidx.x].n[1]);
@@ -995,9 +995,9 @@ __global__ void posvis_facet_streams3_krnl(
 										}
 									}
 
-									dev_POSrect_streams(pos, src, __int2float_rn(i),
-											__int2float_rn(i), __int2float_rn(j),
-											__int2float_rn(j), ijminmax_overall, frm);
+//									dev_POSrect_streams(pos, src, __int2float_rn(i),
+//											__int2float_rn(i), __int2float_rn(j),
+//											__int2float_rn(j), ijminmax_overall, frm);
 
 //									POSrect( pos, src, (double) i, (double) i,
 //											(double) j, (double) j, &imin_overall,
@@ -1144,13 +1144,13 @@ __host__ int posvis_cuda_streams2(
 //	dbg_print_lghtcrv_pos_arrays(ddat, s, 1, nThreadspx[1], hposn[1]);
 	/* Free temp arrays, destroy streams and timers, as applicable */
 
-	f = 1;
-	int npixels = (2*posn[f]+1)*(2*posn[f]+1);
-//	dbg_print_pos_arrays_full(pos, 0, npixels, posn[0]);
-//	dbg_print_pos_arrays_full(pos, 1, npixels, posn[1]);
-//	dbg_print_pos_arrays_full(pos, 2, npixels, posn[2]);
-//	dbg_print_pos_arrays_full(pos, 3, npixels, posn[3]);
-	dbg_print_posfacets(pos, f, posn[f], "dbg_STR2_pos-fac.csv");
+//	f = 1;
+//	int npixels = (2*posn[f]+1)*(2*posn[f]+1);
+//	dbg_print_pos_arrays_full(pos, f, npixels, posn[f]);
+//	dbg_print_pos_arrays_full(pos, f, npixels, posn[f]);
+//	dbg_print_pos_arrays_full(pos, f, npixels, posn[f]);
+//	dbg_print_pos_arrays_full(pos, f, npixels, posn[f]);
+//	dbg_print_posfacets(pos, f, posn[f], "dbg_STR2_pos-fac.csv");
 	cudaFree(ijminmax_overall);
 	cudaFree(oa);
 	cudaFree(usrc);

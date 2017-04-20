@@ -1988,6 +1988,9 @@ __host__ void calc_lghtcrv_cuda_streams2(
 	apply_photo_cuda_streams(dmod, ddat, pos, xylim, span, BLKpx, nThreadspx1,
 			0, s, nframes, cf_stream);
 
+	f = 1;
+	int npixels = (2*hposn[f]+1)*(2*hposn[f]+1);
+	dbg_print_pos_arrays_full(pos, f, npixels, hposn[f]);
 //	dbg_print_lghtcrv_xyy2(ddat, s, nframes, "streams2_x_y_y2_arrays.csv");
 //	dbg_print_lghtcrv_pos_arrays(ddat, s, 1, nThreadspx[1], hposn[1]);
 
@@ -2020,6 +2023,8 @@ __host__ void calc_lghtcrv_cuda_streams2(
 	BLKpx[0].x = floor((THD.x - 1 + n) / THD.x);
 	lghtcrv_splint_streams3_krnl<<<BLKpx[0],THD>>>(ddat, s, n);
 	checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
+
+
 
 //	int threads = 128;
 //	BLKpx[0].x = floor((threads-1+nThreads)/threads);
