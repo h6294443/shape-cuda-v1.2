@@ -1564,6 +1564,24 @@ __global__ void set_idata_pntr_krnl(struct dat_t *ddat, float *d_idata,
 		}
 	}
 }
+__global__ void set_brt_idata_krnl(struct pos_t **pos, double *d_idata,
+		int i, int size) {
+	/* MULTI-threaded kernel */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (offset < size){
+		d_idata[offset] = pos[i]->b_d[offset];
+	}
+}
+__global__ void set_brt_idataf_krnl(struct pos_t **pos, float *d_idata,
+		int i, int size) {
+	/* MULTI-threaded kernel */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (offset < size){
+		d_idata[offset] = __double2float_rn(pos[i]->b_d[offset]);
+	}
+}
 __global__ void set_idata_modarea_krnl(struct mod_t *dmod, float *d_idata,
 		int c, int size) {
 	/* MULTI-threaded kernel */
@@ -1782,6 +1800,154 @@ __host__ float compute_deldop_xsec_pr6(struct dat_t *ddat, int ndel, int ndop,
 	cudaFree(d_odata);
 	cudaFree(d_idata);
 	return xsec;
+}
+__host__ double sum_brightness(struct pos_t **pos, int i, int size) {
+	/* Function sums up all array elements in the pos[i]->b[][] array The output for each individual pos
+	 * is what used to be calculated by apply_photo alone  */
+
+	int s;		// array size
+	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
+	int maxBlocks = 2048;		// max # of blocks per grid
+	int whichKernel = 6;		// id of reduction kernel
+	int numBlocks = 0;			// initialize numBlocks
+	int numThreads = 0;			// initialize numThreads
+	double bsum = 0.0;			// radar cross section; return value
+	double *d_odata;				// temp. float array for reduction output
+	double *d_idata; 			// temp. float arrays for reduction input
+	double *h_odata;				// the host output array
+	float2 xblock_ythread;		// used for return value of getNumBlocksAndThreads
+
+	dim3 BLK,THD;
+	BLK.x = floor((maxThreadsPerBlock - 1 + size)/maxThreadsPerBlock);
+	THD.x = maxThreadsPerBlock; // Thread block dimensions
+
+	/* Allocate memory for d_idata, then set that pointer equal to the right
+	 * data set and frame to the right deldop fit array	 */
+	cudaCalloc((void**)&d_idata, sizeof(double), size);
+
+	set_brt_idata_krnl<<<BLK,THD>>>(pos, d_idata, i, size);
+	checkErrorAfterKernelLaunch("set_brt_idata_krnl");
+
+	/* Find number of blocks & threads needed for reduction call */
+	xblock_ythread = getNumBlocksAndThreads(size, maxBlocks, maxThreads);
+	numBlocks = xblock_ythread.x;
+	numThreads = xblock_ythread.y;
+
+	/* Allocate memory for d_odata and d_odata2 with enough elements to hold
+	 * the reduction of each block during the first call */
+	cudaCalloc((void**)&d_odata,  sizeof(double), numBlocks);
+	h_odata = (double *) malloc(numBlocks*sizeof(double));
+
+	/* Call reduction for first time */
+	reduce<double>(size, numThreads, numBlocks, whichKernel, d_idata, d_odata);
+	checkErrorAfterKernelLaunch("reduce<double> in sum_brightness");
+
+	/* Reset d_idata for later use as buffer */
+	cudaMemset(d_idata, 0, size*sizeof(double));
+
+	/* Now sum partial block sums on GPU, using the reduce6<> kernel */
+	s = numBlocks;
+
+	while (s > 1)
+	{
+		int threads = 0, blocks = 0;
+		xblock_ythread = getNumBlocksAndThreads(s, maxBlocks, maxThreads);
+		blocks = xblock_ythread.x;
+		threads = xblock_ythread.y;
+
+		/* Copy the first d_odata back into d_idata2  */
+		cudaMemcpy(d_idata, d_odata, s*sizeof(double), cudaMemcpyDeviceToDevice);
+
+		reduce<double>(s, threads, blocks, whichKernel, d_idata, d_odata);
+
+		if (whichKernel < 3)
+			s = (s + threads - 1) / threads;
+		else
+			s = (s + (threads*2-1)) / (threads*2);
+		if (s > 1)
+			printf("s is bigger than one");
+	}
+
+	gpuErrchk(cudaMemcpy(h_odata, d_odata, 2*sizeof(double), cudaMemcpyDeviceToHost));
+	bsum = h_odata[0];
+	free(h_odata);
+	cudaFree(d_odata);
+	cudaFree(d_idata);
+	return bsum;
+}
+__host__ float sum_brightness_f(struct pos_t **pos, int i, int size) {
+	/* Function sums up all array elements in the pos[i]->b[][] array The output for each individual pos
+	 * is what used to be calculated by apply_photo alone  */
+
+	int s;		// array size
+	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
+	int maxBlocks = 2048;		// max # of blocks per grid
+	int whichKernel = 6;		// id of reduction kernel
+	int numBlocks = 0;			// initialize numBlocks
+	int numThreads = 0;			// initialize numThreads
+	float bsum = 0.0;			// radar cross section; return value
+	float *d_odata;				// temp. float array for reduction output
+	float *d_idata; 			// temp. float arrays for reduction input
+	float *h_odata;				// the host output array
+	float2 xblock_ythread;		// used for return value of getNumBlocksAndThreads
+
+	dim3 BLK,THD;
+	BLK.x = floor((maxThreadsPerBlock - 1 + size)/maxThreadsPerBlock);
+	THD.x = maxThreadsPerBlock; // Thread block dimensions
+
+	/* Allocate memory for d_idata, then set that pointer equal to the right
+	 * data set and frame to the right deldop fit array	 */
+	cudaCalloc((void**)&d_idata, sizeof(float), size);
+
+	set_brt_idataf_krnl<<<BLK,THD>>>(pos, d_idata, i, size);
+	checkErrorAfterKernelLaunch("set_brt_idata_krnl");
+
+	/* Find number of blocks & threads needed for reduction call */
+	xblock_ythread = getNumBlocksAndThreads(size, maxBlocks, maxThreads);
+	numBlocks = xblock_ythread.x;
+	numThreads = xblock_ythread.y;
+
+	/* Allocate memory for d_odata and d_odata2 with enough elements to hold
+	 * the reduction of each block during the first call */
+	cudaCalloc((void**)&d_odata,  sizeof(float), numBlocks);
+	h_odata = (float *) malloc(numBlocks*sizeof(float));
+
+	/* Call reduction for first time */
+	reduce<float>(size, numThreads, numBlocks, whichKernel, d_idata, d_odata);
+	checkErrorAfterKernelLaunch("reduce<double> in sum_brightness");
+
+	/* Reset d_idata for later use as buffer */
+	cudaMemset(d_idata, 0, size*sizeof(float));
+
+	/* Now sum partial block sums on GPU, using the reduce6<> kernel */
+	s = numBlocks;
+
+	while (s > 1)
+	{
+		int threads = 0, blocks = 0;
+		xblock_ythread = getNumBlocksAndThreads(s, maxBlocks, maxThreads);
+		blocks = xblock_ythread.x;
+		threads = xblock_ythread.y;
+
+		/* Copy the first d_odata back into d_idata2  */
+		cudaMemcpy(d_idata, d_odata, s*sizeof(float), cudaMemcpyDeviceToDevice);
+
+		reduce<float>(s, threads, blocks, whichKernel, d_idata, d_odata);
+
+		if (whichKernel < 3)
+			s = (s + threads - 1) / threads;
+		else
+			s = (s + (threads*2-1)) / (threads*2);
+		if (s > 1)
+			printf("s is bigger than one");
+	}
+
+	gpuErrchk(cudaMemcpy(h_odata, d_odata, 2*sizeof(float), cudaMemcpyDeviceToHost));
+	bsum = h_odata[0];
+	free(h_odata);
+	cudaFree(d_odata);
+	cudaFree(d_idata);
+	return bsum;
 }
 __host__ float compute_deldop_xsec_snglkrnl(struct dat_t *ddat, int ndel, int ndop,
 		int set, int frm) {

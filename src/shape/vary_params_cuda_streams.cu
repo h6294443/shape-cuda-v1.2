@@ -878,51 +878,61 @@ __global__ void lghtcrv_spline_streams_krnl(struct dat_t *ddat, int set, double
 	 * double *y2 - lghtcrv->y2)*/
 
 	/* Multi-threaded kernel */
-	int i = blockIdx.x * blockDim.x + threadIdx.x;
+	int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
 	int n = ncalc;
 	int k = n - 1 - i;
 	double *x = ddat->set[set].desc.lghtcrv.x;
 	double *y = ddat->set[set].desc.lghtcrv.y;
 	double *y2 = ddat->set[set].desc.lghtcrv.y2;
-	double p,qn,sig,un;
+	double p, qn, sig, un;
 
-	/* Perform single-thread task */
-	if (i == 0) {
-		if (yp1 > 0.99e30)
-			y2[1]=u[1]=0.0;
-		else {
-			y2[1] = -0.5;
-			u[1]=(3.0/(x[2]-x[1]))*((y[2]-y[1])/(x[2]-x[1])-yp1);
-		}
-	}
-	__syncthreads();
-
-	if (i > 1 && i < n-1) {
-
-		sig=(x[i]-x[i-1])/(x[i+1]-x[i-1]);
-		p=sig*y2[i-1]+2.0;
-		y2[i]=(sig-1.0)/p;
-		u[i]=(y[i+1]-y[i])/(x[i+1]-x[i]) - (y[i]-y[i-1])/(x[i]-x[i-1]);
-		u[i]=(6.0*u[i]/(x[i+1]-x[i-1])-sig*u[i-1])/p;
-	}
-	__syncthreads();
-
-	/* Perform another single-thread task */
 	if (i == 1) {
-		if (ypn > 0.99e30)
-			qn=un=0.0;
+		if (yp1 > 0.99e30)
+			ddat->set[set].desc.lghtcrv.y2[1] = u[1] = 0.0;
 		else {
-			qn=0.5;
-			un=(3.0/(x[n]-x[n-1]))*(ypn-(y[n]-y[n-1])/(x[n]-x[n-1]));
+			ddat->set[set].desc.lghtcrv.y2[1] = -0.5;
+			u[1] = (3.0/(ddat->set[set].desc.lghtcrv.x[2]-ddat->set[set].desc.lghtcrv.x[1])) *
+					((ddat->set[set].desc.lghtcrv.y[2]-ddat->set[set].desc.lghtcrv.y[1]) /
+					 (ddat->set[set].desc.lghtcrv.x[2]-ddat->set[set].desc.lghtcrv.x[1])-yp1);
 		}
-		y2[n]=(un-qn*u[n-1])/(qn*y2[n-1]+1.0);
 	}
 	__syncthreads();
 
-	if (k <= (n-1) && k >= 1)
-		y2[k]=y2[k]*y2[k+1]+u[k];
+	if ((i>=2) && (i<=(n-1))) {
+		sig = (ddat->set[set].desc.lghtcrv.x[i] - ddat->set[set].desc.lghtcrv.x[i-1]) /
+				(ddat->set[set].desc.lghtcrv.x[i+1] - ddat->set[set].desc.lghtcrv.x[i-1]);
 
+		p = sig * ddat->set[set].desc.lghtcrv.y2[i-1] + 2.0;
+
+		ddat->set[set].desc.lghtcrv.y2[i] = (sig-1.0)/p;
+
+		u[i] = (ddat->set[set].desc.lghtcrv.y[i+1] - ddat->set[set].desc.lghtcrv.y[i]) /
+				(ddat->set[set].desc.lghtcrv.x[i+1] - ddat->set[set].desc.lghtcrv.x[i]) -
+				(ddat->set[set].desc.lghtcrv.y[i] - ddat->set[set].desc.lghtcrv.y[i-1]) /
+				(ddat->set[set].desc.lghtcrv.x[i] - ddat->set[set].desc.lghtcrv.x[i-1]);
+
+		u[i] = (6.0*u[i]/(ddat->set[set].desc.lghtcrv.x[i+1] - ddat->set[set].desc.lghtcrv.x[i-1]) -
+				sig * u[i-1])/p;
+	}
 	__syncthreads();
+
+	if (i == n) {
+		if (ypn > 0.99e30)
+			qn = un = 0.0;
+		else {
+			qn = 0.5;
+			un = (3.0/(ddat->set[set].desc.lghtcrv.x[n] - ddat->set[set].desc.lghtcrv.x[n-1])) *
+				(ypn-(ddat->set[set].desc.lghtcrv.y[n] - ddat->set[set].desc.lghtcrv.y[n-1]) /
+				(ddat->set[set].desc.lghtcrv.x[n] - ddat->set[set].desc.lghtcrv.x[n-1]));
+		}
+
+		ddat->set[set].desc.lghtcrv.y2[n] = (un - qn * u[n-1]) /
+				(qn * ddat->set[set].desc.lghtcrv.y2[n-1] + 1.0);
+
+		for (k=n-1;k>=1;k--)
+			ddat->set[set].desc.lghtcrv.y2[k] = ddat->set[set].desc.lghtcrv.y2[k] *
+			ddat->set[set].desc.lghtcrv.y2[k+1] + u[k];
+	}
 }
 __global__ void lghtcrv_spline_streams_f_krnl(struct dat_t *ddat, int set, float
 		yp1, float ypn, float *u, int ncalc) {
@@ -982,6 +992,58 @@ __global__ void lghtcrv_spline_streams_f_krnl(struct dat_t *ddat, int set, float
 
 	__syncthreads();
 }
+__global__ void lghtcrv_spline_streams_test_krnl(struct dat_t *ddat, int set, double
+		yp1, double ypn, double *u, int ncalc) {
+	/*(double *x  - lghtcrv->x
+	 * double *y  - lghtcrv->y
+	 * int n      - calc
+	 * double yp1 - 2.0e30
+	 * double ypn - 2.0e30
+	 * double *y2 - lghtcrv->y2)*/
+
+	int i, k, n=ncalc;
+	double p, qn, sig, un;
+	double *x = ddat->set[set].desc.lghtcrv.x;
+	double *y = ddat->set[set].desc.lghtcrv.y;
+	double *y2 = ddat->set[set].desc.lghtcrv.y2;
+
+	/* single-threaded kernel */
+
+	if (threadIdx.x == 0) {
+		u[0]=0.0;
+		if (yp1 > 0.99e30)
+			y2[1]=u[1]=0.0;
+		else {
+			y2[1] = -0.5;
+			u[1]=(3.0/(x[2]-x[1]))*((y[2]-y[1])/(x[2]-x[1])-yp1);
+		}
+
+		for (i=2;i<=n-1;i++) {
+			sig=(x[i]-x[i-1])/(x[i+1]-x[i-1]);
+			p=sig*y2[i-1]+2.0;
+			y2[i]=(sig-1.0)/p;
+			u[i]=(y[i+1]-y[i])/(x[i+1]-x[i]) - (y[i]-y[i-1])/(x[i]-x[i-1]);
+
+//			double temp1, temp2, temp3, temp4;
+//			temp1 = 6 * u[i] / (x[i+1]-x[i-1]);
+//			temp2 = sig*u[i-1];
+//			temp3 = temp1 -temp2;
+//			temp4 = temp3/p;
+			u[i] = (6.0 * u[i] / (x[i+1]-x[i-1]) - sig*u[i-1] ) / p;
+		}
+
+		if (ypn > 0.99e30)
+			qn=un=0.0;
+		else {
+			qn=0.5;
+			un=(3.0/(x[n]-x[n-1]))*(ypn-(y[n]-y[n-1])/(x[n]-x[n-1]));
+		}
+		y2[n]=(un-qn*u[n-1])/(qn*y2[n-1]+1.0);
+
+		for (k=n-1;k>=1;k--)
+			y2[k]=y2[k]*y2[k+1]+u[k];
+	}
+}
 __global__ void lghtcrv_splint_streams2_krnl(struct dat_t *ddat, int set, int n)
 {
 	/* This is an n-threaded kernel where n = lghtcrv-> */
@@ -1019,7 +1081,7 @@ __global__ void lghtcrv_splint_streams2_krnl(struct dat_t *ddat, int set, int n)
 		*y=a*ya[klo] + b*ya[khi] + ((a*a*a-a) * y2a[klo] + (b*b*b-b) * y2a[khi]) * (h*h) /6.0;
 	}
 }
-__global__ void lghtcrv_splint_streams3_krnl(struct dat_t *ddat, int set, int n)
+__global__ void lghtcrv_splint_streams3_krnl(struct dat_t *ddat, int set, int n, int ncalc)
 {
 	/* This is an n-threaded kernel where n = lghtcrv->n */
 	/* Parameters:
@@ -1034,18 +1096,64 @@ __global__ void lghtcrv_splint_streams3_krnl(struct dat_t *ddat, int set, int n)
 	 * for memory access reasons.	 */
 
 	int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+	double interp;
 
 	if (i <= n) {
+		ddat->set[set].desc.lghtcrv.fit[i] = 0.0;
 
-		dev_lghtcrv_splint(ddat->set[set].desc.lghtcrv.x,
-				ddat->set[set].desc.lghtcrv.y,
-				ddat->set[set].desc.lghtcrv.y2,
-				n,
-				ddat->set[set].desc.lghtcrv.t[i][ddat->set[set].desc.lghtcrv.v0],
-				&ddat->set[set].desc.lghtcrv.fit[i]);
+		for (int v=0; v<ddat->set[set].desc.lghtcrv.nviews; v++) {
+			dev_lghtcrv_splint(ddat->set[set].desc.lghtcrv.x,
+					ddat->set[set].desc.lghtcrv.y,
+					ddat->set[set].desc.lghtcrv.y2,
+					ncalc,
+					ddat->set[set].desc.lghtcrv.t[i][ddat->set[set].desc.lghtcrv.v0],
+					//&ddat->set[set].desc.lghtcrv.fit[i]
+					&interp);
+			ddat->set[set].desc.lghtcrv.fit[i] += interp;
+		}
+		ddat->set[set].desc.lghtcrv.fit[i] /= ddat->set[set].desc.lghtcrv.nviews;
+
 
 		st_opt_brightness += ddat->set[set].desc.lghtcrv.fit[i] *
 				ddat->set[set].desc.lghtcrv.weight;
+	}
+}
+__global__ void lghtcrv_splint_streams3_test_krnl(struct dat_t *ddat, int set, int n, int ncalc)
+{
+	/* Single-threaded kernel where n = lghtcrv->n */
+	/* Parameters:
+	 * double *xa  - lghtcrv->x
+	 * double *ya  - lghtcrv->y
+	 * double *y2a - lghtcrv->y2
+	 * int n       - ncalc
+	 * double x    - lghtcrv->t[i][lghtcrv->v0]
+	 * double *y   - lghtcrv->fit[i]	 *
+	 *
+	 * This is a wrapper kernel that launches the device function. This is done
+	 * for memory access reasons.	 */
+
+	int i, v;
+	double interp;
+
+	if (threadIdx.x == 0) {
+
+		for (i=1; i<=n; i++) {
+			ddat->set[set].desc.lghtcrv.fit[i] = 0.0;
+
+			for (v=0; v<ddat->set[set].desc.lghtcrv.nviews; v++) {
+				dev_lghtcrv_splint(ddat->set[set].desc.lghtcrv.x,
+						ddat->set[set].desc.lghtcrv.y,
+						ddat->set[set].desc.lghtcrv.y2,
+						ncalc,
+						ddat->set[set].desc.lghtcrv.t[i][ddat->set[set].desc.lghtcrv.v0],
+						&interp);
+				ddat->set[set].desc.lghtcrv.fit[i] += interp;
+			}
+			ddat->set[set].desc.lghtcrv.fit[i] /= ddat->set[set].desc.lghtcrv.nviews;
+
+			st_opt_brightness += ddat->set[set].desc.lghtcrv.fit[i] *
+					ddat->set[set].desc.lghtcrv.weight;
+		}
 	}
 }
 __global__ void lghtcrv_splint_streams3f_krnl(struct dat_t *ddat, int set, int n)
@@ -1427,7 +1535,7 @@ __host__ void vary_params_cuda_streams( struct par_t *dpar, struct mod_t *dmod,
 
 				/* Change launch parameters from ncalc threads to n threads */
 				BLKncalc.x = floor((THD.x - 1 + n) / THD.x);
-				lghtcrv_splint_streams3_krnl<<<BLKncalc,THD>>>(ddat, s, n);
+				lghtcrv_splint_streams3_krnl<<<BLKncalc,THD>>>(ddat, s, n, ncalc);
 				checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
 				/* Cleanup */
 				cudaFree(u);
@@ -1912,7 +2020,7 @@ __host__ void vary_params_cuda_streams2(struct par_t *dpar, struct mod_t *dmod,
 
 				/* Change launch parameters from ncalc threads to n threads */
 				BLKncalc.x = floor((THD.x - 1 + n) / THD.x);
-				lghtcrv_splint_streams3_krnl<<<BLKncalc,THD>>>(ddat, s, n);
+				lghtcrv_splint_streams3_krnl<<<BLKncalc,THD>>>(ddat, s, n, ncalc);
 				checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
 				/* Cleanup */
 				cudaFree(u);
@@ -2303,7 +2411,7 @@ int4 *xylim, hxylim[hnframes[s]+1];
 //				for (f=1; f<nfrm_alloc; f++)
 //					lghtcrv_y[f] = apply_photo_cuda(dmod, ddat, 0, s, f);
 				apply_photo_cuda_streams(dmod, ddat, pos, xylim, span, BLK, nThreadspx1,
-							0, s, hnframes[s], vp_stream);
+							0, s, hnframes[s], npxls, vp_stream);
 
 				/* Now that we have calculated the model lightcurve brightnesses
 				 * y at each of the epochs x, we use cubic spline interpolation
@@ -2324,7 +2432,7 @@ int4 *xylim, hxylim[hnframes[s]+1];
 
 				/* Change launch parameters from ncalc threads to n threads */
 				BLKncalc.x = floor((THD.x - 1 + hlc_n[s]) / THD.x);
-				lghtcrv_splint_streams3_krnl<<<BLKncalc,THD>>>(ddat, s, hlc_n[s]);
+				lghtcrv_splint_streams3_krnl<<<BLKncalc,THD>>>(ddat, s, hlc_n[s], hnframes[s]);
 				checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
 				/* Cleanup */
 				cudaFree(u);

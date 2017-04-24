@@ -1050,6 +1050,7 @@ struct pos_t {
   double **cosi;                /* cos(incidence) */
   double **z;                   /* distance toward observer */
   float *b_s;
+  double *b_d;
   float *cose_s;
   float *cosi_s;
   float *z_s;

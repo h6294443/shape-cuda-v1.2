@@ -1515,6 +1515,7 @@ void set_up_pos_cuda( struct par_t *par, struct dat_t *dat)
 					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.zill_s,
 							sizeof(float),  npx);
 
+
 					/* Offset indexing for these double pointers */
 					//					dat->set[s].desc.deldop.frame[f].pos.b 			-= -n;
 					//					dat->set[s].desc.deldop.frame[f].pos.cosi 		-= -n;
@@ -1823,6 +1824,10 @@ void set_up_pos_cuda( struct par_t *par, struct dat_t *dat)
 							sizeof(float), npx);
 					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.zill_s,
 							sizeof(float), npx);
+					/* Double precision 1-D pointer */
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.b_d,
+							sizeof(double), npx);
+
 
 					/* Offset indexing for these double pointers */
 //					dat->set[s].desc.lghtcrv.rend[i].pos.b 			-= -n;

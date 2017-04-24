@@ -1762,7 +1762,7 @@ __host__ void calc_lghtcrv_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 
 	/* Compute model brightness for this lightcurve point then copy to device  */
 	apply_photo_cuda_streams(dmod, ddat, pos, xylim, span, BLKpx, nThreadspx1,
-			0, s, nframes, cf_stream);
+			0, s, nframes, nThreadspx, cf_stream);
 
 //	dbg_print_lghtcrv_pos_arrays(ddat, s, 22, nThreads, pos_n);
 
@@ -1986,13 +1986,8 @@ __host__ void calc_lghtcrv_cuda_streams2(
 
 	/* Compute model brightness for this lightcurve point then copy to device  */
 	apply_photo_cuda_streams(dmod, ddat, pos, xylim, span, BLKpx, nThreadspx1,
-			0, s, nframes, cf_stream);
+			0, s, nframes, nThreadspx, cf_stream);
 
-	f = 1;
-	int npixels = (2*hposn[f]+1)*(2*hposn[f]+1);
-	dbg_print_pos_arrays_full(pos, f, npixels, hposn[f]);
-//	dbg_print_lghtcrv_xyy2(ddat, s, nframes, "streams2_x_y_y2_arrays.csv");
-//	dbg_print_lghtcrv_pos_arrays(ddat, s, 1, nThreadspx[1], hposn[1]);
 
 	/* Now that we have calculated the model lightcurve brightnesses y at each
 	 * of the epochs x, we use cubic spline interpolation (Numerical Recipes
@@ -2013,19 +2008,28 @@ __host__ void calc_lghtcrv_cuda_streams2(
 	nThreads = nframes;
 	double *u;
 	THD.x = maxThreadsPerBlock;
-	gpuErrchk(cudaMalloc((void**)&u, sizeof(double)*nframes));
+	gpuErrchk(cudaMalloc((void**)&u, sizeof(double)*(nframes+1)));
 	BLKpx[0].x = floor((THD.x - 1 + nThreads)/THD.x);
-	lghtcrv_spline_streams_krnl<<<BLKpx[0],THD>>>(ddat, s, 2.0e30,
-			2.0e30, u, nframes);
+//	lghtcrv_spline_streams_krnl<<<BLKpx[0],THD>>>(ddat, s, 2.0e30,
+//			2.0e30, u, nframes);
+	lghtcrv_spline_streams_test_krnl<<<1,1>>>(ddat, s, 2.0e30, 2.0e30, u, nframes);
 	checkErrorAfterKernelLaunch("lghtcrv_spline_streams_krnl");
 
 	/* Change launch parameters from ncalc threads to n threads */
 	BLKpx[0].x = floor((THD.x - 1 + n) / THD.x);
-	lghtcrv_splint_streams3_krnl<<<BLKpx[0],THD>>>(ddat, s, n);
+	//lghtcrv_splint_streams3_krnl<<<BLKpx[0],THD>>>(ddat, s, n, nframes);
+	lghtcrv_splint_streams3_test_krnl<<<1,1>>>(ddat, s, n, nframes);
 	checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
 
 
+//	dbg_print_lc_fit(ddat, s, "STR2_lghtcrv_fit.csv", n);
 
+//	f = 1;
+//	int npixels = (2*hposn[f]+1)*(2*hposn[f]+1);
+//		dbg_print_pos_arrays_full(pos, f, npixels, hposn[f]);
+//		dbg_print_pos_bd(pos, f, npixels, hposn[f]);
+//	dbg_print_lghtcrv_xyy2(ddat, s, nframes, "streams2_x_y_y2_arrays.csv");
+	//	dbg_print_lghtcrv_pos_arrays(ddat, s, 1, nThreadspx[1], hposn[1]);
 //	int threads = 128;
 //	BLKpx[0].x = floor((threads-1+nThreads)/threads);
 //	THD.x = threads;
@@ -2139,8 +2143,6 @@ __host__ void calc_lghtcrv_cuda_streams2f(
 	 * angle, distance toward Earth at center of each POS pixel; set posbnd
 	 * parameter = 1 if any model portion extends beyond POS frame limits*/
 
-//	posvis_cuda_streams(dpar, dmod, ddat, orbit_offset, s, nframes, 0, 0, c,
-//			outbndarr, cf_stream);
 	posvis_cuda_streams2(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
 				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream);
 

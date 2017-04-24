@@ -51,6 +51,14 @@ __global__ void dbg_print_fit_krnl2(struct dat_t *ddat, double *fit, int s, int 
 		fit[idop] = ddat->set[s].desc.doppler.frame[f].fit_s[idop];
 	}
 }
+__global__ void dbg_print_lc_fit_krnl(struct dat_t *ddat, double *fit, int s, int n) {
+	/* ndop-threaded kernel */
+	int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+
+	if (i <= n) {
+		fit[i] = ddat->set[s].desc.lghtcrv.fit[i];
+	}
+}
 __global__ void dbg_print_fac_krnl(struct pos_t **pos, int **ff, int f, int size, int xspan) {
 	/* ndop-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
@@ -193,6 +201,15 @@ __global__ void dbg_copy_lghtcrv_pos_arrays2_krnl(struct pos_t **pos, int f,
 		b[offset] = pos[f]->b_s[offset];
 		cosi[offset] = pos[f]->cosi_s[offset];
 		cose[offset] = pos[f]->cose_s[offset];
+	}
+}
+__global__ void dbg_copy_lghtcrv_pos_bd_krnl(struct pos_t **pos, int f,
+		int npixels, double *bd) {
+	/* npixels-threaded debug kernel */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (offset < npixels) {
+		bd[offset] = pos[f]->b_d[offset];
 	}
 }
 __global__ void dbg_copy_lghtcrv_pos_arrays_full_krnl(struct pos_t **pos, int f,
@@ -771,6 +788,47 @@ __host__ void dbg_print_pos_arrays2(struct pos_t **pos, int f, int npixels, int 
 	fclose(fp_cosi);
 	fclose(fp_cose);
 }
+__host__ void dbg_print_pos_bd(struct pos_t **pos, int f, int npixels, int n) {
+	/* This debug function prints the GPU arrays:
+	 *  - pos->b_d, currently used only experimentally in light curves
+	 *
+	 *  all of length nPixels in the lghtcrv specified by 'set' in 'ddat' */
+	double *bd;
+	FILE *fp_b;
+	dim3 BLK,THD;
+	char *filename;
+	int i, j, pxa;
+	THD.x = maxThreadsPerBlock;
+
+	cudaCalloc((void**)&bd, sizeof(double), npixels);
+
+	BLK.x = floor((THD.x - 1 + npixels ) / THD.x);
+	dbg_copy_lghtcrv_pos_bd_krnl<<<BLK,THD>>>(pos, f, npixels, bd);
+	checkErrorAfterKernelLaunch("dbg_copy_lghtcrv_pos_bd_krnl");
+	deviceSyncAfterKernelLaunch("dbg_copy_lghtcrv_pos_bd_krnl");
+
+	filename = "dbg_pos_bd.csv";
+	fp_b = fopen(filename, "w+");
+
+	fprintf(fp_b, 	"i%i , ", f);
+
+	/* Print i values along top of table */
+	for (i=-n; i<=n; i++)
+		fprintf(fp_b, "%i, ", i);
+	fprintf(fp_b, "\n");
+
+	for (j=-n; j<=n; j++) {
+		fprintf(fp_b, "%i, ", j);	/* j-entry on far left */
+
+		for (i=-n; i<=n; i++) {
+			pxa = (j+n)*(2*n+1) + (i+n);
+			fprintf(fp_b, "%g, ", bd[pxa]);
+		}
+		fprintf(fp_b, "\n");
+	}
+	fclose(fp_b);
+	cudaFree(bd);
+}
 __host__ void dbg_print_lghtcrv_pos_arrays_host(struct lghtcrv_t *lghtcrv,
 		int f, int set) {
 	/* This debug function prints the CPU arrays:
@@ -880,6 +938,7 @@ __host__ void dbg_print_pos_arrays2_host(struct pos_t *pos) {
 	fclose(fp_cosi);
 	fclose(fp_cose);
 }
+
 __host__ void dbg_print_pos_z_host(struct pos_t *pos, char *fn) {
 	/* This debug function prints the CPU arrays:
 	 *	 - pos->z
@@ -1497,4 +1556,44 @@ __host__ void dbg_print_posfacets_host(struct pos_t *pos, char *fn)
 		fprintf(fp_f, "\n");
 	}
 	fclose(fp_f);
+}
+__host__ void dbg_print_lc_fit(struct dat_t *ddat, int s, char *filename_fit, int n) {
+	/* Debug function that prints all Doppler frame fit values to csv */
+
+	int i;
+	FILE *fp_fit;
+	double *fit;
+	dim3 BLK,THD;
+
+	cudaCalloc((void**)&fit, sizeof(double), n);
+	fit -= 1;
+	THD.x = maxThreadsPerBlock;
+	BLK.x = floor((THD.x - 1 + n)/THD.x);
+
+	dbg_print_lc_fit_krnl<<<BLK,THD>>>(ddat, fit, s, n);
+	checkErrorAfterKernelLaunch("dbg_print_lc_fit_krnl");
+	deviceSyncAfterKernelLaunch("dbg_print_lc_fit_krnl");
+
+	fp_fit = fopen(filename_fit, "w+");
+	fprintf(fp_fit, "i , ");
+	for (i=1; i<=n; i++)
+		fprintf(fp_fit,	"\n%i , %g", i, fit[i]);
+	fclose(fp_fit);
+	//cudaFree(fit);
+}
+__host__ void dbg_print_lc_fit_host(struct lghtcrv_t *lghtcrv, char *filename_fit, int n) {
+	/* Debug function that prints all Doppler frame fit values to csv */
+
+	int i;
+	FILE *fp_fit;
+	double *fit;
+	dim3 BLK,THD;
+
+
+	fp_fit = fopen(filename_fit, "w+");
+	fprintf(fp_fit, "i , ");
+	for (i=1; i<=n; i++)
+		fprintf(fp_fit,	"\n%i , %g", i, lghtcrv->fit[i]);
+	fclose(fp_fit);
+	//cudaFree(fit);
 }

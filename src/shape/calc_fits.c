@@ -1689,6 +1689,7 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 		lghtcrv->y[i] = apply_photo( mod, lghtcrv->ioptlaw, lghtcrv->solar_phase[i],
 				intensityfactor, pos, 0);
 
+		//dbg_print_pos_arrays2_host(pos);
 		/*  Carry out screen and disk output for the write action  */
 
 		if (par->action == WRITE) {
@@ -1882,6 +1883,8 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
       correspond to a given observed lightcurve point.                         */
 
 	spline( lghtcrv->x, lghtcrv->y, ncalc, 2.0e30, 2.0e30, lghtcrv->y2);
+//	dbg_print_lghtcrv_xyy2_host(lghtcrv, s, ncalc, "xyy2_arrays_CPU.csv");
+
 	for (i=1; i<=n; i++) {
 		lghtcrv->fit[i] = 0.0;
 		for (v=0; v<lghtcrv->nviews; v++) {
@@ -1891,7 +1894,9 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 		}
 		lghtcrv->fit[i] /= lghtcrv->nviews;
 	}
-//	dbg_print_lghtcrv_xyy2_host(lghtcrv, s, ncalc, "xyy2_arrays_CPU.csv");
+
+
+//	dbg_print_lc_fit_host(lghtcrv, "CPU_lghtcrv_fit.csv", n);
 	/*  Deal with flags for model that extends beyond the POS frame  */
 
 	par->posbnd_logfactor += lghtcrv->dof * (posbnd_logfactor/ncalc);
@@ -1908,7 +1913,6 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 	/* Start debug */
 //	dbg_print_lghtcrv_pos_arrays_host(lghtcrv, 22, 0);
 }
-
 
 void write_pos_deldop( struct par_t *par, struct mod_t *mod,
 		struct deldop_t *deldop, int s, int f)
@@ -1936,7 +1940,6 @@ void write_pos_deldop( struct par_t *par, struct mod_t *mod,
 			color_output, name);
 }
 
-
 void write_pos_doppler( struct par_t *par, struct mod_t *mod,
 		struct doppler_t *doppler, int s, int f)
 {
@@ -1963,7 +1966,6 @@ void write_pos_doppler( struct par_t *par, struct mod_t *mod,
 			color_output, name);
 }
 
-
 void write_pos_poset( struct par_t *par, struct mod_t *mod,
 		struct poset_t *poset, int s, int f)
 {
@@ -1989,7 +1991,6 @@ void write_pos_poset( struct par_t *par, struct mod_t *mod,
 			poset->frame[f].view[poset->v0].intspin, -1,
 			color_output, name);
 }
-
 
 void write_pos_lghtcrv( struct par_t *par, struct mod_t *mod,
 		struct lghtcrv_t *lghtcrv, int s, int i)

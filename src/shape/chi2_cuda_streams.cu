@@ -533,7 +533,7 @@ __global__ void c2s_doppler_add_o2_streams_krnl(float *o2, float *m2,
 		atomicAdd(&om[f], temp);
 	}
 }
-__global__ void c2s_lghtcrv_add_o2_streams_krnl(double *dof_chi2set) {
+__global__ void c2s_lghtcrv_add_o2_streams_krnl(struct dat_t *ddat, int s, double *dof_chi2set) {
 	/* ncalc-threaded kernel */
 	int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
 	float temp;
@@ -543,19 +543,19 @@ __global__ void c2s_lghtcrv_add_o2_streams_krnl(double *dof_chi2set) {
 		o2_m2_om.x = o2_m2_om.y = o2_m2_om.z = 0.0;
 	__syncthreads();
 
-	if ((i>=1) && (i<=c2s_lghtcrv->n)) {
+	if ((i>=1) && (i<=ddat->set[s].desc.lghtcrv.n)) {
 		/* Add contributions from power within frame limits */
 
 		/* Next 2 lines implement: o2 += obs[j]*obs[j]*oneovervar[j];	 */
-		temp = c2s_lghtcrv->obs[i] * c2s_lghtcrv->obs[i] * c2s_lghtcrv->oneovervar[i];
+		temp = ddat->set[s].desc.lghtcrv.obs[i] * ddat->set[s].desc.lghtcrv.obs[i] * ddat->set[s].desc.lghtcrv.oneovervar[i];
 		atomicAdd(&o2_m2_om.x, temp);
 
 		/* Next 2 lines implement: m2 += fit[j]*fit[j]*oneovervar[j];		 */
-		temp = c2s_lghtcrv->fit[i] * c2s_lghtcrv->fit[i] * c2s_lghtcrv->oneovervar[i];
+		temp = ddat->set[s].desc.lghtcrv.fit[i] * ddat->set[s].desc.lghtcrv.fit[i] * ddat->set[s].desc.lghtcrv.oneovervar[i];
 		atomicAdd(&o2_m2_om.y, temp);
 
 		/* Next 2 lines implement: om += fit[j]*obs[j]*oneovervar[j];		 */
-		temp = c2s_lghtcrv->fit[i] * c2s_lghtcrv->obs[i] * c2s_lghtcrv->oneovervar[i];
+		temp = ddat->set[s].desc.lghtcrv.fit[i] * ddat->set[s].desc.lghtcrv.obs[i] * ddat->set[s].desc.lghtcrv.oneovervar[i];
 		atomicAdd(&o2_m2_om.z, temp);
 	}
 	__syncthreads();
@@ -577,6 +577,41 @@ __global__ void c2s_lghtcrv_add_o2_streams_krnl(double *dof_chi2set) {
 				c2s_lghtcrv->cal.val * c2s_lghtcrv->cal.val * o2_m2_om.y);
 	}
 	__syncthreads();
+}
+__global__ void c2s_lghtcrv_serial_streams_krnl(struct dat_t *ddat, int s, double *dof_chi2set,
+		double3 *o2m2om) {
+
+	/* single-threaded kernel */
+	o2m2om[0].x = o2m2om[0].y = o2m2om[0].z = 0.0;
+
+	if (threadIdx.x == 0) {
+		for (int i=1; i<=ddat->set[s].desc.lghtcrv.n; i++) {
+			o2m2om[0].x += ddat->set[s].desc.lghtcrv.obs[i] *
+					ddat->set[s].desc.lghtcrv.obs[i] *
+					ddat->set[s].desc.lghtcrv.oneovervar[i];
+			o2m2om[0].y += ddat->set[s].desc.lghtcrv.fit[i] *
+					ddat->set[s].desc.lghtcrv.fit[i] *
+					ddat->set[s].desc.lghtcrv.oneovervar[i];
+			o2m2om[0].z += ddat->set[s].desc.lghtcrv.fit[i] *
+					ddat->set[s].desc.lghtcrv.obs[i] *
+					ddat->set[s].desc.lghtcrv.oneovervar[i];
+		}
+	}
+
+	/* If lightcurve's calibration factor is allowed to float, set it to mini-
+	 * mize chi-square (sum over all points of {(obs-calfact*fit)^2/variance}*/
+	if (c2s_lghtcrv->cal.state == 'f') {
+		if (o2m2om[0].z > 0.0)
+			c2s_lghtcrv->cal.val = o2m2om[0].z/o2m2om[0].y;
+		else
+			c2s_lghtcrv->cal.val = TINYCALFACT;
+	}
+
+	/* Compute chi-square for dataset  */
+	dof_chi2set[0] = c2s_lghtcrv->dof;
+	dof_chi2set[1] = c2s_lghtcrv->weight * (o2m2om[0].x - 2 * c2s_lghtcrv->cal.val * o2m2om[0].z +
+			c2s_lghtcrv->cal.val * c2s_lghtcrv->cal.val * o2m2om[0].y);
+
 
 }
 __global__ void c2s_get_prntflgs_krnl(struct par_t *dpar, struct dat_t *ddat) {
@@ -1322,10 +1357,14 @@ __host__ double chi2_lghtcrv_cuda_streams(
 		int lc_n)		{
 	int f;
 	double *dof_chi2set, h_dof_chi2set[2], chi2;
+	double3 *o2m2om, *h_o2m2om;
+
 	dim3 BLK,THD;
 	THD.x = maxThreadsPerBlock;
 
 	gpuErrchk(cudaMalloc((void**)&dof_chi2set, sizeof(double) * 2));
+	gpuErrchk(cudaMalloc((void**)&o2m2om, sizeof(double3) * 2));
+	h_o2m2om = (double3 *) malloc(2*sizeof(double3));
 
 //	/* Calculate launch parameters and create streams */
 //	for (f=0; f<nframes; f++) {
@@ -1340,9 +1379,11 @@ __host__ double chi2_lghtcrv_cuda_streams(
 //	checkErrorAfterKernelLaunch("c2s_lghtcrv_add_o2_streams_krnl");
 
 	BLK = floor((THD.x - 1 + lc_n)/THD.x);
-	c2s_lghtcrv_add_o2_streams_krnl<<<BLK,THD>>>(dof_chi2set);
+	//c2s_lghtcrv_add_o2_streams_krnl<<<BLK,THD>>>(ddat, s, dof_chi2set);
+	c2s_lghtcrv_serial_streams_krnl<<<1,1>>>(ddat, s, dof_chi2set, o2m2om);
 	gpuErrchk(cudaMemcpy(&h_dof_chi2set, dof_chi2set, sizeof(double)*2,
 			cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(h_o2m2om, o2m2om, sizeof(double3)*2, cudaMemcpyDeviceToHost));
 
 	//	dbg_print_lghtcrv_arrays(ddat, s, n, "cuda_lghtcrv_arrays.csv");
 
@@ -1354,6 +1395,8 @@ __host__ double chi2_lghtcrv_cuda_streams(
 //		cudaStreamDestroy(c2s_stream[f]);
 
 	cudaFree(dof_chi2set);
+	cudaFree(o2m2om);
+	free(h_o2m2om);
 	return h_dof_chi2set[1];
 }
 

@@ -74,7 +74,7 @@ __host__ double apply_photo_cuda(struct mod_t *dmod, struct dat_t *ddat,
 		int body, int set, int frm);
 __host__ void apply_photo_cuda_streams(struct mod_t *dmod, struct dat_t *ddat,
 		struct pos_t **pos, int4 *xylim, int2 *span, dim3 *BLKpx, int *nThreads,
-		int body, int set, int nframes, cudaStream_t *ap_stream);
+		int body, int set, int nframes, int *nThreadsPx, cudaStream_t *ap_stream);
 __host__ void apply_photo_cuda_streams_f(struct mod_t *dmod, struct dat_t *ddat,
 		struct pos_t **pos,	int4 *xylim, int2 *span, dim3 *BLKpx, int *nThreads,
 		int body, int set, int nframes, cudaStream_t *ap_stream);
@@ -227,6 +227,8 @@ __host__ void realize_xyoff_cuda_streams( struct dat_t *ddat, int nsets,
 __host__ void show_deldoplim_cuda(struct dat_t *dat, struct dat_t *ddat);
 __host__ void show_deldoplim_cuda_streams(struct dat_t *ddat,
 		unsigned char *type, int nsets, int *nframes, int maxframes);
+__host__ double sum_brightness(struct pos_t **pos, int i, int size);
+__host__ float sum_brightness_f(struct pos_t **pos, int i, int size);
 __host__ void vary_params_cuda(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int action, double *deldop_zmax,
 		double *rad_xsec, double *opt_brightness, double *cos_subradarlat,
@@ -327,10 +329,13 @@ __global__ void euler2mat_realize_mod_krnl(struct mod_t *dmod);
 __global__ void get_types_krnl(struct dat_t *ddat, unsigned char *dtype);
 __global__ void lghtcrv_spline_streams_krnl(struct dat_t *ddat, int set, double
 		yp1, double ypn, double *u, int ncalc);
+__global__ void lghtcrv_spline_streams_test_krnl(struct dat_t *ddat, int set, double
+		yp1, double ypn, double *u, int ncalc);
 __global__ void lghtcrv_spline_streams_f_krnl(struct dat_t *ddat, int set,
 		float yp1, float ypn, float *u, int ncalc);
-__global__ void lghtcrv_splint_streams3_krnl(struct dat_t *ddat, int set, int ncalc);
+__global__ void lghtcrv_splint_streams3_krnl(struct dat_t *ddat, int set, int n, int ncalc);
 __global__ void lghtcrv_splint_streams3f_krnl(struct dat_t *ddat, int set, int ncalc);
+__global__ void lghtcrv_splint_streams3_test_krnl(struct dat_t *ddat, int set, int n, int ncalc);
 __global__ void posclr_streams_krnl(struct pos_t **pos, int *posn, int f);
 __global__ void posmask_universal_krnl(struct par_t *dpar, struct pos_t *pos,
 		int nThreads, int xspan);
@@ -388,3 +393,6 @@ __host__ void dbg_print_facet_normals_host(struct mod_t *mod, char *fn);
 __host__ void dbg_print_facet_normals(struct mod_t *dmod, int nf, char *fn);
 __host__ void dbg_print_posfacets(struct pos_t **pos, int f, int posn, char *filename);
 __host__ void dbg_print_posfacets_host(struct pos_t *pos, char *fn);
+__host__ void dbg_print_pos_bd(struct pos_t **pos, int f, int npixels, int n);
+__host__ void dbg_print_lc_fit(struct dat_t *ddat, int s, char *filename_fit, int n);
+__host__ void dbg_print_lc_fit_host(struct lghtcrv_t *lghtcrv, char *filename_fit, int n);

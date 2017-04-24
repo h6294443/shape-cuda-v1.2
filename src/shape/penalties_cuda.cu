@@ -1760,6 +1760,7 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 		checkErrorAfterKernelLaunch("p_impulse_krnl (penalties_cuda)");
 		gpuErrchk(cudaMemcpyFromSymbol(&sum, p_sum, sizeof(double),
 				0, cudaMemcpyDeviceToHost));
+		int debug = 0;
 	}
 	return sum;
 }

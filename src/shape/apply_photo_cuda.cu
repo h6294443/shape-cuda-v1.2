@@ -956,6 +956,28 @@ __global__ void ap_kaas_init_krnl(struct mod_t *dmod) {
 			   * phasefunc * dmod->photo.optical[ap_ilaw].kaas.R.val/PIE;
 	}
 }
+__global__ void ap_kaas_init2_krnl(
+		struct mod_t *dmod,
+		double *phasefuncd,
+		double *phase_d,
+		double *scale_lommsee,
+		double *scale_lambert,
+		int nframes) {
+	/* nframes-threaded kernel */
+	int frm = blockIdx.x * blockDim.x + threadIdx.x + 1;
+	int ap_ilaw = 0;
+
+	if (frm <= nframes) {
+		phasefuncd[frm] = dmod->photo.optical[ap_ilaw].kaas.A0.val
+				* exp( -phase_d[frm] / dmod->photo.optical[ap_ilaw].kaas.D.val)
+		+ dmod->photo.optical[ap_ilaw].kaas.k.val * phase_d[frm] + 1;
+
+		scale_lommsee[frm] = (1 - dmod->photo.optical[ap_ilaw].kaas.wt.val)
+				* phasefuncd[frm] * dmod->photo.optical[ap_ilaw].kaas.R.val/(4*PIE);
+		scale_lambert[frm] = dmod->photo.optical[ap_ilaw].kaas.wt.val
+				* phasefuncd[frm] * dmod->photo.optical[ap_ilaw].kaas.R.val/PIE;
+	}
+}
 __global__ void ap_kaas_streams2_krnl(
 		struct mod_t *dmod,
 		struct pos_t **pos,
@@ -967,7 +989,10 @@ __global__ void ap_kaas_streams2_krnl(
 		double *intensity_factor,
 		double *phase_d,
 		double *phasefuncd,
-		int frm) {
+		double *scale_lommsee,
+		double *scale_lambert,
+		int frm,
+		int nframes) {
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
 	int i = offset % span.x + xylim[frm].w;
@@ -976,27 +1001,14 @@ __global__ void ap_kaas_streams2_krnl(
 	int pos_spn = 2*n+1;
 	int pxa = (j+n)*pos_spn + (i+n);
 
-	if (offset == 0) {
-		phasefuncd[frm] = dmod->photo.optical[ap_ilaw].kaas.A0.val
-				* exp( -phase_d[frm] / dmod->photo.optical[ap_ilaw].kaas.D.val)
-		+ dmod->photo.optical[ap_ilaw].kaas.k.val * phase_d[frm] + 1;
-	}
-	__syncthreads();
-
-	if (offset == 0 && frm == 1) {
-		scale_lommsee = (1 - dmod->photo.optical[ap_ilaw].kaas.wt.val)
-		 	   * phasefuncd[frm] * dmod->photo.optical[ap_ilaw].kaas.R.val/(4*PIE);
-		scale_lambert = dmod->photo.optical[ap_ilaw].kaas.wt.val
-			   * phasefuncd[frm] * dmod->photo.optical[ap_ilaw].kaas.R.val/PIE;
-	}
-
 	if (offset < nThreads) {
 		if (pos[frm]->cose_s[pxa] > 0.0 && pos[frm]->cosi_s[pxa] > 0.0
-		 && pos[frm]->body[i][j] == body) {
-			pos[frm]->b_s[pxa] = intensity_factor[frm] * pos[frm]->cosi_s[pxa]
-			    *(scale_lommsee / (pos[frm]->cosi_s[pxa] + pos[frm]->cose_s[pxa])
-			    + scale_lambert);
-			atomicAdd(&sum, pos[frm]->b_s[pxa]);
+				&& pos[frm]->body[i][j] == body) {
+
+			pos[frm]->b_d[pxa] = intensity_factor[frm] * pos[frm]->cosi_s[pxa]
+			   *(scale_lommsee[frm] / (pos[frm]->cosi_s[pxa] + pos[frm]->cose_s[pxa])
+			    + scale_lambert[frm]);
+			//atomicAdd(&dsum[frm], __double2float_rn(pos[frm]->b_d[pxa]));
 		}
 	}
 }
@@ -1022,24 +1034,24 @@ __global__ void ap_kaas_streams2_f_krnl(
 
 	if (threadIdx.x == 0) {
 		phasefuncf[frm] = __double2float_rn(dmod->photo.optical[ap_ilaw].kaas.A0.val)
-				* exp( -phase_f[frm] / __double2float_rn(dmod->photo.optical[ap_ilaw].kaas.D.val))
-		+ __double2float_rn(dmod->photo.optical[ap_ilaw].kaas.k.val) * phase_f[frm] + 1;
+						* exp( -phase_f[frm] / __double2float_rn(dmod->photo.optical[ap_ilaw].kaas.D.val))
+						+ __double2float_rn(dmod->photo.optical[ap_ilaw].kaas.k.val) * phase_f[frm] + 1;
 	}
 	__syncthreads();
 
 	if (offset == 0 && frm == 0) {
 		scale_lommseef = (1 - __double2float_rn(dmod->photo.optical[ap_ilaw].kaas.wt.val))
-		 	   * phasefuncf[frm] * __double2float_rn(dmod->photo.optical[ap_ilaw].kaas.R.val)/(4*PIE);
+		 			   * phasefuncf[frm] * __double2float_rn(dmod->photo.optical[ap_ilaw].kaas.R.val)/(4*PIE);
 		scale_lambertf = __double2float_rn(dmod->photo.optical[ap_ilaw].kaas.wt.val)
-			   * phasefuncf[frm] * __double2float_rn(dmod->photo.optical[ap_ilaw].kaas.R.val)/PIE;
+					   * phasefuncf[frm] * __double2float_rn(dmod->photo.optical[ap_ilaw].kaas.R.val)/PIE;
 	}
 
 	if (offset < nThreads) {
 		if (pos[frm]->cose_s[pxa] > 0.0 && pos[frm]->cosi_s[pxa] > 0.0
-		 && pos[frm]->body[i][j] == body) {
+				&& pos[frm]->body[i][j] == body) {
 			pos[frm]->b_s[pxa] = intensity_factor[frm] * pos[frm]->cosi_s[pxa]
-			    *(scale_lommseef / (pos[frm]->cosi_s[pxa] + pos[frm]->cose_s[pxa])
-			    + scale_lambertf);
+			                                                              *(scale_lommseef / (pos[frm]->cosi_s[pxa] + pos[frm]->cose_s[pxa])
+			                                                            		  + scale_lambertf);
 			atomicAdd(&sum, pos[frm]->b_s[pxa]);
 		}
 	}
@@ -1057,10 +1069,10 @@ __global__ void ap_kaas_streams_krnl(struct mod_t *dmod, struct pos_t **pos,
 
 	if (offset < nThreads) {
 		if (pos[f]->cose_s[pxa] > 0.0 && pos[f]->cosi_s[pxa] > 0.0
-		 && pos[f]->body[i][j] == body) {
+				&& pos[f]->body[i][j] == body) {
 			pos[f]->b_s[pxa] = intensityfactor * pos[f]->cosi_s[pxa]
-			    *(scale_lommsee / (pos[f]->cosi_s[pxa] + pos[f]->cose_s[pxa])
-			    + scale_lambert);
+			                                                    *(scale_lommsee / (pos[f]->cosi_s[pxa] + pos[f]->cose_s[pxa])
+			                                                    		+ scale_lambert);
 			atomicAdd(&dsum[f], pos[f]->b_s[pxa]);
 		}
 	}
@@ -1280,12 +1292,20 @@ __global__ void ap_get_sum_krnl() {
 		if (sum == 0)
 			sum = TINY; //printf("\nsum =0!\n");
 }
+__global__ void ap_set_lghtcrv_y_streams_krnl(struct dat_t *ddat, int s, double *sum,
+		int size) {
+	/* Single-threaded kernel */
+	int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+	if (i <= size) {
+		ddat->set[s].desc.lghtcrv.y[i] = /*1.0058**/sum[i];
+	}
+}
 __global__ void ap_set_lghtcrv_y_streams2_krnl(struct dat_t *ddat, int s, float *dsum,
 		int size) {
 	/* Single-threaded kernel */
-	int i = blockIdx.x * blockDim.x + threadIdx.x;
-	if (i < size) {
-		ddat->set[s].desc.lghtcrv.y[i] = dsum[i+1];
+	int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+	if (i <= size) {
+		ddat->set[s].desc.lghtcrv.y[i] = dsum[i];
 	}
 }
 __host__ double apply_photo_cuda(struct mod_t *dmod, struct dat_t *ddat, int body,
@@ -1417,20 +1437,25 @@ __host__ void apply_photo_cuda_streams(
 		int body,
 		int set,
 		int nframes,
+		int *nThreadspx,
 		cudaStream_t *ap_stream)
 {
 	unsigned char *type, *htype;
 	int f;
-	float *hsum, *dsum;
-	double *intensity_factor, *phase_d, *phasefuncd;
+	float *dsum;
+	double *hsum, *sum, *intensity_factor, *phase_d, *phasefuncd,
+		   *scale_lommsee, *scale_lambert;
 	dim3 BLK, THD;
 
 	gpuErrchk(cudaMalloc((void**)&type, sizeof(unsigned char) * 2));
+	gpuErrchk(cudaMalloc((void**)&sum, sizeof(double) * (nframes+1)));
 	gpuErrchk(cudaMalloc((void**)&dsum, sizeof(float)*(nframes+1)));
 	gpuErrchk(cudaMalloc((void**)&intensity_factor, sizeof(double)*(nframes+1)));
 	gpuErrchk(cudaMalloc((void**)&phase_d, sizeof(double)*(nframes+1)));
+	gpuErrchk(cudaMalloc((void**)&scale_lommsee, sizeof(double)*(nframes+1)));
+	gpuErrchk(cudaMalloc((void**)&scale_lambert, sizeof(double)*(nframes+1)));
 	htype = (unsigned char *) malloc(2*sizeof(unsigned char));
-	hsum = (float *) malloc((nframes+1)*sizeof(float));
+	hsum = (double *) malloc((nframes+1)*sizeof(double));
 
 	/* Launch single-thread kernel to assign pos address and get type */
 	THD.x = maxThreadsPerBlock;
@@ -1438,12 +1463,8 @@ __host__ void apply_photo_cuda_streams(
 	ap_init_streams_krnl<<<BLK,THD>>>(ddat, dmod, pos, set, nframes, type, dsum,
 			intensity_factor, phase_d);
 	checkErrorAfterKernelLaunch("ap_init_streams_krnl");
-
 	gpuErrchk(cudaMemcpy(htype, type, sizeof(unsigned char) *2,
 			cudaMemcpyDeviceToHost));
-
-	for (f=0;f<=nframes;f++)
-		hsum[f]=0.0;
 
 	switch (htype[0]) {
 	case LAMBERTLAW:
@@ -1523,17 +1544,16 @@ __host__ void apply_photo_cuda_streams(
 		break;
 	case KAASALAINEN:
 		/* Launch single-thread kernel to init Kaas */
-//		ap_kaas_init_krnl<<<1,1>>>(dmod);
-//		checkErrorAfterKernelLaunch("ap_kaas_init_krnl");
 		gpuErrchk(cudaMalloc((void**)&phasefuncd, sizeof(double)*(nframes+1)));
+		ap_kaas_init2_krnl<<<BLK,THD>>>(dmod, phasefuncd, phase_d,
+				scale_lommsee, scale_lambert, nframes);
+		checkErrorAfterKernelLaunch("ap_kaas_init2_krnl");
+
 		/* Launch the main Kaasalainen kernel */
 		for (f=1; f<=nframes; f++){
-//			ap_kaas_streams_krnl<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
-//					nThreads[f], body, span[f], xylim, dsum, f);
 			ap_kaas_streams2_krnl<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
 					nThreads[f], body, xylim, span[f], dsum, intensity_factor,
-					phase_d, phasefuncd, f);
-			//cudaDeviceSynchronize();
+					phase_d, phasefuncd, scale_lommsee, scale_lambert, f, nframes);
 		}
 		checkErrorAfterKernelLaunch("ap_kaas_streams_krnl");
 		cudaFree(phasefuncd);
@@ -1560,14 +1580,23 @@ __host__ void apply_photo_cuda_streams(
 	default:
 		bailout("apply_photo.c: can't handle that optical scattering law yet\n");
 	}
+
+	/* Do parallel reduction here on pos[f]->b_d[] and copy the results to
+	 * a device array */
+	for (int i=1; i<=nframes; i++)
+		hsum[i] = sum_brightness(pos, i, nThreadspx[i]);
+	gpuErrchk(cudaMemcpy(sum, hsum, (nframes+1)*sizeof(double), cudaMemcpyHostToDevice));
+
 	/* Now set the lghtcrv->y values with what was calculated here */
-	BLK.x = floor((THD.x - 1 + (nframes+1)) / THD.x);
-	ap_set_lghtcrv_y_streams2_krnl<<<BLK,THD>>>(ddat, set, dsum, (nframes+1));
+	BLK.x = floor((THD.x - 1 + nframes) / THD.x);
+//	ap_set_lghtcrv_y_streams2_krnl<<<BLK,THD>>>(ddat, set, dsum, nframes);
+	ap_set_lghtcrv_y_streams_krnl<<<BLK,THD>>>(ddat, set, sum, nframes);
 	checkErrorAfterKernelLaunch("ap_set_lghtcrv_y_streams2_krnl");
-	gpuErrchk(cudaMemcpy(hsum, dsum, sizeof(float)*(nframes+1),
-			cudaMemcpyDeviceToHost));
+//	gpuErrchk(cudaMemcpy(hsum, dsum, sizeof(float)*(nframes+1),
+//			cudaMemcpyDeviceToHost));
 
 	cudaFree(dsum);
+	cudaFree(sum);
 	cudaFree(type);
 	free(htype);
 	free(hsum);

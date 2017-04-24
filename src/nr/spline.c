@@ -19,6 +19,11 @@ void spline(double *x,double *y,int n,double yp1,double ypn,double *y2)
 		p=sig*y2[i-1]+2.0;
 		y2[i]=(sig-1.0)/p;
 		u[i]=(y[i+1]-y[i])/(x[i+1]-x[i]) - (y[i]-y[i-1])/(x[i]-x[i-1]);
+//		double temp1, temp2, temp3, temp4;
+//		temp1 = 6 * u[i] / (x[i+1]-x[i-1]);
+//		temp2 = sig*u[i-1];
+//		temp3 = temp1 -temp2;
+//		temp4 = temp3/p;
 		u[i]=(6.0*u[i]/(x[i+1]-x[i-1])-sig*u[i-1])/p;
 	}
 
