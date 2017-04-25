@@ -319,12 +319,11 @@ __global__ void p_get_real_info_krnl(struct mod_t *dmod) {
 		p_nv = dmod->shape.comp[c].real.nv;
 	}
 }
-__global__ void p_optalbdel_krnl(struct mod_t *dmod) {
+__global__ void p_optalbdel_krnl(struct mod_t *dmod, double *a, double *b) {
 	/* ns-threaded kernel */
 	int s = blockIdx.x * blockDim.x + threadIdx.x;
 	int c = 0, ilaw, f1, f2, v1, v2;
 	double len, x, y;
-	float temp;
 
 	if (s < p_ns) {
 
@@ -343,125 +342,115 @@ __global__ void p_optalbdel_krnl(struct mod_t *dmod) {
 				case HARMLOMMEL:
 					x = dmod->photo.optical[ilaw].harmR.local[c][f1].R.val;
 					y = dmod->photo.optical[ilaw].harmR.local[c][f2].R.val;
-					temp = len*fabs(x+y);	// Need float for atomics
-					atomicAdd(&p_a, temp);
-					temp = len*fabs(x-y);
-					atomicAdd(&p_b, temp);
+					a[s] = len * fabs(x+y);
+					b[s] = len * fabs(x-y);
 					break;
 				case INHOLAMBERT:
 				case INHOLOMMEL:
 					x = dmod->photo.optical[ilaw].inhoR.local[c][f1].R.val;
 					y = dmod->photo.optical[ilaw].inhoR.local[c][f2].R.val;
-					temp = len*fabs(x+y);	// Need float for atomics
-					atomicAdd(&p_a, temp);
-					temp = len*fabs(x-y);
-					atomicAdd(&p_b, temp);
+					a[s] = len * fabs(x+y);
+					b[s] = len * fabs(x-y);
 					break;
 				case HARMHAPKE:
 					x = dmod->photo.optical[ilaw].harmhapke.local[c][f1].w.val;
 					y = dmod->photo.optical[ilaw].harmhapke.local[c][f2].w.val;
-					temp = len*fabs(x+y);	// Need float for atomics
-					atomicAdd(&p_a, temp);
-					temp = len*fabs(x-y);
-					atomicAdd(&p_b, temp);
+					a[s] = len * fabs(x+y);
+					b[s] = len * fabs(x-y);
 					break;
 				case INHOHAPKE:
 					x = dmod->photo.optical[ilaw].inhohapke.local[c][f1].w.val;
 					y = dmod->photo.optical[ilaw].inhohapke.local[c][f2].w.val;
-					temp = len*fabs(x+y);	// Need float for atomics
-					atomicAdd(&p_a, temp);
-					temp = len*fabs(x-y);
-					atomicAdd(&p_b, temp);
+					a[s] = len * fabs(x+y);
+					b[s] = len * fabs(x-y);
 					break;
 				case HARMKAAS:
 					x = dmod->photo.optical[ilaw].harmkaas.local[c][f1].R.val;
 					y = dmod->photo.optical[ilaw].harmkaas.local[c][f2].R.val;
-					temp = len*fabs(x+y);	// Need float for atomics
-					atomicAdd(&p_a, temp);
-					temp = len*fabs(x-y);
-					atomicAdd(&p_b, temp);
+					a[s] = len * fabs(x+y);
+					b[s] = len * fabs(x-y);
 					break;
 				case INHOKAAS:
 					x = dmod->photo.optical[ilaw].inhokaas.local[c][f1].R.val;
 					y = dmod->photo.optical[ilaw].inhokaas.local[c][f2].R.val;
-					temp = len*fabs(x+y);	// Need float for atomics
-					atomicAdd(&p_a, temp);
-					temp = len*fabs(x-y);
-					atomicAdd(&p_b, temp);
+					a[s] = len * fabs(x+y);
+					b[s] = len * fabs(x-y);
 					break;
 				}
 			}
 		}
 	}
-	__syncthreads();
+}
+__global__ void p_optalbdel_finish_krnl(double asum, double bsum) {
+	/* Single-threaded kernel to set p_pen */
 
-	if (s == 0) {
+	if (threadIdx.x == 0) {
 		if (p_a == 0.0)
 			printf("penalties_cuda.cu: 'optalbdel' can't be used with this radar scattering law\n");
-		p_pen = p_b/p_a;
+		p_pen = bsum/asum; /* penalty = b/a */
 	}
-	__syncthreads();
 }
-__global__ void p_optalbvar_krnl(struct mod_t *dmod) {
+__global__ void p_optalbvar_krnl(struct mod_t *dmod, double *av, double *av2) {
 	/* nf-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	int c=0, ilaw, ntot=0;
-	float x;
+	int c=0, ilaw;
+	double x;
+
 	if (f < p_nf) {
 
 		if (dmod->shape.comp[c].real.f[f].act) {
 			for (ilaw=0; ilaw<dmod->photo.noptlaws; ilaw++) {
 				switch (dmod->photo.opttype[ilaw]) {
 				case HARMLAMBERT:
-//				case HARMLOMMEL:
-//					x = dmod->photo.optical[ilaw].harmR.local[c][f].R.val;
-//					atomicAdd(&p_av, x);
-//					atomicAdd(&p_av2, (x*x));
-//					atomicAdd(&p_ntot, 1);
-//					break;
-//				case INHOLAMBERT:
-//				case INHOLOMMEL:
-//					x = dmod->photo.optical[ilaw].inhoR.local[c][f].R.val;
-//					atomicAdd(&p_av, x);
-//					atomicAdd(&p_av2, (x*x));
-//					atomicAdd(&ntot, 1);
-//					break;
-//				case HARMHAPKE:
-//					x = dmod->photo.optical[ilaw].harmhapke.local[c][f].w.val;
-//					atomicAdd(&p_av, x);
-//					atomicAdd(&p_av2, (x*x));
-//					break;
-//				case INHOHAPKE:
-//					x = dmod->photo.optical[ilaw].inhohapke.local[c][f].w.val;
-//					atomicAdd(&p_av, x);
-//					atomicAdd(&p_av2, (x*x));
-//					atomicAdd(&ntot, 1);
-//					break;
-//				case HARMKAAS:
-//					x = dmod->photo.optical[ilaw].harmkaas.local[c][f].R.val;
-//					atomicAdd(&p_av, x);
-//					atomicAdd(&p_av2, (x*x));
-//					atomicAdd(&ntot, 1);
-//					break;
-//				case INHOKAAS:
-//					x = dmod->photo.optical[ilaw].inhokaas.local[c][f].R.val;
-//					atomicAdd(&p_av, x);
-//					atomicAdd(&p_av2, (x*x));
-//					atomicAdd(&ntot, 1);
-//					break;
+				case HARMLOMMEL:
+					x = dmod->photo.optical[ilaw].harmR.local[c][f].R.val;
+					av[f] = x;
+					av2[f] = x*x;
+					atomicAdd(&p_ntot, 1);
+					break;
+				case INHOLAMBERT:
+				case INHOLOMMEL:
+					x = dmod->photo.optical[ilaw].inhoR.local[c][f].R.val;
+					av[f] = x;
+					av2[f] = x*x;
+					atomicAdd(&p_ntot, 1);
+					break;
+				case HARMHAPKE:
+					x = dmod->photo.optical[ilaw].harmhapke.local[c][f].w.val;
+					av[f] = x;
+					av2[f] = x*x;
+					break;
+				case INHOHAPKE:
+					x = dmod->photo.optical[ilaw].inhohapke.local[c][f].w.val;
+					av[f] = x;
+					av2[f] = x*x;
+					atomicAdd(&p_ntot, 1);
+					break;
+				case HARMKAAS:
+					x = dmod->photo.optical[ilaw].harmkaas.local[c][f].R.val;
+					av[f] = x;
+					av2[f] = x*x;
+					atomicAdd(&p_ntot, 1);
+					break;
+				case INHOKAAS:
+					x = dmod->photo.optical[ilaw].inhokaas.local[c][f].R.val;
+					av[f] = x;
+					av2[f] = x*x;
+					atomicAdd(&p_ntot, 1);
+					break;
 				}
 			}
 		}
 	}
-	__syncthreads();
-
-	if (f == 0) {
+}
+__global__ void p_optalbvar_finish_krnl(double avsum, double av2sum) {
+	/* Single-threaded kernel to finish the penalty calculation for optalbvar */
+	if (threadIdx.x == 0) {
 		if (p_ntot == 0)
 			printf("penalties_cuda.cu: 'optalbvar' can't be used with this radar scattering law\n");
-		p_pen = p_ntot*(p_av2/(p_av*p_av)) - 1.0; /* fractional variance */
+		p_pen = p_ntot*(av2sum/(avsum*avsum)) - 1.0; /* fractional variance */
 		if (p_pen < 0.0)	p_pen = 0.0;    /* roundoff error */
 	}
-	__syncthreads();
 }
 __global__ void p_volume_krnl(struct mod_t *dmod) {
 	/* Single-threaded kernel */
@@ -469,12 +458,11 @@ __global__ void p_volume_krnl(struct mod_t *dmod) {
 		p_pen = dmod->shape.volume;
 	}
 }
-__global__ void p_thetadel_krnl(struct mod_t *dmod) {
+__global__ void p_thetadel_krnl(struct mod_t *dmod, double *a, double *b) {
 	/* ns-threaded kernel */
 	int s = blockIdx.x * blockDim.x + threadIdx.x;
 	int c=0, ilaw, f1, f2, v1, v2;
 	double len, x, y;
-	float temp;
 	if (s < p_ns) {
 		f1 = dmod->shape.comp[c].real.s[s].f[0];
 		f2 = dmod->shape.comp[c].real.s[s].f[1];
@@ -484,38 +472,35 @@ __global__ void p_thetadel_krnl(struct mod_t *dmod) {
 			v2 = dmod->shape.comp[c].real.s[s].v[1];
 			len = dev_distance(dmod->shape.comp[c].real.v[v1].x,
 					dmod->shape.comp[c].real.v[v2].x);
+
 			for (ilaw=0; ilaw<dmod->photo.noptlaws; ilaw++) {
 				switch (dmod->photo.opttype[ilaw]) {
 				case HARMHAPKE:
 					x = dmod->photo.optical[ilaw].harmhapke.local[c][f1].theta.val;
 					y = dmod->photo.optical[ilaw].harmhapke.local[c][f2].theta.val;
-					temp = len*fabs(x+y);
-					atomicAdd(&p_a, temp);
-					temp = len*fabs(x-y);
-					atomicAdd(&p_b, temp);
+					a[s] = len * fabs(x+y);
+					b[s] = len * fabs(x-y);
 					break;
 				case INHOHAPKE:
 					x = dmod->photo.optical[ilaw].inhohapke.local[c][f1].theta.val;
 					y = dmod->photo.optical[ilaw].inhohapke.local[c][f2].theta.val;
-					temp = len*fabs(x+y);
-					atomicAdd(&p_a, temp);
-					temp = len*fabs(x-y);
-					atomicAdd(&p_b, temp);
+					a[s] = len * fabs(x+y);
+					b[s] = len * fabs(x-y);
 					break;
 				}
 			}
 		}
 	}
-	__syncthreads();
-
+}
+__global__ void p_thetadel_finish_krnl(double asum, double bsum) {
 	/* What follows is a single-thread task */
-	if (s == 0) {
-		if (p_a == 0.0)
+	if (threadIdx.x == 0) {
+		if (asum == 0.0)
 			printf("penalties_cuda.cu: 'thetadel' can't be used with this optical scattering law\n");
-		p_pen = p_b/p_a;
+		p_pen = bsum/asum;
 	}
 }
-__global__ void p_thetavar_krnl(struct mod_t *dmod) {
+__global__ void p_thetavar_krnl(struct mod_t *dmod, double *av, double *av2) {
 	/* nf-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
 	int c=0, ilaw;
@@ -527,36 +512,36 @@ __global__ void p_thetavar_krnl(struct mod_t *dmod) {
 				switch (dmod->photo.opttype[ilaw]) {
 				case HARMHAPKE:
 					x = dmod->photo.optical[ilaw].harmhapke.local[c][f].theta.val;
-					atomicAdd(&p_av, x);
-					atomicAdd(&p_av2, (x*x));
+					av[f] = x;
+					av2[f] = x*x;
 					atomicAdd(&p_ntot, 1);
 					break;
 				case INHOHAPKE:
 					x = dmod->photo.optical[ilaw].inhohapke.local[c][f].theta.val;
-					atomicAdd(&p_av, x);
-					atomicAdd(&p_av2, (x*x));
+					av[f] = x;
+					av2[f] = x*x;
 					atomicAdd(&p_ntot, 1);
 					break;
 				}
 			}
 		}
 	}
-	__syncthreads();
+}
+__global__ void p_thetavar_finish_krnl(double avsum, double av2sum) {
 
-	/* Single-thread task */
-	if (f == 0) {
+	/* Single-threaded kernel */
+	if (threadIdx.x == 0) {
 		if (p_ntot == 0)
 			printf("penalties_cuda.cu: 'thetavar' can't be used with this optical scattering law\n");
-		p_pen = p_ntot * (p_av2/(p_av*p_av)) - 1.0; /* fractional variance */
+		p_pen = p_ntot * (av2sum/(avsum*avsum)) - 1.0; /* fractional variance */
 		if (p_pen < 0.0)		p_pen = 0.0;    /* roundoff error */
 	}
 }
-__global__ void p_radalbdel_krnl(struct mod_t *dmod) {
+__global__ void p_radalbdel_krnl(struct mod_t *dmod, double *a, double *b) {
 	/* ns-threaded kernel */
 	int s = blockIdx.x * blockDim.x + threadIdx.x;
 	int c=0, f1, f2, v1, v2, ilaw;
 	double len, x, y;
-	float temp;
 
 	if (s < p_ns) {
 		f1 = dmod->shape.comp[c].real.s[s].f[0];
@@ -572,31 +557,28 @@ __global__ void p_radalbdel_krnl(struct mod_t *dmod) {
 				case HARMCOSINE_DIFF:
 					x = dmod->photo.radar[ilaw].harmcosine.local[c][f1].R.val;
 					y = dmod->photo.radar[ilaw].harmcosine.local[c][f2].R.val;
-					temp = len*fabs(x+y);
-					atomicAdd(&p_a, temp);
-					temp = len*fabs(x-y);
-					atomicAdd(&p_b, temp);
+					a[s] = len * fabs(x+y);
+					b[s] = len * fabs(x-y);
 					break;
 				case INHOCOSINE_DIFF:
 					x = dmod->photo.radar[ilaw].inhocosine.local[c][f1].R.val;
 					y = dmod->photo.radar[ilaw].inhocosine.local[c][f2].R.val;
-					temp = len*fabs(x+y);
-					atomicAdd(&p_a, temp);
-					temp = len*fabs(x-y);
-					atomicAdd(&p_b, temp);
+					a[s] = len * fabs(x+y);
+					b[s] = len * fabs(x-y);
 					break;
 				}
 			}
 		}
 	}
-	__syncthreads();
+}
+__global__ void p_radalbdel_finish_krnl(double asum, double bsum) {
 
-	/* Single-threaded task */
-	if (s == 0) {
-		if (p_a == 0.0)
+	/* Single-threaded kernel */
+	if (threadIdx.x == 0) {
+		if (asum == 0.0)
 			printf("penalties_cuda.cu: 'radalbdel' can't be used with this "
 					"radar scattering law\n");
-		p_pen = p_b/p_a;
+		p_pen = bsum/asum;
 	}
 }
 __global__ void p_radalbvar_krnl(struct mod_t *dmod) {
@@ -1254,12 +1236,13 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat)
 {
 	int i, ntot;
-	double sum=0.0;
+	double sum=0.0, *a, *b, *absum, *av, *av2;
 	char name[80];
 
 	int pen_n, pen_type, ns, nf, nv;
 	unsigned char shape_type;
-	dim3 BLK,THD;
+	dim3 BLKs, BLKf, BLKv,THD;
+	THD.x = maxThreadsPerBlock;
 
 	/* Get # of penalties from dpar */
 	p_get_pen_n_krnl<<<1,1>>>(dpar);
@@ -1279,6 +1262,17 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 	gpuErrchk(cudaMemcpyFromSymbol(&nv, p_nv, sizeof(int),
 			0, cudaMemcpyDeviceToHost));
 
+	/* Calculate launch parameters */
+	BLKs.x = floor((THD.x - 1 + ns)/THD.x);
+	BLKf.x = floor((THD.x - 1 + nf)/THD.x);
+	BLKv.x = floor((THD.x - 1 + nv)/THD.x);
+
+	gpuErrchk(cudaMalloc((void**)&a, 	sizeof(double) * ns));
+	gpuErrchk(cudaMalloc((void**)&b, 	sizeof(double) * ns));
+	gpuErrchk(cudaMalloc((void**)&av, 	sizeof(double) * nf));
+	gpuErrchk(cudaMalloc((void**)&av2, 	sizeof(double) * nf));
+	absum = (double *) malloc(2*sizeof(double));
+
 	/* G thru penalties & calculate each contribution to penalty-function sum */
 	for (i=1; i<=pen_n; i++) {
 		/* Single-threaded kernel to get penalty type */
@@ -1296,25 +1290,37 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			 * for the two facets sharing that side)/(weighted mean over model
 			 *  "sides" of albedo sum for those facets) where the weighting
 			 *  factor is the length of the side  */
+			/* Penalty is calculated by summing up a and b over all sides, then
+			 * pen = b/a.  So the first kernel calculates a and b for each side
+			 * (as doubles) then a parallel reduction gets the sum of all. Then
+			 * we calculate b/a.			 */
 			strcpy( name, "optalbdel");
 
-			/* Configure and launch the ns-threaded optalbdel kernel */
-			BLK.x = floor((maxThreadsPerBlock - 1 + ns) / maxThreadsPerBlock);
-			THD.x = maxThreadsPerBlock; // Thread block dimensions
-			p_optalbdel_krnl<<<BLK,THD>>>(dmod);
-			checkErrorAfterKernelLaunch("p_optalbdel_krnl (penalties_cuda)");
+			/* Launch the ns-threaded optalbdel kernel */
+			p_optalbdel_krnl<<<BLKs,THD>>>(dmod, a, b);
+			checkErrorAfterKernelLaunch("p_optalbdel_krnl");
 
+			/* Now do parallel reduction on arrays a and b */
+			sum_2_double_arrays(a, b, absum, ns);
+
+			/* Now finish the pen(alty) calculation pen = b/a */
+			p_optalbdel_finish_krnl<<<1,1>>>(absum[0], absum[1]);
+			checkErrorAfterKernelLaunch("p_optalbdel_finish_krnl");
 			break;
 		case OPTALBVAR:
 			/*  pen = (facet albedo variance) / (mean facet albedo)^2  */
 			strcpy( name, "optalbvar");
 
-			/* Configure and launch the ns-threaded optalbdel kernel */
-			BLK.x = floor((maxThreadsPerBlock - 1 + nf) / maxThreadsPerBlock);
-			THD.x = maxThreadsPerBlock; // Thread block dimensions
-			p_optalbvar_krnl<<<BLK,THD>>>(dmod);
+			/* Launch the nf-threaded optalbvar kernel */
+			p_optalbvar_krnl<<<BLKf,THD>>>(dmod, av, av2);
 			checkErrorAfterKernelLaunch("p_optalbvar_krnl (penalties_cuda)");
 
+			/* Now do parallel reduction on arrays av and av2 */
+			sum_2_double_arrays(av, av2, absum, nf);
+
+			/* Now finish the pen(alty) calculation */
+			p_optalbvar_finish_krnl<<<1,1>>>(absum[0], absum[1]);
+			checkErrorAfterKernelLaunch("p_optalbdel_finish_krnl");
 			break;
 		case THETADEL:
 			/* pen = (weighted mean over model "sides" [edges] of
@@ -1328,12 +1334,16 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			 *  variance.                                               */
 			strcpy( name, "thetadel");
 
-			/* Configure and launch the ns-threaded optalbdel kernel */
-			BLK.x = floor((maxThreadsPerBlock - 1 + ns) / maxThreadsPerBlock);
-			THD.x = maxThreadsPerBlock; // Thread block dimensions
-			p_thetadel_krnl<<<BLK,THD>>>(dmod);
+			/* Launch the ns-threaded thetadel kernel */
+			p_thetadel_krnl<<<BLKs,THD>>>(dmod, a, b);
 			checkErrorAfterKernelLaunch("p_thetadel_krnl (penalties_cuda)");
 
+			/* Now do parallel reduction on arrays a and b */
+			sum_2_double_arrays(a, b, absum, ns);
+
+			/* Now finish penalty calculation */
+			p_thetadel_finish_krnl<<<1,1>>>(absum[0], absum[1]);
+			checkErrorAfterKernelLaunch("p_thetadel_finish_krnl");
 			break;
 		case THETAVAR:
 			/* pen = (facet slope angle variance) / (mean facet slope angle)^2
@@ -1343,12 +1353,16 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			 * roughness within each facet," and similarly for the variance */
 			strcpy( name, "thetavar");
 
-			/* Configure and launch the ns-threaded optalbdel kernel */
-			BLK.x = floor((maxThreadsPerBlock - 1 + nf) / maxThreadsPerBlock);
-			THD.x = maxThreadsPerBlock; // Thread block dimensions
-			p_thetavar_krnl<<<BLK,THD>>>(dmod);
+			/* Launch the nf-threaded thetavar kernel */
+			p_thetavar_krnl<<<BLKf,THD>>>(dmod, av, av2);
 			checkErrorAfterKernelLaunch("p_thetadel_krnl (penalties_cuda)");
 
+			/* Parallel reduction on av and av2 to get sums */
+			sum_2_double_arrays(av, av2, absum, nf);
+
+			/* Now finish penalty calculation */
+			p_thetavar_finish_krnl<<<1,1>>>(absum[0], absum[1]);
+			checkErrorAfterKernelLaunch("p_thetavar_finish_krnl");
 			break;
 		case RADALBDEL:
 			/* pen = (weighted mean over model "sides" [edges] of |albedo
@@ -1357,21 +1371,23 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			 * the weighting factor is the length of the side  */
 			strcpy( name, "radalbdel");
 
-			/* Configure and launch the ns-threaded optalbdel kernel */
-			BLK.x = floor((maxThreadsPerBlock - 1 + ns) / maxThreadsPerBlock);
-			THD.x = maxThreadsPerBlock; // Thread block dimensions
-			p_radalbdel_krnl<<<BLK,THD>>>(dmod);
+			/* Launch the ns-threaded radalbdel kernel */
+			p_radalbdel_krnl<<<BLKs,THD>>>(dmod, a, b);
 			checkErrorAfterKernelLaunch("p_radalbdel_krnl (penalties_cuda)");
 
+			/* Parallel reduction on a and b to get sums */
+			sum_2_double_arrays(a, b, absum, ns);
+
+			/* Finish penalty calculations */
+			p_radalbdel_finish_krnl<<<1,1>>>(absum[0], absum[1]);
+			checkErrorAfterKernelLaunch("p_radalbdel_finish_krnl");
 			break;
 		case RADALBVAR:
 			/* pen = (facet albedo variance) / (mean facet albedo)^2  */
 			strcpy( name, "radalbvar");
 
-			/* Configure and launch the nf-threaded radalbvar kernel */
-			BLK.x = floor((maxThreadsPerBlock - 1 + nf) / maxThreadsPerBlock);
-			THD.x = maxThreadsPerBlock; // Thread block dimensions
-			p_radalbvar_krnl<<<BLK,THD>>>(dmod);
+			/* Launch the nf-threaded radalbvar kernel */
+			p_radalbvar_krnl<<<BLKf,THD>>>(dmod);
 			checkErrorAfterKernelLaunch("p_radalbvar_krnl (penalties_cuda)");
 
 			break;
@@ -1382,10 +1398,8 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			 * the length of the side  */
 			strcpy( name, "rad_c_del");
 
-			/* Configure and launch the ns-threaded rad_c_del kernel */
-			BLK.x = floor((maxThreadsPerBlock - 1 + ns) / maxThreadsPerBlock);
-			THD.x = maxThreadsPerBlock; // Thread block dimensions
-			p_radcdel_krnl<<<BLK,THD>>>(dmod);
+			/* Launch the ns-threaded rad_c_del kernel */
+			p_radcdel_krnl<<<BLKs,THD>>>(dmod);
 			checkErrorAfterKernelLaunch("p_radcdel_krnl (penalties_cuda)");
 
 			break;
@@ -1393,10 +1407,8 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			/* pen = (facet C variance) / (mean facet C)^2  */
 			strcpy( name, "rad_c_var");
 
-			/* Configure and launch the nf-threaded radalbvar kernel */
-			BLK.x = floor((maxThreadsPerBlock - 1 + nf) / maxThreadsPerBlock);
-			THD.x = maxThreadsPerBlock; // Thread block dimensions
-			p_radcvar_krnl<<<BLK,THD>>>(dmod);
+			/* Launch the nf-threaded radalbvar kernel */
+			p_radcvar_krnl<<<BLKf,THD>>>(dmod);
 			checkErrorAfterKernelLaunch("p_radcvar_krnl (penalties_cuda)");
 
 			break;
@@ -1432,10 +1444,8 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			 * weight accordingly.                    */
 			strcpy( name, "nonsmooth");
 
-			/* Configure and launch the ns-threaded nonsmooth kernel */
-			BLK.x = floor((maxThreadsPerBlock - 1 + ns) / maxThreadsPerBlock);
-			THD.x = maxThreadsPerBlock; // Thread block dimensions
-			p_nonsmooth_krnl<<<BLK,THD>>>(dmod);
+			/* Launch the ns-threaded nonsmooth kernel */
+			p_nonsmooth_krnl<<<BLKs,THD>>>(dmod);
 			checkErrorAfterKernelLaunch("p_nonsmooth_krnl (penalties_cuda)");
 
 			break;
@@ -1461,10 +1471,8 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			 * the "concavity" penalty weight accordingly.               */
 			strcpy( name, "concavity");
 
-			/* Configure and launch the ns-threaded concavity kernel */
-			BLK.x = floor((maxThreadsPerBlock - 1 + ns) / maxThreadsPerBlock);
-			THD.x = maxThreadsPerBlock; // Thread block dimensions
-			p_concavity_krnl<<<BLK,THD>>>(dmod);
+			/* Launch the ns-threaded concavity kernel */
+			p_concavity_krnl<<<BLKs,THD>>>(dmod);
 			checkErrorAfterKernelLaunch("p_concavity_krnl (penalties_cuda)");
 
 			break;
@@ -1480,9 +1488,7 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 
 			if (shape_type == VERTEX) {
 				/* Launch nv-threaded kernel oop through vertices to build up mean squared deviation  */
-				BLK.x = floor((maxThreadsPerBlock - 1 + nv) / maxThreadsPerBlock);
-				THD.x = maxThreadsPerBlock; // Thread block dimensions
-				p_rdev_vertex_krnl<<<BLK,THD>>>(dmod);
+				p_rdev_vertex_krnl<<<BLKv,THD>>>(dmod);
 				checkErrorAfterKernelLaunch("p_rdev_vertex_krnl (penalties_cuda)");
 				gpuErrchk(cudaMemcpyFromSymbol(&ntot, p_ntot, sizeof(int),
 						0, cudaMemcpyDeviceToHost));
@@ -1508,10 +1514,8 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			/* Launch nv-threaded kernel to find maximum deviation for each
 			 * vertex.		 */
 			if (shape_type == VERTEX) {
-				/*  Loop through vertices to find maximum deviation  */
-				BLK.x = floor((maxThreadsPerBlock-1+nv)/maxThreadsPerBlock);
-				THD.x = maxThreadsPerBlock; // Thread block dimensions
-				p_maxrdev_vertex_krnl<<<BLK,THD>>>(dmod);
+				/*  Loop through vertices to find maximum deviation (nv-threaded) */
+				p_maxrdev_vertex_krnl<<<BLKv,THD>>>(dmod);
 				checkErrorAfterKernelLaunch("p_maxrdev_vertex_krnl (penalties_cuda)");
 			}
 			break;
@@ -1532,9 +1536,7 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 
 			/* Loop thru components & compute each vertex's deviation from DEEVE,
 			 * expressed as a fraction of the model's effective radius */
-			BLK.x = floor((maxThreadsPerBlock-1+nv)/maxThreadsPerBlock);
-			THD.x = maxThreadsPerBlock; // Thread block dimensions
-			p_maxellipsdev_vertex_krnl<<<BLK,THD>>>(dmod);
+			p_maxellipsdev_vertex_krnl<<<BLKv,THD>>>(dmod);
 			checkErrorAfterKernelLaunch("p_maxellipsdev_vertex_krnl (penalties_cuda)");
 
 			break;
@@ -1700,10 +1702,8 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			p_bifur_gotpa_krnl<<<1,1>>>(dmod);
 			checkErrorAfterKernelLaunch("p_bifur_gotpa_krnl (penalties_cuda)");
 
-			/* Loop through vertices to find maximum deviation  */
-			BLK.x = floor((maxThreadsPerBlock-1+nv)/maxThreadsPerBlock);
-			THD.x = maxThreadsPerBlock; // Thread block dimensions
-			p_bifur_1st_vertex_krnl<<<BLK,THD>>>(dmod);
+			/* Loop through vertices to find maximum deviation (nv-threaded)  */
+			p_bifur_1st_vertex_krnl<<<BLKv,THD>>>(dmod);
 			checkErrorAfterKernelLaunch("p_bifur_1st_vertex_krnl (penalties_cuda)");
 
 			/* Launch single-thread kernel to initialize sumrho2[] and to set
@@ -1719,13 +1719,13 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			 * wide. This implies fractional contributions and hence the "nrho2"
 			 * vector is floating-point rather than integer.              */
 
-			/* Launch nv-thraded kernel */
-			p_bifur_2nd_vertex_krnl<<<BLK,THD>>>(dmod);
+			/* Launch nv-threaded kernel */
+			p_bifur_2nd_vertex_krnl<<<BLKv,THD>>>(dmod);
 			checkErrorAfterKernelLaunch("p_bifur_2nd_vertex_krnl (penalties_cuda)");
 
 			/* Launch an NZONES-threaded kernel to calculate meanrho2[] */
-			THD.x = NZONES;	BLK.x = 1;
-			p_bifur_meanrho2_krnl<<<BLK,THD>>>();
+			THD.x = NZONES;
+			p_bifur_meanrho2_krnl<<<1,THD>>>();
 			checkErrorAfterKernelLaunch("p_bifur_meanrho2_krnl (penalties_cuda)");
 
 			/* Look for the deepest fractional minimum in the mean squared distance
@@ -1734,10 +1734,11 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			 * values for both zone k1 and zone k2 are greater than for zone k   */
 
 			/* Another NZONES-threaded kernel */
-			THD.x = NZONES-1;	BLK.x = 1;
-			p_bifur_deepest_krnl<<<BLK,THD>>>();
+			THD.x = NZONES-1;
+			p_bifur_deepest_krnl<<<1,THD>>>();
 			checkErrorAfterKernelLaunch("p_bifur_deepest_krnl (penalties_cuda)");
-
+			/* Reset THD.x */
+			THD.x = maxThreadsPerBlock;
 			break;
 		case IMPULSE:
 			/* pen = mean squared spin impulse *component* in degrees/day  */
@@ -1760,8 +1761,12 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 		checkErrorAfterKernelLaunch("p_impulse_krnl (penalties_cuda)");
 		gpuErrchk(cudaMemcpyFromSymbol(&sum, p_sum, sizeof(double),
 				0, cudaMemcpyDeviceToHost));
-		int debug = 0;
 	}
+	cudaFree(a);
+	cudaFree(b);
+	cudaFree(av);
+	cudaFree(av2);
+	free(absum);
 	return sum;
 }
 

@@ -227,6 +227,7 @@ __host__ void realize_xyoff_cuda_streams( struct dat_t *ddat, int nsets,
 __host__ void show_deldoplim_cuda(struct dat_t *dat, struct dat_t *ddat);
 __host__ void show_deldoplim_cuda_streams(struct dat_t *ddat,
 		unsigned char *type, int nsets, int *nframes, int maxframes);
+__host__ void sum_2_double_arrays(double *a, double *b, double *absum, int size);
 __host__ double sum_brightness(struct pos_t **pos, int i, int size);
 __host__ float sum_brightness_f(struct pos_t **pos, int i, int size);
 __host__ void vary_params_cuda(struct par_t *dpar, struct mod_t *dmod,

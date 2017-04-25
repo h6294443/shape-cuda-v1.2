@@ -1582,6 +1582,16 @@ __global__ void set_brt_idataf_krnl(struct pos_t **pos, float *d_idata,
 		d_idata[offset] = __double2float_rn(pos[i]->b_d[offset]);
 	}
 }
+__global__ void set_ab_penalty_terms_krnl(double *d_idata1, double *d_idata2,
+		double *a, double *b, int size) {
+	/* MULTI-threaded kernel */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (offset < size){
+		d_idata1[offset] = a[offset];
+		d_idata2[offset] = b[offset];
+	}
+}
 __global__ void set_idata_modarea_krnl(struct mod_t *dmod, float *d_idata,
 		int c, int size) {
 	/* MULTI-threaded kernel */
@@ -1874,6 +1884,96 @@ __host__ double sum_brightness(struct pos_t **pos, int i, int size) {
 	cudaFree(d_odata);
 	cudaFree(d_idata);
 	return bsum;
+}
+__host__ void sum_2_double_arrays(double *a, double *b, double *absum, int size) {
+	/* Function sums up two arrays of doubles.  Returns both sums in host-array
+	 * absum  */
+
+	int s;
+	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
+	int maxBlocks = 2048;		// max # of blocks per grid
+	int whichKernel = 6;		// id of reduction kernel
+	int numBlocks = 0;			// initialize numBlocks
+	int numThreads = 0;			// initialize numThreads
+	double *d_odata1;				// temp. float array for reduction output
+	double *d_odata2;
+	double *d_idata1; 			// temp. float arrays for reduction input
+	double *d_idata2;
+	double *h_odata1;				// the host output array
+	double *h_odata2;
+	float2 xblock_ythread;		// used for return value of getNumBlocksAndThreads
+
+	dim3 BLK,THD;
+	BLK.x = floor((maxThreadsPerBlock - 1 + size)/maxThreadsPerBlock);
+	THD.x = maxThreadsPerBlock; // Thread block dimensions
+
+	/* Allocate memory for d_idata, then set that pointer equal to the right
+	 * data set and frame to the right deldop fit array	 */
+	gpuErrchk(cudaMalloc((void**)&d_idata1, sizeof(double) * size));
+	gpuErrchk(cudaMalloc((void**)&d_idata2, sizeof(double) * size));
+
+	set_ab_penalty_terms_krnl<<<BLK,THD>>>(d_idata1, d_idata2,
+			a, b, size);
+	checkErrorAfterKernelLaunch("set_ab_penalty_terms_krnl");
+
+	/* Find number of blocks & threads needed for reduction call. Note that
+	 * both a and b reductions use the same parameters for size (because both
+	 * arrays are of the same size!) */
+	xblock_ythread = getNumBlocksAndThreads(size, maxBlocks, maxThreads);
+	numBlocks = xblock_ythread.x;
+	numThreads = xblock_ythread.y;
+
+	/* Allocate memory for d_odata and d_odata2 with enough elements to hold
+	 * the reduction of each block during the first call */
+	gpuErrchk(cudaMalloc((void**)&d_odata1, sizeof(double) * numBlocks));
+	gpuErrchk(cudaMalloc((void**)&d_odata2, sizeof(double) * numBlocks));
+	h_odata1 = (double *)malloc(numBlocks * sizeof(double));
+	h_odata2 = (double *)malloc(numBlocks * sizeof(double));
+
+	/* Call reduction for first time on both arrays */
+	reduce<double>(size, numThreads, numBlocks, whichKernel, d_idata1, d_odata1);
+	reduce<double>(size, numThreads, numBlocks, whichKernel, d_idata2, d_odata2);
+	checkErrorAfterKernelLaunch("reduce<double> in sum_a_b_penalty_terms");
+
+	/* Reset d_idata for later use as buffer */
+	cudaMemset(d_idata1, 0, size*sizeof(double));
+	cudaMemset(d_idata2, 0, size*sizeof(double));
+
+	/* Now sum partial block sums on GPU, using the reduce6<> kernel */
+	s = numBlocks;
+
+	while (s > 1)
+	{
+		int threads = 0, blocks = 0;
+		xblock_ythread = getNumBlocksAndThreads(s, maxBlocks, maxThreads);
+		blocks = xblock_ythread.x;
+		threads = xblock_ythread.y;
+
+		/* Copy the first d_odata back into d_idata2  */
+		cudaMemcpy(d_idata1, d_odata1, s*sizeof(double), cudaMemcpyDeviceToDevice);
+		cudaMemcpy(d_idata2, d_odata2, s*sizeof(double), cudaMemcpyDeviceToDevice);
+
+		reduce<double>(s, threads, blocks, whichKernel, d_idata1, d_odata1);
+		reduce<double>(s, threads, blocks, whichKernel, d_idata2, d_odata2);
+
+		if (whichKernel < 3)
+			s = (s + threads - 1) / threads;
+		else
+			s = (s + (threads*2-1)) / (threads*2);
+		if (s > 1)
+			printf("s is bigger than one");
+	}
+
+	gpuErrchk(cudaMemcpy(h_odata1, d_odata1, 2*sizeof(double), cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(h_odata2, d_odata2, 2*sizeof(double), cudaMemcpyDeviceToHost));
+	absum[0] = h_odata1[0]; /* a sum */
+	absum[1] = h_odata2[0]; /* b sum */
+	free(h_odata1);
+	free(h_odata2);
+	cudaFree(d_odata1);
+	cudaFree(d_odata2);
+	cudaFree(d_idata1);
+	cudaFree(d_idata2);
 }
 __host__ float sum_brightness_f(struct pos_t **pos, int i, int size) {
 	/* Function sums up all array elements in the pos[i]->b[][] array The output for each individual pos
