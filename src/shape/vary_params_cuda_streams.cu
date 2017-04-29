@@ -408,7 +408,7 @@ __global__ void compute_cosdelta_streams_f_krnl(struct dat_t *ddat, int s, int f
 		}
 	}
 }
-__global__ void posclr_streams_krnl(struct pos_t **pos, int *posn, int f)
+__global__ void posclr_streams_krnl(struct pos_t **pos, int *posn, int f, int bdflag)
 {
 	/* Multi-threaded kernel (2*pos->n + 1)^2 threads) */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
@@ -424,8 +424,10 @@ __global__ void posclr_streams_krnl(struct pos_t **pos, int *posn, int f)
 		 * which the pixel center projects to  dummy values                  */
 		pos[f]->body[i][j] = pos[f]->comp[i][j] = pos[f]->f[i][j] = -1;
 
-		pos[f]->b_s[offset] = pos[f]->cose_s[offset] = 0.0;
+		pos[f]->b_s[offset] = pos[f]->cose_s[offset] = pos[f]->cosi_s[offset] = 0.0;
 		pos[f]->z_s[offset] = -HUGENUMBER;
+		if (bdflag)
+			pos[f]->b_d[offset] = 0.0;
 
 		/* In the x direction, reset the model's leftmost and rightmost
 		 * pixel number to dummy values, and similarly for the y direction   */
@@ -1294,7 +1296,7 @@ __host__ void vary_params_cuda_streams( struct par_t *dpar, struct mod_t *dmod,
 			for (f=0; f<nframes; f++) {
 				/* Start the if block for computing zmax and/or cross-section */
 				if (compute_zmax || compute_xsec[f]) {
-					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f);
+					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,0);
 				}
 			} checkErrorAfterKernelLaunch("posclr_streams_krnl (Delay-Doppler)");
 
@@ -1384,7 +1386,7 @@ __host__ void vary_params_cuda_streams( struct par_t *dpar, struct mod_t *dmod,
 			/* Clear out the plane-of-sky first */
 			for (f=0; f<nframes; f++)
 				if (compute_xsec[f])
-					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f);
+					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,0);
 
 			checkErrorAfterKernelLaunch("posclr_streams_krnl (Doppler) ");
 
@@ -1473,7 +1475,7 @@ __host__ void vary_params_cuda_streams( struct par_t *dpar, struct mod_t *dmod,
 
 				/* Clear out the plane-of-sky first */
 				for (f=0; f<ncalc; f++)
-					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f);
+					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,1);
 				checkErrorAfterKernelLaunch("posclr_streams_krnl (Doppler) ");
 
 				/* Determine which POS pixels cover the target */
@@ -1794,7 +1796,7 @@ __host__ void vary_params_cuda_streams2(struct par_t *dpar, struct mod_t *dmod,
 				if (hcomp_zmax[s] || hcomp_xsec[f]) {
 					vpst_set_posmtrx_streams_krnl<<<1,THD9,0,vp_stream[f]>>>(ddat, pos, htype[s],
 							s, f);
-					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f);
+					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,0);
 				}
 			} checkErrorAfterKernelLaunch("vpst_set_posmtrx_streams_krnl and "
 					"posclr_streams_krnl (Delay-Doppler)");
@@ -1880,7 +1882,7 @@ __host__ void vary_params_cuda_streams2(struct par_t *dpar, struct mod_t *dmod,
 				if (hcomp_xsec[f]) {
 					vpst_set_posmtrx_streams_krnl<<<1,THD9,0,vp_stream[f]>>>(ddat, pos, htype[s],
 							s, f);
-					posclr_streams_krnl<<<BLK[f],THD,0,vp_stream[f]>>>(pos,posn,f);
+					posclr_streams_krnl<<<BLK[f],THD,0,vp_stream[f]>>>(pos,posn,f,0);
 				}
 			} checkErrorAfterKernelLaunch("vpst_set_posmtrx_streams_krnl and "
 					"posclr_streams_krnl (Doppler)");
@@ -1955,7 +1957,7 @@ __host__ void vary_params_cuda_streams2(struct par_t *dpar, struct mod_t *dmod,
 					vpst_set_posmtrx_streams_krnl<<<1,THD9,0,vp_stream[f-1]>>>(
 							ddat, pos, htype[s], s, f);
 
-					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f-1]>>>(pos,posn,f);
+					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f-1]>>>(pos,posn,f,1);
 				checkErrorAfterKernelLaunch("vpst_set_posmtrx_streams_krnl and"
 						"posclr_streams_krnl (Lightcurve) ");
 
@@ -2198,7 +2200,7 @@ int4 *xylim, hxylim[hnframes[s]+1];
 				if (hcomp_zmax[s] || hcomp_xsec[f]) {
 					vpst_set_posmtrx_streams_krnl<<<1,THD9,0,vp_stream[f]>>>(ddat, pos, htype[s],
 							s, f);
-					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f);
+					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,0);
 				}
 			} checkErrorAfterKernelLaunch("vpst_set_posmtrx_streams_krnl and "
 					"posclr_streams_krnl (Delay-Doppler)");
@@ -2280,7 +2282,7 @@ int4 *xylim, hxylim[hnframes[s]+1];
 				if (hcomp_xsec[f]) {
 					vpst_set_posmtrx_streams_krnl<<<1,THD9,0,vp_stream[f]>>>(ddat, pos, htype[s],
 							s, f);
-					posclr_streams_krnl<<<BLK[f],THD,0,vp_stream[f]>>>(pos,posn,f);
+					posclr_streams_krnl<<<BLK[f],THD,0,vp_stream[f]>>>(pos,posn,f,0);
 				}
 			} checkErrorAfterKernelLaunch("vpst_set_posmtrx_streams_krnl and "
 					"posclr_streams_krnl (Doppler)");
@@ -2354,7 +2356,7 @@ int4 *xylim, hxylim[hnframes[s]+1];
 					vpst_set_posmtrx_streams_krnl<<<1,THD9,0,vp_stream[f-1]>>>(
 							ddat, pos, htype[s], s, f);
 
-					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f-1]>>>(pos,posn,f);
+					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f-1]>>>(pos,posn,f,1);
 				}
 				checkErrorAfterKernelLaunch("vpst_set_posmtrx_streams_krnl and"
 						"posclr_streams_krnl (Lightcurve) ");
@@ -2607,7 +2609,7 @@ __host__ void vary_params_cuda_streams3f(
 				if (hcomp_zmax[s] || hcomp_xsec[f]) {
 					vpst_set_posmtrx_streams_krnl<<<1,THD9,0,vp_stream[f]>>>(ddat, pos, htype[s],
 							s, f);
-					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f);
+					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,0);
 				}
 			} checkErrorAfterKernelLaunch("vpst_set_posmtrx_streams_krnl and "
 					"posclr_streams_krnl (Delay-Doppler)");
@@ -2692,7 +2694,7 @@ __host__ void vary_params_cuda_streams3f(
 				if (hcomp_xsec[f]) {
 					vpst_set_posmtrx_streams_krnl<<<1,THD9,0,vp_stream[f]>>>(ddat, pos, htype[s],
 							s, f);
-					posclr_streams_krnl<<<BLK[f],THD,0,vp_stream[f]>>>(pos,posn,f);
+					posclr_streams_krnl<<<BLK[f],THD,0,vp_stream[f]>>>(pos,posn,f,0);
 				}
 			} checkErrorAfterKernelLaunch("vpst_set_posmtrx_streams_krnl and "
 					"posclr_streams_krnl (Doppler)");
@@ -2765,7 +2767,7 @@ __host__ void vary_params_cuda_streams3f(
 					vpst_set_posmtrx_streams_krnl<<<1,THD9,0,vp_stream[f-1]>>>(
 							ddat, pos, htype[s], s, f);
 
-					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f-1]>>>(pos,posn,f);
+					posclr_streams_krnl<<<BLK[f],THD, 0, vp_stream[f-1]>>>(pos,posn,f,1);
 				}
 				checkErrorAfterKernelLaunch("vpst_set_posmtrx_streams_krnl and"
 						"posclr_streams_krnl (Lightcurve) ");
@@ -2862,9 +2864,6 @@ __host__ void vary_params_cuda_streams3f(
 		cudaFree(outbndarr);
 		cudaFree(compute_xsec);
 	}
-
-//	dbg_print_pos_z(ddat, 0, 0, 75, "Streams_pos_z_s0f0.csv");
-//	dbg_print_pos_cose_s(ddat, 0, 0, 75, "Streams_pos_cose_s_s0f0.csv");
 
 	/* Calculate the zmax, radar cross-section, optical brightness, and cosine
 	 * subradar latitude */

@@ -595,21 +595,25 @@ __global__ void vertex_update_dev_krnl(struct par_t *dpar, struct mod_t *dmod)
 __global__ void vertex_scalefactor_krnl(struct par_t *dpar, struct mod_t *dmod)
 {
 	// This is a 3-thread single thread kernel
-	int j = threadIdx.x;
+	//int j = threadIdx.x;
 
-	if (j < 2) {
+	if (threadIdx.x == 0) {
+		for (int j=0; j<=2; j++) {
+			if (j > 0 && dmod->shape.comp[0].desc.ver.scalefactor[j].state == '=')
+				dmod->shape.comp[0].desc.ver.scalefactor[j].val
+				= dmod->shape.comp[0].desc.ver.scalefactor[j-1].val;
 
-		if (j > 0 && dmod->shape.comp[0].desc.ver.scalefactor[j].state == '=')
-			dmod->shape.comp[0].desc.ver.scalefactor[j].val
-			= dmod->shape.comp[0].desc.ver.scalefactor[j-1].val;
-		dmod->shape.comp[0].real.scalefactor[j].val = dmod->shape.comp[0].desc.ver.scalefactor[j].val;
-		if (dmod->shape.comp[0].real.scalefactor[j].val <= SMALLRATIO) {
-			dpar->baddiam = 1;
-			dpar->baddiam_logfactor += log(1 + SMALLRATIO - dmod->shape.comp[0].real.scalefactor[j].val);
-			dmod->shape.comp[0].real.scalefactor[j].val = SMALLRATIO
-					/ (1 + SMALLRATIO - dmod->shape.comp[0].real.scalefactor[j].val);
+			dmod->shape.comp[0].real.scalefactor[j].val = dmod->shape.comp[0].desc.ver.scalefactor[j].val;
+
+			if (dmod->shape.comp[0].real.scalefactor[j].val <= SMALLRATIO) {
+				dpar->baddiam = 1;
+				dpar->baddiam_logfactor += log(1 + SMALLRATIO - dmod->shape.comp[0].real.scalefactor[j].val);
+				dmod->shape.comp[0].real.scalefactor[j].val = SMALLRATIO
+						/ (1 + SMALLRATIO - dmod->shape.comp[0].real.scalefactor[j].val);
+			}
 		}
 	}
+	__syncthreads();
 }
 __global__ void calc_vertex_co_krnl(struct par_t *dpar, struct mod_t *dmod)
 {
@@ -1009,8 +1013,8 @@ __host__ void realize_coordinates_cuda( struct par_t *dpar, struct mod_t *dmod, 
 		vertex_update_dev_krnl<<<nvBLK,nvTHD>>>(dpar, dmod);
 		checkErrorAfterKernelLaunch("vertex_update_dev_kernel");
 
-		BLK.x = 1;	THD.x = 3;
-		vertex_scalefactor_krnl<<<BLK,THD>>>(dpar, dmod);
+		THD.x = 3;
+		vertex_scalefactor_krnl<<<1,THD>>>(dpar, dmod);
 		checkErrorAfterKernelLaunch("vertex_scalefactor_krnl");
 		break;
 	default:
@@ -1128,7 +1132,7 @@ __host__ void realize_coordinates_f_cuda( struct par_t *dpar, struct mod_t *dmod
 		checkErrorAfterKernelLaunch("vertex_update_dev_kernel");
 
 		BLK.x = 1;	THD.x = 3;
-		vertex_scalefactor_krnl<<<BLK,THD>>>(dpar, dmod);
+		vertex_scalefactor_krnl<<<1,1>>>(dpar, dmod);
 		checkErrorAfterKernelLaunch("vertex_scalefactor_krnl");
 		break;
 	default:

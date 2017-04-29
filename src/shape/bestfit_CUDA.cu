@@ -1149,7 +1149,7 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 	 * tive function at each step. Stop when fractional decrease in the objec-
 	 * tive function from one iteration to the next is less than term_prec.   */
 
-	do {
+//	do {
 		showvals = 1;        /* show reduced chi-square and penalties at beginning */
 		beginerr = enderr;
 		printf("# iteration %d %f", ++iter, beginerr);
@@ -1182,8 +1182,8 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % npar_update;
-		//first_fitpar = 1;
-		for (p=first_fitpar; p<nfpar; p++) {
+		p = first_fitpar = 1;
+		//for (p=first_fitpar; p<nfpar; p++) {
 
 			//p = first_fitpar;
 			/*  Adjust only parameter p on this try  */
@@ -1292,331 +1292,331 @@ __host__ double bestfit_CUDA2(struct par_t *dpar, struct mod_t *dmod,
 			else
 				enderr = brent_abs( ax, bx, cx, objective_cuda,
 					fpartol[p], fparabstol[p], &xmin);
-
-			/* Realize whichever part(s) of the model has changed.
-			 *
-			 * The code here is somewhat opaque because more than one part of
-			 * the model may have changed - if the "vary_delcor0" "vary_radalb"
-			 * and/or "vary_optalb" parameter is being used to permit joint pa-
-			 * rameter adjustments. Before calling the vary_params routine, the
-			 * size/shape and spin states must be realized (realize_mod and
-			 * realize_spin); if albedos are being varied jointly with other
-			 * parameters, the photometric state must also be realized
-			 * (realize_photo); and in either case the 0th-order delay correc-
-			 * tion polynomial coefficients must be reset to their saved
-			 * values via the appropriate call to realize_delcor.          */
-			/* Set the value pointed to by hotparam to 0.95 of its
-			 * previous value (*hotparam) = xmin; */
-			bf_set_hotparam_val_krnl<<<1,1>>>(xmin);
-			checkErrorAfterKernelLaunch("bf_set_hotparam_val_krnl");
-			gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
-					sizeof(double),	0, cudaMemcpyDeviceToHost));
-
-			if (newsize || newshape)
-				realize_mod_cuda(dpar, dmod, type);
-			if (newspin) {
-				if (AF)
-					realize_spin_cuda_af(dpar, dmod, ddat, nsets);
-				else if (STREAMS)
-					realize_spin_cuda_streams(dpar, dmod, ddat, nsets);
-				else if (STREAMS2)
-					realize_spin_cuda_streams2(dpar, dmod, ddat, htype, nframes,
-							nviews, nsets, bf_stream);
-				else
-					realize_spin_cuda(dpar, dmod, ddat, nsets);
-			}
-			if ((newsize && vary_alb_size) || ((newshape ||
-					newspin) && vary_alb_shapespin))
-				realize_photo_cuda(dpar, dmod, 1.0, 1.0, 1);  /* set R to R_save */
-			if ((newsize && vary_delcor0_size) || ((newshape || newspin)
-					&& vary_delcor0_shapespin)) {
-				if (FLOAT)
-					realize_delcor_cuda_f(ddat, 0.0, 1, nsets, htype, nframes);  /* set delcor0 to delcor0_save */
-				else
-					realize_delcor_cuda(ddat, 0.0, 1, nsets);  /* set delcor0 to delcor0_save */
-			}
-			if ((newspin && vary_dopscale_spin) || ((newsize || newshape)
-					&& vary_dopscale_sizeshape))
-				realize_dopscale_cuda_streams(dpar, ddat, 1.0, 1, nsets, dtype);  /* set dopscale to dopscale_save */
-			if (call_vary_params) {
-				/* Call vary_params to get the adjustments to 0th-order delay
-				 * correction polynomial coefficients, to Doppler scaling fac-
-				 * tors, and to radar and optical albedos                  */
-				if (AF)
-					vary_params_af(dpar,dmod,ddat, 11, &deldop_zmax,&rad_xsec,
-							&opt_brightness,&cos_subradarlat, nsets);
-				if (STREAMS)
-					vary_params_cuda_streams2(dpar,dmod,ddat,11, &deldop_zmax,
-							&rad_xsec,&opt_brightness,&cos_subradarlat,nsets);
-				else if (STREAMS2)
-					vary_params_cuda_streams3(dpar,dmod,ddat,11,&deldop_zmax,
-							&rad_xsec, &opt_brightness, &cos_subradarlat,
-							nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-							bf_stream);
-				else	//11 - this used to be MPI_SETPAR_VARY
-					vary_params_cuda(dpar,dmod,ddat,11,&deldop_zmax,&rad_xsec,
-							&opt_brightness, &cos_subradarlat, nsets);
-
-				delta_delcor0 = (deldop_zmax - deldop_zmax_save)*KM2US;
-				if (cos_subradarlat != 0.0)
-					dopscale_factor = cos_subradarlat_save/cos_subradarlat;
-				if (rad_xsec != 0.0)
-					radalb_factor = rad_xsec_save/rad_xsec;
-				if (opt_brightness != 0.0)
-					optalb_factor = opt_brightness_save/opt_brightness;
-			}
-			if ((newsize && vary_alb_size) || ((newshape || newspin) &&
-					vary_alb_shapespin)) {
-				realize_photo_cuda(dpar, dmod, radalb_factor, optalb_factor, 2);  /* reset R, then R_save */
-
-				/* Must update opt_brightness_save for Hapke optical scattering
-				 * law, since single-scattering albedo w isn't just an overall
-				 * scaling factor  */
-				if (vary_hapke) {
-					if (AF)
-						vary_params_af(dpar,dmod,ddat,12,&dummyval2,&dummyval3,
-								&opt_brightness_save,&dummyval4, nsets);
-					if (STREAMS)
-						vary_params_cuda_streams2(dpar,dmod,ddat,12, &dummyval2,
-								&dummyval3,&opt_brightness,&dummyval4,nsets);
-					else if (STREAMS2)
-						vary_params_cuda_streams3(dpar,dmod,ddat,12,&dummyval2,
-								&dummyval3,&opt_brightness,&dummyval4,
-								nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-								bf_stream);
-					else	// used to be MPI_SETPAR_HAPKE
-						vary_params_cuda(dpar,dmod,ddat,12,&dummyval2,&dummyval3,
-								&opt_brightness_save, &dummyval4, nsets);
-				}
-			} else if (newphoto) {
-				rad_xsec_save = rad_xsec;
-				opt_brightness_save = opt_brightness;
-				realize_photo_cuda(dpar, dmod, 1.0, 1.0, 0);  /* set R_save to R */
-			}
-			if ((newsize && vary_delcor0_size) || ((newshape || newspin) &&
-					vary_delcor0_shapespin)) {
-				deldop_zmax_save = deldop_zmax;
-				if (FLOAT)
-					realize_delcor_cuda_f(ddat, delta_delcor0, 2, nsets, htype, nframes);  /* reset delcor0, then delcor0_save */
-				else
-					realize_delcor_cuda(ddat, delta_delcor0, 2, nsets);  /* reset delcor0, then delcor0_save */
-			} else if (newdelcor) {
-				if (FLOAT)
-					realize_delcor_cuda_f(ddat, 0.0, 0, nsets, htype, nframes);  /* set delcor0_save to delcor0 */
-				else
-					realize_delcor_cuda(ddat, 0.0, 0, nsets);  /* set delcor0_save to delcor0 */
-			}
-			if ((newspin && vary_dopscale_spin) || ((newsize || newshape) &&
-					vary_dopscale_sizeshape)) {
-				cos_subradarlat_save = cos_subradarlat;
-				realize_dopscale_cuda_streams(dpar, ddat, dopscale_factor, 2, nsets, dtype);  /* reset dopscale, then dopscale_save */
-			} else if (newdopscale) {
-				realize_dopscale_cuda_streams(dpar, ddat, 1.0, 0, nsets, dtype);  /* set dopscale_save to dopscale */
-			}
-			if (newxyoff)
-				realize_xyoff_cuda_streams(ddat, nsets, dtype);
-
-			/* If the model extended beyond POS frame (sky rendering) for any
-			 * trial parameter value(s), if it extended beyond any plane-of-
-			 * sky fit frames, or if it was too wide in delay-Doppler space,
-			 * evaluate model for best-fit parameter value to check if these
-			 * problems persist - that is, to update "posbnd" "badposet" and
-			 * "badradar" parameters for updated model.
-			 * (This needn't be done for "baddiam" "badphoto" flags: if we've
-			 * just finished adjusting an ellipsoid dimension or photometric
-			 * parameter, realize_mod or realize_photo was called in code block
-			 * above in order to realize the changed portion of model, and that
-			 * call updated corresponding flag. Also we needn't worry about the
-			 * "baddopscale" flag, since realize_dopscale was called above if
-			 * Doppler scaling factors were changed.) The call to objective
-			 * (*hotparam) first sets *hotparam (the parameter that we just
-			 * adjusted) equal to itself (i.e., no change) and then calls
-			 * calc_fits to evaluate the model for all datasets.          */
-			if (check_posbnd || check_badposet || check_badradar) {
-				if (STREAMS2)
-					objective_cuda_streams(hotparamval, verts, htype, dtype,
-							nframes, nviews, lc_n, nsets, nf, bf_stream);
-				else
-					objective_cuda(hotparamval);//(*hotparam);
-			}
-
-			/* Launch single-thread kernel to retrieve flags in dev_par */
-			bf_get_flags_krnl<<<1,1>>>(dpar, flags);
-			checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-			gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
-					cudaMemcpyDeviceToHost));
-			/* Display the objective function after each parameter adjustment.  */
-			printf("%4d %8.6f %d", p, enderr, iround(par->fpartype[p]));
-			if (hflags[0])		printf("  (BAD DIAMS)");
-			if (hflags[1])		printf("  (BAD PHOTO)");
-			if (hflags[2])		printf("  (BAD POS)");
-			if (hflags[3])		printf("  (BAD POSET)");
-			if (hflags[4])		printf("  (BAD RADAR)");
-			if (hflags[5])		printf("  (BAD DOPSCALE)");
-			printf("\n");
-			fflush(stdout);
-
-			/* Display reduced chi-square and individual penalty values after
-			 * every 20th parameter adjustment. Setting showvals to 1 here
-			 * means that these things will be displayed next time objective(x)
-			 * is evaluated - at start of NEXT parameter adjustment.  Specifi-
-			 * cally, they will be displayed when routine mnbrak evaluates
-			 * objective(x) for *unadjusted* parameter value ax (see comment
-			 * above).
-			 * Also rewrite model and obs files after every 20th parameter
-			 * adjustment. Most of obs file doesn't change, but some floating
-			 * parameters (i.e. delay correction polynomial coefficients) do.  */
-			if (++cntr >= npar_update) {
-				cntr = 0;
-				showvals = 1;
-				if (AF) {
-					calc_fits_cuda_af(dpar, dmod, ddat);
-					chi2_cuda_af(dpar, ddat, 0, nsets);
-				}
-				else if (STREAMS) {
-					calc_fits_cuda_streams(dpar, dmod, ddat);
-					chi2_cuda_streams(dpar, ddat, 0, nsets);
-				}
-				else if (STREAMS2) {
-					calc_fits_cuda_streams2(dpar, dmod, ddat, verts, nviews,
-							nframes, lc_n, htype, nsets, nf, bf_stream);
-					chi2_cuda_streams2(dpar, ddat, htype, dtype, nframes,
-							lc_n, 0, nsets, bf_stream);
-				}
-				else {
-					calc_fits_cuda(dpar, dmod, ddat);
-					chi2_cuda(dpar, ddat, 0);
-				}
-				//write_mod( par, mod);
-				//write_dat( par, dat);
-			}
-		}
-
-		/* End of this iteration: Write model and data to disk, and display the
-		 * region within each delay-Doppler or Doppler frame for which model
-		 * power is nonzero.                                               */
-		if (cntr != 0) {
-			if (AF){
-				calc_fits_cuda_af(dpar, dmod, ddat);
-				chi2_cuda_af(dpar, ddat, 0, nsets);
-			}
-			else if (STREAMS) {
-				calc_fits_cuda_streams(dpar, dmod, ddat);
-				chi2_cuda_streams(dpar, ddat, 0, nsets);
-			}
-			else if (STREAMS2) {
-				calc_fits_cuda_streams2(dpar, dmod, ddat, verts, nviews,
-						nframes, lc_n, htype, nsets, nf, bf_stream);
-				chi2_cuda_streams2(dpar, ddat, htype, dtype, nframes,
-						lc_n, 0, nsets, bf_stream);
-			}
-			else {
-				calc_fits_cuda(dpar, dmod, ddat);
-				chi2_cuda(dpar, ddat, 0);
-			}
-			//write_mod( par, mod);
-			//write_dat( par, dat);
-		}
-		show_deldoplim_cuda_streams(ddat, htype, nsets, nframes, max_frames);
-
-		/* Check if we should start a new iteration  */
-		if (iter == term_maxiter) {
-			/* Just completed last iteration permitted by "term_maxiter" para-
-			 * meter, so stop iterating; note that since iter is 1-based, this
-			 * test is always false if "term_maxiter" = 0 (its default value)  */
-			keep_iterating = 0;
-
-		} else if (first_fitpar > 0) {
-			/* Just completed partial iteration (possible for iteration 1): if
-			 * "objfunc_start" parameter was given, check if fractional decrea-
-			 * se in objective function *relative to objfunc_start* during the
-			 * just-completed iteration was larger than term_prec, thus
-			 * justifying a new iteration; if it wasn't specified, definitely
-			 * proceed to a new iteration.                            */
-			if (objfunc_start > 0.0)
-				keep_iterating = ((objfunc_start - enderr)/enderr >= term_prec);
-			else
-				keep_iterating = 1;
-			first_fitpar = 0;     /* for all iterations after the first iteration */
-
-		} else if (term_badmodel && (hflags[0] || hflags[1] || hflags[2] ||
-				hflags[3] || hflags[4] || hflags[5]) ) {
-
-			/* Just completed a full iteration, stop iterating because "term_
-			 * badmodel" parameter is turned on and model has a fatal flaw: it
-			 * extends beyond POS frame OR it one or more illegal photometric
-			 * parameters OR it has one or more tiny or negative ellipsoid dia-
-			 * meters OR it has plane-of-sky fit frames too small to "contain"
-			 * model OR it is too wide in delay-Doppler space for (delay-)
-			 * Doppler fit frames to be correctly constructed OR it has out-of-
-			 * range values for one or more Doppler scaling factors    */
-			keep_iterating = 0;
-
-		} else {
-			/* Just completed a full iteration and the model has no fatal flaws
-			 * (or else the "term_badmodel" parameter is turned off): keep
-			 * iterating if fractional decrease objective function during the
-			 * just-completed iteration was greater than term_prec         */
-			keep_iterating = ((beginerr - enderr)/enderr >= term_prec);
-		}
-
-	} while (keep_iterating);
-
-			/* Show final values of reduced chi-square, individual penalty functions,
-			 * and the objective function  */
-			if (AF)
-				final_chi2 = chi2_cuda_af(dpar, ddat, 1, nsets);
-			else if (STREAMS)
-				final_chi2 = chi2_cuda_streams(dpar, ddat, 1, nsets);
-			else if (STREAMS2)
-				final_chi2 = chi2_cuda_streams2(dpar, ddat, htype, dtype, nframes,
-						lc_n, 1, nsets, bf_stream);
-			else
-				final_chi2 = chi2_cuda(dpar, ddat, 1);
-			final_redchi2 = final_chi2/dat->dof;
-		printf("# search completed\n");
-
-		/* Launch single-thread kernel to get these final flags from dev->par:
-		 * pen.n, baddiam, badphoto, posbnd, badposet, badradar, baddopscale */
-		/* Launch single-thread kernel to retrieve flags in dev_par */
-		bf_get_flags_krnl<<<1,1>>>(dpar, flags);
-		checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-		gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
-				cudaMemcpyDeviceToHost));
-
-		if (par->pen.n > 0 || hflags[0] || hflags[1] || hflags[2]	|| hflags[3] ||
-				hflags[4] || hflags[5]) {
-			printf("#\n");
-			printf("# %15s %e\n", "reduced chi2", final_redchi2);
-			if (par->pen.n > 0) {
-				par->showstate = 1;
-			penalties_cuda(dpar, dmod, ddat);
-			par->showstate = 0;
-		}
-		if (hflags[0])
-			printf("# objective func multiplied by %.1f: illegal ellipsoid diameters\n",
-					baddiam_factor);
-		if (hflags[1])
-			printf("# objective func multiplied by %.1f: illegal photometric parameters\n",
-					badphoto_factor);
-		if (hflags[2])
-			printf("# objective func multiplied by %.1f: model extends beyond POS frame\n",
-					posbnd_factor);
-		if (hflags[3])
-			printf("# objective func multiplied by %.1f: "
-					"model extends beyond plane-of-sky fit image\n",
-					badposet_factor);
-		if (hflags[4])
-			printf("# objective func multiplied by %.1f: "
-					"model is too wide in delay-Doppler space to construct fit image\n",
-					badradar_factor);
-		if (hflags[5])
-			printf("# objective func multiplied by %.1f: illegal Doppler scaling factors\n",
-					baddopscale_factor);
-		printf("# ----------------------------\n");
-		printf("# %15s %e\n", "objective func", enderr);
-		printf("#\n");
-	}
+//
+//			/* Realize whichever part(s) of the model has changed.
+//			 *
+//			 * The code here is somewhat opaque because more than one part of
+//			 * the model may have changed - if the "vary_delcor0" "vary_radalb"
+//			 * and/or "vary_optalb" parameter is being used to permit joint pa-
+//			 * rameter adjustments. Before calling the vary_params routine, the
+//			 * size/shape and spin states must be realized (realize_mod and
+//			 * realize_spin); if albedos are being varied jointly with other
+//			 * parameters, the photometric state must also be realized
+//			 * (realize_photo); and in either case the 0th-order delay correc-
+//			 * tion polynomial coefficients must be reset to their saved
+//			 * values via the appropriate call to realize_delcor.          */
+//			/* Set the value pointed to by hotparam to 0.95 of its
+//			 * previous value (*hotparam) = xmin; */
+//			bf_set_hotparam_val_krnl<<<1,1>>>(xmin);
+//			checkErrorAfterKernelLaunch("bf_set_hotparam_val_krnl");
+//			gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
+//					sizeof(double),	0, cudaMemcpyDeviceToHost));
+//
+//			if (newsize || newshape)
+//				realize_mod_cuda(dpar, dmod, type);
+//			if (newspin) {
+//				if (AF)
+//					realize_spin_cuda_af(dpar, dmod, ddat, nsets);
+//				else if (STREAMS)
+//					realize_spin_cuda_streams(dpar, dmod, ddat, nsets);
+//				else if (STREAMS2)
+//					realize_spin_cuda_streams2(dpar, dmod, ddat, htype, nframes,
+//							nviews, nsets, bf_stream);
+//				else
+//					realize_spin_cuda(dpar, dmod, ddat, nsets);
+//			}
+//			if ((newsize && vary_alb_size) || ((newshape ||
+//					newspin) && vary_alb_shapespin))
+//				realize_photo_cuda(dpar, dmod, 1.0, 1.0, 1);  /* set R to R_save */
+//			if ((newsize && vary_delcor0_size) || ((newshape || newspin)
+//					&& vary_delcor0_shapespin)) {
+//				if (FLOAT)
+//					realize_delcor_cuda_f(ddat, 0.0, 1, nsets, htype, nframes);  /* set delcor0 to delcor0_save */
+//				else
+//					realize_delcor_cuda(ddat, 0.0, 1, nsets);  /* set delcor0 to delcor0_save */
+//			}
+//			if ((newspin && vary_dopscale_spin) || ((newsize || newshape)
+//					&& vary_dopscale_sizeshape))
+//				realize_dopscale_cuda_streams(dpar, ddat, 1.0, 1, nsets, dtype);  /* set dopscale to dopscale_save */
+//			if (call_vary_params) {
+//				/* Call vary_params to get the adjustments to 0th-order delay
+//				 * correction polynomial coefficients, to Doppler scaling fac-
+//				 * tors, and to radar and optical albedos                  */
+//				if (AF)
+//					vary_params_af(dpar,dmod,ddat, 11, &deldop_zmax,&rad_xsec,
+//							&opt_brightness,&cos_subradarlat, nsets);
+//				if (STREAMS)
+//					vary_params_cuda_streams2(dpar,dmod,ddat,11, &deldop_zmax,
+//							&rad_xsec,&opt_brightness,&cos_subradarlat,nsets);
+//				else if (STREAMS2)
+//					vary_params_cuda_streams3(dpar,dmod,ddat,11,&deldop_zmax,
+//							&rad_xsec, &opt_brightness, &cos_subradarlat,
+//							nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+//							bf_stream);
+//				else	//11 - this used to be MPI_SETPAR_VARY
+//					vary_params_cuda(dpar,dmod,ddat,11,&deldop_zmax,&rad_xsec,
+//							&opt_brightness, &cos_subradarlat, nsets);
+//
+//				delta_delcor0 = (deldop_zmax - deldop_zmax_save)*KM2US;
+//				if (cos_subradarlat != 0.0)
+//					dopscale_factor = cos_subradarlat_save/cos_subradarlat;
+//				if (rad_xsec != 0.0)
+//					radalb_factor = rad_xsec_save/rad_xsec;
+//				if (opt_brightness != 0.0)
+//					optalb_factor = opt_brightness_save/opt_brightness;
+//			}
+//			if ((newsize && vary_alb_size) || ((newshape || newspin) &&
+//					vary_alb_shapespin)) {
+//				realize_photo_cuda(dpar, dmod, radalb_factor, optalb_factor, 2);  /* reset R, then R_save */
+//
+//				/* Must update opt_brightness_save for Hapke optical scattering
+//				 * law, since single-scattering albedo w isn't just an overall
+//				 * scaling factor  */
+//				if (vary_hapke) {
+//					if (AF)
+//						vary_params_af(dpar,dmod,ddat,12,&dummyval2,&dummyval3,
+//								&opt_brightness_save,&dummyval4, nsets);
+//					if (STREAMS)
+//						vary_params_cuda_streams2(dpar,dmod,ddat,12, &dummyval2,
+//								&dummyval3,&opt_brightness,&dummyval4,nsets);
+//					else if (STREAMS2)
+//						vary_params_cuda_streams3(dpar,dmod,ddat,12,&dummyval2,
+//								&dummyval3,&opt_brightness,&dummyval4,
+//								nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+//								bf_stream);
+//					else	// used to be MPI_SETPAR_HAPKE
+//						vary_params_cuda(dpar,dmod,ddat,12,&dummyval2,&dummyval3,
+//								&opt_brightness_save, &dummyval4, nsets);
+//				}
+//			} else if (newphoto) {
+//				rad_xsec_save = rad_xsec;
+//				opt_brightness_save = opt_brightness;
+//				realize_photo_cuda(dpar, dmod, 1.0, 1.0, 0);  /* set R_save to R */
+//			}
+//			if ((newsize && vary_delcor0_size) || ((newshape || newspin) &&
+//					vary_delcor0_shapespin)) {
+//				deldop_zmax_save = deldop_zmax;
+//				if (FLOAT)
+//					realize_delcor_cuda_f(ddat, delta_delcor0, 2, nsets, htype, nframes);  /* reset delcor0, then delcor0_save */
+//				else
+//					realize_delcor_cuda(ddat, delta_delcor0, 2, nsets);  /* reset delcor0, then delcor0_save */
+//			} else if (newdelcor) {
+//				if (FLOAT)
+//					realize_delcor_cuda_f(ddat, 0.0, 0, nsets, htype, nframes);  /* set delcor0_save to delcor0 */
+//				else
+//					realize_delcor_cuda(ddat, 0.0, 0, nsets);  /* set delcor0_save to delcor0 */
+//			}
+//			if ((newspin && vary_dopscale_spin) || ((newsize || newshape) &&
+//					vary_dopscale_sizeshape)) {
+//				cos_subradarlat_save = cos_subradarlat;
+//				realize_dopscale_cuda_streams(dpar, ddat, dopscale_factor, 2, nsets, dtype);  /* reset dopscale, then dopscale_save */
+//			} else if (newdopscale) {
+//				realize_dopscale_cuda_streams(dpar, ddat, 1.0, 0, nsets, dtype);  /* set dopscale_save to dopscale */
+//			}
+//			if (newxyoff)
+//				realize_xyoff_cuda_streams(ddat, nsets, dtype);
+//
+//			/* If the model extended beyond POS frame (sky rendering) for any
+//			 * trial parameter value(s), if it extended beyond any plane-of-
+//			 * sky fit frames, or if it was too wide in delay-Doppler space,
+//			 * evaluate model for best-fit parameter value to check if these
+//			 * problems persist - that is, to update "posbnd" "badposet" and
+//			 * "badradar" parameters for updated model.
+//			 * (This needn't be done for "baddiam" "badphoto" flags: if we've
+//			 * just finished adjusting an ellipsoid dimension or photometric
+//			 * parameter, realize_mod or realize_photo was called in code block
+//			 * above in order to realize the changed portion of model, and that
+//			 * call updated corresponding flag. Also we needn't worry about the
+//			 * "baddopscale" flag, since realize_dopscale was called above if
+//			 * Doppler scaling factors were changed.) The call to objective
+//			 * (*hotparam) first sets *hotparam (the parameter that we just
+//			 * adjusted) equal to itself (i.e., no change) and then calls
+//			 * calc_fits to evaluate the model for all datasets.          */
+//			if (check_posbnd || check_badposet || check_badradar) {
+//				if (STREAMS2)
+//					objective_cuda_streams(hotparamval, verts, htype, dtype,
+//							nframes, nviews, lc_n, nsets, nf, bf_stream);
+//				else
+//					objective_cuda(hotparamval);//(*hotparam);
+//			}
+//
+//			/* Launch single-thread kernel to retrieve flags in dev_par */
+//			bf_get_flags_krnl<<<1,1>>>(dpar, flags);
+//			checkErrorAfterKernelLaunch("bf_get_flags_krnl");
+//			gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+//					cudaMemcpyDeviceToHost));
+//			/* Display the objective function after each parameter adjustment.  */
+//			printf("%4d %8.6f %d", p, enderr, iround(par->fpartype[p]));
+//			if (hflags[0])		printf("  (BAD DIAMS)");
+//			if (hflags[1])		printf("  (BAD PHOTO)");
+//			if (hflags[2])		printf("  (BAD POS)");
+//			if (hflags[3])		printf("  (BAD POSET)");
+//			if (hflags[4])		printf("  (BAD RADAR)");
+//			if (hflags[5])		printf("  (BAD DOPSCALE)");
+//			printf("\n");
+//			fflush(stdout);
+//
+//			/* Display reduced chi-square and individual penalty values after
+//			 * every 20th parameter adjustment. Setting showvals to 1 here
+//			 * means that these things will be displayed next time objective(x)
+//			 * is evaluated - at start of NEXT parameter adjustment.  Specifi-
+//			 * cally, they will be displayed when routine mnbrak evaluates
+//			 * objective(x) for *unadjusted* parameter value ax (see comment
+//			 * above).
+//			 * Also rewrite model and obs files after every 20th parameter
+//			 * adjustment. Most of obs file doesn't change, but some floating
+//			 * parameters (i.e. delay correction polynomial coefficients) do.  */
+//			if (++cntr >= npar_update) {
+//				cntr = 0;
+//				showvals = 1;
+//				if (AF) {
+//					calc_fits_cuda_af(dpar, dmod, ddat);
+//					chi2_cuda_af(dpar, ddat, 0, nsets);
+//				}
+//				else if (STREAMS) {
+//					calc_fits_cuda_streams(dpar, dmod, ddat);
+//					chi2_cuda_streams(dpar, ddat, 0, nsets);
+//				}
+//				else if (STREAMS2) {
+//					calc_fits_cuda_streams2(dpar, dmod, ddat, verts, nviews,
+//							nframes, lc_n, htype, nsets, nf, bf_stream);
+//					chi2_cuda_streams2(dpar, ddat, htype, dtype, nframes,
+//							lc_n, 0, nsets, bf_stream);
+//				}
+//				else {
+//					calc_fits_cuda(dpar, dmod, ddat);
+//					chi2_cuda(dpar, ddat, 0);
+//				}
+//				//write_mod( par, mod);
+//				//write_dat( par, dat);
+//			}
+//		}
+//
+//		/* End of this iteration: Write model and data to disk, and display the
+//		 * region within each delay-Doppler or Doppler frame for which model
+//		 * power is nonzero.                                               */
+//		if (cntr != 0) {
+//			if (AF){
+//				calc_fits_cuda_af(dpar, dmod, ddat);
+//				chi2_cuda_af(dpar, ddat, 0, nsets);
+//			}
+//			else if (STREAMS) {
+//				calc_fits_cuda_streams(dpar, dmod, ddat);
+//				chi2_cuda_streams(dpar, ddat, 0, nsets);
+//			}
+//			else if (STREAMS2) {
+//				calc_fits_cuda_streams2(dpar, dmod, ddat, verts, nviews,
+//						nframes, lc_n, htype, nsets, nf, bf_stream);
+//				chi2_cuda_streams2(dpar, ddat, htype, dtype, nframes,
+//						lc_n, 0, nsets, bf_stream);
+//			}
+//			else {
+//				calc_fits_cuda(dpar, dmod, ddat);
+//				chi2_cuda(dpar, ddat, 0);
+//			}
+//			//write_mod( par, mod);
+//			//write_dat( par, dat);
+//		}
+//		show_deldoplim_cuda_streams(ddat, htype, nsets, nframes, max_frames);
+//
+//		/* Check if we should start a new iteration  */
+//		if (iter == term_maxiter) {
+//			/* Just completed last iteration permitted by "term_maxiter" para-
+//			 * meter, so stop iterating; note that since iter is 1-based, this
+//			 * test is always false if "term_maxiter" = 0 (its default value)  */
+//			keep_iterating = 0;
+//
+//		} else if (first_fitpar > 0) {
+//			/* Just completed partial iteration (possible for iteration 1): if
+//			 * "objfunc_start" parameter was given, check if fractional decrea-
+//			 * se in objective function *relative to objfunc_start* during the
+//			 * just-completed iteration was larger than term_prec, thus
+//			 * justifying a new iteration; if it wasn't specified, definitely
+//			 * proceed to a new iteration.                            */
+//			if (objfunc_start > 0.0)
+//				keep_iterating = ((objfunc_start - enderr)/enderr >= term_prec);
+//			else
+//				keep_iterating = 1;
+//			first_fitpar = 0;     /* for all iterations after the first iteration */
+//
+//		} else if (term_badmodel && (hflags[0] || hflags[1] || hflags[2] ||
+//				hflags[3] || hflags[4] || hflags[5]) ) {
+//
+//			/* Just completed a full iteration, stop iterating because "term_
+//			 * badmodel" parameter is turned on and model has a fatal flaw: it
+//			 * extends beyond POS frame OR it one or more illegal photometric
+//			 * parameters OR it has one or more tiny or negative ellipsoid dia-
+//			 * meters OR it has plane-of-sky fit frames too small to "contain"
+//			 * model OR it is too wide in delay-Doppler space for (delay-)
+//			 * Doppler fit frames to be correctly constructed OR it has out-of-
+//			 * range values for one or more Doppler scaling factors    */
+//			keep_iterating = 0;
+//
+//		} else {
+//			/* Just completed a full iteration and the model has no fatal flaws
+//			 * (or else the "term_badmodel" parameter is turned off): keep
+//			 * iterating if fractional decrease objective function during the
+//			 * just-completed iteration was greater than term_prec         */
+//			keep_iterating = ((beginerr - enderr)/enderr >= term_prec);
+//		}
+//
+//	} while (keep_iterating);
+//
+//			/* Show final values of reduced chi-square, individual penalty functions,
+//			 * and the objective function  */
+//			if (AF)
+//				final_chi2 = chi2_cuda_af(dpar, ddat, 1, nsets);
+//			else if (STREAMS)
+//				final_chi2 = chi2_cuda_streams(dpar, ddat, 1, nsets);
+//			else if (STREAMS2)
+//				final_chi2 = chi2_cuda_streams2(dpar, ddat, htype, dtype, nframes,
+//						lc_n, 1, nsets, bf_stream);
+//			else
+//				final_chi2 = chi2_cuda(dpar, ddat, 1);
+//			final_redchi2 = final_chi2/dat->dof;
+//		printf("# search completed\n");
+//
+//		/* Launch single-thread kernel to get these final flags from dev->par:
+//		 * pen.n, baddiam, badphoto, posbnd, badposet, badradar, baddopscale */
+//		/* Launch single-thread kernel to retrieve flags in dev_par */
+//		bf_get_flags_krnl<<<1,1>>>(dpar, flags);
+//		checkErrorAfterKernelLaunch("bf_get_flags_krnl");
+//		gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+//				cudaMemcpyDeviceToHost));
+//
+//		if (par->pen.n > 0 || hflags[0] || hflags[1] || hflags[2]	|| hflags[3] ||
+//				hflags[4] || hflags[5]) {
+//			printf("#\n");
+//			printf("# %15s %e\n", "reduced chi2", final_redchi2);
+//			if (par->pen.n > 0) {
+//				par->showstate = 1;
+//			penalties_cuda(dpar, dmod, ddat);
+//			par->showstate = 0;
+//		}
+//		if (hflags[0])
+//			printf("# objective func multiplied by %.1f: illegal ellipsoid diameters\n",
+//					baddiam_factor);
+//		if (hflags[1])
+//			printf("# objective func multiplied by %.1f: illegal photometric parameters\n",
+//					badphoto_factor);
+//		if (hflags[2])
+//			printf("# objective func multiplied by %.1f: model extends beyond POS frame\n",
+//					posbnd_factor);
+//		if (hflags[3])
+//			printf("# objective func multiplied by %.1f: "
+//					"model extends beyond plane-of-sky fit image\n",
+//					badposet_factor);
+//		if (hflags[4])
+//			printf("# objective func multiplied by %.1f: "
+//					"model is too wide in delay-Doppler space to construct fit image\n",
+//					badradar_factor);
+//		if (hflags[5])
+//			printf("# objective func multiplied by %.1f: illegal Doppler scaling factors\n",
+//					baddopscale_factor);
+//		printf("# ----------------------------\n");
+//		printf("# %15s %e\n", "objective func", enderr);
+//		printf("#\n");
+//	}
 	intifpossible( dofstring, MAXLEN, dat->dof, SMALLVAL, "%f");
 	printf("# final chi2 = %e for %s dof (reduced chi2 = %f)\n",
 			final_chi2, dofstring, final_redchi2);

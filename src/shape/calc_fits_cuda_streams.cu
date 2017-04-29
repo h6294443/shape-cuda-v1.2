@@ -658,14 +658,6 @@ __host__ void calc_fits_cuda_streams2(
 			printf("calc_fits_cuda.c: can't handle this type yet\n");
 		}
 	}
-//
-//
-//	int debug = 0;
-//	int size;
-//	if (debug)
-//		size = (2*50+1)*(2*50+1);
-//	dbg_print_lghtcrv_pos_arrays(ddat, 0, 22, size, 50);
-
 
 	/* Complete calculations of values that will be used during a fit to
 	 * increase the objective function for models with bad properties   */
@@ -1119,7 +1111,7 @@ __host__ void calc_deldop_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 					bistatic, type, v[v2]);
 
 			/* Launch posclr_krnl to initialize POS view */
-			posclr_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f);
+			posclr_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f,0);
 
 		}
 	} checkErrorAfterKernelLaunch("posclr_streams_krnl (calc_fits_cuda_streams)");
@@ -1314,7 +1306,7 @@ __host__ void calc_doppler_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 					bistatic, type, v[v2]);
 
 			/* Clear the POS-view to initialize */
-			posclr_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f);
+			posclr_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f,0);
 		}
 	} checkErrorAfterKernelLaunch("cfs_set_pos_ae_streams and posclr_streams_krnl");
 
@@ -1672,7 +1664,7 @@ __host__ void calc_lghtcrv_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 				bistatic, type, 0);
 
 		/* Clear the POS-view to initialize */
-		posclr_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn, f);
+		posclr_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn, f,1);
 	} checkErrorAfterKernelLaunch("cfs_set_pos_ae_streams and posclr_streams_krnl");
 
 	/* Call routine posvis to get  facet number, scattering & incidence
@@ -1792,17 +1784,6 @@ __host__ void calc_lghtcrv_cuda_streams(struct par_t *dpar, struct mod_t *dmod,
 	cfs_spline_lghtcrv_serial2_krnl<<<1,1>>>(u);
 	checkErrorAfterKernelLaunch("cf_spline_lghtcrv_krnl");
 
-	/* Start debug */
-	/* Pull out lghtcrv->x, lghtcrv->y, lghtcrv->y2 (all of length ncalc) */
-	//dbg_print_lghtcrv_xyy2(ddat, s, ncalc, "xyy2_arrays_CUDA.csv");
-
-
-	/* Launch n-threaded kernel to do the following:
-	 * 	- set each fit[i] = 0
-	 * 	- loop through all views and splint
-	 * 	- add interp to fit[i]
-	 * 	- divide final fit[i] over nviews
-	 */
 	BLKpx[0].x = floor((threads-1+n)/threads);
 	THD.x = threads;
 	cfs_splint_lghtcrv_krnl<<<BLKpx[0],THD>>>(dpar);
@@ -1888,22 +1869,14 @@ __host__ void calc_lghtcrv_cuda_streams2(
 				bistatic, type, 0);
 
 		/* Clear the POS-view to initialize */
-		posclr_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn, f);
+		posclr_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn, f,1);
 	} checkErrorAfterKernelLaunch("cfs_set_pos_ae_streams and posclr_streams_krnl");
 
 	/* Call routine posvis to get  facet number, scattering & incidence
 	 * angle, distance toward Earth at center of each POS pixel; set posbnd
 	 * parameter = 1 if any model portion extends beyond POS frame limits*/
-
-	//dbg_print_facet_normals(dmod, nf, "STR2_facet_normals.csv");
-
-
 	posvis_cuda_streams2(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
 				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream);
-//	int npixels = (2*hposn[1]+1)*(2*hposn[1]+1);
-//	dbg_print_pos_arrays_full(pos, 1, npixels, hposn[1]);
-//	dbg_print_pos_arrays_full(pos, 2, npixels, hposn[2]);
-//	dbg_print_pos_arrays_full(pos, 3, npixels, hposn[3]);
 
 	/* Copy the posbnd flag returns for all frames to a host copy */
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*(nfplus),
@@ -1952,8 +1925,7 @@ __host__ void calc_lghtcrv_cuda_streams2(
 
 		} checkErrorAfterKernelLaunch("posmask_streams_krnl");
 	}
-//	for (f=21; f<=22; f++)
-//		dbg_print_lghtcrv_pos_arrays(ddat, 0, f, nThreadspx[f], hposn[f]);
+
 	/* Go through all visible and unshadowed POS pixels with low enough
 	 * scattering and incidence angles, and mark facets which project onto
 	 * their centers as having been "seen" at least once   */
@@ -2010,54 +1982,28 @@ __host__ void calc_lghtcrv_cuda_streams2(
 	THD.x = maxThreadsPerBlock;
 	gpuErrchk(cudaMalloc((void**)&u, sizeof(double)*(nframes+1)));
 	BLKpx[0].x = floor((THD.x - 1 + nThreads)/THD.x);
-//	lghtcrv_spline_streams_krnl<<<BLKpx[0],THD>>>(ddat, s, 2.0e30,
-//			2.0e30, u, nframes);
 	lghtcrv_spline_streams_test_krnl<<<1,1>>>(ddat, s, 2.0e30, 2.0e30, u, nframes);
 	checkErrorAfterKernelLaunch("lghtcrv_spline_streams_krnl");
 
 	/* Change launch parameters from ncalc threads to n threads */
 	BLKpx[0].x = floor((THD.x - 1 + n) / THD.x);
-	//lghtcrv_splint_streams3_krnl<<<BLKpx[0],THD>>>(ddat, s, n, nframes);
 	lghtcrv_splint_streams3_test_krnl<<<1,1>>>(ddat, s, n, nframes);
 	checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
 
-
-//	dbg_print_lc_fit(ddat, s, "STR2_lghtcrv_fit.csv", n);
-
-//	f = 1;
+//
+//	f = nframes;
 //	int npixels = (2*hposn[f]+1)*(2*hposn[f]+1);
-//		dbg_print_pos_arrays_full(pos, f, npixels, hposn[f]);
+////		dbg_print_pos_arrays_full(pos, f, npixels, hposn[f]);
+////		dbg_print_pos_bd(pos, f, npixels, hposn[f]);
+////	dbg_print_lghtcrv_pos_arrays(ddat, s, 1, nThreadspx[1], hposn[1]);
+//
+//	int debug = 0;
+//
+//	if (debug){
+//		dbg_print_lghtcrv_xyy2(ddat, s, nframes, "streams2_x_y_y2_arrays.csv");
 //		dbg_print_pos_bd(pos, f, npixels, hposn[f]);
-//	dbg_print_lghtcrv_xyy2(ddat, s, nframes, "streams2_x_y_y2_arrays.csv");
-	//	dbg_print_lghtcrv_pos_arrays(ddat, s, 1, nThreadspx[1], hposn[1]);
-//	int threads = 128;
-//	BLKpx[0].x = floor((threads-1+nThreads)/threads);
-//	THD.x = threads;
-//	//cf_spline_lghtcrv_krnl<<<BLK,THD>>>(2.0e30, 2.0e30, u);
-//	cfs_spline_lghtcrv_serial_krnl<<<1,1>>>(u);
-//	checkErrorAfterKernelLaunch("cf_spline_lghtcrv_krnl");
-
-	/* Start debug */
-	/* Pull out lghtcrv->x, lghtcrv->y, lghtcrv->y2 (all of length ncalc) */
-	//dbg_print_lghtcrv_xyy2(ddat, s, ncalc, "xyy2_arrays_CUDA.csv");
-
-
-	/* Launch n-threaded kernel to do the following:
-	 * 	- set each fit[i] = 0
-	 * 	- loop through all views and splint
-	 * 	- add interp to fit[i]
-	 * 	- divide final fit[i] over nviews
-	 */
-//	BLKpx[0].x = floor((threads-1+n)/threads);
-//	THD.x = threads;
-//	cfs_splint_lghtcrv_krnl<<<BLKpx[0],THD>>>(dpar);
-	//	checkErrorAfterKernelLaunch("cf_splint_lghtcrv_krnl");
-//
-//	int npixels = (2*hposn[1]+1)*(2*hposn[1]+1);
-//
-//	dbg_print_pos_arrays_full(pos, 1, npixels, hposn[1]);
-//	dbg_print_pos_arrays_full(pos, 2, npixels, hposn[2]);
-//	dbg_print_pos_arrays_full(pos, 3, npixels, hposn[3]);
+//		dbg_print_lc_fit(ddat, s, "streams2_fit", hposn[f]);
+//	}
 
 	cudaFree(pos);
 	cudaFree(rend);
@@ -2136,7 +2082,7 @@ __host__ void calc_lghtcrv_cuda_streams2f(
 				bistatic, type, 0);
 
 		/* Clear the POS-view to initialize */
-		posclr_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn, f);
+		posclr_streams_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn, f,1);
 	} checkErrorAfterKernelLaunch("cfs_set_pos_ae_streams and posclr_streams_krnl");
 
 	/* Call routine posvis to get  facet number, scattering & incidence
@@ -2260,11 +2206,6 @@ __host__ void calc_lghtcrv_cuda_streams2f(
 	BLKpx[0].x = floor((THD.x - 1 + lc_n) / THD.x);
 	lghtcrv_splint_streams3f_krnl<<<BLKpx[0],THD>>>(ddat, s, n);
 	checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
-
-
-	/* Start debug */
-	/* Pull out lghtcrv->x, lghtcrv->y, lghtcrv->y2 (all of length ncalc) */
-	//dbg_print_lghtcrv_xyy2(ddat, s, ncalc, "xyy2_arrays_CUDA.csv");
 
 	cudaFree(pos);
 	cudaFree(rend);

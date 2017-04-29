@@ -545,19 +545,6 @@ void realize_coordinates( struct par_t *par, struct mod_t *mod)
 			}
 		}
 
-//		/* Start debug */
-//		FILE *fp_v;
-//		char *filename_v;
-//		filename_v = "dbg_facets_std_in_bestfit1.csv";
-//		printf("\n %sfile created", filename_v);
-//		fp_v = fopen(filename_v, "w+");
-//		for(i=0; i<=nf; i++) {
-//			fprintf(fp_v, "%i x, %f\n", i, mod->shape.comp[0].real.f[i].n[0]);
-//			fprintf(fp_v, "%i y, %f\n", i, mod->shape.comp[0].real.f[i].n[1]);
-//			fprintf(fp_v, "%i z, %f\n", i, mod->shape.comp[0].real.f[i].n[2]);
-//		}
-//		/* End debug */
-
 		//-----------------------------------------------------------------------------------------
 		/*  Calculate vertex normals for this component as normalized sums
         of the facet normals for all facets attached to each vertex     */

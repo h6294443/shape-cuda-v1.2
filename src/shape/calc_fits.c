@@ -1634,10 +1634,6 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
         each POS pixel; set the posbnd parameter to 1 if any portion
         of the model extends beyond the POS frame limits.              */
 
-
-		//dbg_print_facet_normals_host(mod, "CPU_facet_normals.csv");
-
-
 		for (c=0; c<mod->shape.ncomp; c++)
 			if (posvis( &mod->shape.comp[c].real, orbit_offset, pos,
 					(int) par->pos_smooth, 0, 0, c)) {
@@ -1665,8 +1661,6 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 			posmask( pos, par->mask_tol);
 		}
 
-		//dbg_print_pos_arrays_full_host(pos);
-		//dbg_print_lghtcrv_pos_arrays_host(lghtcrv, i, 0);
 		/*  Go through all POS pixels which are visible and unshadowed with
         sufficiently low scattering and incidence angles, and mark the facets
         which project onto their centers as having been "seen" at least once   */
@@ -1689,7 +1683,6 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 		lghtcrv->y[i] = apply_photo( mod, lghtcrv->ioptlaw, lghtcrv->solar_phase[i],
 				intensityfactor, pos, 0);
 
-		//dbg_print_pos_arrays2_host(pos);
 		/*  Carry out screen and disk output for the write action  */
 
 		if (par->action == WRITE) {
@@ -1865,10 +1858,6 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 		}
 		/*  Finished with this calculated lightcurve point  */
 	}
-	//		dbg_print_lghtcrv_pos_arrays_host(lghtcrv, 1, 0);
-	/* Start debug */
-//	dbg_print_lghtcrv_pos_arrays_host(lghtcrv, 1, s);
-//	dbg_print_lghtcrv_xyy2_host(lghtcrv, s, ncalc, "xyy2_arrays_CPU.csv");
 
 	/*  Now that we have calculated the model lightcurve brightnesses y at each
       of the epochs x, we use cubic spline interpolation (Numerical Recipes
@@ -1883,7 +1872,6 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
       correspond to a given observed lightcurve point.                         */
 
 	spline( lghtcrv->x, lghtcrv->y, ncalc, 2.0e30, 2.0e30, lghtcrv->y2);
-//	dbg_print_lghtcrv_xyy2_host(lghtcrv, s, ncalc, "xyy2_arrays_CPU.csv");
 
 	for (i=1; i<=n; i++) {
 		lghtcrv->fit[i] = 0.0;
@@ -1896,7 +1884,6 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 	}
 
 
-//	dbg_print_lc_fit_host(lghtcrv, "CPU_lghtcrv_fit.csv", n);
 	/*  Deal with flags for model that extends beyond the POS frame  */
 
 	par->posbnd_logfactor += lghtcrv->dof * (posbnd_logfactor/ncalc);
@@ -1911,7 +1898,15 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 	}
 
 	/* Start debug */
-//	dbg_print_lghtcrv_pos_arrays_host(lghtcrv, 22, 0);
+//	int debug = 0;
+//	if (debug)
+//		dbg_print_pos_arrays_full_host(&lghtcrv->rend[1].pos);
+	//
+//	int debug = 0;
+//	if (debug) {
+//		dbg_print_lc_fit_host(lghtcrv, "CPU_lghtcrv_fit.csv", n);
+//		dbg_print_lghtcrv_xyy2_host(lghtcrv, s, ncalc, "xyy2_arrays_CPU.csv");
+//	}
 }
 
 void write_pos_deldop( struct par_t *par, struct mod_t *mod,

@@ -697,8 +697,6 @@ __host__ double chi2_cuda_streams(struct par_t *dpar, struct dat_t *ddat,
 		case LGHTCRV:
 			chi2 = chi2_lghtcrv_cuda_streams(dpar, ddat, s, list_breakdown,
 					&chi2_all_lghtcrv, hnframes[s], hlc_n[s]);
-//			dbg_print_lghtcrv_arrays(ddat, s, hlc_n[s], "cuda_lghtcrv_arrays.csv");
-//			dbg_print_lghtcrv_xyy2(ddat, s, hnframes[s], "lghtcrv_cuda_arrays.csv");
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl, chi2_cuda");
 			break;
@@ -876,8 +874,6 @@ __host__ double chi2_cuda_streams2(
 		case LGHTCRV:
 			chi2 = chi2_lghtcrv_cuda_streams(dpar, ddat, s, list_breakdown,
 					&chi2_all_lghtcrv, hnframes[s], hlc_n[s]);
-//			dbg_print_lghtcrv_arrays(ddat, s, hlc_n[s], "cuda_lghtcrv_arrays.csv");
-//			dbg_print_lghtcrv_xyy2(ddat, s, hnframes[s], "lghtcrv_cuda_arrays.csv");
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl, chi2_cuda");
 			break;
@@ -1366,18 +1362,6 @@ __host__ double chi2_lghtcrv_cuda_streams(
 	gpuErrchk(cudaMalloc((void**)&o2m2om, sizeof(double3) * 2));
 	h_o2m2om = (double3 *) malloc(2*sizeof(double3));
 
-//	/* Calculate launch parameters and create streams */
-//	for (f=0; f<nframes; f++) {
-//		/* Compute contributions to chi-square  */
-//		BLK[f].x = floor((THD.x - 1 + lc_n) / THD.x);
-//		cudaStreamCreate(&c2s_stream[f]);
-//	}
-
-//	/* Calculate the lightcurve chi2 in streams */
-//	for (f=1; f<=nframes; f++)
-//		c2s_lghtcrv_add_o2_streams_krnl<<<BLK[f],THD,0,c2s_stream[f-1]>>>(dof_chi2set, f);
-//	checkErrorAfterKernelLaunch("c2s_lghtcrv_add_o2_streams_krnl");
-
 	BLK = floor((THD.x - 1 + lc_n)/THD.x);
 	//c2s_lghtcrv_add_o2_streams_krnl<<<BLK,THD>>>(ddat, s, dof_chi2set);
 	c2s_lghtcrv_serial_streams_krnl<<<1,1>>>(ddat, s, dof_chi2set, o2m2om);
@@ -1385,14 +1369,8 @@ __host__ double chi2_lghtcrv_cuda_streams(
 			cudaMemcpyDeviceToHost));
 	gpuErrchk(cudaMemcpy(h_o2m2om, o2m2om, sizeof(double3)*2, cudaMemcpyDeviceToHost));
 
-	//	dbg_print_lghtcrv_arrays(ddat, s, n, "cuda_lghtcrv_arrays.csv");
-
 	if (list_breakdown)
 		*chi2_all_lghtcrv += h_dof_chi2set[1];
-
-	/* Destroy the streams */
-//	for (f=0; f<nframes; f++)
-//		cudaStreamDestroy(c2s_stream[f]);
 
 	cudaFree(dof_chi2set);
 	cudaFree(o2m2om);

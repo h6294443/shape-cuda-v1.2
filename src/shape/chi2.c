@@ -287,10 +287,6 @@ double chi2( struct par_t *par, struct dat_t *dat, int list_breakdown)
 		case LGHTCRV:
 			dat->set[s].chi2 = chi2_lghtcrv( par, &dat->set[s].desc.lghtcrv,
 					list_breakdown, s, &chi2_all_lghtcrv);
-
-//			dbg_print_lghtcrv_arrays_host(lghtcrv, s, n, "std_lghtcrv_arrays.csv");
-//			int ncalc = dat->set[s].desc.lghtcrv.ncalc;
-//			dbg_print_lghtcrv_xyy2_host(&dat->set[s].desc.lghtcrv, s, ncalc, "std_lghtcrv_arrays.csv");
 			break;
 		default:
 			bailout("chi2.c: can't handle this type yet\n");

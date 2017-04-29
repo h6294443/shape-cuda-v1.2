@@ -31,9 +31,13 @@ void posclr( struct pos_t *pos)
       component, and facet onto which the pixel center projects to
       dummy values                                                  */
 
+	/* Debug notice:  pos->cosi[i][j] was inserted by Matt Engels on 4/28/17
+	 * as this field kept getting overwritten by all frames from all sets.
+	 */
+
 	for (i=(-pos->n); i<=pos->n; i++)
 		for (j=(-pos->n); j<=pos->n; j++) {
-			pos->b[i][j] = pos->cose[i][j] = 0.0;
+			pos->b[i][j] = pos->cose[i][j] = pos->cosi[i][j] =  0.0;
 			pos->z[i][j] = -HUGENUMBER;
 			pos->body[i][j] = pos->comp[i][j] = pos->f[i][j] = -1;
 		}

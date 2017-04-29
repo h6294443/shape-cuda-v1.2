@@ -308,6 +308,7 @@ __global__ void p_get_pen_type_krnl(struct par_t *dpar, struct mod_t
 		for (k=0; k<3; k++)
 			for (j=0; j<3; j++)
 				p_ap[k][j] = 0.0;
+		p_ntot = 0;
 	}
 }
 __global__ void p_get_real_info_krnl(struct mod_t *dmod) {
@@ -581,7 +582,7 @@ __global__ void p_radalbdel_finish_krnl(double asum, double bsum) {
 		p_pen = bsum/asum;
 	}
 }
-__global__ void p_radalbvar_krnl(struct mod_t *dmod) {
+__global__ void p_radalbvar_krnl(struct mod_t *dmod, double *av, double *av2) {
 	/* nf-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
 	int c=0, ilaw;
@@ -593,37 +594,37 @@ __global__ void p_radalbvar_krnl(struct mod_t *dmod) {
 				switch (dmod->photo.radtype[ilaw]) {
 				case HARMCOSINE_DIFF:
 					x = dmod->photo.radar[ilaw].harmcosine.local[c][f].R.val;
-					atomicAdd(&p_av, x);
-					atomicAdd(&p_av2, (x*x));
+					av[f] = x;
+					av2[f] = x*x;
 					atomicAdd(&p_ntot, 1);
 					break;
 				case INHOCOSINE_DIFF:
 					x = dmod->photo.radar[ilaw].inhocosine.local[c][f].R.val;
-					atomicAdd(&p_av, x);
-					atomicAdd(&p_av2, (x*x));
+					av[f] = x;
+					av2[f] = x*x;
 					atomicAdd(&p_ntot, 1);
 					break;
 				}
 			}
 		}
 	}
-	__syncthreads();
-
+}
+__global__ void p_radalbvar_finish_krnl(double avsum, double av2sum)
+{
 	/* Single-threaded task */
-	if (f == 0) {
+	if (threadIdx.x == 0) {
 		if (p_ntot == 0)
 			printf("penalties_cuda.cu: 'radalbvar' can't be used with this "
 					"radar scattering law\n");
-		p_pen = p_ntot * (p_av2/(p_av*p_av)) - 1.0; /* fractional variance */
+		p_pen = p_ntot * (av2sum/(avsum*avsum)) - 1.0; /* fractional variance */
 		if (p_pen < 0.0)		p_pen = 0.0;    /* roundoff error */
 	}
 }
-__global__ void p_radcdel_krnl(struct mod_t *dmod) {
+__global__ void p_radcdel_krnl(struct mod_t *dmod, double *a, double *b) {
 	/* ns-threaded kernel */
 	int s = blockIdx.x * blockDim.x + threadIdx.x;
 	int c=0, ilaw, f1, f2, v1, v2;
 	double len, x, y;
-	float temp;
 
 	if (s < p_ns) {
 		f1 = dmod->shape.comp[c].real.s[s].f[0];
@@ -639,34 +640,31 @@ __global__ void p_radcdel_krnl(struct mod_t *dmod) {
 				case HARMCOSINE_DIFF:
 					x = dmod->photo.radar[ilaw].harmcosine.local[c][f1].C.val;
 					y = dmod->photo.radar[ilaw].harmcosine.local[c][f2].C.val;
-					temp = len*fabs(x+y);
-					atomicAdd(&p_a, temp);
-					temp = len*fabs(x-y);
-					atomicAdd(&p_b, temp);
+					a[s] = len * fabs(x+y);
+					b[s] = len * fabs(x-y);
 					break;
 				case INHOCOSINE_DIFF:
 					x = dmod->photo.radar[ilaw].inhocosine.local[c][f1].C.val;
 					y = dmod->photo.radar[ilaw].inhocosine.local[c][f2].C.val;
-					temp = len*fabs(x+y);
-					atomicAdd(&p_a, temp);
-					temp = len*fabs(x-y);
-					atomicAdd(&p_b, temp);
+					a[s] = len * fabs(x+y);
+					b[s] = len * fabs(x-y);
 					break;
 				}
 			}
 		}
 	}
-	__syncthreads();
-
+}
+__global__ void p_radcdel_finish_krnl(double asum, double bsum)
+{
 	/* Single-thread task */
-	if (s == 0) {
-		if (p_a == 0.0)
+	if (threadIdx.x == 0) {
+		if (asum == 0.0)
 			printf("penalties_cuda.cu: 'rad_c_del' can't be used with this radar "
 					"scattering law\n");
-		p_pen = p_b/p_a;
+		p_pen = bsum/asum;
 	}
 }
-__global__ void p_radcvar_krnl(struct mod_t *dmod) {
+__global__ void p_radcvar_krnl(struct mod_t *dmod, double *av, double *av2) {
 	/* nf-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
 	int c=0, ilaw;
@@ -678,31 +676,31 @@ __global__ void p_radcvar_krnl(struct mod_t *dmod) {
 				switch (dmod->photo.radtype[ilaw]) {
 				case HARMCOSINE_DIFF:
 					x = dmod->photo.radar[ilaw].harmcosine.local[c][f].C.val;
-					atomicAdd(&p_av, x);
-					atomicAdd(&p_av2, (x*x));
+					av[f] = x;
+					av2[f] = x*x;
 					atomicAdd(&p_ntot, 1);
 					break;
 				case INHOCOSINE_DIFF:
 					x = dmod->photo.radar[ilaw].inhocosine.local[c][f].C.val;
-					atomicAdd(&p_av, x);
-					atomicAdd(&p_av2, (x*x));
+					av[f] = x;
+					av2[f] = x*x;
 					atomicAdd(&p_ntot, 1);
 					break;
 				}
 			}
 		}
 	}
-	__syncthreads();
-
+}
+__global__ void p_radcvar_finish_krnl(double avsum, double av2sum)
+{
 	/* Single-threaded task */
-	if (f == 0) {
+	if (threadIdx.x == 0) {
 		if (p_ntot == 0)
 			printf("penalties_cuda.cu: 'rad_c_var' can't be used with this "
 					"radar scattering law\n");
-		p_pen = p_ntot * (p_av2/(p_av*p_av)) - 1.0; /* fractional variance */
+		p_pen = p_ntot * (av2sum/(avsum*avsum)) - 1.0; /* fractional variance */
 		if (p_pen < 0.0)		p_pen = 0.0;    /* roundoff error */
 	}
-	__syncthreads();
 }
 __global__ void p_noncosine_krnl(struct par_t *dpar, struct mod_t *dmod){
 	/* Single-threaded kernel */
@@ -770,7 +768,7 @@ __global__ void p_noncosine_krnl(struct par_t *dpar, struct mod_t *dmod){
 		p_pen = MAX(resid2sum/p_ntot, 0.0);
 	}
 }
-__global__ void p_nonsmooth_krnl(struct mod_t *dmod) {
+__global__ void p_nonsmooth_krnl(struct mod_t *dmod, double *a) {
 	/* ns-threaded kernel */
 	int s = blockIdx.x * blockDim.x + threadIdx.x;
 	int c=0;
@@ -782,23 +780,25 @@ __global__ void p_nonsmooth_krnl(struct mod_t *dmod) {
 					[dmod->shape.comp[c].real.s[s].f[0] ].n,
 					dmod->shape.comp[c].real.f
 					[dmod->shape.comp[c].real.s[s].f[1] ].n );
-			atomicAdd(&p_pen, (x*x*x*x));
+			a[s] = x*x*x*x;
 			atomicAdd(&p_ntot, 1);
 		}
 	}
-	__syncthreads();
-
-	/* Single-threaded task */
-	if (s == 0)		p_pen /= p_ntot;
 }
-__global__ void p_concavity_krnl(struct mod_t *dmod) {
+__global__ void p_nonsmooth_finish_krnl(double sum)
+{
+	/* Single-threaded task */
+	if (threadIdx.x == 0)
+		p_pen = sum/p_ntot;
+}
+__global__ void p_concavity_krnl(struct mod_t *dmod, double *a) {
 	/* ns-threaded kernel */
 	int s = blockIdx.x * blockDim.x + threadIdx.x;
 	int c=0, f1, f2, v1, v2, v3, j;
-	double disp[3];
-	float x;
+	double disp[3], x;
 
 	if (s < p_ns) {
+		a[s] = 0.0;
 		if (dmod->shape.comp[c].real.s[s].act) {
 			f1 = dmod->shape.comp[c].real.s[s].f[0];
 			f2 = dmod->shape.comp[c].real.s[s].f[1];
@@ -814,15 +814,17 @@ __global__ void p_concavity_krnl(struct mod_t *dmod) {
 			if (dev_dot(disp, dmod->shape.comp[c].real.f[f2].n) > 0.0) {
 				x = 1 - dev_dot(dmod->shape.comp[c].real.f[f1].n,
 						dmod->shape.comp[c].real.f[f2].n);
-				atomicAdd(&p_pen, (x*x));
+				a[s] = x*x;
 			}
 			atomicAdd(&p_ntot, 1);
 		}
 	}
-	__syncthreads();
-
+}
+__global__ void p_concavity_finish_krnl(double sum)
+{
 	/* Single-thread task */
-	if (s == 0)		p_pen /= p_ntot;
+	if (threadIdx.x == 0)
+		p_pen = sum/p_ntot;
 }
 __global__ void p_rdev_get_radius_krnl(struct mod_t *dmod) {
 	/* Single-threaded kernel */
@@ -831,7 +833,7 @@ __global__ void p_rdev_get_radius_krnl(struct mod_t *dmod) {
 		p_r_eff = pow( 3*p_volume/(4*PIE), 1.0/3.0);
 	}
 }
-__global__ void p_rdev_vertex_krnl(struct mod_t *dmod) {
+__global__ void p_rdev_vertex_krnl(struct mod_t *dmod, double *varr) {
 	/* nv-threaded kernel */
 	int v = blockIdx.x * blockDim.x + threadIdx.x;
 	int c=0, j;
@@ -846,23 +848,25 @@ __global__ void p_rdev_vertex_krnl(struct mod_t *dmod) {
 			}
 			scale = sqrt(scale);
 			x = scale * dmod->shape.comp[c].real.v[v].r.val / p_r_eff;
-			atomicAdd(&p_pen, (x*x));
+			varr[v] = x*x;
 			atomicAdd(&p_ntot, 1);
 		}
 	}
 	__syncthreads();
+
+	if (threadIdx.x == 0 && p_ntot == 0)
+		printf("penalties_cuda.cu: need at least one vertex component for 'rdev'\n");
 }
-__global__ void p_rdev_pen_krnl() {
+__global__ void p_rdev_pen_krnl(double sum) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0)
-		p_pen /= p_ntot;
+		p_pen = sum/p_ntot;
 }
-__global__ void p_maxrdev_vertex_krnl(struct mod_t *dmod) {
+__global__ void p_maxrdev_vertex_krnl(struct mod_t *dmod, double *varr) {
 	/* nv-threaded kernel */
 	int v = blockIdx.x * blockDim.x + threadIdx.x;
 	int c=0, j;
 	double scale, x, y;
-	float xf;
 
 	if (v < p_nv) {
 		if (dmod->shape.comp[c].real.v[v].act) {
@@ -875,12 +879,14 @@ __global__ void p_maxrdev_vertex_krnl(struct mod_t *dmod) {
 			scale = sqrt(scale);
 			x = scale * dmod->shape.comp[c].real.v[v].r.val / p_r_eff;
 			x *= x;
-			xf = x;
-			atomicMaxf(&p_pen, xf);
-			//pen = MAX( pen, x);
+			varr[v] = x;
 		}
 	}
-	__syncthreads();
+}
+__global__ void p_maxrdev_finish_krnl(double sum) {
+	/* Single-threaded kernel */
+	if (threadIdx.x == 0)
+		p_pen = sum;
 }
 __global__ void p_maxellipdev_inertia_krnl(struct mod_t *dmod) {
 	/* Single-threaded kernel */
@@ -908,11 +914,10 @@ __global__ void p_maxellipdev_inertia_krnl(struct mod_t *dmod) {
 			p_DEEVE_radius[j] = scale*radius[j];
 	}
 }
-__global__ void p_maxellipsdev_vertex_krnl(struct mod_t *dmod) {
+__global__ void p_maxellipsdev_vertex_krnl(struct mod_t *dmod, double *varr) {
 	/* nv-threaded kernel */
 	int v = blockIdx.x * blockDim.x + threadIdx.x;
 	int c=0, j;
-	float xf;
 	double vcoord[3], r, theta, phi, xtemp, ytemp, ztemp, x, r_DEEVE;
 
 	if (v < p_nv) {
@@ -938,13 +943,9 @@ __global__ void p_maxellipsdev_vertex_krnl(struct mod_t *dmod) {
 			 * fraction of the model's effective radius, and then square it */
 			x = (r - r_DEEVE)/p_r_eff;
 			x *= x;
-			xf = x;
-
-			/* The penalty is the maximum value of this quantity  */
-			atomicMaxf(&p_pen, xf);
+			varr[v] = x;
 		}
 	}
-	__syncthreads();
 }
 __global__ void p_comdev_krnl(struct mod_t *dmod) {
 	/* Single-threaded kernel */
@@ -1009,27 +1010,22 @@ __global__ void p_pa3tilt_krnl(struct mod_t *dmod) {
 			p_got_pa = 1;
 		}
 		/*  ap[2][2] = cos(angle between PA3 and the body-fixed z-axis)  */
-		temp = max(0.0, (1 - p_ap[2][2]*p_ap[2][2]));
-		p_pen = temp;
+		p_pen = max(0.0, (1 - p_ap[2][2]*p_ap[2][2]));
 	}
 }
 __global__ void p_nonpa_krnl(struct mod_t *dmod) {
 	/* Single-threaded kernel */
-	float temp;
 
 	if (threadIdx.x == 0) {
 		/* The 0.01 term below avoids biaxial inertia ellipsoids  */
-		temp = max((dmod->spin.inertia[0].val/dmod->spin.inertia[2].val) - 1,
+		p_pen =  max((dmod->spin.inertia[0].val/dmod->spin.inertia[2].val) - 1,
 				(dmod->spin.inertia[1].val/dmod->spin.inertia[2].val) - 1 )
-            								  + 0.01;
-		p_pen = temp;
+            										  + 0.01;;
 		if (p_pen < 0.0)		p_pen = 0.0;
 	}
 }
 __global__ void p_nonpa_uni_krnl(struct mod_t *dmod) {
 	/* Single-threaded kernel */
-	float temp;
-	//double pmoment[3];
 
 	if (threadIdx.x == 0) {
 		if (!p_got_pa) {
@@ -1041,9 +1037,8 @@ __global__ void p_nonpa_uni_krnl(struct mod_t *dmod) {
 		}
 
 		/* The 0.01 term below avoids biaxial inertia ellipsoids */
-		temp = MAX((pmoment[0]/pmoment[2]) - 1, (pmoment[1]/pmoment[2]) - 1 )
-								  + 0.01;
-		p_pen = temp;
+		p_pen = max((pmoment[0]/pmoment[2]) - 1, (pmoment[1]/pmoment[2]) - 1 )
+												  + 0.01;
 		if (p_pen < 0.0)	p_pen = 0.0;
 	}
 }
@@ -1065,7 +1060,7 @@ __global__ void p_euleroffs_krnl(struct dat_t *ddat) {
 }
 __global__ void p_flattening_krnl(struct mod_t *dmod) {
 	/* Single-threaded kernel */
-	double /*pmoment[3], */b_over_c, x;
+	double b_over_c, x;
 
 	if (threadIdx.x == 0) {
 		if (!p_got_pa) {
@@ -1109,33 +1104,34 @@ __global__ void p_bifur_gotpa_krnl(struct mod_t *dmod) {
 		p_j2 = (p_jmax + 2) % 3;
 	}
 }
-__global__ void p_bifur_1st_vertex_krnl(struct mod_t *dmod) {
-	/* nv-threaded kernel */
+__global__ void p_bifur_1st_vertex_krnl(struct mod_t *dmod, double *varr) {
+	/* nv-threaded kernel that assembles an array of values. After completion,
+	 * a parallel reduction is run to find min and max */
 	int v = blockIdx.x * blockDim.x + threadIdx.x;
 	int c=0;
-	float temp;
+	double temp;
 
 	if (v < p_nv) {
-		temp = dmod->shape.comp[c].real.v[v].x[p_jmax];
-		atomicMinf(&p_min_extent, temp);
-		atomicMaxf(&p_max_extent, temp);
+		varr[v] = dmod->shape.comp[c].real.v[v].x[p_jmax];
+//		atomicMinf(&p_min_extent, temp);
+//		atomicMaxf(&p_max_extent, temp);
 	}
 }
-__global__ void p_bifur_init_krnl() {
+__global__ void p_bifur_init_krnl(double min_extent, double max_extent) {
 	/* Single-threaded kernel */
 	int k;
 	if (threadIdx.x == 0) {
-		p_axis_increment = (p_max_extent - p_min_extent + SMALLVAL) / NBIFURCATION;
+		p_axis_increment = (max_extent - min_extent + SMALLVAL) / NBIFURCATION;
 		for (k=0; k<NZONES; k++)
 			p_sumrho2[k] = p_nrho2[k] = 0.0;
 	}
 }
-__global__ void p_bifur_2nd_vertex_krnl(struct mod_t *dmod) {
+__global__ void p_bifur_2nd_vertex_krnl(struct mod_t *dmod, double min_extent,
+		double max_extent) {
 	/* nv-threaded kernel */
 	int v = blockIdx.x * blockDim.x + threadIdx.x;
 	int c=0, k, k1, k2;
-	double rho2, x, y, w1, w2;
-	float temp;
+	double rho2, x, y, w1, w2, temp;
 
 	if (v < p_nv) {
 		if (dmod->shape.comp[c].real.v[v].act) {
@@ -1159,13 +1155,13 @@ __global__ void p_bifur_2nd_vertex_krnl(struct mod_t *dmod) {
 				w2 = 1 - pow(1-y, 6);
 			}
 			temp = w1*rho2;
-			atomicAdd(&p_sumrho2[k1], temp);
+			atomicAdd(&p_sumrho2[k1], __double2float_rn(temp));
 			temp = w2*rho2;
-			atomicAdd(&p_sumrho2[k2], temp);
+			atomicAdd(&p_sumrho2[k2], __double2float_rn(temp));
 			temp = w1;
-			atomicAdd(&p_nrho2[k1], temp);
+			atomicAdd(&p_nrho2[k1], __double2float_rn(temp));
 			temp = w2;
-			atomicAdd(&p_nrho2[k2], temp);
+			atomicAdd(&p_nrho2[k2], __double2float_rn(temp));
 		}
 	}
 }
@@ -1236,7 +1232,7 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat)
 {
 	int i, ntot;
-	double sum=0.0, *a, *b, *absum, *av, *av2;
+	double sum=0.0, *a, *b, *absum, *av, *av2, *varr, out, min, max;
 	char name[80];
 
 	int pen_n, pen_type, ns, nf, nv;
@@ -1271,6 +1267,7 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 	gpuErrchk(cudaMalloc((void**)&b, 	sizeof(double) * ns));
 	gpuErrchk(cudaMalloc((void**)&av, 	sizeof(double) * nf));
 	gpuErrchk(cudaMalloc((void**)&av2, 	sizeof(double) * nf));
+	gpuErrchk(cudaMalloc((void**)&varr,	sizeof(double) * nv));
 	absum = (double *) malloc(2*sizeof(double));
 
 	/* G thru penalties & calculate each contribution to penalty-function sum */
@@ -1387,9 +1384,15 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			strcpy( name, "radalbvar");
 
 			/* Launch the nf-threaded radalbvar kernel */
-			p_radalbvar_krnl<<<BLKf,THD>>>(dmod);
+			p_radalbvar_krnl<<<BLKf,THD>>>(dmod, av, av2);
 			checkErrorAfterKernelLaunch("p_radalbvar_krnl (penalties_cuda)");
 
+			/* Paralle reduction on av and av2 to get sums */
+			sum_2_double_arrays(av, av2, absum, nf);
+
+			/* Finish penalty calculations */
+			p_radalbvar_finish_krnl<<<1,1>>>(absum[0], absum[1]);
+			checkErrorAfterKernelLaunch("p_radalbvar_finish_krnl");
 			break;
 		case RAD_C_DEL:
 			/* pen = (weighted mean over model "sides" [edges] of |C difference|
@@ -1399,18 +1402,30 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			strcpy( name, "rad_c_del");
 
 			/* Launch the ns-threaded rad_c_del kernel */
-			p_radcdel_krnl<<<BLKs,THD>>>(dmod);
+			p_radcdel_krnl<<<BLKs,THD>>>(dmod, a, b);
 			checkErrorAfterKernelLaunch("p_radcdel_krnl (penalties_cuda)");
 
+			/* Parallel reduction to get sums */
+			sum_2_double_arrays(a, b, absum, ns);
+
+			/* Finish penalty calculations */
+			p_radcdel_finish_krnl<<<1,1>>>(absum[0], absum[1]);
+			checkErrorAfterKernelLaunch("p_radcdel_finish_krnl");
 			break;
 		case RAD_C_VAR:
 			/* pen = (facet C variance) / (mean facet C)^2  */
 			strcpy( name, "rad_c_var");
 
 			/* Launch the nf-threaded radalbvar kernel */
-			p_radcvar_krnl<<<BLKf,THD>>>(dmod);
+			p_radcvar_krnl<<<BLKf,THD>>>(dmod, av, av2);
 			checkErrorAfterKernelLaunch("p_radcvar_krnl (penalties_cuda)");
 
+			/* Parallel reduction to get sums */
+			sum_2_double_arrays(av, av2, absum, nf);
+
+			/* Finish penalty calculations */
+			p_radcvar_finish_krnl<<<1,1>>>(absum[0], absum[1]);
+			checkErrorAfterKernelLaunch("p_radcvar_finish_krnl");
 			break;
 		case NONCOSINE:
 			/* pen = mean squared residual about fit to cosine scattering law
@@ -1445,9 +1460,15 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			strcpy( name, "nonsmooth");
 
 			/* Launch the ns-threaded nonsmooth kernel */
-			p_nonsmooth_krnl<<<BLKs,THD>>>(dmod);
+			p_nonsmooth_krnl<<<BLKs,THD>>>(dmod, a);
 			checkErrorAfterKernelLaunch("p_nonsmooth_krnl (penalties_cuda)");
 
+			/* Parallel reduction on a to get sum */
+			out = sum_double_array(a, ns);
+
+			/* Finish penalty calculations */
+			p_nonsmooth_finish_krnl<<<1,1>>>(out);
+			checkErrorAfterKernelLaunch("p_noncosine_finish_krnl");
 			break;
 		case CONCAVITY:
 			/* pen = mean over all "sides" (edges) of the following quantity:
@@ -1470,11 +1491,15 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			 * roughly proportional to 1/(number of vertices)^2. Must adjust
 			 * the "concavity" penalty weight accordingly.               */
 			strcpy( name, "concavity");
-
 			/* Launch the ns-threaded concavity kernel */
-			p_concavity_krnl<<<BLKs,THD>>>(dmod);
+			p_concavity_krnl<<<BLKs,THD>>>(dmod, a);
 			checkErrorAfterKernelLaunch("p_concavity_krnl (penalties_cuda)");
 
+			/* Parallel reduction */
+			out = sum_double_array(a, ns);
+
+			p_concavity_finish_krnl<<<1,1>>>(out);
+			checkErrorAfterKernelLaunch("p_concavity_finish_krnl");
 			break;
 		case RDEV:
 			/* pen = mean squared vertex deviation length (where each vertex
@@ -1488,18 +1513,18 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 
 			if (shape_type == VERTEX) {
 				/* Launch nv-threaded kernel oop through vertices to build up mean squared deviation  */
-				p_rdev_vertex_krnl<<<BLKv,THD>>>(dmod);
+				p_rdev_vertex_krnl<<<BLKv,THD>>>(dmod, varr);
 				checkErrorAfterKernelLaunch("p_rdev_vertex_krnl (penalties_cuda)");
 				gpuErrchk(cudaMemcpyFromSymbol(&ntot, p_ntot, sizeof(int),
 						0, cudaMemcpyDeviceToHost));
+
+				/* Parallel reduction */
+				out = sum_double_array(varr, nv);
+
+				/* Single-thread kernel to calculate pen */
+				p_rdev_pen_krnl<<<1,1>>>(out);
+				checkErrorAfterKernelLaunch("p_rdev_pen_krnl (penalties_cuda)");
 			}
-			if (ntot == 0)
-				bailout("penalties_cuda.cu: need at least one vertex component for 'rdev'\n");
-
-			/* Single-thread kernel to calculate pen */
-			p_rdev_pen_krnl<<<1,1>>>();
-			checkErrorAfterKernelLaunch("p_rdev_pen_krnl (penalties_cuda)");
-
 			break;
 		case MAXRDEV:
 			/* pen = maximum squared vertex deviation length (where each vertex
@@ -1515,8 +1540,15 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			 * vertex.		 */
 			if (shape_type == VERTEX) {
 				/*  Loop through vertices to find maximum deviation (nv-threaded) */
-				p_maxrdev_vertex_krnl<<<BLKv,THD>>>(dmod);
+				p_maxrdev_vertex_krnl<<<BLKv,THD>>>(dmod, varr);
 				checkErrorAfterKernelLaunch("p_maxrdev_vertex_krnl (penalties_cuda)");
+
+				/* Do parallel reduction to find the maximum */
+				out = find_max_in_double_array(varr, nv);
+
+				/* Finish up penalty calculation */
+				p_maxrdev_finish_krnl<<<1,1>>>(out);
+				checkErrorAfterKernelLaunch("p_maxrdev_finish_krnl");
 			}
 			break;
 		case MAXELLIPDEV:
@@ -1536,9 +1568,14 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 
 			/* Loop thru components & compute each vertex's deviation from DEEVE,
 			 * expressed as a fraction of the model's effective radius */
-			p_maxellipsdev_vertex_krnl<<<BLKv,THD>>>(dmod);
+			p_maxellipsdev_vertex_krnl<<<BLKv,THD>>>(dmod, varr);
 			checkErrorAfterKernelLaunch("p_maxellipsdev_vertex_krnl (penalties_cuda)");
 
+			/* Do parallel reduction to find the maximum */
+			out = find_max_in_double_array(varr, nv);
+			/* Finish up penalty calculation (yes, this is the right kernel!) */
+			p_maxrdev_finish_krnl<<<1,1>>>(out);
+			checkErrorAfterKernelLaunch("p_maxrdev_finish_krnl");
 			break;
 		case VOLUME:
 			/* pen = model's total volume (km^3)  */
@@ -1702,13 +1739,15 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			p_bifur_gotpa_krnl<<<1,1>>>(dmod);
 			checkErrorAfterKernelLaunch("p_bifur_gotpa_krnl (penalties_cuda)");
 
-			/* Loop through vertices to find maximum deviation (nv-threaded)  */
-			p_bifur_1st_vertex_krnl<<<BLKv,THD>>>(dmod);
+			/* Loop through vertices to assemble an array of values, then launch
+			 * a parallel reduction to find min and max values (nv-threaded)  */
+			p_bifur_1st_vertex_krnl<<<BLKv,THD>>>(dmod, varr);
 			checkErrorAfterKernelLaunch("p_bifur_1st_vertex_krnl (penalties_cuda)");
-
+			max = find_max_in_double_array(varr, nv);
+			min = find_min_in_double_array(varr, nv);
 			/* Launch single-thread kernel to initialize sumrho2[] and to set
 			 * axis_increment  */
-			p_bifur_init_krnl<<<1,1>>>();
+			p_bifur_init_krnl<<<1,1>>>(min, max);
 			checkErrorAfterKernelLaunch("p_bifur_init_vertex_krnl (penalties_cuda)");
 
 			/* Loop over all "active" (exterior) vertices of all model components,
@@ -1720,7 +1759,7 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 			 * vector is floating-point rather than integer.              */
 
 			/* Launch nv-threaded kernel */
-			p_bifur_2nd_vertex_krnl<<<BLKv,THD>>>(dmod);
+			p_bifur_2nd_vertex_krnl<<<BLKv,THD>>>(dmod, min, max);
 			checkErrorAfterKernelLaunch("p_bifur_2nd_vertex_krnl (penalties_cuda)");
 
 			/* Launch an NZONES-threaded kernel to calculate meanrho2[] */
@@ -1766,6 +1805,7 @@ __host__ double penalties_cuda(struct par_t *dpar, struct mod_t *dmod,
 	cudaFree(b);
 	cudaFree(av);
 	cudaFree(av2);
+	cudaFree(varr);
 	free(absum);
 	return sum;
 }

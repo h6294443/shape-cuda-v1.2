@@ -139,6 +139,8 @@ __host__ void dvdI_reduce_single(struct mod_t *dmod, float *dv, float *dcom0,
 		float *dcom1, float *dcom2, float *dI00, float *dI01, float *dI02,
 		float *dI10, float *dI11, float *dI12, float *dI20, float *dI21,
 		float *dI22, int size, int c);
+__host__ double find_max_in_double_array(double *in, int size);
+__host__ double find_min_in_double_array(double *in, int size);
 __host__ void gpuAssert(cudaError_t code, const char *file, int line);
 __host__ void mnbrak_streams(double *ax,double *bx,double *cx,double *fa,double *fb,
 	    double *fc,double (*func)(double, struct vertices_t**, unsigned char*,
@@ -229,6 +231,7 @@ __host__ void show_deldoplim_cuda_streams(struct dat_t *ddat,
 		unsigned char *type, int nsets, int *nframes, int maxframes);
 __host__ void sum_2_double_arrays(double *a, double *b, double *absum, int size);
 __host__ double sum_brightness(struct pos_t **pos, int i, int size);
+__host__ double sum_double_array(double *a, int size);
 __host__ float sum_brightness_f(struct pos_t **pos, int i, int size);
 __host__ void vary_params_cuda(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int action, double *deldop_zmax,
@@ -337,7 +340,7 @@ __global__ void lghtcrv_spline_streams_f_krnl(struct dat_t *ddat, int set,
 __global__ void lghtcrv_splint_streams3_krnl(struct dat_t *ddat, int set, int n, int ncalc);
 __global__ void lghtcrv_splint_streams3f_krnl(struct dat_t *ddat, int set, int ncalc);
 __global__ void lghtcrv_splint_streams3_test_krnl(struct dat_t *ddat, int set, int n, int ncalc);
-__global__ void posclr_streams_krnl(struct pos_t **pos, int *posn, int f);
+__global__ void posclr_streams_krnl(struct pos_t **pos, int *posn, int f, int bdflag);
 __global__ void posmask_universal_krnl(struct par_t *dpar, struct pos_t *pos,
 		int nThreads, int xspan);
 __global__ void posmask_init_streams_krnl(struct pos_t **pos, double3 *so,
