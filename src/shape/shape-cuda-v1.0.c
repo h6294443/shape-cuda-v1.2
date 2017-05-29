@@ -9,19 +9,18 @@
  */
 #include "../shape/head.h"
 
-int CUDA 			= 1;		/* Use CUDA code or run CPU code 		*/
-int AF 				= 0;		/* Process all frames in a set at once	*/
-int STREAMS 		= 0;		/* Use CUDA streams						*/
-int STREAMS2 		= 1;
-int TIMING 			= 0;		/* Time certain kernel executions 		*/
-int GPU 			= 1;		/* Which GPU will run code 				*/
-int POSVIS_SEPARATE = 0;		/* Calculate xlim/ylim separately 		*/
-int DYNPROC 		= 0;		/* Use dynamic processing        		*/
-int FLOAT			= 0;
-
+int CUDA   = 1;		/* Use CUDA code or run CPU code 	*/
+int TIMING = 0;		/* Time certain kernel executions	*/
+int GPU0   = 1;		/* Which GPU will run code 			*/
+int GPU1   = 0;
+int FLOAT  = 0;
+int MGPU   = 1;		/* Switch for dual-gpu mode 		*/
+int MGPU_MEM = 1;
+int PIN = 0;
 int main(int argc, char *argv[])
  {
-	printf("Shape-CUDA-v1.0 running\n");
+	printf("Shape-CUDA-v1.2 running\n");
+	printf("Now with even more face-melting concurrency.\n");
 	/* Check available CUDA devices, if any, before proceeding */
 	CUDACount();
 	maxThreadsPerBlock = 256;
@@ -50,6 +49,8 @@ int main(int argc, char *argv[])
 	/* Read the par file, get the action, and make sure actions other than
 	 * "fit" do NOT use parallel processing  */
 	read_par( argv[1], &par);
+	printf("%s\n", argv[2]);
+	printf("%s\n", argv[3]);
 
 	/*  Record the names of the mod and obs files  */
 	if (par.action == ORBIT) {
@@ -153,10 +154,7 @@ int main(int argc, char *argv[])
 			gpuErrchk(cudaMallocManaged((void**)&dev_dat, sizeof(struct dat_t), cudaMemAttachGlobal));
 			gpuErrchk(cudaMemcpy(dev_dat, &dat, sizeof(struct dat_t), cudaMemcpyHostToDevice));
 
-			if (STREAMS2)
-				bestfit_CUDA2(dev_par,dev_mod,dev_dat, &par,&mod,&dat);
-			else
-				bestfit_CUDA( dev_par,dev_mod,dev_dat, &par,&mod,&dat);
+			bestfit_gpu(dev_par,dev_mod,dev_dat, &par,&mod,&dat);
 		} else
 			bestfit( &par, &mod, &dat);
 		break;

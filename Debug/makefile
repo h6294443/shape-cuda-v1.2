@@ -14,6 +14,10 @@ RM := rm -rf
 -include src/pgm/subdir.mk
 -include src/nr/subdir.mk
 -include src/astro/subdir.mk
+-include src/DebugCode/subdir.mk
+-include src/CudaUtils/subdir.mk
+-include src/CudaPR/subdir.mk
+-include src/CudaCode/subdir.mk
 
 OS_SUFFIX := $(subst Linux,linux,$(subst Darwin/x86_64,darwin,$(shell uname -s)/$(shell uname -m)))
 

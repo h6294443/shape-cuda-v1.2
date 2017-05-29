@@ -131,24 +131,17 @@ void vary_params( struct par_t *par, struct mod_t *mod, struct dat_t *dat,
 					/*  Determine which POS pixels cover the target, and
 	                    get the distance toward Earth of each POS pixel   */
 					for (c=0; c<mod->shape.ncomp; c++){
-						if (CUDA)
-							posvis_cuda(&mod->shape.comp[c].real, orbit_offset,
-									pos, (int) par->pos_smooth, 0, 0, c);
-						else
-							posvis( &mod->shape.comp[c].real, orbit_offset, pos,
-									(int) par->pos_smooth, 0, 0, c);
+						posvis( &mod->shape.comp[c].real, orbit_offset, pos,
+								(int) par->pos_smooth, 0, 0, c);
 					}
-
 					/* Zero out the fit delay-Doppler image and call pos2deldop
 					 * to create the fit image by mapping power from the plane
 					 * of sky to delay-Doppler space.                             */
 
 					clrmat( deldop->frame[f].fit, 1, deldop->frame[f].ndel,
 							1, deldop->frame[f].ndop);
-					if (CUDA)
-						pos2deldop_cuda(par, &mod->photo, 0.0, 0.0, 0.0, deldop, 0, s, f, 0);
-					else
-						pos2deldop(par, &mod->photo, 0.0, 0.0, 0.0, deldop, 0, s, f, 0);
+
+					pos2deldop(par, &mod->photo, 0.0, 0.0, 0.0, deldop, 0, s, f, 0);
 
 					/*  Compute distance toward Earth of the subradar point  */
 
@@ -210,11 +203,7 @@ void vary_params( struct par_t *par, struct mod_t *mod, struct dat_t *dat,
 
 					/*  Determine which POS pixels cover the target  */
 					for (c=0; c<mod->shape.ncomp; c++){
-						if (CUDA)
-							posvis_cuda(&mod->shape.comp[c].real, orbit_offset, pos,
-									(int) par->pos_smooth, 0, 0, c);
-						else
-							posvis( &mod->shape.comp[c].real, orbit_offset, pos,
+						posvis( &mod->shape.comp[c].real, orbit_offset, pos,
 									(int) par->pos_smooth, 0, 0, c);
 					}
 
@@ -222,11 +211,7 @@ void vary_params( struct par_t *par, struct mod_t *mod, struct dat_t *dat,
 					 * 	spectrum by mapping power from the plane of the sky to Doppler space.      */
 					clrvect( doppler->frame[f].fit, 1, doppler->frame[f].ndop);
 
-					//int testcnt = mod->shape.comp[0].real.nf;
-					if (CUDA)
-						pos2doppler_cuda(par, &mod->photo, 0.0, 0.0, 0.0, doppler, 0, s, f, 0);
-					else
-						pos2doppler(par, &mod->photo, 0.0, 0.0, 0.0, doppler, 0, s, f, 0);
+					pos2doppler(par, &mod->photo, 0.0, 0.0, 0.0, doppler, 0, s, f, 0);
 
 					/*  Compute cross section  */
 					cross_section = doppler->frame[f].overflow_xsec;

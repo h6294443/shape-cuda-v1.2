@@ -17,8 +17,6 @@ Top-level header file for shape-cuda - adapted from head.h in v2.10.0 of shape.
 #include <unistd.h>
 
 #include "build.h"
-
-
 #include "../nr/nr.h"
 #include "../macros/files.h"
 #include "../macros/func.h"
@@ -31,4 +29,7 @@ Top-level header file for shape-cuda - adapted from head.h in v2.10.0 of shape.
 //#include "/home/matt/cfitsio/fitsio.h"
 #include "const.h"
 //#include "mpi_vars.h"
-#include "../shape/shape-cuda.h"
+#include "../CudaCode/shape-cuda.h"
+#include "../CudaUtils/cuda_utils.h"
+#include "../DebugCode/debug_routines.h"
+#include "../CudaPR/parallel_reductions.h"

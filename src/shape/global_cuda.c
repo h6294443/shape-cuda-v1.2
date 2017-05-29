@@ -1,4 +1,4 @@
-#include "../shape/shape-cuda.h"
+#include "../CudaCode/shape-cuda.h"
 
 double *fparstep;
 double *fpartol;

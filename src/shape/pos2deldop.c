@@ -299,9 +299,9 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
    *  Only compute contributions from POS pixels that project onto the right body, in case this
    *  is the "orbit" action (for which this routine is called twice, once for each of the two
    *  orbiting bodies). */
-
+int dbg_occ = 0;
   for (x=pos->xlim[0]; x<=pos->xlim[1]; x++)
-    for (y=pos->ylim[0]; y<=pos->ylim[1]; y++) {
+    for (y=pos->ylim[0]; y<=pos->ylim[1]; y++) {dbg_occ++;
       if (pos->cose[x][y] > 0.0 && pos->body[x][y] == body) {
 
         /*  Get the (floating-point) delay and Doppler bin of the POS pixel center: delPOS and dopPOS.

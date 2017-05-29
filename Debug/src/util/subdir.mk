@@ -3,10 +3,6 @@
 ################################################################################
 
 # Add inputs and outputs from these tool invocations to the build variables 
-CU_SRCS += \
-../src/util/cuda-util.cu \
-../src/util/euler_cuda.cu 
-
 C_SRCS += \
 ../src/util/addsuffix.c \
 ../src/util/allwhite.c \
@@ -85,12 +81,10 @@ OBJS += \
 ./src/util/countdata.o \
 ./src/util/createdir.o \
 ./src/util/cross.o \
-./src/util/cuda-util.o \
 ./src/util/distance.o \
 ./src/util/dms.o \
 ./src/util/dot.o \
 ./src/util/euler.o \
-./src/util/euler_cuda.o \
 ./src/util/facnorm.o \
 ./src/util/fiteuler.o \
 ./src/util/free_uc3tensor.o \
@@ -134,10 +128,6 @@ OBJS += \
 ./src/util/vmax.o \
 ./src/util/vmin.o \
 ./src/util/waitsecs.o 
-
-CU_DEPS += \
-./src/util/cuda-util.d \
-./src/util/euler_cuda.d 
 
 C_DEPS += \
 ./src/util/addsuffix.d \
@@ -209,14 +199,6 @@ src/util/%.o: ../src/util/%.c
 	@echo 'Invoking: NVCC Compiler'
 	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --use_fast_math -gencode arch=compute_35,code=sm_35 -m64 -odir "src/util" -M -o "$(@:%.o=%.d)" "$<"
 	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --use_fast_math --compile -m64  -x c -o  "$@" "$<"
-	@echo 'Finished building: $<'
-	@echo ' '
-
-src/util/%.o: ../src/util/%.cu
-	@echo 'Building file: $<'
-	@echo 'Invoking: NVCC Compiler'
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --use_fast_math -gencode arch=compute_35,code=sm_35 -m64 -odir "src/util" -M -o "$(@:%.o=%.d)" "$<"
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --use_fast_math --compile --relocatable-device-code=true -gencode arch=compute_35,code=compute_35 -gencode arch=compute_35,code=sm_35 -m64  -x cu -o  "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 

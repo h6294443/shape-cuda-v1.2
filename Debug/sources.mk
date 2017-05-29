@@ -30,4 +30,8 @@ src/shape \
 src/pgm \
 src/nr \
 src/astro \
+src/DebugCode \
+src/CudaUtils \
+src/CudaPR \
+src/CudaCode \
 

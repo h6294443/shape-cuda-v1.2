@@ -3,12 +3,6 @@
 ################################################################################
 
 # Add inputs and outputs from these tool invocations to the build variables 
-CU_SRCS += \
-../src/nr/brent_abs_cuda.cu \
-../src/nr/gammln_cuda.cu \
-../src/nr/mnbrak_cuda.cu \
-../src/nr/plgndr_cuda.cu 
-
 C_SRCS += \
 ../src/nr/bcucof.c \
 ../src/nr/bcuint.c \
@@ -77,7 +71,6 @@ OBJS += \
 ./src/nr/bessy1.o \
 ./src/nr/brent.o \
 ./src/nr/brent_abs.o \
-./src/nr/brent_abs_cuda.o \
 ./src/nr/bsstep.o \
 ./src/nr/caldat.o \
 ./src/nr/cel.o \
@@ -86,7 +79,6 @@ OBJS += \
 ./src/nr/f1dim.o \
 ./src/nr/factrl.o \
 ./src/nr/gammln.o \
-./src/nr/gammln_cuda.o \
 ./src/nr/gasdev.o \
 ./src/nr/hpsort.o \
 ./src/nr/indexx.o \
@@ -98,12 +90,10 @@ OBJS += \
 ./src/nr/ludcmp.o \
 ./src/nr/mmid.o \
 ./src/nr/mnbrak.o \
-./src/nr/mnbrak_cuda.o \
 ./src/nr/nrutil.o \
 ./src/nr/odeint.o \
 ./src/nr/piksrt.o \
 ./src/nr/plgndr.o \
-./src/nr/plgndr_cuda.o \
 ./src/nr/poidev.o \
 ./src/nr/powell.o \
 ./src/nr/qsimp.o \
@@ -120,12 +110,6 @@ OBJS += \
 ./src/nr/trapzd.o \
 ./src/nr/zbrent.o \
 ./src/nr/zroots.o 
-
-CU_DEPS += \
-./src/nr/brent_abs_cuda.d \
-./src/nr/gammln_cuda.d \
-./src/nr/mnbrak_cuda.d \
-./src/nr/plgndr_cuda.d 
 
 C_DEPS += \
 ./src/nr/bcucof.d \
@@ -188,14 +172,6 @@ src/nr/%.o: ../src/nr/%.c
 	@echo 'Invoking: NVCC Compiler'
 	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --use_fast_math -gencode arch=compute_35,code=sm_35 -m64 -odir "src/nr" -M -o "$(@:%.o=%.d)" "$<"
 	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --use_fast_math --compile -m64  -x c -o  "$@" "$<"
-	@echo 'Finished building: $<'
-	@echo ' '
-
-src/nr/%.o: ../src/nr/%.cu
-	@echo 'Building file: $<'
-	@echo 'Invoking: NVCC Compiler'
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --use_fast_math -gencode arch=compute_35,code=sm_35 -m64 -odir "src/nr" -M -o "$(@:%.o=%.d)" "$<"
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --use_fast_math --compile --relocatable-device-code=true -gencode arch=compute_35,code=compute_35 -gencode arch=compute_35,code=sm_35 -m64  -x cu -o  "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
