@@ -85,8 +85,6 @@ extern "C" {
 #include <limits.h>
 }
 
-__device__ int mposvis_streams_outbnd, mpvst_smooth;
-
 __device__ static float atomicMaxf(float* address, float val) {
 	int* address_as_i = (int*) address;
 	int old = *address_as_i, assumed;
@@ -107,46 +105,94 @@ __global__ void mposvis_init_krnl(
 		int *outbndarr,
 		int c,
 		int f,
+		int hf,
 		int start,
 		int end,
 		int src) {
 
-	/* Single-threaded, streamed kernel */
+	/* Single-threaded, streamed, multi-GPU kernel. GPU0 handles even frames,
+	 * GPU1 handles odd frames */
 	if (threadIdx.x == 0) {
-		if (f == start) {
-			mposvis_streams_outbnd = 0;
-			mpvst_smooth = dpar->pos_smooth;
-		}
-		ijminmax_overall[f].w = ijminmax_overall[f].y = HUGENUMBER;
-		ijminmax_overall[f].x = ijminmax_overall[f].z = -HUGENUMBER;
-		pos[f]->posbnd_logfactor = 0.0;
 
-		dev_mtrnsps3(oa, pos[f]->ae, f);
+		ijminmax_overall[hf].w = ijminmax_overall[hf].y = HUGENUMBER;
+		ijminmax_overall[hf].x = ijminmax_overall[hf].z = -HUGENUMBER;
+		pos[hf]->posbnd_logfactor = 0.0;
+
+		dev_mtrnsps3(oa, pos[hf]->ae, hf);
 
 		if (src) {
 			/* We're viewing the model from the sun: at the center of each pixel
 			 * in the projected view, we want cos(incidence angle), distance from
 			 * the COM towards the sun, and the facet number.                */
-			dev_mmmul3(oa, pos[f]->se, oa, f); /* oa takes ast into sun coords           */
+			dev_mmmul3(oa, pos[hf]->se, oa, hf); /* oa takes ast into sun coords           */
 		} else {
 			/* We're viewing the model from Earth: at the center of each POS pixel
 			 * we want cos(scattering angle), distance from the COM towards Earth,
 			 * and the facet number.  For bistatic situations (lightcurves) we also
 									 want cos(incidence angle) and the unit vector towards the source.     */
-			dev_mmmul3(oa, pos[f]->oe, oa, f); /* oa takes ast into obs coords */
-			if (pos[f]->bistatic) {
-				usrc[f].x = usrc[f].y = 0.0; /* unit vector towards source */
-				usrc[f].z = 1.0;
-				dev_cotrans9(&usrc[f], pos[f]->se, usrc[f], -1);
-				dev_cotrans9(&usrc[f], pos[f]->oe, usrc[f], 1); /* in observer coordinates */
+			dev_mmmul3(oa, pos[hf]->oe, oa, hf); /* oa takes ast into obs coords */
+			if (pos[hf]->bistatic) {
+				usrc[hf].x = usrc[hf].y = 0.0; /* unit vector towards source */
+				usrc[hf].z = 1.0;
+				dev_cotrans9(&usrc[hf], pos[hf]->se, usrc[hf], -1);
+				dev_cotrans9(&usrc[hf], pos[hf]->oe, usrc[hf], 1); /* in observer coordinates */
 			}
 		}
-		outbndarr[f] = 0;
+		outbndarr[hf] = 0;
 	}
 }
-__global__ void mposvis_facet_krnl(
+
+__global__ void posvis_mgpu_init_krnl(
+		struct par_t *dpar,
 		struct pos_t **pos,
-		struct vertices_t **verts,
+		float4 *ijminmax_overall,
+		float3 *oa,
+		float3 *usrc,
+		int *outbndarr,
+		int c,
+		int size,
+		int oddflg,
+		int src) {
+
+	/* nfrm_half0/nfrm_half1-threaded kernel for multi-GPU operation. GPU0
+	 * handles even frames, GPU1 handles odd frames */
+	int hf = blockIdx.x * blockDim.x + threadIdx.x;
+	int f = 2*hf + oddflg;
+
+	if (hf < size) {
+
+		ijminmax_overall[hf].w = ijminmax_overall[hf].y = HUGENUMBER;
+		ijminmax_overall[hf].x = ijminmax_overall[hf].z = -HUGENUMBER;
+		pos[hf]->posbnd_logfactor = 0.0;
+
+		dev_mtrnsps3(oa, pos[hf]->ae, hf);
+
+		if (src) {
+			/* We're viewing the model from the sun: at the center of each pixel
+			 * in the projected view, we want cos(incidence angle), distance from
+			 * the COM towards the sun, and the facet number.                */
+			dev_mmmul3(oa, pos[hf]->se, oa, hf); /* oa takes ast into sun coords           */
+		} else {
+			/* We're viewing the model from Earth: at the center of each POS pixel
+			 * we want cos(scattering angle), distance from the COM towards Earth,
+			 * and the facet number.  For bistatic situations (lightcurves) we also
+									 want cos(incidence angle) and the unit vector towards the source.     */
+			dev_mmmul3(oa, pos[hf]->oe, oa, hf); /* oa takes ast into obs coords */
+			if (pos[hf]->bistatic) {
+				usrc[hf].x = usrc[hf].y = 0.0; /* unit vector towards source */
+				usrc[hf].z = 1.0;
+				dev_cotrans9(&usrc[hf], pos[hf]->se, usrc[hf], -1);
+				dev_cotrans9(&usrc[hf], pos[hf]->oe, usrc[hf], 1); /* in observer coordinates */
+			}
+		}
+		outbndarr[hf] = 0;
+	}
+}
+
+__global__ void mposvis_facet_krnl(
+		struct par_t *dpar,
+		struct mod_t *dmod,
+		struct pos_t **pos,
 		float4 *ijminmax_overall,
 		float3 orbit_offs,
 		float3 *oa,
@@ -156,10 +202,12 @@ __global__ void mposvis_facet_krnl(
 		int comp,
 		int nfacets,
 		int frm,
-		int smooth,
+		int hf,
 		int *outbndarr) {
-	/* (nf * nframes)-threaded kernel.  This version eliminates as much double
-	 * math as possible */
+
+	/* nf-thread kernel.  It is streamed and GPU0 does even frames while GPU1
+	 * does odd frames. hf is the half-frame array index for those arrays that
+	 * needed to be split in half and assigned to the responsible gpu. */
 
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
 	int pxa, i, i1, i2, j, j1, j2, imin, imax, jmin, jmax;
@@ -170,34 +218,34 @@ __global__ void mposvis_facet_krnl(
 	__shared__ float kmpxl;
 
 	if (threadIdx.x == 0) {
-		pn = pos[frm]->n;
-		kmpxl = __double2float_rn(pos[frm]->km_per_pixel);
+		pn = pos[hf]->n;
+		kmpxl = __double2float_rn(pos[hf]->km_per_pixel);
 	}
-
+	__syncthreads();
 	if (f < nfacets) {
 		/* The following section transfers vertex coordinates from double[3]
 		 * storage to float3		 */
-		fidx.x = verts[0]->f[f].v[0];
-		fidx.y = verts[0]->f[f].v[1];
-		fidx.z = verts[0]->f[f].v[2];
-		tv0.x = __double2float_rn( verts[0]->v[fidx.x].x[0]);
-		tv0.y = __double2float_rn(verts[0]->v[fidx.x].x[1]);
-		tv0.z = __double2float_rn(verts[0]->v[fidx.x].x[2]);
-		tv1.x = __double2float_rn(verts[0]->v[fidx.y].x[0]);
-		tv1.y = __double2float_rn(verts[0]->v[fidx.y].x[1]);
-		tv1.z = __double2float_rn(verts[0]->v[fidx.y].x[2]);
-		tv2.x = __double2float_rn(verts[0]->v[fidx.z].x[0]);
-		tv2.y = __double2float_rn(verts[0]->v[fidx.z].x[1]);
-		tv2.z = __double2float_rn(verts[0]->v[fidx.z].x[2]);
+		fidx.x = dmod->shape.comp[0].real.f[f].v[0];
+		fidx.y = dmod->shape.comp[0].real.f[f].v[1];
+		fidx.z = dmod->shape.comp[0].real.f[f].v[2];
+		tv0.x = __double2float_rn(dmod->shape.comp[0].real.v[fidx.x].x[0]);
+		tv0.y = __double2float_rn(dmod->shape.comp[0].real.v[fidx.x].x[1]);
+		tv0.z = __double2float_rn(dmod->shape.comp[0].real.v[fidx.x].x[2]);
+		tv1.x = __double2float_rn(dmod->shape.comp[0].real.v[fidx.y].x[0]);
+		tv1.y = __double2float_rn(dmod->shape.comp[0].real.v[fidx.y].x[1]);
+		tv1.z = __double2float_rn(dmod->shape.comp[0].real.v[fidx.y].x[2]);
+		tv2.x = __double2float_rn(dmod->shape.comp[0].real.v[fidx.z].x[0]);
+		tv2.y = __double2float_rn(dmod->shape.comp[0].real.v[fidx.z].x[1]);
+		tv2.z = __double2float_rn(dmod->shape.comp[0].real.v[fidx.z].x[2]);
 		v0.x = v0.y = v0.z = v1.x = v1.y = v1.z = v2.x = v2.y = v2.z = 0.0;
 
 		/* Get the normal to this facet in body-fixed (asteroid) coordinates
 		 * and convert it to observer coordinates     */
-		n.x = verts[0]->f[f].n[0];
-		n.y = verts[0]->f[f].n[1];
-		n.z = verts[0]->f[f].n[2];
+		n.x = dmod->shape.comp[0].real.f[f].n[0];
+		n.y = dmod->shape.comp[0].real.f[f].n[1];
+		n.z = dmod->shape.comp[0].real.f[f].n[2];
 
-		dev_cotrans8(&n, oa, n, 1, frm);
+		dev_cotrans8(&n, oa, n, 1, hf);
 
 		/* Consider this facet further only if its normal points somewhat
 		 * towards the observer rather than away         */
@@ -207,9 +255,9 @@ __global__ void mposvis_facet_krnl(
 			 * (in observer coordinates) for this model at this frame's epoch
 			 * due to orbital motion, in case the model is half of a binary
 			 * system.  */
-			dev_cotrans8(&v0, oa, tv0, 1, frm);
-			dev_cotrans8(&v1, oa, tv1, 1, frm);
-			dev_cotrans8(&v2, oa, tv2, 1, frm);
+			dev_cotrans8(&v0, oa, tv0, 1, hf);
+			dev_cotrans8(&v1, oa, tv1, 1, hf);
+			dev_cotrans8(&v2, oa, tv2, 1, hf);
 
 			v0.x += orbit_offs.x;
 			v0.y += orbit_offs.x;
@@ -239,8 +287,7 @@ __global__ void mposvis_facet_krnl(
 
 			/*  Set the outbnd flag if the facet extends beyond the POS window  */
 			if ((imin < (-pn)) || (imax > pn) || (jmin < (-pn))	|| (jmax > pn)) {
-				mposvis_streams_outbnd = 1;
-				outbndarr[f] = 1;
+				outbndarr[hf] = 1;
 			}
 
 			/* Figure out if facet projects at least partly within POS window;
@@ -254,13 +301,13 @@ __global__ void mposvis_facet_krnl(
 				/* Facet is entirely outside the POS frame: just keep track of
 				 * changed POS region     */
 				dev_POSrect_gpu(pos, src, imin_dbl, imax_dbl, jmin_dbl, jmax_dbl,
-						ijminmax_overall, frm);
+						ijminmax_overall, hf);
 
 			} else {
 
-				dev_POSrect_gpu(pos, src, __double2float_rn(i1),
-						__double2float_rn(i2), __double2float_rn(j1),
-						__double2float_rn(j2), ijminmax_overall, frm);
+				dev_POSrect_gpu(pos,src, __int2float_rn(i1), __int2float_rn(i2),
+						__int2float_rn(j1),	__int2float_rn(j2),
+						ijminmax_overall, hf);
 
 				/* Facet is at least partly within POS frame: find all POS
 				 * pixels whose centers project onto this facet  */
@@ -309,12 +356,12 @@ __global__ void mposvis_facet_krnl(
 								 * matches the z we compared to*/
 
 								if (src)
-									old = atomicMaxf(&pos[frm]->zill_s[pxa], z);
+									old = atomicMaxf(&pos[hf]->zill_s[pxa], z);
 								else
-									old = atomicMaxf(&pos[frm]->z_s[pxa], z);
+									old = atomicMaxf(&pos[hf]->z_s[pxa], z);
 
-								if (old < z || pos[frm]->fill[i][j] < 0 ||
-										pos[frm]->f[i][j] < 0) {
+								if (old < z || pos[hf]->fill[i][j] < 0 ||
+										pos[hf]->f[i][j] < 0) {
 
 									/* Next line assigns distance of POS pixel
 									 * center from COM towards Earth; that is,
@@ -322,22 +369,22 @@ __global__ void mposvis_facet_krnl(
 									 * pos->zill                */
 									/* following line is a first time z calc
 									 * for this pixel  */
-									if ( (pos[frm]->fill[i][j] < 0) || (pos[frm]->f[i][j] < 0)){
-										if (src)	atomicExch(&pos[frm]->zill_s[pxa], z);
-										else 		atomicExch(&pos[frm]->z_s[pxa], z);
+									if ( (pos[hf]->fill[i][j] < 0) || (pos[hf]->f[i][j] < 0)){
+										if (src)	atomicExch(&pos[hf]->zill_s[pxa], z);
+										else 		atomicExch(&pos[hf]->z_s[pxa], z);
 									}
 
-									if (mpvst_smooth) {
+									if (dpar->pos_smooth) {
 										/* Assign temp. normal components as float3 */
-										tv0.x = __double2float_rn(verts[0]->v[fidx.x].n[0]);
-										tv0.y = __double2float_rn(verts[0]->v[fidx.x].n[1]);
-										tv0.z = __double2float_rn(verts[0]->v[fidx.x].n[2]);
-										tv1.x = __double2float_rn(verts[0]->v[fidx.y].n[0]);
-										tv1.y = __double2float_rn(verts[0]->v[fidx.y].n[1]);
-										tv1.z = __double2float_rn(verts[0]->v[fidx.y].n[2]);
-										tv2.x = __double2float_rn(verts[0]->v[fidx.z].n[0]);
-										tv2.y = __double2float_rn(verts[0]->v[fidx.z].n[1]);
-										tv2.z = __double2float_rn(verts[0]->v[fidx.z].n[2]);
+										tv0.x = __double2float_rn(dmod->shape.comp[0].real.v[fidx.x].n[0]);
+										tv0.y = __double2float_rn(dmod->shape.comp[0].real.v[fidx.x].n[1]);
+										tv0.z = __double2float_rn(dmod->shape.comp[0].real.v[fidx.x].n[2]);
+										tv1.x = __double2float_rn(dmod->shape.comp[0].real.v[fidx.y].n[0]);
+										tv1.y = __double2float_rn(dmod->shape.comp[0].real.v[fidx.y].n[1]);
+										tv1.z = __double2float_rn(dmod->shape.comp[0].real.v[fidx.y].n[2]);
+										tv2.x = __double2float_rn(dmod->shape.comp[0].real.v[fidx.z].n[0]);
+										tv2.y = __double2float_rn(dmod->shape.comp[0].real.v[fidx.z].n[1]);
+										tv2.z = __double2float_rn(dmod->shape.comp[0].real.v[fidx.z].n[2]);
 
 										/* Get pvs_smoothed version of facet unit
 										 * normal: Take the linear combination
@@ -350,7 +397,7 @@ __global__ void mposvis_facet_krnl(
 										n.y = tv0.y + s * (tv1.y - tv0.y) + t * (tv2.y - tv1.y);
 										n.z = tv0.z + s * (tv1.z - tv0.z) + t * (tv2.z - tv1.z);
 
-										dev_cotrans8(&n, oa, n, 1, frm);
+										dev_cotrans8(&n, oa, n, 1, hf);
 										dev_normalize2(n);
 									}
 
@@ -361,27 +408,27 @@ __global__ void mposvis_facet_krnl(
 									 * pos->cosi is also changed.                 */
 									if (n.z > 0.0) {
 										if (src)
-											atomicExch(&pos[frm]->cosill_s[pxa], n.z);
+											atomicExch(&pos[hf]->cosill_s[pxa], n.z);
 										else
-											atomicExch(&pos[frm]->cose_s[pxa], n.z);
-										if ((!src) && (pos[frm]->bistatic)) {
-											float temp = dev_dot4(n,usrc[frm]);
-											atomicExch(&pos[frm]->cosi_s[pxa], temp);
-											if (pos[frm]->cosi_s[pxa] <= 0.0)
-												pos[frm]->cose_s[pxa] = 0.0;
+											atomicExch(&pos[hf]->cose_s[pxa], n.z);
+										if ((!src) && (pos[hf]->bistatic)) {
+											float temp = dev_dot4(n,usrc[hf]);
+											atomicExch(&pos[hf]->cosi_s[pxa], temp);
+											if (pos[hf]->cosi_s[pxa] <= 0.0)
+												pos[hf]->cose_s[pxa] = 0.0;
 										}
 									}
 
 									/* Next lines change pos->body/bodyill,
 									 * pos->comp/compill, pos->f/fill          */
 									if (src) {
-										pos[frm]->bodyill[i][j] = body;
-										pos[frm]->compill[i][j] = comp;
-										pos[frm]->fill[i][j] = f;
+										pos[hf]->bodyill[i][j] = body;
+										pos[hf]->compill[i][j] = comp;
+										pos[hf]->fill[i][j] = f;
 									} else {
-										pos[frm]->body[i][j] = body;
-										pos[frm]->comp[i][j] = comp;
-										pos[frm]->f[i][j] = f;
+										pos[hf]->body[i][j] = body;
+										pos[hf]->comp[i][j] = comp;
+										pos[hf]->f[i][j] = f;
 									}
 
 								} /* end if (no other facet yet blocks this facet from view) */
@@ -394,20 +441,44 @@ __global__ void mposvis_facet_krnl(
 	} /* end if (f < nf) */
 }
 __global__ void mposvis_outbnd_krnl(struct pos_t **pos, int posn,
-		int *outbndarr, float4 *ijminmax_overall, int f) {
-	/* Single-threaded, streamed kernel */
+		int *outbndarr, float4 *ijminmax_overall, int f, int hf) {
+	/* Single-threaded, streamed, multi-GPU kernel. Odd frames go to GPU1,
+	 * even frames go to GPU0 */
 	double xfactor, yfactor;
 	if (threadIdx.x == 0) {
-		if (outbndarr[f]) {
+		if (outbndarr[hf]) {
 			/* ijminmax_overall.w = imin_overall
 			 * ijminmax_overall.x = imax_overall
 			 * ijminmax_overall.y = jmin_overall
 			 * ijminmax_overall.z = jmax_overall	 */
-			xfactor = (MAX( ijminmax_overall[f].x,  posn) -
-					MIN( ijminmax_overall[f].w, -posn) + 1) / (2*posn+1);
-			yfactor = (MAX( ijminmax_overall[f].z,  posn) -
-					MIN( ijminmax_overall[f].y, -posn) + 1) / (2*posn+1);
-			pos[f]->posbnd_logfactor = log(xfactor*yfactor);
+			xfactor = (MAX( ijminmax_overall[hf].x,  posn) -
+					MIN( ijminmax_overall[hf].w, -posn) + 1) / (2*posn+1);
+			yfactor = (MAX( ijminmax_overall[hf].z,  posn) -
+					MIN( ijminmax_overall[hf].y, -posn) + 1) / (2*posn+1);
+			pos[hf]->posbnd_logfactor = log(xfactor*yfactor);
+		}
+	}
+}
+
+__global__ void posvis_mgpu_outbnd_krnl(struct pos_t **pos, int *outbndarr,
+		float4 *ijminmax_overall, int size) {
+	/* nfrm_half0/nfrm_half1-threaded multi-GPU kernel. Odd frames go to GPU1,
+	 * even frames go to GPU0 */
+	int hf = blockIdx.x * blockDim.x + threadIdx.x;
+	int posn;
+	double xfactor, yfactor;
+	if (hf < size) {
+		posn = pos[hf]->n;
+		if (outbndarr[hf]) {
+			/* ijminmax_overall.w = imin_overall
+			 * ijminmax_overall.x = imax_overall
+			 * ijminmax_overall.y = jmin_overall
+			 * ijminmax_overall.z = jmax_overall	 */
+			xfactor = (MAX( ijminmax_overall[hf].x,  posn) -
+					MIN( ijminmax_overall[hf].w, -posn) + 1) / (2*posn+1);
+			yfactor = (MAX( ijminmax_overall[hf].z,  posn) -
+					MIN( ijminmax_overall[hf].y, -posn) + 1) / (2*posn+1);
+			pos[hf]->posbnd_logfactor = log(xfactor*yfactor);
 		}
 	}
 }
@@ -418,6 +489,10 @@ __global__ void mposvis_outbnd_krnl(struct pos_t **pos, int posn,
  * 	- posvis_mgpu alternates gpus as it goes through frames of one set.
  * 	- this is done with cudaSetDevice() to set the desired gpu before the
  * 	  intended instruction.
+ * 	- each gpu can perform write operations only on the constructs allocated
+ * 	  on that device.
+ * 	- Consequently, all arrays must be be split in half and allocated to the
+ * 	  GPU device responsible for it.
  * 	- additionally, streams are associated with the gpu they were created on.
  * 	  Therefore, the streams used must go with the gpu that is current.
  */
@@ -427,14 +502,13 @@ __host__ int posvis_mgpu(
 		struct dat_t *ddat,
 		struct pos_t **pos0,
 		struct pos_t **pos1,
-		struct vertices_t **verts,
 		float3 orbit_offset,
-		int *posn0,
-		int *posn1,
+		int *hposn0,
+		int *hposn1,
 		int *outbndarr0,
 		int *outbndarr1,
 		int set,
-		int nframes,
+		int nfrm_alloc,
 		int src,
 		int nf,
 		int body,
@@ -443,33 +517,42 @@ __host__ int posvis_mgpu(
 		cudaStream_t *gpu0_stream,	/* streams owned by gpu0    	*/
 		cudaStream_t *gpu1_stream)	/* streams owned by gpu1		*/
 {
-	int outbnd, smooth, start, end, frames_alloc;
-	dim3 BLK,THD;
+	int outbnd=0, start, end;
+	dim3 BLK,BLK_half0, BLK_half1, THD;
 	cudaEvent_t start01, stop01;
 	float milliseconds;
-	float4 *ijminmax_overall;
-	float3 *oa, *usrc;
+	float4 *ijminmax_overall0, *ijminmax_overall1;
+	float3 *oa0, *oa1, *usrc0, *usrc1;
+
+	/* Fix the frame offset if either of the two datasets is a lightcurve set */
+	if (type == LGHTCRV)
+		start = 1;	/* fixes the lightcurve offsets */
+	else start = 0;
+
+	int nfrm_half0 = nfrm_alloc/2 + nfrm_alloc%2;
+	int nfrm_half1 = nfrm_alloc/2;
+	int oasize0 = nfrm_half0 * 3;
+	int oasize1 = nfrm_half1 * 3;
+	int hf = 0;	/* Half-frame counter for the split arrays */
+	int houtbnd0[nfrm_half0], houtbnd1[nfrm_half1];
 
 	/* Launch parameters for the facet_streams kernel */
 	THD.x = maxThreadsPerBlock;
 	BLK.x = floor((THD.x - 1 + nf) / THD.x);
+	BLK_half0.x = floor((THD.x - 1 + nfrm_half0)/THD.x);
+	BLK_half1.x = floor((THD.x - 1 + nfrm_half1)/THD.x);
 
-	/* Fix the frame offset if either of the two datasets is a lightcurve set */
-	if (type == LGHTCRV) {
-		start = 1;	/* fixes the lightcurve offsets */
-		end = nframes + 1;
-		frames_alloc = nframes + 1;
-	} else {
-		start = 0;
-		end = nframes;
-		frames_alloc = nframes;	}
+	/* GPU 0 allocation */
+	gpuErrchk(cudaSetDevice(GPU0));	/* Make sure we're really on GPU0 */
+	gpuErrchk(cudaMalloc((void**)&ijminmax_overall0, sizeof(float4) * nfrm_half0));
+	gpuErrchk(cudaMalloc((void**)&oa0, sizeof(float3) * oasize0));
+	gpuErrchk(cudaMalloc((void**)&usrc0, sizeof(float3) * nfrm_half0));
 
-	int oasize = frames_alloc*3;
-
-	/* Allocate temporary arrays/structs */
-	gpuErrchk(cudaMalloc((void**)&ijminmax_overall, sizeof(float4) * frames_alloc));
-	gpuErrchk(cudaMalloc((void**)&oa, sizeof(float3) * oasize));
-	gpuErrchk(cudaMalloc((void**)&usrc, sizeof(float3) * frames_alloc));
+	/* GPU 1 allocation, then switch back to GPU0 */
+	gpuErrchk(cudaSetDevice(GPU1));
+	gpuErrchk(cudaMalloc((void**)&ijminmax_overall1, sizeof(float4) * nfrm_half1));
+	gpuErrchk(cudaMalloc((void**)&oa1, sizeof(float3) * oasize1));
+	gpuErrchk(cudaMalloc((void**)&usrc1, sizeof(float3) * nfrm_half1));
 
 	if (TIMING) {
 		/* Create the timer events */
@@ -478,201 +561,126 @@ __host__ int posvis_mgpu(
 		cudaEventRecord(start01);
 	}
 
-	for (int f=start; f<end; f++) {
+	gpuErrchk(cudaSetDevice(GPU0));
+	posvis_mgpu_init_krnl<<<BLK_half0,THD,0,gpu0_stream[0]>>>(dpar, pos0,
+			ijminmax_overall0, oa0, usrc0, outbndarr0, 0, nfrm_half0, 0, src);
+	gpuErrchk(cudaSetDevice(GPU1));
+	posvis_mgpu_init_krnl<<<BLK_half1,THD,0,gpu1_stream[0]>>>(dpar, pos1,
+			ijminmax_overall1, oa1, usrc1, outbndarr1, 0, nfrm_half1, 1, src);
+	checkErrorAfterKernelLaunch("posvis_mgpu_init_krnl");
 
-		gpuErrchk(cudaSetDevice(GPU0));
-		/* Initialize via single-thread kernel first */
-		mposvis_init_krnl<<<1,1,0,gpu0_stream[f-start]>>>(dpar,
-				pos, ijminmax_overall, oa, usrc, outbndarr, comp, f, start,
-				end, src);
-//		checkErrorAfterKernelLaunch("mposvis_init_krnl on device 0");
+	hf = 0;
+	gpuErrchk(cudaSetDevice(GPU0));
+	for (int f=start; f<nfrm_alloc; f++) {
 		/* Now the main facet kernel */
-		mposvis_facet_krnl<<<BLK,THD, 0, gpu0_stream[f-start]>>>(pos, verts,
-				ijminmax_overall, orbit_offset, oa, usrc,	src, body, comp,
-				nf, f, smooth, outbndarr);
-
-		/* Take care of any posbnd flags */
-		mposvis_outbnd_krnl<<<1,1,0,gpu0_stream[f-start]>>>(pos, posn[f],
-				outbndarr, ijminmax_overall, f);
-
-		/* Switch devices */
-		gpuErrchk(cudaSetDevice(GPU1));
-
-		/* Go to next frame and check if we're still in the set */
-		f++;
-		if (f==end)	break;
-
-
-		/* Initialize via single-thread kernel first */
-		mposvis_init_krnl<<<1,1,0,gpu1_stream[f-start]>>>(dpar,
-				pos, ijminmax_overall, oa, usrc, outbndarr, comp, f, start,
-				end, src);
-
-		/* Now the main facet kernel */
-		mposvis_facet_krnl<<<BLK,THD, 0, gpu1_stream[f-start]>>>(pos, verts,
-				ijminmax_overall, orbit_offset, oa, usrc,	src, body, comp,
-				nf, f, smooth, outbndarr);
-
-		/* Take care of any posbnd flags */
-		mposvis_outbnd_krnl<<<1,1,0,gpu1_stream[f-start]>>>(pos, posn[f],
-				outbndarr, ijminmax_overall, f);
+		mposvis_facet_krnl<<<BLK,THD, 0, gpu0_stream[hf]>>>(dpar, dmod, pos0,
+				ijminmax_overall0, orbit_offset, oa0, usrc0, src, body, comp,
+				nf, f, hf, outbndarr0);
+		f++;	hf++;
+		if (f>=nfrm_alloc) break;
 	}
+
+	hf = 0;
+	gpuErrchk(cudaSetDevice(GPU1));
+	for (int f=1+start; f<nfrm_alloc; f++) {
+		/* Now the main facet kernel */
+		mposvis_facet_krnl<<<BLK,THD, 0, gpu1_stream[hf]>>>(dpar, dmod, pos1,
+				ijminmax_overall1, orbit_offset, oa1, usrc1, src, body, comp,
+				nf, f, hf, outbndarr1);
+
+		f++;	hf++;
+		if (f>=nfrm_alloc)	break;
+	}
+
+	gpuErrchk(cudaSetDevice(GPU0));
+	posvis_mgpu_outbnd_krnl<<<BLK_half0,THD,0,gpu0_stream[0]>>>(pos0,
+			outbndarr0, ijminmax_overall0, nfrm_half0);
+	gpuErrchk(cudaSetDevice(GPU1));
+	posvis_mgpu_outbnd_krnl<<<BLK_half1,THD,0,gpu1_stream[0]>>>(pos1,
+			outbndarr1, ijminmax_overall1, nfrm_half1);
+	checkErrorAfterKernelLaunch("posvis_mgpu_outbnd_krnl");
+
 
 	if (TIMING) {
 		cudaEventRecord(stop01);
 		cudaEventSynchronize(stop01);
 		milliseconds = 0;
 		cudaEventElapsedTime(&milliseconds, start01, stop01);
-		printf("%i facets in posvis_cuda_2 in %3.3f ms with %i frames.\n", nf, milliseconds, nframes);
+		printf("%i facets in posvis_cuda_2 in %3.3f ms with %i frames.\n",
+				nf, milliseconds, nfrm_alloc);
 	}
-
-	gpuErrchk(cudaMemcpyFromSymbol(&outbnd, mposvis_streams_outbnd, sizeof(outbnd), 0,
+	/* Now asynchronously copy the outbnd arrays from each gpu back to host
+	 * arrays.  If any of the frames were out of bounds, we'll return 1.   */
+//	printf("nrm_half0: %i;     nfrmf_half1: %i\n", nfrm_half0, nfrm_half1);
+//	fflush( stdout);
+	gpuErrchk(cudaSetDevice(GPU0));
+	gpuErrchk(cudaMemcpy(houtbnd0, outbndarr0, sizeof(int)*nfrm_half0,
+			cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaSetDevice(GPU1));
+	gpuErrchk(cudaMemcpy(houtbnd1, outbndarr1, sizeof(int)*nfrm_half1,
 			cudaMemcpyDeviceToHost));
 
-	/* Free temp arrays, destroy streams and timers, as applicable */
-	cudaFree(ijminmax_overall);
-	cudaFree(oa);
-	cudaFree(usrc);
+	for (int f=0; f<nfrm_half1; f++) {
+		if (houtbnd0[f] || houtbnd1[f])
+			outbnd = 1;
+	}
+	/* Check last frame in houtbnd0 if nframes is uneven */
+	if (houtbnd0[nfrm_half0-1])
+		outbnd = 1;
 
+
+//	/* Debug start	 */
+//	cudaSetDevice(GPU0);
+//	/* Frame 0 */
+//	hf = 0;
+//	int npxls = (2*hposn0[hf]+1)*(2*hposn0[hf]+1);
+//	dbg_print_pos_arrays_full(pos0, hf, (2*hf), npxls,  hposn0[hf]);
+//	/* Frame 2 */
+//	hf = 1;
+//	npxls = (2*hposn0[hf]+1)*(2*hposn0[hf]+1);
+//	dbg_print_pos_arrays_full(pos0, hf, (2*hf), npxls, hposn0[hf]);
+////	/* Frame 4 */
+////	hf = 2;
+////	npxls = (2*hposn0[hf]+1)*(2*hposn0[hf]+1);
+////	dbg_print_pos_arrays_full(pos0, hf, npxls, hposn0[hf]);
+//
+//	/* Frame 1 */
+//	hf = 0;
+//	npxls = (2*hposn1[hf]+1)*(2*hposn1[hf]+1);
+//	cudaSetDevice(GPU1);
+//	dbg_print_pos_arrays_full(pos1, hf, (2*hf+1), npxls, hposn1[hf]);
+//	/* Frame 3 */
+//	hf = 1;
+//	npxls = (2*hposn1[hf]+1)*(2*hposn1[hf]+1);
+//	cudaSetDevice(GPU1);
+//	dbg_print_pos_arrays_full(pos1, hf, (2*hf+1), npxls, hposn1[hf]);
+////	/* Frame 5 */
+////	hf = 2;
+////	npxls = (2*hposn1[hf]+1)*(2*hposn1[hf]+1);
+////	cudaSetDevice(GPU1);
+////	dbg_print_pos_arrays_full(pos1, hf, npxls, hposn1[hf]);
+//
+//	/* Debug end */
+
+
+
+	/* Free GPU0 memory */
+	gpuErrchk(cudaSetDevice(GPU0));
+	cudaFree(ijminmax_overall0);
+	cudaFree(oa0);
+	cudaFree(usrc0);
+
+	/* Free GPU1 memory */
+	gpuErrchk(cudaSetDevice(GPU1));
+	cudaFree(ijminmax_overall1);
+	cudaFree(oa1);
+	cudaFree(usrc1);
+
+	/* Back to GPU0 and destroy timing events if they were used. */
+	gpuErrchk(cudaSetDevice(GPU0));
 	if (TIMING) {
 		cudaEventDestroy(start01);
-		cudaEventDestroy(stop01);
-	}
+		cudaEventDestroy(stop01);	}
 
-	/* Make sure the original GPU is set back to current device */
-	gpuErrchk(cudaSetDevice(GPU0));
 	return outbnd;
 }
-
-/* The posvis_mgpu function performs the same tasks as posvis_gpu. The principal
- * difference is this:
- *
- * 	- posvis_gpu operates on one dataset at a time and streams the frame
- * 	  calculation kernels,
- * 	- posvis_mgpu operates on two datasets at a time by assigning one dataset
- * 	  to gpu0 and the other dataset to gpu1,
- * 	- posvis_mgpu must calculate parameters needed for the facet kernel for
- * 	  two sets at a time,
- * 	- gpu is switched with cudaSetDevice(),
- * 	- Streams belong to the gpu that was active when they were created. So we
- * 	  have to use two sets of streams as input arguments.
- */
-//__host__ int posvis_mgpu(
-//		struct par_t *dpar,
-//		struct mod_t *dmod,
-//		struct dat_t *ddat,
-//		struct pos_t **pos0,		/* all pos frames for gpu0 dataset */
-//		struct pos_t **pos1,		/* all pos frames for gpu1 dataset */
-//		struct vertices_t **verts,
-//		float3 orbit_offset,
-//		int *posn,
-//		int src,
-//		int nf,
-//		int body,
-//		int comp,
-//		int *outbndarr0,			/* for dataset on gpu0 			*/
-//		int *outbndarr1,			/* for dataset on gpu1 			*/
-//		int set0,					/* dataset for gpu0    			*/
-//		int set1,					/* dataset for gpu1	   			*/
-//		int nframes0,				/* frames in dataset for gpu0 	*/
-//		int nframes1,				/* frames in dataset for gpu1 	*/
-//		unsigned char type0,		/* type of dataset for gpu0 	*/
-//		unsigned char type1,		/* type of dataset for gpu1 	*/
-//		cudaStream_t *gpu0_stream,	/* streams owned by gpu0    	*/
-//		cudaStream_t *gpu1_stream)	/* streams owned by gpu1		*/
-//{
-//
-//
-//	int outbnd0, outbnd1, smooth, start0, start1, end0, end1, frames_alloc0,
-//		frames_alloc1;
-//	dim3 BLK,THD;
-//	cudaEvent_t start01, stop01;
-//	float milliseconds;
-//	float4 *ijminmax_overall0, *ijminmax_overall1;
-//	float3 *oa0, *oa1, *usrc0, *usrc1;
-//
-//	/* Launch parameters for the facet_streams kernel */
-//	THD.x = maxThreadsPerBlock;
-//	BLK.x = floor((THD.x - 1 + nf) / THD.x);
-//
-//	/* Fix the frame offset if either of the two datasets is a lightcurve set */
-//	if (type0 == LGHTCRV) {
-//		start0 = 1;	/* fixes the lightcurve offsets */
-//		end0 = nframes0 + 1;
-//		frames_alloc0 = nframes0 + 1;
-//	} else {
-//		start0 = 0;
-//		end0 = nframes0;
-//		frames_alloc0 = nframes0;	}
-//	if (type1 == LGHTCRV) {
-//		start1 = 1; /* fixes lightcurve offset in gpu1 dataset */
-//		end1 = nframes1 + 1;
-//		frames_alloc1 = nframes1 + 1;
-//	} else {
-//		start1= 0;
-//		end1 = nframes1;
-//		frames_alloc1 = nframes1;	}
-//
-//	int oasize0 = frames_alloc0*3;
-//	int oasize1 = frames_alloc1*3;
-//
-//
-//	/* Allocate temporary arrays/structs */
-//	gpuErrchk(cudaMalloc((void**)&ijminmax_overall0, sizeof(float4) * frames_alloc0));
-//	gpuErrchk(cudaMalloc((void**)&ijminmax_overall1, sizeof(float4) * frames_alloc1));
-//	gpuErrchk(cudaMalloc((void**)&oa0, sizeof(float3) * oasize0));
-//	gpuErrchk(cudaMalloc((void**)&oa1, sizeof(float3) * oasize1));
-//	gpuErrchk(cudaMalloc((void**)&usrc0, sizeof(float3) * frames_alloc0));
-//	gpuErrchk(cudaMalloc((void**)&usrc1, sizeof(float3) * frames_alloc1));
-//
-//	if (TIMING) {
-//		/* Create the timer events */
-//		cudaEventCreate(&start01);
-//		cudaEventCreate(&stop01);
-//		cudaEventRecord(start01);
-//	}
-//
-//	for (int f=start; f<end; f++) {
-//
-//		/* Initialize via single-thread kernel first */
-//		posvis_init_krnl<<<1,1,0,posvis_stream[f-start]>>>(dpar,
-//				pos, ijminmax_overall, oa, usrc, outbndarr, comp, f, start,
-//				end, src);
-//
-//		/* Now the main facet kernel */
-//		posvis_facet_krnl<<<BLK,THD, 0, posvis_stream[f-start]>>>(pos, verts,
-//				ijminmax_overall, orbit_offset, oa, usrc,	src, body, comp,
-//				nf, f, smooth, outbndarr);
-//
-//		/* Take care of any posbnd flags */
-//		posvis_outbnd_krnl<<<1,1,0,posvis_stream[f-start]>>>(pos, posn[f],
-//				outbndarr, ijminmax_overall, f);
-//	}
-//
-//	if (TIMING) {
-//		cudaEventRecord(stop01);
-//		cudaEventSynchronize(stop01);
-//		milliseconds = 0;
-//		cudaEventElapsedTime(&milliseconds, start01, stop01);
-//		printf("%i facets in posvis_cuda_2 in %3.3f ms with %i frames.\n", nf, milliseconds, nframes);
-//	}
-//	checkErrorAfterKernelLaunch("The three posvis_cuda_streams2 kernels");
-//	gpuErrchk(cudaMemcpyFromSymbol(&outbnd, mposvis_streams_outbnd, sizeof(outbnd), 0,
-//			cudaMemcpyDeviceToHost));
-//
-//	/* Free temp arrays, destroy streams and timers, as applicable */
-//
-//	cudaFree(ijminmax_overall0);
-//	cudaFree(ijminmax_overall1);
-//	cudaFree(oa0);
-//	cudaFree(oa1);
-//	cudaFree(usrc0);
-//	cudaFree(usrc1);
-//
-//
-//	if (TIMING) {
-//		cudaEventDestroy(start01);
-//		cudaEventDestroy(stop01);
-//	}
-//	return outbnd;
-//}

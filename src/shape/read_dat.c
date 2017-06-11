@@ -239,6 +239,8 @@ Modified 2003 April 15 by CM:
 
 int read_deldop( FILE *fp, struct par_t *par, struct deldop_t *deldop,
 		int nradlaws, int s, double *chi2_variance);
+int read_deldop_mgpu( FILE *fp, struct par_t *par, struct deldop_t *deldop,
+		int nradlaws, int s, double *chi2_variance);
 int read_doppler( FILE *fp, struct par_t *par, struct doppler_t *doppler,
 		int nradlaws, int s, double *chi2_variance);
 void set_up_pos( struct par_t *par, struct dat_t *dat);
@@ -337,8 +339,12 @@ int read_dat( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 		}
 		else if (!strcmp( str, "delay-doppler")) {
 			dat->set[s].type = DELAY;
-			npar += read_deldop( fp, par, &dat->set[s].desc.deldop, mod->photo.nradlaws,
-					s, &chi2_variance);
+			if (MGPU)
+				npar += read_deldop_mgpu( fp, par, &dat->set[s].desc.deldop,
+						mod->photo.nradlaws, s, &chi2_variance);
+			else
+				npar += read_deldop( fp, par, &dat->set[s].desc.deldop,
+						mod->photo.nradlaws, s, &chi2_variance);
 			dat->dof_deldop += dat->set[s].desc.deldop.dof;
 			dat->sum_deldop_zmax_weights +=
 					dat->set[s].desc.deldop.sum_deldop_zmax_weights;
@@ -785,6 +791,417 @@ int read_deldop( FILE *fp, struct par_t *par, struct deldop_t *deldop,
 			free_matrix( pixweight, 1, deldop->ndel, 1, deldop->ndop);
 
 		/*  Loop through all views contributing to this (smeared) frame*/
+
+		for (k=0; k<deldop->nviews; k++) {
+
+			/*  Compute the epoch of this view, uncorrected for light-travel time*/
+
+			deldop->frame[i].view[k].t = deldop->frame[i].t0
+					+ (k - deldop->v0)*deldop->view_interval;
+
+			/*  Use this dataset's ephemeris (and linear interpolation) to get the target's
+          distance (AU) at this view's epoch.  Also compute frame[i].view[k].oe, the
+          transformation matrix from ecliptic to observer coordinates at that epoch,
+          and frame[i].view[k].orbspin, the plane-of-sky-motion contribution to the
+          apparent spin vector at that epoch.  (orbspin is in ecliptic coordinates.)
+
+          Note that the final "0" in the call to ephem2mat signifies monostatic
+          observations; this means that arguments 2 and 5, which would pertain to
+          the Sun's ephemeris, are unused here, and arguments 7 and 8 (solar phase
+          angle and azimuth angle) are returned as 0.*/
+
+			dist = ephem2mat( deldop->astephem, deldop->astephem,
+					deldop->frame[i].view[k].t, deldop->frame[i].view[k].oe, se,
+					deldop->frame[i].view[k].orbspin, &solar_phase, &solar_azimuth, 0);
+
+			/*  If the perform_ltc parameter is turned on, use the distance just
+          obtained to subtract the one-way light-travel time from this view's
+          epoch; then go back to the ephemeris and recompute frame[i].view[k].oe
+          and frame[i].view[k].orbspin for the corrected epoch. */
+			if (par->perform_ltc) {
+				deldop->frame[i].view[k].t -= DAYSPERAU*dist;
+				ephem2mat( deldop->astephem, deldop->astephem,
+						deldop->frame[i].view[k].t, deldop->frame[i].view[k].oe, se,
+						deldop->frame[i].view[k].orbspin, &solar_phase, &solar_azimuth, 0);
+			}
+
+		}
+
+		/*  Initialize quantities related to spin impulses*/
+
+		deldop->frame[i].n_integrate = -999;
+		for (n=0; n<MAXIMP+2; n++) {
+			deldop->frame[i].t_integrate[n] = -HUGENUMBER;
+			for (j=0; j<=2; j++)
+				deldop->frame[i].impulse[n][j] = 0.0;
+		}
+
+		printf("#     %s\n", fullname);
+		fflush(stdout);
+	}
+	return npar;
+}
+
+int read_deldop_mgpu( FILE *fp, struct par_t *par, struct deldop_t *deldop,
+		int nradlaws, int s, double *chi2_variance)
+{
+	int i, j, npar=0, k, n_equals, swap_bytes, is_binary, is_fits, is_rdf,
+			bufferlength=128, idel_use[2], idop_use[2], jskip, kskip,
+			datafile_is_gzipped, n, nmaskvals;
+	char fullname[160], cmd[255], codestring[10], smearingstring[7], buffer[200],
+	pixweightfile[MAXLEN], datafile_temp[MAXLEN], datafile_gzipped_temp[MAXLEN];
+	FILE *fin, *wp=0;
+	double lookfact, se[3][3], dist, solar_phase, solar_azimuth, dof,
+	**pixweight=NULL;
+
+	/*  Initialize degrees of freedom, variance of chi2 estimate, and weight sums*/
+
+	deldop->dof = 0.0;
+	*chi2_variance = 0.0;
+	deldop->sum_deldop_zmax_weights = 0.0;
+	deldop->sum_rad_xsec_weights = 0.0;
+	deldop->sum_cos_subradarlat_weights = 0.0;
+
+	/*  Read which radar scattering law to use for this dataset*/
+
+	deldop->iradlaw = getint( fp);
+	if (deldop->iradlaw < 0 || deldop->iradlaw >= nradlaws) {
+		printf("ERROR in set %d: must have 0 <= radar scattering law <= %d\n",
+				s, nradlaws-1);
+		bailout("read_deldop in read_dat.c\n");
+	}
+
+	/*  Read the asteroid ephemeris*/
+
+	deldop->astephem.n = getint( fp);  //# of points in ephemeris
+	/*==BLK=====================================================================*/
+	cudaCalloc1((void**)&deldop->astephem.pnt, sizeof(struct ephpnt_t),
+				deldop->astephem.n);
+	/*=======================================================================*/
+
+	for (i=0; i<deldop->astephem.n; i++) {
+		rdcal2jd( fp, &deldop->astephem.pnt[i].t);
+		deldop->astephem.pnt[i].ra = getdouble( fp)*D2R;
+		deldop->astephem.pnt[i].dec = getdouble( fp)*D2R;
+		deldop->astephem.pnt[i].dist = getdouble( fp);
+	}
+
+	/*	Read the transmitter frequency (MHz)*/
+
+	deldop->Ftx = getdouble( fp);
+
+	/*	Read delay information for the unvignetted images.*/
+
+	/*    Note that del_per_pixel is NOT necessarily the baud length
+      for multiple-spb data: it is equal to the delay height of
+      each pixel (or image row), which is baud / (spb/stride). */
+
+	deldop->ndel = getint( fp);  			//# delay bins
+	deldop->del_per_pixel = getdouble( fp); //pixel height (usec)
+	deldop->spb = getint( fp);  			//# samples per baud in original data
+	deldop->stride = getint( fp); 			// image rows are stride spb's apart
+	if (deldop->spb % deldop->stride != 0)
+		bailout("read_deldop in read_dat.c: stride must divide evenly into spb\n");
+	gettstr( fp, codestring);    				//type of code+reduction used
+	if (!strcmp(codestring, "short"))
+		deldop->codemethod = SHORT;
+	else if (!strcmp(codestring, "long1") || !strcmp(codestring, "long_orig"))
+		deldop->codemethod = LONG_ORIG;
+	else if (!strcmp(codestring, "long2") || !strcmp(codestring, "long_mod"))
+		deldop->codemethod = LONG_MOD;
+	else
+		bailout("read_deldop in read_dat.c: can't do that code method yet\n");
+
+	/*  Read Doppler information for the unvignetted images*/
+	deldop->ndop = getint( fp); 			// # doppler bins
+	deldop->dop_per_pixel = getdouble( fp); // pixel width (Hz)
+	deldop->dopcom = getdouble( fp);  		// ephemeris COM doppler bin (1-based)
+	deldop->dopDC = getdouble( fp);  		// Doppler DC bin (1-based)
+	deldop->dopfftlen = getint( fp);  		// Doppler fft length
+
+	/*  Compute the reference epoch (JD) for the delay correction polynomial*/
+
+	rdcal2jd( fp, &deldop->delcor.t0);
+
+	/*  Read the delay correction polynomial itself:
+      coefficients have units of usec, usec/day, usec/day^2, etc.*/
+
+	deldop->delcor.n = getint( fp);
+	/*=======================================================================*/
+	cudaCalloc1((void**)&deldop->delcor.a, sizeof(struct param_t),
+			deldop->delcor.n + 1);
+	/*=======================================================================*/
+
+	n_equals = 0;
+	for (i=0; i<=deldop->delcor.n; i++) {
+		npar += readparam( fp, &deldop->delcor.a[i]);
+		if (deldop->delcor.a[i].state == '=')
+			n_equals++;
+	}
+	if (n_equals > 0 && n_equals <= deldop->delcor.n)
+		bailout("can't use \"=\" state for just part of a delay polynomial\n");
+	deldop->delcor.delcor0_save = deldop->delcor.a[0].val;
+
+	/*  Read the Doppler scaling factor*/
+
+	npar += readparam( fp, &deldop->dopscale);
+	deldop->dopscale_save = deldop->dopscale.val;
+
+	/*  Read smearing information*/
+	deldop->nviews = getint( fp);  			// # views per frame
+	deldop->view_interval = getdouble( fp); // view interval (s)
+	deldop->view_interval /= 86400;  		// convert to days
+	gettstr( fp, smearingstring);   			// smearing mode
+	if (!strcmp(smearingstring, "center")) {
+		deldop->smearing_mode = SMEAR_CENTER;
+		deldop->v0 = deldop->nviews / 2;
+	} else if (!strcmp(smearingstring, "first")) {
+		deldop->smearing_mode = SMEAR_FIRST;
+		deldop->v0 = 0;
+	} else {
+		bailout("read_deldop in read_dat.c: can't do that smearing mode yet\n");
+	}
+
+	/*  Get the data directory and the number of frames in the dataset*/
+	gettstr( fp, deldop->dir);
+	deldop->nframes = getint( fp);
+	int nfrm_half0 = deldop->nframes/2 + deldop->nframes%2;
+	int nfrm_half1 = deldop->nframes/2;
+	/*=======================================================================*/
+	cudaCalloc1((void**)&deldop->frame, sizeof(struct deldopfrm_t),
+			deldop->nframes);
+	/*=======================================================================*/
+
+//	/* Start splitting things by GPU0 (even frames) and GPU1 (odd frames) */
+//	gpuErrchk(cudaSetDevice(GPU0));
+	for (i=0; i<deldop->nframes; i++) {
+		/*===================================================================*/
+		cudaCalloc1((void**)&deldop->frame[i].view, sizeof(struct
+				deldopview_t),deldop->nviews);
+//		i++;	if(i==deldop->nframes)	break;
+//		gpuErrchk(cudaSetDevice(GPU1));
+//		gpuErrchk(cudaMalloc((void**)&deldop->frame[i].view, sizeof(struct
+//				deldopview_t)*nfrm_half1));
+		/*===================================================================*/
+	}
+
+	/*  Loop through the frames*/
+	int hf = 0;
+	for (i=0; i<deldop->nframes; i++) {
+		gettstr( fp, deldop->frame[i].name); // name of data file
+		sprintf( fullname, "%s/%s", deldop->dir, deldop->frame[i].name);
+
+		/* Read this frame's mid-receive epoch and convert to a Julian date.*/
+		rdcal2jd( fp, &deldop->frame[i].t0);
+
+		/* Read sdev, calibration factor, number of looks, and ephemeris
+		 * COM delay bin (1-based) for this frame*/
+		deldop->frame[i].sdev = getdouble( fp);
+		readparam( fp, &deldop->frame[i].cal);
+		if (deldop->frame[i].cal.val <= 0.0 && deldop->frame[i].cal.state == 'c') {
+			printf("ERROR in set %d: frame %d has constant calfact <= 0.0\n", s, i);
+			bailout("read_deldop in read_dat.c\n");
+		}
+		if ((deldop->frame[i].nlooks = getdouble( fp)) > 0)
+			lookfact = 1/sqrt(deldop->frame[i].nlooks);
+		else
+			lookfact = 0.0;
+		deldop->frame[i].delcom = getdouble( fp);
+
+		/*  Read this frame's relative weight and add to three weight sums		 */
+		deldop->frame[i].weight = getdouble( fp);
+		if (deldop->delcor.a[0].state != 'c')
+			deldop->sum_deldop_zmax_weights += deldop->frame[i].weight;
+		if (deldop->frame[i].cal.state == 'c')
+			deldop->sum_rad_xsec_weights += deldop->frame[i].weight;
+		if (deldop->dopscale.state != 'c')
+			deldop->sum_cos_subradarlat_weights += deldop->frame[i].weight;
+
+		/*  Read this frame's pixel-weighting "mask" flag		 */
+		deldop->frame[i].pixels_weighted = getint( fp);
+
+		/*  If a pixel-weighting mask is being used, check that it has the
+        expected number of values and read them in, and then get the
+        frame's vignetted dimensions and number of degrees of freedom */
+		dof = 0.0;
+		if (deldop->frame[i].pixels_weighted) {
+
+			/*  Open the mask file, count the entries, and make sure that it's the
+            expected number of entries (in case someone has changed the numbering
+            of datasets without changing mask filenames accordingly)
+
+            Note that the countdata routine resets the file position indicator to
+            its initial value after it finishes reading data entries*/
+
+			if (strcmp( par->maskdir, "")) {
+				if (deldop->nframes > 100)
+					sprintf( pixweightfile, "%s/mask_%02d_%03d.txt", par->maskdir, s, i);
+				else
+					sprintf( pixweightfile, "%s/mask_%02d_%02d.txt", par->maskdir, s, i);
+			} else {
+				if (deldop->nframes > 100)
+					sprintf( pixweightfile, "%s/mask_%02d_%03d.txt", deldop->dir, s, i);
+				else
+					sprintf( pixweightfile, "%s/mask_%02d_%02d.txt", deldop->dir, s, i);
+			}
+			FOPEN( wp, pixweightfile, "r");
+			nmaskvals = countdata( wp);
+			if (nmaskvals != deldop->ndel * deldop->ndop) {
+				fprintf(stderr,"ERROR: expected %d x %d = %d mask weights for set %2d frame %2d\n",
+						deldop->ndel, deldop->ndop, deldop->ndel * deldop->ndop, s, i);
+				fprintf(stderr,"       -- instead there are %d weights in %s\n",
+						nmaskvals, pixweightfile);
+				bailout("read_deldop in read_dat.c\n");
+			}
+
+			/*  Allocate memory for the mask values and read them in*/
+			pixweight = matrix( 1, deldop->ndel, 1, deldop->ndop);
+			idel_use[0] = deldop->ndel + 1;
+			idel_use[1] = 0;
+			idop_use[0] = deldop->ndop + 1;
+			idop_use[1] = 0;
+			for (j=1; j<=deldop->ndel; j++)
+				for (k=1; k<=deldop->ndop; k++) {
+					pixweight[j][k] = getdouble( wp);
+					if (pixweight[j][k] > 0.0) {
+						dof += deldop->frame[i].weight;
+						*chi2_variance += 2 * deldop->frame[i].weight * deldop->frame[i].weight;
+						idel_use[0] = MIN( idel_use[0], j);
+						idel_use[1] = MAX( idel_use[1], j);
+						idop_use[0] = MIN( idop_use[0], k);
+						idop_use[1] = MAX( idop_use[1], k);
+					}
+				}
+			fclose( wp);
+		} else {
+			dof = deldop->frame[i].weight * deldop->ndel * deldop->ndop;
+			*chi2_variance += 2 * deldop->frame[i].weight * deldop->frame[i].weight
+					* deldop->ndel * deldop->ndop;
+			idel_use[0] = 1;
+			idel_use[1] = deldop->ndel;
+			idop_use[0] = 1;
+			idop_use[1] = deldop->ndop;
+		}
+		deldop->frame[i].dof = dof;
+		deldop->dof += dof;
+		deldop->frame[i].ndel = idel_use[1] - idel_use[0] + 1;
+		deldop->frame[i].ndop = idop_use[1] - idop_use[0] + 1;
+		deldop->frame[i].idelvig[0] = idel_use[0];
+		deldop->frame[i].idelvig[1] = idel_use[1];
+		deldop->frame[i].idopvig[0] = idop_use[0];
+		deldop->frame[i].idopvig[1] = idop_use[1];
+		deldop->frame[i].delcom_vig = deldop->frame[i].delcom - idel_use[0] + 1;
+		deldop->frame[i].dopcom_vig = deldop->dopcom - idop_use[0] + 1;
+		deldop->frame[i].dopDC_vig = deldop->dopDC - idop_use[0] + 1;
+
+		/* Allocate memory for observed data and fits*/
+		int ndel = deldop->frame[i].ndel, ndop = deldop->frame[i].ndop;
+		int k, nbins = ndel * ndop;
+
+		/* Allocate the unrolled single pointers and offset addressing */
+		/* Figure out which GPU we're using for these allocations */
+		if ((i%2)==0)	 	/* Even  frames */
+			gpuErrchk(cudaSetDevice(GPU0));
+		else if ((i%2)==1)	/* Odd frame */
+			gpuErrchk(cudaSetDevice(GPU1));
+
+		gpuErrchk(cudaMalloc((void**)&deldop->frame[i].fit_s, sizeof(float)*nbins));
+
+		/* Allocate double pointers (outer loop) and offset addressing */
+		cudaCalloc1((void**)&deldop->frame[i].fit, sizeof(double*), ndel);
+		cudaCalloc1((void**)&deldop->frame[i].obs, sizeof(double*), ndel);
+		cudaCalloc1((void**)&deldop->frame[i].oneovervar, sizeof(double*), ndel);
+		deldop->frame[i].fit -= 1;
+		deldop->frame[i].obs -= 1;
+		deldop->frame[i].oneovervar -= 1;
+
+		/* Allocate double pointers (inner loop) and offset addressing */
+		for (k=1; k<=ndel; k++) {
+			cudaCalloc1((void**)&deldop->frame[i].fit[k], sizeof(double), ndop);
+			cudaCalloc1((void**)&deldop->frame[i].obs[k], sizeof(double), ndop);
+			cudaCalloc1((void**)&deldop->frame[i].oneovervar[k], sizeof(double), ndop);
+			deldop->frame[i].fit[k] -= 1;
+			deldop->frame[i].obs[k] -= 1;
+			deldop->frame[i].oneovervar[k] -= 1;
+		}
+
+
+		/* If file is gzipped, copy to a temporary file, unzip, then read*/
+		if (!strcmp( ".gz", &fullname[strlen(fullname)-3])) {
+			datafile_is_gzipped = 1;
+			tempname(datafile_temp, MAXLEN, "datafile.temp", "dat");
+			strcpy(datafile_gzipped_temp, datafile_temp);
+			strcat(datafile_gzipped_temp, ".gz");
+			sprintf( cmd, "cp %s %s", fullname, datafile_gzipped_temp);
+			if (!system( cmd))
+				bailout("read_deldop in read_dat.c: can't make copy of gzipped data file\n");
+			sprintf( cmd, "gunzip -f %s", datafile_gzipped_temp);
+			if (!system( cmd))
+				bailout("read_deldop in read_dat.c: can't unzip gzipped data file\n");
+			FOPEN( fin, datafile_temp, "r");
+		} else {
+			datafile_is_gzipped = 0;
+			FOPEN( fin, fullname, "r");
+		}
+
+		/* Read first line of file so that we can identify file type*/
+		if (!fread(buffer, bufferlength, 1, fin))
+			bailout("read_deldop in read_dat.c: can't read first line of data file\n");
+		rewind(fin);
+
+		/* Set binary flag if first line is not ASCII*/
+		is_binary = 0;
+		for (j=0; j<bufferlength; j++)
+			if (!isascii(buffer[j]))
+				is_binary = 1;
+
+		/* Read data according to file type*/
+		swap_bytes = ( is_little_endian() && par->endian == BIG_ENDIAN_DATA) ||
+				(!is_little_endian() && par->endian == LITTLE_ENDIAN_DATA);
+		is_fits = !is_binary && (strstr(buffer, "SIMPLE") != NULL);
+		lowcase(buffer);
+		is_rdf = !is_binary && !is_fits && (strstr(buffer, "type") != NULL);
+
+		if (is_fits)
+			read_deldop_fits(fullname, deldop, i, idel_use, idop_use);
+		else if (is_rdf)
+			read_deldop_rdf(fin, deldop, i, idel_use, idop_use, swap_bytes);
+		else if (is_binary)
+			read_deldop_binary(fin, deldop, i, idel_use, idop_use, swap_bytes);
+		else
+			read_deldop_ascii(fin, deldop, i, idel_use, idop_use);
+
+		/* Get variance for each pixel; apply gamma, speckle, and pixel
+		 * weighting if desired*/
+		jskip = idel_use[0] - 1;
+		kskip = idop_use[0] - 1;
+
+		for (j=1; j<=deldop->frame[i].ndel; j++)
+			for (k=1; k<=deldop->frame[i].ndop; k++) {
+				if (par->dd_gamma != 1.0)
+					gamma_trans( &deldop->frame[i].obs[j][k], par->dd_gamma);
+				if (par->speckle)
+					deldop->frame[i].oneovervar[j][k] =
+							1/( pow(deldop->frame[i].sdev,2.0) +
+									pow(lookfact*deldop->frame[i].obs[j][k],2.0) );
+				else
+					deldop->frame[i].oneovervar[j][k] = 1/pow(deldop->frame[i].sdev,2.0);
+				if (deldop->frame[i].pixels_weighted)
+					deldop->frame[i].oneovervar[j][k] *= pixweight[j+jskip][k+kskip];
+			}
+
+		fclose( fin);
+		if (datafile_is_gzipped) {
+			sprintf( cmd, "\\rm -f %s %s", datafile_temp, datafile_gzipped_temp);
+			if (!system( cmd))
+				bailout("read_deldop in read_dat.c: can't delete gzipped and unzipped data files\n");
+		}
+
+		/* Free memory for the pixel-weighting mask*/
+		if (deldop->frame[i].pixels_weighted)
+			free_matrix( pixweight, 1, deldop->ndel, 1, deldop->ndop);
+
+		/* Loop through all views contributing to this (smeared) frame*/
 
 		for (k=0; k<deldop->nviews; k++) {
 

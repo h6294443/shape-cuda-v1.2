@@ -26,20 +26,41 @@ __global__ void set_idata_pntr_krnl(struct dat_t *ddat, float *d_idata,
 /* Specific reduction functions */
 __host__ float compute_deldop_xsec_gpu(struct dat_t *ddat, int nframes,
 		int size, int set, cudaStream_t *sb_stream);
+
+__host__ float compute_deldop_xsec_mgpu(struct dat_t *ddat, int nframes, int
+		nfrm_half0, int nfrm_half1, int size, int set,
+		cudaStream_t *gpu0_stream, cudaStream_t *gpu1_stream);
+
 __host__ float compute_doppler_xsec(struct dat_t *ddat, int ndop,
-		int set, int frm);;
+		int set, int frm);
+
 __host__ float compute_model_area(struct mod_t *dmod, int c, int size);
+
 __host__ float compute_zmax_gpu(struct dat_t *ddat, struct pos_t **pos,
 		int nframes, int size, int set, cudaStream_t *sb_stream);
+
+__host__ float compute_zmax_mgpu(struct dat_t *ddat, struct pos_t **pos0,
+		struct pos_t **pos1, int nframes, int nfrm_half0, int nfrm_half1, int
+		size, int set, cudaStream_t *gpu0_stream, cudaStream_t *gpu1_stream);
+
 __host__ void dvdI_reduce_streams(struct mod_t *dmod, float *dv, float *dcom0,
 		float *dcom1, float *dcom2, float *dI00, float *dI01, float *dI02,
 		float *dI10, float *dI11, float *dI12, float *dI20, float *dI21,
 		float *dI22, int size, int c, cudaStream_t *dv_streams);
+
 __host__ double find_max_in_double_array(double *in, int size);
+
 __host__ double find_min_in_double_array(double *in, int size);
+
 __host__ void sum_brightness_streams(struct dat_t *ddat, struct pos_t **pos,
 		int nframes, int size, int flt, int set, cudaStream_t *sb_stream);
+
+__host__ void sum_brightness_mgpu(struct dat_t *ddat, struct pos_t **pos0,
+		struct pos_t **pos1, int nframes, int nfrm_half0, int nfrm_half1,
+		int size, int set, cudaStream_t *gpu0_stream, cudaStream_t *gpu1_stream);
+
 __host__ double sum_double_array(double *a, int size);
+
 __host__ void sum_2_double_arrays(double *a, double *b, double *absum, int size);
 
 

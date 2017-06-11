@@ -125,15 +125,18 @@ void vary_params( struct par_t *par, struct mod_t *mod, struct dat_t *dat,
 						}
 					pos->bistatic = 0;
 
-					/*  Initialize the plane-of-sky view  */
+					/* Initialize the plane-of-sky view  */
 					posclr( pos);
 
-					/*  Determine which POS pixels cover the target, and
-	                    get the distance toward Earth of each POS pixel   */
+					/* Determine which POS pixels cover the target, and get the
+					 * distance toward Earth of each POS pixel   */
 					for (c=0; c<mod->shape.ncomp; c++){
 						posvis( &mod->shape.comp[c].real, orbit_offset, pos,
 								(int) par->pos_smooth, 0, 0, c);
 					}
+
+//					if (f==1)
+//					dbg_print_pos_arrays_full_host(pos);
 					/* Zero out the fit delay-Doppler image and call pos2deldop
 					 * to create the fit image by mapping power from the plane
 					 * of sky to delay-Doppler space.                             */
@@ -142,6 +145,8 @@ void vary_params( struct par_t *par, struct mod_t *mod, struct dat_t *dat,
 							1, deldop->frame[f].ndop);
 
 					pos2deldop(par, &mod->photo, 0.0, 0.0, 0.0, deldop, 0, s, f, 0);
+
+//					dbg_print_deldop_fit_host(dat, s, f, "GPU_deldop_fit.csv");
 
 					/*  Compute distance toward Earth of the subradar point  */
 
@@ -206,7 +211,7 @@ void vary_params( struct par_t *par, struct mod_t *mod, struct dat_t *dat,
 						posvis( &mod->shape.comp[c].real, orbit_offset, pos,
 									(int) par->pos_smooth, 0, 0, c);
 					}
-
+//					if (f==1)	dbg_print_pos_arrays_full_host(pos);
 					/*  Zero out the fit Doppler spectrum, then call pos2doppler to create the fit
 					 * 	spectrum by mapping power from the plane of the sky to Doppler space.      */
 					clrvect( doppler->frame[f].fit, 1, doppler->frame[f].ndop);

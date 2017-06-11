@@ -117,8 +117,7 @@ extern "C" {
 #include "../shape/head.h"
 }
 
-//__device__ unsigned char dopttype, dradtype;
-__device__ int dL, dLmax, dnof, dn;
+__device__ int dL, dLmax, dn;
 __device__ unsigned char dradtype, dopttype;
 
 __device__ void dev_checkphotopar( double parval, double parmin, double parmax, int mode,
@@ -206,7 +205,6 @@ __global__ void opt_harmlommel_set_nlm_krnl(struct mod_t *dmod, double **nlm, in
 		for (m=0; m<=l; m++)
 			nlm[l][m] = sqrt( (2*l+1) * exp(dev_gammln(l-m+1.0) - dev_gammln(l+m+1.0)) );
 	}
-	dnof = dmod->shape.comp[0].real.nf;
 }
 __global__ void opt_harmlommel_facet_krnl(struct par_t *dpar, struct mod_t *dmod,
 		double **afactor, double **bfactor, double **nlm)
@@ -379,7 +377,6 @@ __global__ void opt_harmhapke_kaas_nlm_krnl(struct mod_t *dmod, double **nlm, in
 			nlm[l][m] = sqrt( (2*l+1) * exp(dev_gammln(l-m+1.0) -
 					dev_gammln(l+m+1.0)) );
 	}
-	dnof = dmod->shape.comp[0].real.nf;
 }
 __global__ void opt_harmhapke_facet_krnl(struct par_t *dpar, struct mod_t
 		*dmod, double **nlm,	double **afactor, double **bfactor, int nf,
@@ -516,7 +513,6 @@ __global__ void opt_inhohapke_A_krnl(struct par_t *dpar, struct mod_t *dmod,
 		dev_checkphotopar( dmod->photo.optical[ilaw].inhohapke.global.theta.val,
 				dpar->opt_theta_min, dpar->opt_theta_max, 2,
 				&dpar->badphoto, &dpar->badphoto_logfactor);
-		dnof = dmod->shape.comp[0].real.nf;
 	}
 }
 __global__ void opt_inhohapke_facet_krnl(struct par_t *dpar, struct mod_t
@@ -789,8 +785,6 @@ __global__ void opt_inhokaas_A_krnl(struct par_t *dpar, struct mod_t *dmod,
 		dev_checkphotopar( dmod->photo.optical[ilaw].inhokaas.global.k.val,
 				dpar->opt_k_min, dpar->opt_k_max, 1,
 				&dpar->badphoto, &dpar->badphoto_logfactor);
-
-		dnof = dmod->shape.comp[0].real.nf;
 	}
 }
 __global__ void opt_inhokaas_facet_krnl(struct par_t *dpar, struct mod_t
@@ -1062,8 +1056,6 @@ __global__ void rad_inhocosine_set_ab_krnl(struct par_t *dpar, struct mod_t
 		dev_checkphotopar( dmod->photo.radar[ilaw].inhocosine.global.C.val,
 				dpar->rad_C_min, dpar->rad_C_max, 3,
 				&dpar->badphoto, &dpar->badphoto_logfactor);
-
-		dnof = dmod->shape.comp[c].real.nf;
 	}
 }
 __global__ void rad_inhocosine_facet_krnl(struct par_t *dpar, struct mod_t
@@ -1100,9 +1092,9 @@ __global__ void rad_inhocosine_facet_krnl(struct par_t *dpar, struct mod_t
  * and one radlaw at a time. The capability to handle multiple laws may be
  * added at a later date.   (November 1, 2016) */
 __host__ void realize_photo_gpu( struct par_t *dpar, struct mod_t *dmod,
-		double radalb_factor, double optalb_factor, int albedo_mode)
+		double radalb_factor, double optalb_factor, int albedo_mode, int nf)
 {
-	int Lmax, L, i, n, nf, Bx;
+	int Lmax, L, i, n, Bx;
  	double **nlm, **afactor, **bfactor=NULL;
 	unsigned char opttype, radtype;
 	dim3 BLK, THD;
@@ -1155,7 +1147,6 @@ __host__ void realize_photo_gpu( struct par_t *dpar, struct mod_t *dmod,
 		THD.x = (L+1)*(L+1);
 		opt_harmlommel_set_nlm_krnl<<<BLK,THD>>>(dmod, nlm, L);
 		checkErrorAfterKernelLaunch("opt_harmlommel_set_nlm_krnl, line ");
-		gpuErrchk(cudaMemcpyFromSymbol(&nf, dnof, sizeof(dnof), 0, cudaMemcpyDeviceToHost));
 
 		/* Calculate launch parameters */
 		Bx = floor((maxThreadsPerBlock - 1 + nf ) / maxThreadsPerBlock);
@@ -1218,7 +1209,6 @@ __host__ void realize_photo_gpu( struct par_t *dpar, struct mod_t *dmod,
 		THD.x = Lmax;
 		opt_harmhapke_kaas_nlm_krnl<<<BLK,THD>>>(dmod, nlm, Lmax);
 		checkErrorAfterKernelLaunch("opt_harmhapke_nlm_krnl, line ");
-		gpuErrchk(cudaMemcpyFromSymbol(&nf, dnof, sizeof(dnof), 0, cudaMemcpyDeviceToHost));
 
 		/* Need to calculate number of threads & blocks necessary */
 		Bx = floor((maxThreadsPerBlock - 1 + nf ) / maxThreadsPerBlock);
@@ -1237,7 +1227,6 @@ __host__ void realize_photo_gpu( struct par_t *dpar, struct mod_t *dmod,
 		/* Call single-threaded kernel for Harmhapke part A */
 		opt_inhohapke_A_krnl<<<1,1>>>(dpar, dmod, albedo_mode, optalb_factor);
 		checkErrorAfterKernelLaunch("opt_inhohapke_A_krnl, line ");
-		gpuErrchk(cudaMemcpyFromSymbol(&nf, dnof, sizeof(dnof), 0, cudaMemcpyDeviceToHost));
 
 		/* Need to calculate number of threads & blocks necessary */
 		Bx = floor((maxThreadsPerBlock - 1 + nf ) / maxThreadsPerBlock);
@@ -1286,7 +1275,6 @@ __host__ void realize_photo_gpu( struct par_t *dpar, struct mod_t *dmod,
 		THD.x = Lmax;
 		opt_harmhapke_kaas_nlm_krnl<<<BLK,THD>>>(dmod, nlm, Lmax);
 		checkErrorAfterKernelLaunch("opt_harmhapke_kaas_nlm_krnl, line ");
-		gpuErrchk(cudaMemcpyFromSymbol(&nf, dnof, sizeof(dnof), 0, cudaMemcpyDeviceToHost));
 
 		/* Need to calculate number of threads & blocks necessary */
 		Bx = floor((maxThreadsPerBlock - 1 + nf ) / maxThreadsPerBlock);
@@ -1304,7 +1292,6 @@ __host__ void realize_photo_gpu( struct par_t *dpar, struct mod_t *dmod,
 		/* Call single-threaded kernel to start off inhokaas */
 		opt_inhokaas_A_krnl<<<1,1>>>(dpar, dmod, albedo_mode, optalb_factor);
 		checkErrorAfterKernelLaunch("opt_inhokaas_A_krnl, line ");
-		gpuErrchk(cudaMemcpyFromSymbol(&nf, dnof, sizeof(dnof), 0, cudaMemcpyDeviceToHost));
 
 		/* Need to calculate number of threads & blocks necessary */
 		Bx = floor((maxThreadsPerBlock - 1 + nf ) / maxThreadsPerBlock);
@@ -1389,7 +1376,6 @@ __host__ void realize_photo_gpu( struct par_t *dpar, struct mod_t *dmod,
 		THD.x = Lmax;
 		opt_harmhapke_kaas_nlm_krnl<<<BLK,THD>>>(dmod, nlm, Lmax);
 		checkErrorAfterKernelLaunch("opt_harmhapke_kaas_nlm_krnl, line ");
-		gpuErrchk(cudaMemcpyFromSymbol(&nf, dnof, sizeof(dnof), 0, cudaMemcpyDeviceToHost));
 
 		/* Need to calculate number of threads & blocks necessary */
 		Bx = floor((maxThreadsPerBlock - 1 + nf ) / maxThreadsPerBlock);
@@ -1409,7 +1395,6 @@ __host__ void realize_photo_gpu( struct par_t *dpar, struct mod_t *dmod,
 		rad_inhocosine_set_ab_krnl<<<1,1>>>(dpar, dmod, albedo_mode,
 				radalb_factor);
 		checkErrorAfterKernelLaunch("rad_inhocosine_set_ab_krnl, line ");
-		gpuErrchk(cudaMemcpyFromSymbol(&nf, dnof, sizeof(dnof), 0, cudaMemcpyDeviceToHost));
 
 		/* Need to calculate number of threads & blocks necessary */
 		Bx = floor((maxThreadsPerBlock - 1 + nf ) / maxThreadsPerBlock);

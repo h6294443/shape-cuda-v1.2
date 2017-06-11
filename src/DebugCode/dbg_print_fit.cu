@@ -42,7 +42,7 @@ __global__ void dbg_print_lc_fit_krnl(struct dat_t *ddat, double *fit, int s, in
 		fit[i] = ddat->set[s].desc.lghtcrv.fit[i];
 	}
 }
-__global__ void dbg_print_fit_deldop_krnl2(struct dat_t *ddat, double *fit, int s, int f){
+__global__ void dbg_print_fit_deldop_krnl2(struct dat_t *ddat, float *fit, int s, int f){
 	/* ndel*ndop-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -130,9 +130,17 @@ __host__ void dbg_print_deldop_fit(struct dat_t *ddat, int s, int f, char *filen
 
 	int idop, ndop, idel, ndel, nbins, nThreads, offset, xlim[2], ylim[2];
 	FILE *fp_fit;
-	double *fit_dd;
+	float *fit_dd;
 	dim3 BLK,THD;
 	printf("\n %sfile created",filename_fit);
+	float *host_fit;
+
+	/* Check for dual-GPU mode and set device accordingly (GPU0 for even
+	 * frames and GPU1 for odd frames) 	 */
+	if ((f%2)==0)		/* Even frames */
+		gpuErrchk(cudaSetDevice(GPU0));
+	else if ((f%2)==1)	/* Odd frames */
+		gpuErrchk(cudaSetDevice(GPU1));
 
 	/* Launch 1st debug kernel to get ndop and xlim/ylim	 */
 	dbg_print_fit_krnl1<<<1,1>>>(ddat, s, f);
@@ -153,14 +161,26 @@ __host__ void dbg_print_deldop_fit(struct dat_t *ddat, int s, int f, char *filen
 
 	nThreads = (xlim[1] - xlim[0] + 1) * (ylim[1] - ylim[0] + 1);
 	nbins = ndop * ndel;
-	cudaCalloc((void**)&fit_dd, sizeof(double), nbins);
+	cudaCalloc((void**)&fit_dd, sizeof(float), nbins);
+	host_fit = (float *)malloc(sizeof(float) * nbins);
 
 	BLK.x = floor((maxThreadsPerBlock - 1 + nbins)/maxThreadsPerBlock);
 	THD.x = maxThreadsPerBlock; // Thread block dimensions
 
 	dbg_print_fit_deldop_krnl2<<<BLK,THD>>>(ddat, fit_dd, s, f);
 	checkErrorAfterKernelLaunch("dbg_print_fit_deldop_krnl_2");
-	deviceSyncAfterKernelLaunch("dbg_print_fit_deldop_krnl_2");
+	cudaMemcpy(host_fit, fit_dd, sizeof(float)*nbins, cudaMemcpyDeviceToHost);
+
+	cudaSetDevice(GPU0);
+	cudaDeviceSynchronize();
+	cudaSetDevice(GPU1);
+	cudaDeviceSynchronize();
+
+	if ((f%2)==0) 	 	/* Even frames */
+		gpuErrchk(cudaSetDevice(GPU0));
+	else if ((f%2)==1) 	/* Odd frames */
+		gpuErrchk(cudaSetDevice(GPU1));
+
 
 	fp_fit = fopen(filename_fit, "w+");
 
@@ -178,9 +198,8 @@ __host__ void dbg_print_deldop_fit(struct dat_t *ddat, int s, int f, char *filen
 		/* Write the rest of the row values: fit[idel][idop] */
 		for (idel=1; idel<=ndel; idel++) {
 			offset = (idop-1)*ndel + (idel-1);
-			fprintf(fp_fit, " %g , ", fit_dd[offset]);
+			fprintf(fp_fit, " %g , ", host_fit[offset]);//fit_dd[offset]);
 		}
-
 	}
 	fprintf(fp_fit, "\nxlim0 , %i", xlim[0]);
 	fprintf(fp_fit, "\nxlim1 , %i", xlim[1]);
@@ -188,6 +207,9 @@ __host__ void dbg_print_deldop_fit(struct dat_t *ddat, int s, int f, char *filen
 	fprintf(fp_fit, "\nylim1 , %i", ylim[1]);
 	fprintf(fp_fit, "\nthreads , %i", nThreads);
 	fclose(fp_fit);
+
+	/* Back to GPU0 before returning */
+	gpuErrchk(cudaSetDevice(GPU0));
 }
 
 __host__ void dbg_print_deldop_fit_host(struct dat_t *ddat, int s, int f, char *filename_fit) {
@@ -259,14 +281,10 @@ __host__ void dbg_print_lc_fit_host(struct lghtcrv_t *lghtcrv, char *filename_fi
 
 	int i;
 	FILE *fp_fit;
-	double *fit;
 	dim3 BLK,THD;
-
-
 	fp_fit = fopen(filename_fit, "w+");
 	fprintf(fp_fit, "i , ");
 	for (i=1; i<=n; i++)
 		fprintf(fp_fit,	"\n%i , %g", i, lghtcrv->fit[i]);
 	fclose(fp_fit);
-	//cudaFree(fit);
 }

@@ -18,10 +18,13 @@ void CUDACount() {
 	cudaGetDeviceCount(&nDevices);
 	if (nDevices < 1)
 		bailout("No CUDA-capable GPU detected.  Exiting shape-cuda.");
-	if (nDevices >= 1)
+	if (nDevices >= 1) {
 		printf("%i CUDA-capable GPU(s) detected.  shape-cuda will use device id %i.\n\n", nDevices, GPU0);
+		//pickGPU(GPU0);
+		gpuErrchk(cudaSetDevice(GPU0));
+	}
 	if (nDevices >= 2 && MGPU){
-
+		//pickGPU(GPU0);
 		gpuErrchk(cudaDeviceCanAccessPeer(&canAccess0, GPU0, GPU1));
 		gpuErrchk(cudaDeviceCanAccessPeer(&canAccess1, GPU1, GPU0));
 		if (canAccess0)
@@ -30,7 +33,8 @@ void CUDACount() {
 			printf("Peer access from GPU1 to GPU0 supported.\n\n");
 		if (canAccess0 && canAccess1) {
 			gpuErrchk(cudaSetDevice(GPU0));
-			cudaError_t test = cudaDeviceEnablePeerAccess(GPU1, 0);
+			cudaError_t test;
+			test = cudaDeviceEnablePeerAccess(GPU1, 0);
 			if (test==cudaSuccess)
 				printf("Enabled for GPU0.\n");
 			else if (test==cudaErrorInvalidDevice)
@@ -54,7 +58,7 @@ void CUDACount() {
 			else if (test==cudaErrorPeerAccessUnsupported)
 				printf("Peer access not supported.\n");
 
-			printf("Dual-GPU mode enabled");
+		printf("Dual-GPU mode enabled");
 		}
 		else printf("Peer access not possible");
 	}
@@ -62,7 +66,7 @@ void CUDACount() {
 		printf("Dual-GPU mode not possible. Only one GPU detected. Defaulting to single-GPU mode.");
 		MGPU = 0;
 	}
-	pickGPU(GPU0);
+
 
 	for (i = 0; i < nDevices; i++) {
 #ifdef __cplusplus

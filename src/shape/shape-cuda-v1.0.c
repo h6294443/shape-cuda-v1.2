@@ -14,8 +14,8 @@ int TIMING = 0;		/* Time certain kernel executions	*/
 int GPU0   = 1;		/* Which GPU will run code 			*/
 int GPU1   = 0;
 int FLOAT  = 0;
-int MGPU   = 1;		/* Switch for dual-gpu mode 		*/
-int MGPU_MEM = 1;
+int MGPU   = 0;		/* Switch for dual-gpu mode 		*/
+int MGPU_MEM = 0;
 int PIN = 0;
 int main(int argc, char *argv[])
  {
@@ -153,8 +153,10 @@ int main(int argc, char *argv[])
 			gpuErrchk(cudaMemcpy(dev_mod, &mod, sizeof(struct mod_t), cudaMemcpyHostToDevice));
 			gpuErrchk(cudaMallocManaged((void**)&dev_dat, sizeof(struct dat_t), cudaMemAttachGlobal));
 			gpuErrchk(cudaMemcpy(dev_dat, &dat, sizeof(struct dat_t), cudaMemcpyHostToDevice));
-
-			bestfit_gpu(dev_par,dev_mod,dev_dat, &par,&mod,&dat);
+			if (MGPU)
+				bestfit_mgpu(dev_par, dev_mod, dev_dat, &par, &mod, &dat);
+			else
+				bestfit_gpu(dev_par,dev_mod,dev_dat, &par,&mod,&dat);
 		} else
 			bestfit( &par, &mod, &dat);
 		break;

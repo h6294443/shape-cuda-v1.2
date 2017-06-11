@@ -12,6 +12,32 @@ __global__ void posmask_init_krnl(struct pos_t **pos, double3 *so,
 		pixels_per_km[f] = 1/pos[f]->km_per_pixel;
 	}
 }
+__global__ void posmask_init_krnl2(struct pos_t **pos, double3 *so,
+		float *pixels_per_km, int size) {
+	/* nfrm_alloc-threaded kernel */
+	int f = blockIdx.x * blockDim.x + threadIdx.x;
+	if (f < size) {
+		dev_mtrnsps2(so, pos[f]->oe, f);
+		dev_mmmul2(so, pos[f]->se, so, f);
+		pixels_per_km[f] = 1/pos[f]->km_per_pixel;
+	}
+}
+__global__ void posmask_init_mgpu_krnl(struct pos_t **pos, double3 *so,
+		float *pixels_per_km, int size, int oddflg) {
+
+	/* nfrm_half0/nfrm_half1-threaded kernel for dual-GPU operation. It
+	 * performs the first few tasks (outside the pixel loop) of routine
+	 * posmask.	 */
+
+	int hf = blockIdx.x * blockDim.x + threadIdx.x;
+	int f = 2*hf + oddflg + 1;
+
+	if (hf < size) {
+		dev_mtrnsps2(so, pos[hf]->oe, hf);
+		dev_mmmul2(so, pos[hf]->se, so, hf);
+		pixels_per_km[hf] = 1/pos[hf]->km_per_pixel;
+	}
+}
 
 __global__ void posmask_krnl(
 		struct par_t *dpar,

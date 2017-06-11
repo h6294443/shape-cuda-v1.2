@@ -95,7 +95,8 @@ __host__ void dbg_print_pos_z_host(struct pos_t *pos, char *fn) {
 	}
 	fclose(fp_z);
 }
-__host__ void dbg_print_pos_arrays_full(struct pos_t **pos, int f, int npixels, int n) {
+__host__ void dbg_print_pos_arrays_full(struct pos_t **pos, int f, int f_real,
+		int npixels, int n) {
 	/* This debug function prints the GPU arrays:
 	 *  - pos->cosi_s
 	 *  - pos->cose_s
@@ -108,15 +109,36 @@ __host__ void dbg_print_pos_arrays_full(struct pos_t **pos, int f, int npixels, 
 	char *filename;
 	int i, j, pxa, thd = 256;
 
-	cudaCalloc((void**)&b, sizeof(float), npixels);
-	cudaCalloc((void**)&cosi, sizeof(float), npixels);
-	cudaCalloc((void**)&cose, sizeof(float), npixels);
-	cudaCalloc((void**)&zz, sizeof(float), npixels);
+	/* For multi-GPU, figure out which GPU to use */
+	if (MGPU) {
+		if ((f_real%2)==0)
+			gpuErrchk(cudaSetDevice(GPU0));
+		else if ((f_real%2)==1)
+			gpuErrchk(cudaSetDevice(GPU1));
+	}
+	cudaCalloc1((void**)&b, sizeof(float), npixels);
+	cudaCalloc1((void**)&cosi, sizeof(float), npixels);
+	cudaCalloc1((void**)&cose, sizeof(float), npixels);
+	cudaCalloc1((void**)&zz, sizeof(float), npixels);
 
 	BLK.x = floor((thd-1+npixels)/thd);	THD.x = thd;
 	dbg_copy_pos_arrays_full_krnl<<<BLK,THD>>>(pos, f, npixels, b, cosi, cose, zz);
 	checkErrorAfterKernelLaunch("dbg_copy_pos_arrays_full_krnl");
 	deviceSyncAfterKernelLaunch("dbg_copy_pos_arrays_full_krnl");
+
+	if (MGPU) {
+		gpuErrchk(cudaSetDevice(GPU0));
+		gpuErrchk(cudaDeviceSynchronize());
+		gpuErrchk(cudaSetDevice(GPU1));
+		gpuErrchk(cudaDeviceSynchronize());
+	}
+	/* For multi-GPU, figure out which GPU to use */
+	if (MGPU) {
+		if ((f_real%2)==0)
+			gpuErrchk(cudaSetDevice(GPU0));
+		else if ((f_real%2)==1)
+			gpuErrchk(cudaSetDevice(GPU1));
+	}
 
 	filename = "STR2_pos-b_s.csv";
 	fp_b = fopen(filename, "w+");

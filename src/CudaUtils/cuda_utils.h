@@ -3,7 +3,11 @@ __device__ double atomicAdd_dbl(double* address, double val);
 __global__ void cf_gamma_trans_streams_krnl(struct par_t *dpar, struct dat_t *ddat,
 		int s, int f, int nThreads, unsigned char type, int flt);
 __global__ void clrvect_krnl(struct dat_t *ddat, int size, int s, int f);
-__global__ void clrvect_streams_krnl(struct dat_t *ddat, int size, int s, int f);
+__global__ void clrvect_krnl1(struct dat_t *ddat, int size, int s, int f);
+__global__ void clrvect_krnl2(struct dat_t *ddat, int size, int s, int f);
+__global__ void clrvect_krnl3(struct dat_t *ddat, int size, int s, int f);
+__global__ void clrvect_krnl4(struct dat_t *ddat, int size, int s, int f);
+//__global__ void clrvect_streams_krnl(struct dat_t *ddat, int size, int s, int f);
 __device__ int cubic_realroots_cuda( double *coeff, double *realroot);
 __device__ int cubic_realroots_f_cuda( float4 coeff, float3 *realroot);
 __device__ void dev_bsstep(double *y, double *dydx, int nv, double *xx, double htry, double eps,

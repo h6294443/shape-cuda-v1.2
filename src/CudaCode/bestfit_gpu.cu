@@ -362,7 +362,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	lc_n	= (int *) malloc(nsets*sizeof(int));
 	nviews 	= (int *) malloc(nsets*sizeof(int));
 	gpuErrchk(cudaMalloc((void**)&dtype, sizeof(unsigned char)*nsets));
-	gpuErrchk(cudaMalloc((void**)&verts, sizeof(struct vertices_t)*2));
+	gpuErrchk(cudaMalloc((void**)&verts, sizeof(struct vertices_t*)*2));
 
 	for (int s=0; s<nsets; s++) {
 		htype[s] = dat->set[s].type;
@@ -404,15 +404,6 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	for (int f=0; f<max_streams; f++)
 		gpuErrchk(cudaStreamCreate(&bf_stream[f]));
 	cudaStream_t bf1_stream[max_streams];
-	/* Check for multi-GPU flag, then change device and create gpu1 streams */
-	if (MGPU) {
-		gpuErrchk(cudaSetDevice(GPU1));
-
-		for (int f=0; f<max_streams; f++)
-			gpuErrchk(cudaStreamCreate(&bf1_stream[f]));
-	gpuErrchk(cudaSetDevice(GPU0));	/* Back to our default device */
-	}
-
 
 	/*..........................End section..................................*/
 
@@ -450,7 +441,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	/* Set vertices shortcut and also set max_frames (the maximum number of
 	 * frames for any one set) to device so that objective_gpu
 	 * can retrieve it later */
-	gpuErrchk(cudaDeviceSynchronize());
+	//gpuErrchk(cudaDeviceSynchronize());
 
 	set_verts_shortcut_krnl<<<1,1>>>(dmod, verts, max_frames);
 	checkErrorAfterKernelLaunch("set_verts_shortcut_krnl");
@@ -497,6 +488,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 
 	/* Compute deldop_zmax_save, cos_subradarlat_save, rad_xsec_save, and
 	 * opt_brightness_save for the initial model  */
+	call_vary_params=1;
 	if (call_vary_params)
 	{
 		realize_mod_gpu(dpar, dmod, type, nf, bf_stream);
@@ -508,22 +500,16 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			realize_spin_gpu(dpar, dmod, ddat, htype, nframes, nviews,
 					nsets, bf_stream);
 
-		realize_photo_gpu(dpar, dmod, 1.0, 1.0, 0);  /* set R_save to R */
+		realize_photo_gpu(dpar, dmod, 1.0, 1.0, 0, nf);  /* set R_save to R */
 
-		if (MGPU)
-			vary_params_mgpu(dpar, dmod, ddat, action, &deldop_zmax_save,
-					&rad_xsec_save, &opt_brightness_save, &cos_subradarlat_save,
-					nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-					bf_stream, bf1_stream, max_frames);
-		else
-			vary_params_gpu(dpar, dmod, ddat, action, &deldop_zmax_save,
-					&rad_xsec_save, &opt_brightness_save, &cos_subradarlat_save,
-					nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-					bf_stream, max_frames);
+		vary_params_gpu(dpar, dmod, ddat, action, &deldop_zmax_save,
+				&rad_xsec_save, &opt_brightness_save, &cos_subradarlat_save,
+				nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+				bf_stream, max_frames);
 	}
 	printf("rad_xsec: %f\n", rad_xsec_save);
 	printf("deldop_zmax: %f\n", (float)deldop_zmax_save);
-
+//
 //	/* Point hotparam to a dummy variable (dummyval) rather than to a model pa-
 //	 * rameter; then call objective(0.0) to set dummy variable = 0.0, realize
 //	 * the initial model, calculate the fits, return initial model's objective
@@ -733,7 +719,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 //			}
 //			if ((newsize && vary_alb_size) || ((newshape ||
 //					newspin) && vary_alb_shapespin))
-//				realize_photo_gpu(dpar, dmod, 1.0, 1.0, 1);  /* set R to R_save */
+//				realize_photo_gpu(dpar, dmod, 1.0, 1.0, 1, nf);  /* set R to R_save */
 //			if ((newsize && vary_delcor0_size) || ((newshape || newspin)
 //					&& vary_delcor0_shapespin)) {
 //				realize_delcor_gpu(ddat, 0.0, 1, nsets, nframes);  /* set delcor0 to delcor0_save */
@@ -761,7 +747,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 //			}
 //			if ((newsize && vary_alb_size) || ((newshape || newspin) &&
 //					vary_alb_shapespin)) {
-//				realize_photo_gpu(dpar, dmod, radalb_factor, optalb_factor, 2);  /* reset R, then R_save */
+//				realize_photo_gpu(dpar, dmod, radalb_factor, optalb_factor, 2, nf);  /* reset R, then R_save */
 //
 //				/* Must update opt_brightness_save for Hapke optical scattering
 //				 * law, since single-scattering albedo w isn't just an overall
@@ -775,7 +761,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 //			} else if (newphoto) {
 //				rad_xsec_save = rad_xsec;
 //				opt_brightness_save = opt_brightness;
-//				realize_photo_gpu(dpar, dmod, 1.0, 1.0, 0);  /* set R_save to R */
+//				realize_photo_gpu(dpar, dmod, 1.0, 1.0, 0, nf);  /* set R_save to R */
 //			}
 //			if ((newsize && vary_delcor0_size) || ((newshape || newspin) &&
 //					vary_delcor0_shapespin)) {
@@ -966,34 +952,34 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	fflush(stdout);
 
 	/* Destroy the streams */
-	cudaSetDevice(GPU0);
-	for (int f=0; f<max_frames; f++)
-		cudaStreamDestroy(bf_stream[f]);
+//	cudaSetDevice(GPU0);
+//	for (int f=0; f<max_frames; f++)
+//		cudaStreamDestroy(bf_stream[f]);
+//
 
 
-
-	free(hflags);
-	free(htype);
-	free(nframes);
-	free(lc_n);
-	free(nviews);
-	free(hfparstep);
-	free(hfpartol);
-	free(hfparabstol);
-//	free(fpartype);
-	cudaFree(sdev_par);
-	cudaFree(sdev_mod);
-	cudaFree(sdev_dat);
-	cudaFree(fparstep);
-	cudaFree(fpartol);
-	cudaFree(fparabstol);
-	cudaFree(fpartype);
-	cudaFree(fpntr);
-	cudaFree(flags);
-	cudaFree(dtype);
-	cudaFree(verts);
-	cudaDeviceReset();
-	//cudaProfilerStop();
+//	free(hflags);
+//	free(htype);
+//	free(nframes);
+//	free(lc_n);
+//	free(nviews);
+//	free(hfparstep);
+//	free(hfpartol);
+//	free(hfparabstol);
+////	free(fpartype);
+//	cudaFree(sdev_par);
+//	cudaFree(sdev_mod);
+//	cudaFree(sdev_dat);
+//	cudaFree(fparstep);
+//	cudaFree(fpartol);
+//	cudaFree(fparabstol);
+//	cudaFree(fpartype);
+//	cudaFree(fpntr);
+//	cudaFree(flags);
+//	cudaFree(dtype);
+//	cudaFree(verts);
+//	cudaDeviceReset();
+//	//cudaProfilerStop();
 	return enderr;
 }
 
@@ -1018,6 +1004,7 @@ __host__ double objective_gpu(
 	unsigned char *dflags, *hflags;
 	int max_frames;
 
+	gpuErrchk(cudaSetDevice(GPU0));
 	gpuErrchk(cudaMalloc((void**)&dflags, sizeof(unsigned char)*7));
 	gpuErrchk(cudaMalloc((void**)&dlogfactors, sizeof(double)*7));
 	hflags 	 	= (unsigned char *) malloc(7*sizeof(unsigned char));
@@ -1058,7 +1045,7 @@ __host__ double objective_gpu(
 	}
 
 	if ((newsize && vary_alb_size) || ((newshape || newspin) && vary_alb_shapespin))
-		realize_photo_gpu(sdev_par, sdev_mod, 1.0, 1.0, 1);  /* set R to R_save */
+		realize_photo_gpu(sdev_par, sdev_mod, 1.0, 1.0, 1, nf);  /* set R to R_save */
 	if ((newsize && vary_delcor0_size) || ((newshape || newspin) && vary_delcor0_shapespin)) {
 		realize_delcor_gpu(sdev_dat, 0.0, 1, nsets, nframes);  /* set delcor0 to delcor0_save */
 	}
@@ -1085,9 +1072,9 @@ __host__ double objective_gpu(
 	}
 
 	if ((newsize && vary_alb_size) || ((newshape || newspin) && vary_alb_shapespin))
-		realize_photo_gpu(sdev_par, sdev_mod, radalb_factor, optalb_factor, 1);  /* adjust R */
+		realize_photo_gpu(sdev_par, sdev_mod, radalb_factor, optalb_factor, 1, nf);  /* adjust R */
 	else if (newphoto)
-		realize_photo_gpu(sdev_par, sdev_mod, 1.0, 1.0, 0);  /* set R_save to R */
+		realize_photo_gpu(sdev_par, sdev_mod, 1.0, 1.0, 0, nf);  /* set R_save to R */
 	if ((newsize && vary_delcor0_size) || ((newshape || newspin) && vary_delcor0_shapespin)) {
 		realize_delcor_gpu(sdev_dat, delta_delcor0, 1, nsets, nframes);  /* adjust delcor0 */
 	}

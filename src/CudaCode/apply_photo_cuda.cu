@@ -27,7 +27,7 @@ Modified 2007 August 4 by CM:
     Add comp matrix for POS frames
 
 Modified 2006 October 1 by CM:
-    Add "intensityfactor" parameter: account for POS pixel area,
+    Add "intensity_factor" parameter: account for POS pixel area,
         1 AU Sun-target distance, and solar apparent magnitude here
         rather than after calling the routine
 
@@ -78,8 +78,6 @@ extern "C" {
 #define TINY 1.0e-40
 
 __device__ int ap_ilaw;
-__device__ double phasefunc, scale_lommsee, scale_lambert, intensityfactor, phase;
-//__device__ float sum, phasefuncf, scale_lommseef, scale_lambertf;
 
 __global__ void ap_init_streams_krnl(
 		struct dat_t *ddat,
@@ -322,7 +320,7 @@ __global__ void ap_lommel_streams_f_krnl(
 		scale = __double2float_rn(dmod->photo.optical[ap_ilaw].R.R.val)/(4*PIE);
 		if (pos[frm]->cose_s[offset] > 0.0 && pos[frm]->cosi_s[offset] > 0.0
 				&& pos[frm]->body[i][j] == body) {
-			pos[frm]->b_s[offset] = intensityfactor * scale * pos[frm]->cosi_s[offset]
+			pos[frm]->b_s[offset] = intensity_factor[frm] * scale * pos[frm]->cosi_s[offset]
 			  / (pos[frm]->cosi_s[offset] + pos[frm]->cose_s[offset]);
 		}
 	}
@@ -381,7 +379,7 @@ __global__ void ap_harmlommel_streams_f_krnl(
 			c = pos[frm]->comp[i][j];
 			f = pos[frm]->f[i][j];
 			scale = __double2float_rn(dmod->photo.optical[ap_ilaw].harmR.local[c][f].R.val)/(4*PIE);
-			pos[frm]->b_s[offset] = intensityfactor * scale * pos[frm]->cosi_s[offset]
+			pos[frm]->b_s[offset] = intensity_factor[frm] * scale * pos[frm]->cosi_s[offset]
 			   / (pos[frm]->cosi_s[offset] + pos[frm]->cose_s[offset]);
 		}
 	}
@@ -439,7 +437,7 @@ __global__ void ap_inholommel_streams_f_krnl(
 			c = pos[frm]->comp[i][j];
 			f = pos[frm]->f[i][j];
 			scale = __double2float_rn(dmod->photo.optical[ap_ilaw].inhoR.local[c][f].R.val)/(4*PIE);
-			pos[frm]->b_s[offset] = intensityfactor * scale * pos[frm]->cosi_s[offset]
+			pos[frm]->b_s[offset] = intensity_factor[frm] * scale * pos[frm]->cosi_s[offset]
 			   / (pos[frm]->cosi_s[offset] + pos[frm]->cose_s[offset]);
 		}
 	}
@@ -483,7 +481,7 @@ __global__ void ap_geometrical_streams_f_krnl(
 	if (offset < nThreads) {
 		if (pos[frm]->cose_s[offset] > 0.0 && pos[frm]->cosi_s[offset] > 0.0
 		 && pos[frm]->body[i][j] == body) {
-			pos[frm]->b_s[offset] = intensityfactor * dmod->photo.optical[ap_ilaw].R.R.val;
+			pos[frm]->b_s[offset] = intensity_factor[frm] * dmod->photo.optical[ap_ilaw].R.R.val;
 		}
 	}
 }
