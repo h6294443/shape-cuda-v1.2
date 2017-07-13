@@ -204,15 +204,12 @@ __global__ void posvis_facet_krnl(
 	float imin_dbl, imax_dbl, jmin_dbl, jmax_dbl, old, s, t, z, den;
 	int3 fidx;
 	float3 n, v0, v1, v2, tv0, tv1, tv2, x;
-	__shared__ int pn;
-	__shared__ float kmpxl;
-
-	if (threadIdx.x == 0) {
-		pn = pos[frm]->n;
-		kmpxl = __double2float_rn(pos[frm]->km_per_pixel);
-	}
+	int pn;
+	float kmpxl;
 
 	if (f < nfacets) {
+		pn = pos[frm]->n;
+		kmpxl = __double2float_rn(pos[frm]->km_per_pixel);
 		/* The following section transfers vertex coordinates from double[3]
 		 * storage to float3		 */
 		fidx.x = verts[0]->f[f].v[0];
@@ -628,7 +625,7 @@ __host__ int posvis_gpu2(
 		printf("%i facets in posvis_cuda_2 in %3.3f ms with %i frames.\n", nf, milliseconds, nfrm_alloc);
 	}
 	checkErrorAfterKernelLaunch("The three posvis_cuda_streams2 kernels");
-	gpuErrchk(cudaMemcpyFromSymbol(&outbnd, posvis_streams_outbnd, sizeof(outbnd), 0,
+	gpuErrchk(cudaMemcpyFromSymbol(&outbnd, posvis_streams_outbnd, sizeof(int), 0,
 			cudaMemcpyDeviceToHost));
 
 	/* Free temp arrays, destroy streams and timers, as applicable */

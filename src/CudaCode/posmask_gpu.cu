@@ -15,8 +15,8 @@ __global__ void posmask_init_krnl(struct pos_t **pos, double3 *so,
 __global__ void posmask_init_krnl2(struct pos_t **pos, double3 *so,
 		float *pixels_per_km, int size) {
 	/* nfrm_alloc-threaded kernel */
-	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	if (f < size) {
+	int f = blockIdx.x * blockDim.x + threadIdx.x + 1;
+	if (f <= size) {
 		dev_mtrnsps2(so, pos[f]->oe, f);
 		dev_mmmul2(so, pos[f]->se, so, f);
 		pixels_per_km[f] = 1/pos[f]->km_per_pixel;

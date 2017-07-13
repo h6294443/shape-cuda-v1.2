@@ -2172,9 +2172,32 @@ void setuprealver( struct mod_t *mod, int c, int **iv, int nt, int *np)
 				for (l=0; l<=L; l++)
 					for (m=0; m<=l; m++)
 						plm[l][m] = nlm[l][m]*plgndr( l, m, costheta);
-				mod->shape.comp[c].real.v[v].afactor = matrix( 0, L, 0, L);
-				if (L > 0)
-					mod->shape.comp[c].real.v[v].bfactor = matrix( 1, L, 1, L);
+
+				if (CUDA) {
+					/* Outer loop allocation */
+					cudaCalloc((void**)&mod->shape.comp[c].real.v[v].afactor,
+						sizeof(double*), L+1);
+					/* Now inner loop allocation */
+					for (int z=0; z<=L; z++)
+						cudaCalloc((void**)&mod->shape.comp[c].real.v[v].afactor[z],
+								sizeof(double), L+1);
+				}
+				else
+					mod->shape.comp[c].real.v[v].afactor = matrix( 0, L, 0, L);
+
+				if (L > 0) {
+					if (CUDA) {
+						/* Outer loop allocation */
+						cudaCalloc((void**)&mod->shape.comp[c].real.v[v].bfactor,
+								sizeof(double*), L+1);
+						/* Now inner loop allocation */
+						for (int z=0; z<=L; z++)
+							cudaCalloc((void**)&mod->shape.comp[c].real.v[v].bfactor[z],
+									sizeof(double), L+1);
+					}
+					else
+						mod->shape.comp[c].real.v[v].bfactor = matrix( 1, L, 1, L);
+				}
 				for (l=0; l<=L; l++) {
 					mod->shape.comp[c].real.v[v].afactor[l][0] = plm[l][0];
 					for (m=1; m<=l; m++) {

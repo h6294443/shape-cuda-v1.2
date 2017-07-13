@@ -1315,9 +1315,9 @@ __global__ void pos2deldop_deldoplim_krnl2(
 
 	/* nfrm_malloc-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	__shared__ double dlppxl, dpppxl;
-	dlppxl = ddat->set[set].desc.deldop.del_per_pixel;
-	dpppxl = ddat->set[set].desc.deldop.dop_per_pixel;
+	float dlppxl, dpppxl;
+	dlppxl = __double2float_rn(ddat->set[set].desc.deldop.del_per_pixel);
+	dpppxl = __double2float_rn(ddat->set[set].desc.deldop.dop_per_pixel);
 
 	if (f<size) {
 		frame[f]->dellim[0] = deldoplim[f].w;

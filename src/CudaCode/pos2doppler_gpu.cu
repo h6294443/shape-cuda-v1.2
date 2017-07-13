@@ -242,7 +242,7 @@ __global__ void pos2doppler_init_krnl2(
 	if (f < size) {
 		/* Initialize variables  */
 		idop0[f] = 0;
-		pds_any_overflow = 0;
+		if (f==0)	pds_any_overflow = 0;
 		frame[f]->idoplim[0] = ndop[f] + 999999;
 		frame[f]->idoplim[1] = -999999;
 		frame[f]->doplim[0] =  HUGENUMBER;
@@ -448,28 +448,26 @@ __global__ void pos2doppler_radar_parameters_krnl2(
 
 	/* nfrm_alloc-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	double dopfact;
-	__shared__ int dpb, nsinc2, sinc2width;
-	__shared__ double kmppxl;
+	float dopfact;
+	int dpb, nsinc2, sinc2width;
+	float kmppxl;
 
 	dpb = ddat->set[set].desc.doppler.dop_per_bin;
-	kmppxl = pos[f]->km_per_pixel;
 	nsinc2 = dpar->nsinc2;
 	sinc2width = dpar->sinc2width;
 
-	if (f == 0) {
+	if (f < size) {
+		kmppxl = __double2float_rn(pos[f]->km_per_pixel);
+
+		if (f == 0) 	pds_nsinc2_sq = nsinc2 * nsinc2;
 		/*  Compute the Doppler bin increment per plane-of-sky pixel westward (ax)
       and northward (ay); these values are scaled by the "dopscale" parameter
       for this dataset.  Then compute km2Hz, the Doppler increment (Hz) per
       km perpendicular to the projected spin axis in the plane of the sky.     */
 
-		dopfact = ddat->set[set].desc.doppler.dopscale.val * KM2HZFACT * kmppxl
-			* ddat->set[set].desc.doppler.Ftx / dpb;
-		pds_nsinc2_sq = nsinc2 * nsinc2;
-	}
-	__syncthreads();
+		dopfact = ddat->set[set].desc.doppler.dopscale.val * KM2HZFACT *
+				kmppxl	* ddat->set[set].desc.doppler.Ftx / dpb;
 
-	if (f < size) {
 		axay[f].x = -w[f].y*dopfact;
 		axay[f].y =  w[f].x*dopfact;
 		frame[f]->view[v].km2Hz = sqrt(axay[f].x*axay[f].x +
@@ -1227,7 +1225,7 @@ __global__ void pos2doppler_finish_krnl2(
 	}
 }
 
-__host__ int pos2doppler_gpu(
+ __host__ int pos2doppler_gpu(
 		struct par_t *dpar,
 		struct mod_t *dmod,
 		struct dat_t *ddat,

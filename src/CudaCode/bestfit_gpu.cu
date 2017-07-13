@@ -343,7 +343,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			max_streams=0;
 	struct vertices_t **verts;
 	dim3 THD, BLK;
-
+	gpuErrchk(cudaSetDevice(GPU0));
 	/* This section collects parameters used for CUDA kernel launches throughout
 	 * the program.  The cudaStreams created here are used/re-used for the
 	 * lifetime of one program run */
@@ -403,7 +403,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	cudaStream_t bf_stream[max_streams];
 	for (int f=0; f<max_streams; f++)
 		gpuErrchk(cudaStreamCreate(&bf_stream[f]));
-	cudaStream_t bf1_stream[max_streams];
+	//cudaStream_t bf1_stream[max_streams];
 
 	/*..........................End section..................................*/
 
@@ -509,477 +509,477 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	}
 	printf("rad_xsec: %f\n", rad_xsec_save);
 	printf("deldop_zmax: %f\n", (float)deldop_zmax_save);
-//
-//	/* Point hotparam to a dummy variable (dummyval) rather than to a model pa-
-//	 * rameter; then call objective(0.0) to set dummy variable = 0.0, realize
-//	 * the initial model, calculate the fits, return initial model's objective
-//	 * function as enderr.                          */
-//	bf_set_hotparam_initial_krnl<<<1,1>>>();
-//	checkErrorAfterKernelLaunch("bf_set_hotparam_initial_krnl");
-//
-//	enderr = objective_gpu(0.0, verts, htype, dtype, nframes,
-//				nviews, lc_n, nsets, nf, bf_stream);
-//
-//	printf("#\n# searching for best fit ...\n");
-//	printf("%4d %8.6f to begin", 0, enderr);
-//
-//	/* Launch single-thread kernel to retrieve flags in dev_par */
-//	/*		flags[0] = dpar->baddiam;
-//			flags[1] = dpar->badphoto;
-//			flags[2] = dpar->posbnd;
-//			flags[3] = dpar->badposet;
-//			flags[4] = dpar->badradar;
-//			flags[5] = dpar->baddopscale;*/
-//
-//	bf_get_flags_krnl<<<1,1>>>(dpar, flags);
-//	checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-//	gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
-//			cudaMemcpyDeviceToHost));
-//
-//	/* Now act on the flags just retrieved from dev_par */
-//	if (hflags[0])		printf("  (BAD DIAMS)");
-//	if (hflags[1])		printf("  (BAD PHOTO)");
-//	if (hflags[2])		printf("  (BAD POS)");
-//	if (hflags[3])		printf("  (BAD POSET)");
-//	if (hflags[4])		printf("  (BAD RADAR)");
-//	if (hflags[5])		printf("  (BAD DOPSCALE)");		printf("\n");
-//	fflush(stdout);
-//
-//	/* Display the region within each delay-Doppler or Doppler frame that, ac-
-//	 * cording to initial model, has nonzero power. A warning is displayed if
-//	 * any region extends beyond the data limits: the vignetting is too tight,
-//	 * or else some model parameter (such as a delay correction polynomial co-
-//	 * efficient) is seriously in error.   */
-//	show_deldoplim_gpu(ddat, htype, nsets, nframes, max_frames);
-//
-//	/* Set the starting fit parameter for the first iteration only  */
-//	first_fitpar = par->first_fitpar;
-//	term_maxiter = par->term_maxiter;
-//	if (first_fitpar < 0 || first_fitpar >= nfpar) {
-//		printf("ERROR: need 0 <= first_fitpar < nparams (%d)\n", nfpar);
-//		bailout("bestfit.c\n");
-//	}
-//
-//	/* Iteratively adjust model; for each iteration, step through all free pa-
-//	 * rameters, adjusting one parameter at a time so as to minimize the objec-
-//	 * tive function at each step. Stop when fractional decrease in the objec-
-//	 * tive function from one iteration to the next is less than term_prec.   */
-//
-//	do {
-//		showvals = 1;        /* show reduced chi-square and penalties at beginning */
-//		beginerr = enderr;
-//		printf("# iteration %d %f", ++iter, beginerr);
-//
-//		/* Launch single-thread kernel to retrieve flags in dev_par */
-//		bf_get_flags_krnl<<<1,1>>>(dpar, flags);
-//		checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-//		gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
-//				cudaMemcpyDeviceToHost));
-//
-//		/* Now act on the flags just retrieved from dev_par */
-//		if (hflags[0])		printf("  (BAD DIAMS)");
-//		if (hflags[1])		printf("  (BAD PHOTO)");
-//		if (hflags[2])		printf("  (BAD POS)");
-//		if (hflags[3])		printf("  (BAD POSET)");
-//		if (hflags[4])		printf("  (BAD RADAR)");
-//		if (hflags[5])		printf("  (BAD DOPSCALE)");		printf("\n");
-//		fflush(stdout);
-//
-//		/* Show breakdown of chi-square by data type    */
-//		chi2_gpu(dpar, ddat, htype, dtype, nframes, lc_n, 1,
-//				nsets, bf_stream, max_frames);
-//
-//		/*  Loop through the free parameters  */
-//		cntr = first_fitpar % npar_update;
-//		//p = first_fitpar = 1;
-//		for (p=first_fitpar; p<nfpar; p++) {
-//
-////		p = first_fitpar;
-//			/*  Adjust only parameter p on this try  */
-//			bf_set_hotparam_pntr_krnl<<<1,1>>>(fpntr, fpartype, p);
-//			checkErrorAfterKernelLaunch("bf_set_hotparam_pntr_krnl");
-//			gpuErrchk(cudaMemcpyFromSymbol(&partype, bf_partype, sizeof(int),
-//					0, cudaMemcpyDeviceToHost));
-//
-//			newsize = newshape = newspin = newphoto = newdelcor = newdopscale
-//					= newxyoff = 0;
-//			if 		(partype == SIZEPAR)		newsize	 	= 1;
-//			else if (partype == SHAPEPAR)		newshape 	= 1;
-//			else if (partype == SPINPAR)		newspin 	= 1;
-//			else if (partype == PHOTOPAR)		newphoto 	= 1;
-//			else if (partype == DELCORPAR)		newdelcor 	= 1;
-//			else if (partype == DOPSCALEPAR)	newdopscale	= 1;
-//			else if (partype == XYOFFPAR)		newxyoff 	= 1;
-//
-//			/* If this is a size parameter AND model extends beyond POS frame
-//			 * AND the "avoid_badpos" parameter is turned on, shrink model by
-//			 * 5% at a time until it fits within the POS frame.
-//			 * We must start with the redundant model evaluation for the un-
-//			 * changed value of the size parameter, in case the first call to
-//			 * objective displays reduced chi-square and the penalty functions.  */
-//			if (avoid_badpos && partype == SIZEPAR) {
-//				bf_get_flags_krnl<<<1,1>>>(dpar, flags);
-//				checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-//				gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
-//						cudaMemcpyDeviceToHost));
-//
-//				/* Get value of (*hotparam) */
-//				bf_get_hotparam_val_krnl<<<1,1>>>();
-//				checkErrorAfterKernelLaunch("bf_get_hotparam_val_krnl");
-//				gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
-//						sizeof(double),	0, cudaMemcpyDeviceToHost));
-//
-//				while (hflags[2]) {
-//					objective_gpu(hotparamval, verts, htype, dtype,
-//							nframes, nviews, lc_n, nsets, nf, bf_stream);
-//
-//					bf_get_flags_krnl<<<1,1>>>(dpar, flags);
-//					checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-//					gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
-//							cudaMemcpyDeviceToHost));
-//
-//					if (hflags[2]) {
-//						/* Set the value pointed to by hotparam to 0.95 of its
-//						 * previous value */
-//						bf_mult_hotparam_val_krnl<<<1,1>>>(0.95);
-//						checkErrorAfterKernelLaunch("bf_mult_hotparam_val_krnl");
-//					}
-//				}
-//			}
-//
-//			/* Get value of (*hotparam) so that mnbrak can use it*/
-//			bf_get_hotparam_val_krnl<<<1,1>>>();
-//			checkErrorAfterKernelLaunch("bf_get_hotparam_val_krnl");
-//			gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
-//					sizeof(double),	0, cudaMemcpyDeviceToHost));
-//
-//			/* Use Numerical Recipes routine mnbrak to bracket a minimum in the
-//			 * objective function (reduced chi-square plus penalties) objec-
-//			 * tive(x), where x is the value of parameter p.  As initial trial
-//			 * parameter values, use ax (unadjusted value) and bx, that value
-//			 * incremented by the appropriate step size (length_step,spin_step,
-//			 * etc.). mnbrak returns 3 parameter values, with bx between ax
-//			 * and cx; note that ax and bx are changed from their input values.
-//			 * It also returns the 3 corresponding objective(x) values, where
-//			 * objb is less than obja and objc.  Hence there is at least one
-//			 * local minimum (but not necessarily *any* global minimum)
-//			 * somewhere between ax and cx.          */
-//			ax = hotparamval;
-//			bx = ax + hfparstep[p]; /* par usage us fine here */
-//
-//			mnbrak_gpu(&ax, &bx, &cx, &obja, &objb, &objc,
-//					objective_gpu, verts, htype, dtype, nframes,
-//					nviews, lc_n, nsets, nf, bf_stream);
-//
-//			/* Before homing in on local minimum, initialize flags that will
-//			 * tell us if model extended beyond POS frame (sky rendering) for
-//			 * any trial parameter value(s), if it extended beyond any POS ima-
-//			 * ges, and if it was too wide in delay-Doppler space         */
-//			check_posbnd = 0;
-//			check_badposet = 0;
-//			check_badradar = 0;
-//
-//			/* Now use Numerical Recipes function brent to find local minimum -
-//			 * that is, to find xmin, the best value of x, to within the
-//			 * *fractional* tolerance specified for parameter p (length_tol,
-//			 * spin_tol, etc.). brent's return value is the minimized objective
-//			 * function, objective(xmin). If more than one local minimum bet-
-//			 * ween ax and cx, brent might not find the best one. brent_abs is
-//			 * a modified version of brent that has an absolute fitting tole-
-//			 * rance as one of its arguments, in addition to the existing
-//			 * fractional tolerance.                                      */
-//			enderr = brent_abs_gpu(ax, bx, cx, objective_gpu, hfpartol[p],
-//					hfparabstol[p], &xmin, verts, htype, dtype, nframes, nviews, lc_n,
-//					nsets, nf, bf_stream);
-//
-//			/* Realize whichever part(s) of the model has changed.
-//			 *
-//			 * The code here is somewhat opaque because more than one part of
-//			 * the model may have changed - if the "vary_delcor0" "vary_radalb"
-//			 * and/or "vary_optalb" parameter is being used to permit joint pa-
-//			 * rameter adjustments. Before calling the vary_params routine, the
-//			 * size/shape and spin states must be realized (realize_mod and
-//			 * realize_spin); if albedos are being varied jointly with other
-//			 * parameters, the photometric state must also be realized
-//			 * (realize_photo); and in either case the 0th-order delay correc-
-//			 * tion polynomial coefficients must be reset to their saved
-//			 * values via the appropriate call to realize_delcor.          */
-//			/* Set the value pointed to by hotparam to 0.95 of its
-//			 * previous value (*hotparam) = xmin; */
-//			bf_set_hotparam_val_krnl<<<1,1>>>(xmin);
-//			checkErrorAfterKernelLaunch("bf_set_hotparam_val_krnl");
-//			gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
-//					sizeof(double),	0, cudaMemcpyDeviceToHost));
-//
-//			if (newsize || newshape)
-//				realize_mod_gpu(dpar, dmod, type, nf, bf_stream);
-//			if (newspin) {
-//				realize_spin_gpu(dpar, dmod, ddat, htype, nframes,
-//						nviews, nsets, bf_stream);
-//			}
-//			if ((newsize && vary_alb_size) || ((newshape ||
-//					newspin) && vary_alb_shapespin))
-//				realize_photo_gpu(dpar, dmod, 1.0, 1.0, 1, nf);  /* set R to R_save */
-//			if ((newsize && vary_delcor0_size) || ((newshape || newspin)
-//					&& vary_delcor0_shapespin)) {
-//				realize_delcor_gpu(ddat, 0.0, 1, nsets, nframes);  /* set delcor0 to delcor0_save */
-//			}
-//			if ((newspin && vary_dopscale_spin) || ((newsize || newshape)
-//					&& vary_dopscale_sizeshape))
-//				realize_dopscale_gpu(dpar, ddat, 1.0, 1, nsets, dtype);  /* set dopscale to dopscale_save */
-//			if (call_vary_params) {
-//				/* Call vary_params to get the adjustments to 0th-order delay
-//				 * correction polynomial coefficients, to Doppler scaling fac-
-//				 * tors, and to radar and optical albedos                  */
-//
-//				vary_params_gpu(dpar,dmod,ddat,11,&deldop_zmax,
-//						&rad_xsec, &opt_brightness, &cos_subradarlat,
-//						nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-//						bf_stream, max_frames);
-//
-//				delta_delcor0 = (deldop_zmax - deldop_zmax_save)*KM2US;
-//				if (cos_subradarlat != 0.0)
-//					dopscale_factor = cos_subradarlat_save/cos_subradarlat;
-//				if (rad_xsec != 0.0)
-//					radalb_factor = rad_xsec_save/rad_xsec;
-//				if (opt_brightness != 0.0)
-//					optalb_factor = opt_brightness_save/opt_brightness;
-//			}
-//			if ((newsize && vary_alb_size) || ((newshape || newspin) &&
-//					vary_alb_shapespin)) {
-//				realize_photo_gpu(dpar, dmod, radalb_factor, optalb_factor, 2, nf);  /* reset R, then R_save */
-//
-//				/* Must update opt_brightness_save for Hapke optical scattering
-//				 * law, since single-scattering albedo w isn't just an overall
-//				 * scaling factor  */
-//				if (vary_hapke) {
-//					vary_params_gpu(dpar,dmod,ddat,12,&dummyval2,
-//							&dummyval3,&opt_brightness,&dummyval4,
-//							nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-//							bf_stream, max_frames);
-//				}
-//			} else if (newphoto) {
-//				rad_xsec_save = rad_xsec;
-//				opt_brightness_save = opt_brightness;
-//				realize_photo_gpu(dpar, dmod, 1.0, 1.0, 0, nf);  /* set R_save to R */
-//			}
-//			if ((newsize && vary_delcor0_size) || ((newshape || newspin) &&
-//					vary_delcor0_shapespin)) {
-//				deldop_zmax_save = deldop_zmax;
-//				realize_delcor_gpu(ddat, delta_delcor0, 2, nsets, nframes);  /* reset delcor0, then delcor0_save */
-//			} else if (newdelcor)
-//				realize_delcor_gpu(ddat, 0.0, 0, nsets, nframes);  /* set delcor0_save to delcor0 */
-//
-//			if ((newspin && vary_dopscale_spin) || ((newsize || newshape) &&
-//					vary_dopscale_sizeshape)) {
-//				cos_subradarlat_save = cos_subradarlat;
-//				realize_dopscale_gpu(dpar, ddat, dopscale_factor, 2, nsets, dtype);  /* reset dopscale, then dopscale_save */
-//			} else if (newdopscale) {
-//				realize_dopscale_gpu(dpar, ddat, 1.0, 0, nsets, dtype);  /* set dopscale_save to dopscale */
-//			}
-//			if (newxyoff)
-//				realize_xyoff_gpu(ddat, nsets, dtype);
-//
-//			/* If the model extended beyond POS frame (sky rendering) for any
-//			 * trial parameter value(s), if it extended beyond any plane-of-
-//			 * sky fit frames, or if it was too wide in delay-Doppler space,
-//			 * evaluate model for best-fit parameter value to check if these
-//			 * problems persist - that is, to update "posbnd" "badposet" and
-//			 * "badradar" parameters for updated model.
-//			 * (This needn't be done for "baddiam" "badphoto" flags: if we've
-//			 * just finished adjusting an ellipsoid dimension or photometric
-//			 * parameter, realize_mod or realize_photo was called in code block
-//			 * above in order to realize the changed portion of model, and that
-//			 * call updated corresponding flag. Also we needn't worry about the
-//			 * "baddopscale" flag, since realize_dopscale was called above if
-//			 * Doppler scaling factors were changed.) The call to objective
-//			 * (*hotparam) first sets *hotparam (the parameter that we just
-//			 * adjusted) equal to itself (i.e., no change) and then calls
-//			 * calc_fits to evaluate the model for all datasets.          */
-//			if (check_posbnd || check_badposet || check_badradar)
-//				objective_gpu(hotparamval, verts, htype, dtype,
-//						nframes, nviews, lc_n, nsets, nf, bf_stream);
-//
-//			/* Launch single-thread kernel to retrieve flags in dev_par */
-//			bf_get_flags_krnl<<<1,1>>>(dpar, flags);
-//			checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-//			gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
-//					cudaMemcpyDeviceToHost));
-//			/* Display the objective function after each parameter adjustment.  */
-//			printf("%4d %8.6f %d", p, enderr, iround(par->fpartype[p]));
-//			if (hflags[0])		printf("  (BAD DIAMS)");
-//			if (hflags[1])		printf("  (BAD PHOTO)");
-//			if (hflags[2])		printf("  (BAD POS)");
-//			if (hflags[3])		printf("  (BAD POSET)");
-//			if (hflags[4])		printf("  (BAD RADAR)");
-//			if (hflags[5])		printf("  (BAD DOPSCALE)");
-//			printf("\n");
-//			fflush(stdout);
-//
-//			/* Display reduced chi-square and individual penalty values after
-//			 * every 20th parameter adjustment. Setting showvals to 1 here
-//			 * means that these things will be displayed next time objective(x)
-//			 * is evaluated - at start of NEXT parameter adjustment.  Specifi-
-//			 * cally, they will be displayed when routine mnbrak evaluates
-//			 * objective(x) for *unadjusted* parameter value ax (see comment
-//			 * above).
-//			 * Also rewrite model and obs files after every 20th parameter
-//			 * adjustment. Most of obs file doesn't change, but some floating
-//			 * parameters (i.e. delay correction polynomial coefficients) do.  */
-//			if (++cntr >= npar_update) {
-//				cntr = 0;
-//				showvals = 1;
-//				calc_fits_gpu(dpar, dmod, ddat, verts, nviews,
-//						nframes, lc_n, htype, nsets, nf, bf_stream, max_frames);
-//				chi2_gpu(dpar, ddat, htype, dtype, nframes,
-//						lc_n, 0, nsets, bf_stream, max_frames);
-//
-//				//write_mod( par, mod);
-//				//write_dat( par, dat);
-//			}
-//		}  // End fitpar loop
-//
-//		/* End of this iteration: Write model and data to disk, and display the
-//		 * region within each delay-Doppler or Doppler frame for which model
-//		 * power is nonzero.                                               */
-//		if (cntr != 0) {
-//			calc_fits_gpu(dpar, dmod, ddat, verts, nviews,
-//					nframes, lc_n, htype, nsets, nf, bf_stream, max_frames);
-//			chi2_gpu(dpar, ddat, htype, dtype, nframes,
-//					lc_n, 0, nsets, bf_stream, max_frames);
-//
-//			//write_mod( par, mod);
-//			//write_dat( par, dat);
-//		}
-//		show_deldoplim_gpu(ddat, htype, nsets, nframes, max_frames);
-//
-//		/* Check if we should start a new iteration  */
-//		if (iter == term_maxiter) {
-//			/* Just completed last iteration permitted by "term_maxiter" para-
-//			 * meter, so stop iterating; note that since iter is 1-based, this
-//			 * test is always false if "term_maxiter" = 0 (its default value)  */
-//			keep_iterating = 0;
-//
-//		} else if (first_fitpar > 0) {
-//			/* Just completed partial iteration (possible for iteration 1): if
-//			 * "objfunc_start" parameter was given, check if fractional decrea-
-//			 * se in objective function *relative to objfunc_start* during the
-//			 * just-completed iteration was larger than term_prec, thus
-//			 * justifying a new iteration; if it wasn't specified, definitely
-//			 * proceed to a new iteration.                            */
-//			if (objfunc_start > 0.0)
-//				keep_iterating = ((objfunc_start - enderr)/enderr >= term_prec);
-//			else
-//				keep_iterating = 1;
-//			first_fitpar = 0;     /* for all iterations after the first iteration */
-//
-//		} else if (term_badmodel && (hflags[0] || hflags[1] || hflags[2] ||
-//				hflags[3] || hflags[4] || hflags[5]) ) {
-//
-//			/* Just completed a full iteration, stop iterating because "term_
-//			 * badmodel" parameter is turned on and model has a fatal flaw: it
-//			 * extends beyond POS frame OR it one or more illegal photometric
-//			 * parameters OR it has one or more tiny or negative ellipsoid dia-
-//			 * meters OR it has plane-of-sky fit frames too small to "contain"
-//			 * model OR it is too wide in delay-Doppler space for (delay-)
-//			 * Doppler fit frames to be correctly constructed OR it has out-of-
-//			 * range values for one or more Doppler scaling factors    */
-//			keep_iterating = 0;
-//
-//		} else {
-//			/* Just completed a full iteration and the model has no fatal flaws
-//			 * (or else the "term_badmodel" parameter is turned off): keep
-//			 * iterating if fractional decrease objective function during the
-//			 * just-completed iteration was greater than term_prec         */
-//			keep_iterating = ((beginerr - enderr)/enderr >= term_prec);
-//		}
-//
-//	} while (keep_iterating);
-//
-//		/* Show final values of reduced chi-square, individual penalty functions,
-//		 * and the objective function  */
-//		final_chi2 = chi2_gpu(dpar, ddat, htype, dtype, nframes,
-//				lc_n, 1, nsets, bf_stream, max_frames);
-//
-//		final_redchi2 = final_chi2/dat->dof;
-//		printf("# search completed\n");
-//
-//		/* Launch single-thread kernel to get these final flags from dev->par:
-//		 * pen.n, baddiam, badphoto, posbnd, badposet, badradar, baddopscale */
-//		/* Launch single-thread kernel to retrieve flags in dev_par */
-//		bf_get_flags_krnl<<<1,1>>>(dpar, flags);
-//		checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-//		gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
-//				cudaMemcpyDeviceToHost));
-//
-//		if (par->pen.n > 0 || hflags[0] || hflags[1] || hflags[2]	|| hflags[3] ||
-//				hflags[4] || hflags[5]) {
-//			printf("#\n");
-//			printf("# %15s %e\n", "reduced chi2", final_redchi2);
-//			if (par->pen.n > 0) {
-//				par->showstate = 1;
-//			penalties_gpu(dpar, dmod, ddat);
-//			par->showstate = 0;
-//		}
-//		if (hflags[0])
-//			printf("# objective func multiplied by %.1f: illegal ellipsoid diameters\n",
-//					baddiam_factor);
-//		if (hflags[1])
-//			printf("# objective func multiplied by %.1f: illegal photometric parameters\n",
-//					badphoto_factor);
-//		if (hflags[2])
-//			printf("# objective func multiplied by %.1f: model extends beyond POS frame\n",
-//					posbnd_factor);
-//		if (hflags[3])
-//			printf("# objective func multiplied by %.1f: "
-//					"model extends beyond plane-of-sky fit image\n",
-//					badposet_factor);
-//		if (hflags[4])
-//			printf("# objective func multiplied by %.1f: "
-//					"model is too wide in delay-Doppler space to construct fit image\n",
-//					badradar_factor);
-//		if (hflags[5])
-//			printf("# objective func multiplied by %.1f: illegal Doppler scaling factors\n",
-//					baddopscale_factor);
-//		printf("# ----------------------------\n");
-//		printf("# %15s %e\n", "objective func", enderr);
-//		printf("#\n");
-//	}
-//	intifpossible( dofstring, MAXLEN, dat->dof, SMALLVAL, "%f");
+
+	/* Point hotparam to a dummy variable (dummyval) rather than to a model pa-
+	 * rameter; then call objective(0.0) to set dummy variable = 0.0, realize
+	 * the initial model, calculate the fits, return initial model's objective
+	 * function as enderr.                          */
+	bf_set_hotparam_initial_krnl<<<1,1>>>();
+	checkErrorAfterKernelLaunch("bf_set_hotparam_initial_krnl");
+
+	enderr = objective_gpu(0.0, verts, htype, dtype, nframes,
+				nviews, lc_n, nsets, nf, bf_stream);
+
+	printf("#\n# searching for best fit ...\n");
+	printf("%4d %8.6f to begin", 0, enderr);
+
+	/* Launch single-thread kernel to retrieve flags in dev_par */
+	/*		flags[0] = dpar->baddiam;
+			flags[1] = dpar->badphoto;
+			flags[2] = dpar->posbnd;
+			flags[3] = dpar->badposet;
+			flags[4] = dpar->badradar;
+			flags[5] = dpar->baddopscale;*/
+
+	bf_get_flags_krnl<<<1,1>>>(dpar, flags);
+	checkErrorAfterKernelLaunch("bf_get_flags_krnl");
+	gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+			cudaMemcpyDeviceToHost));
+
+	/* Now act on the flags just retrieved from dev_par */
+	if (hflags[0])		printf("  (BAD DIAMS)");
+	if (hflags[1])		printf("  (BAD PHOTO)");
+	if (hflags[2])		printf("  (BAD POS)");
+	if (hflags[3])		printf("  (BAD POSET)");
+	if (hflags[4])		printf("  (BAD RADAR)");
+	if (hflags[5])		printf("  (BAD DOPSCALE)");		printf("\n");
+	fflush(stdout);
+
+	/* Display the region within each delay-Doppler or Doppler frame that, ac-
+	 * cording to initial model, has nonzero power. A warning is displayed if
+	 * any region extends beyond the data limits: the vignetting is too tight,
+	 * or else some model parameter (such as a delay correction polynomial co-
+	 * efficient) is seriously in error.   */
+	show_deldoplim_gpu(ddat, htype, nsets, nframes, max_frames);
+
+	/* Set the starting fit parameter for the first iteration only  */
+	first_fitpar = par->first_fitpar;
+	term_maxiter = par->term_maxiter;
+	if (first_fitpar < 0 || first_fitpar >= nfpar) {
+		printf("ERROR: need 0 <= first_fitpar < nparams (%d)\n", nfpar);
+		bailout("bestfit.c\n");
+	}
+
+	/* Iteratively adjust model; for each iteration, step through all free pa-
+	 * rameters, adjusting one parameter at a time so as to minimize the objec-
+	 * tive function at each step. Stop when fractional decrease in the objec-
+	 * tive function from one iteration to the next is less than term_prec.   */
+
+	do {
+		showvals = 1;        /* show reduced chi-square and penalties at beginning */
+		beginerr = enderr;
+		printf("# iteration %d %f", ++iter, beginerr);
+
+		/* Launch single-thread kernel to retrieve flags in dev_par */
+		bf_get_flags_krnl<<<1,1>>>(dpar, flags);
+		checkErrorAfterKernelLaunch("bf_get_flags_krnl");
+		gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+				cudaMemcpyDeviceToHost));
+
+		/* Now act on the flags just retrieved from dev_par */
+		if (hflags[0])		printf("  (BAD DIAMS)");
+		if (hflags[1])		printf("  (BAD PHOTO)");
+		if (hflags[2])		printf("  (BAD POS)");
+		if (hflags[3])		printf("  (BAD POSET)");
+		if (hflags[4])		printf("  (BAD RADAR)");
+		if (hflags[5])		printf("  (BAD DOPSCALE)");		printf("\n");
+		fflush(stdout);
+
+		/* Show breakdown of chi-square by data type    */
+		chi2_gpu(dpar, ddat, htype, dtype, nframes, lc_n, 1,
+				nsets, bf_stream, max_frames);
+
+		/*  Loop through the free parameters  */
+		cntr = first_fitpar % npar_update;
+		//p = first_fitpar = 1;
+		for (p=first_fitpar; p<nfpar; p++) {
+
+//		p = first_fitpar;
+			/*  Adjust only parameter p on this try  */
+			bf_set_hotparam_pntr_krnl<<<1,1>>>(fpntr, fpartype, p);
+			checkErrorAfterKernelLaunch("bf_set_hotparam_pntr_krnl");
+			gpuErrchk(cudaMemcpyFromSymbol(&partype, bf_partype, sizeof(int),
+					0, cudaMemcpyDeviceToHost));
+
+			newsize = newshape = newspin = newphoto = newdelcor = newdopscale
+					= newxyoff = 0;
+			if 		(partype == SIZEPAR)		newsize	 	= 1;
+			else if (partype == SHAPEPAR)		newshape 	= 1;
+			else if (partype == SPINPAR)		newspin 	= 1;
+			else if (partype == PHOTOPAR)		newphoto 	= 1;
+			else if (partype == DELCORPAR)		newdelcor 	= 1;
+			else if (partype == DOPSCALEPAR)	newdopscale	= 1;
+			else if (partype == XYOFFPAR)		newxyoff 	= 1;
+
+			/* If this is a size parameter AND model extends beyond POS frame
+			 * AND the "avoid_badpos" parameter is turned on, shrink model by
+			 * 5% at a time until it fits within the POS frame.
+			 * We must start with the redundant model evaluation for the un-
+			 * changed value of the size parameter, in case the first call to
+			 * objective displays reduced chi-square and the penalty functions.  */
+			if (avoid_badpos && partype == SIZEPAR) {
+				bf_get_flags_krnl<<<1,1>>>(dpar, flags);
+				checkErrorAfterKernelLaunch("bf_get_flags_krnl");
+				gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+						cudaMemcpyDeviceToHost));
+
+				/* Get value of (*hotparam) */
+				bf_get_hotparam_val_krnl<<<1,1>>>();
+				checkErrorAfterKernelLaunch("bf_get_hotparam_val_krnl");
+				gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
+						sizeof(double),	0, cudaMemcpyDeviceToHost));
+
+				while (hflags[2]) {
+					objective_gpu(hotparamval, verts, htype, dtype,
+							nframes, nviews, lc_n, nsets, nf, bf_stream);
+
+					bf_get_flags_krnl<<<1,1>>>(dpar, flags);
+					checkErrorAfterKernelLaunch("bf_get_flags_krnl");
+					gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+							cudaMemcpyDeviceToHost));
+
+					if (hflags[2]) {
+						/* Set the value pointed to by hotparam to 0.95 of its
+						 * previous value */
+						bf_mult_hotparam_val_krnl<<<1,1>>>(0.95);
+						checkErrorAfterKernelLaunch("bf_mult_hotparam_val_krnl");
+					}
+				}
+			}
+
+			/* Get value of (*hotparam) so that mnbrak can use it*/
+			bf_get_hotparam_val_krnl<<<1,1>>>();
+			checkErrorAfterKernelLaunch("bf_get_hotparam_val_krnl");
+			gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
+					sizeof(double),	0, cudaMemcpyDeviceToHost));
+
+			/* Use Numerical Recipes routine mnbrak to bracket a minimum in the
+			 * objective function (reduced chi-square plus penalties) objec-
+			 * tive(x), where x is the value of parameter p.  As initial trial
+			 * parameter values, use ax (unadjusted value) and bx, that value
+			 * incremented by the appropriate step size (length_step,spin_step,
+			 * etc.). mnbrak returns 3 parameter values, with bx between ax
+			 * and cx; note that ax and bx are changed from their input values.
+			 * It also returns the 3 corresponding objective(x) values, where
+			 * objb is less than obja and objc.  Hence there is at least one
+			 * local minimum (but not necessarily *any* global minimum)
+			 * somewhere between ax and cx.          */
+			ax = hotparamval;
+			bx = ax + hfparstep[p]; /* par usage us fine here */
+
+			mnbrak_gpu(&ax, &bx, &cx, &obja, &objb, &objc,
+					objective_gpu, verts, htype, dtype, nframes,
+					nviews, lc_n, nsets, nf, bf_stream);
+
+			/* Before homing in on local minimum, initialize flags that will
+			 * tell us if model extended beyond POS frame (sky rendering) for
+			 * any trial parameter value(s), if it extended beyond any POS ima-
+			 * ges, and if it was too wide in delay-Doppler space         */
+			check_posbnd = 0;
+			check_badposet = 0;
+			check_badradar = 0;
+
+			/* Now use Numerical Recipes function brent to find local minimum -
+			 * that is, to find xmin, the best value of x, to within the
+			 * *fractional* tolerance specified for parameter p (length_tol,
+			 * spin_tol, etc.). brent's return value is the minimized objective
+			 * function, objective(xmin). If more than one local minimum bet-
+			 * ween ax and cx, brent might not find the best one. brent_abs is
+			 * a modified version of brent that has an absolute fitting tole-
+			 * rance as one of its arguments, in addition to the existing
+			 * fractional tolerance.                                      */
+			enderr = brent_abs_gpu(ax, bx, cx, objective_gpu, hfpartol[p],
+					hfparabstol[p], &xmin, verts, htype, dtype, nframes, nviews, lc_n,
+					nsets, nf, bf_stream);
+
+			/* Realize whichever part(s) of the model has changed.
+			 *
+			 * The code here is somewhat opaque because more than one part of
+			 * the model may have changed - if the "vary_delcor0" "vary_radalb"
+			 * and/or "vary_optalb" parameter is being used to permit joint pa-
+			 * rameter adjustments. Before calling the vary_params routine, the
+			 * size/shape and spin states must be realized (realize_mod and
+			 * realize_spin); if albedos are being varied jointly with other
+			 * parameters, the photometric state must also be realized
+			 * (realize_photo); and in either case the 0th-order delay correc-
+			 * tion polynomial coefficients must be reset to their saved
+			 * values via the appropriate call to realize_delcor.          */
+			/* Set the value pointed to by hotparam to 0.95 of its
+			 * previous value (*hotparam) = xmin; */
+			bf_set_hotparam_val_krnl<<<1,1>>>(xmin);
+			checkErrorAfterKernelLaunch("bf_set_hotparam_val_krnl");
+			gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
+					sizeof(double),	0, cudaMemcpyDeviceToHost));
+
+			if (newsize || newshape)
+				realize_mod_gpu(dpar, dmod, type, nf, bf_stream);
+			if (newspin) {
+				realize_spin_gpu(dpar, dmod, ddat, htype, nframes,
+						nviews, nsets, bf_stream);
+			}
+			if ((newsize && vary_alb_size) || ((newshape ||
+					newspin) && vary_alb_shapespin))
+				realize_photo_gpu(dpar, dmod, 1.0, 1.0, 1, nf);  /* set R to R_save */
+			if ((newsize && vary_delcor0_size) || ((newshape || newspin)
+					&& vary_delcor0_shapespin)) {
+				realize_delcor_gpu(ddat, 0.0, 1, nsets, nframes);  /* set delcor0 to delcor0_save */
+			}
+			if ((newspin && vary_dopscale_spin) || ((newsize || newshape)
+					&& vary_dopscale_sizeshape))
+				realize_dopscale_gpu(dpar, ddat, 1.0, 1, nsets, dtype);  /* set dopscale to dopscale_save */
+			if (call_vary_params) {
+				/* Call vary_params to get the adjustments to 0th-order delay
+				 * correction polynomial coefficients, to Doppler scaling fac-
+				 * tors, and to radar and optical albedos                  */
+
+				vary_params_gpu(dpar,dmod,ddat,11,&deldop_zmax,
+						&rad_xsec, &opt_brightness, &cos_subradarlat,
+						nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+						bf_stream, max_frames);
+
+				delta_delcor0 = (deldop_zmax - deldop_zmax_save)*KM2US;
+				if (cos_subradarlat != 0.0)
+					dopscale_factor = cos_subradarlat_save/cos_subradarlat;
+				if (rad_xsec != 0.0)
+					radalb_factor = rad_xsec_save/rad_xsec;
+				if (opt_brightness != 0.0)
+					optalb_factor = opt_brightness_save/opt_brightness;
+			}
+			if ((newsize && vary_alb_size) || ((newshape || newspin) &&
+					vary_alb_shapespin)) {
+				realize_photo_gpu(dpar, dmod, radalb_factor, optalb_factor, 2, nf);  /* reset R, then R_save */
+
+				/* Must update opt_brightness_save for Hapke optical scattering
+				 * law, since single-scattering albedo w isn't just an overall
+				 * scaling factor  */
+				if (vary_hapke) {
+					vary_params_gpu(dpar,dmod,ddat,12,&dummyval2,
+							&dummyval3,&opt_brightness,&dummyval4,
+							nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+							bf_stream, max_frames);
+				}
+			} else if (newphoto) {
+				rad_xsec_save = rad_xsec;
+				opt_brightness_save = opt_brightness;
+				realize_photo_gpu(dpar, dmod, 1.0, 1.0, 0, nf);  /* set R_save to R */
+			}
+			if ((newsize && vary_delcor0_size) || ((newshape || newspin) &&
+					vary_delcor0_shapespin)) {
+				deldop_zmax_save = deldop_zmax;
+				realize_delcor_gpu(ddat, delta_delcor0, 2, nsets, nframes);  /* reset delcor0, then delcor0_save */
+			} else if (newdelcor)
+				realize_delcor_gpu(ddat, 0.0, 0, nsets, nframes);  /* set delcor0_save to delcor0 */
+
+			if ((newspin && vary_dopscale_spin) || ((newsize || newshape) &&
+					vary_dopscale_sizeshape)) {
+				cos_subradarlat_save = cos_subradarlat;
+				realize_dopscale_gpu(dpar, ddat, dopscale_factor, 2, nsets, dtype);  /* reset dopscale, then dopscale_save */
+			} else if (newdopscale) {
+				realize_dopscale_gpu(dpar, ddat, 1.0, 0, nsets, dtype);  /* set dopscale_save to dopscale */
+			}
+			if (newxyoff)
+				realize_xyoff_gpu(ddat, nsets, dtype);
+
+			/* If the model extended beyond POS frame (sky rendering) for any
+			 * trial parameter value(s), if it extended beyond any plane-of-
+			 * sky fit frames, or if it was too wide in delay-Doppler space,
+			 * evaluate model for best-fit parameter value to check if these
+			 * problems persist - that is, to update "posbnd" "badposet" and
+			 * "badradar" parameters for updated model.
+			 * (This needn't be done for "baddiam" "badphoto" flags: if we've
+			 * just finished adjusting an ellipsoid dimension or photometric
+			 * parameter, realize_mod or realize_photo was called in code block
+			 * above in order to realize the changed portion of model, and that
+			 * call updated corresponding flag. Also we needn't worry about the
+			 * "baddopscale" flag, since realize_dopscale was called above if
+			 * Doppler scaling factors were changed.) The call to objective
+			 * (*hotparam) first sets *hotparam (the parameter that we just
+			 * adjusted) equal to itself (i.e., no change) and then calls
+			 * calc_fits to evaluate the model for all datasets.          */
+			if (check_posbnd || check_badposet || check_badradar)
+				objective_gpu(hotparamval, verts, htype, dtype,
+						nframes, nviews, lc_n, nsets, nf, bf_stream);
+
+			/* Launch single-thread kernel to retrieve flags in dev_par */
+			bf_get_flags_krnl<<<1,1>>>(dpar, flags);
+			checkErrorAfterKernelLaunch("bf_get_flags_krnl");
+			gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+					cudaMemcpyDeviceToHost));
+			/* Display the objective function after each parameter adjustment.  */
+			printf("%4d %8.6f %d", p, enderr, iround(par->fpartype[p]));
+			if (hflags[0])		printf("  (BAD DIAMS)");
+			if (hflags[1])		printf("  (BAD PHOTO)");
+			if (hflags[2])		printf("  (BAD POS)");
+			if (hflags[3])		printf("  (BAD POSET)");
+			if (hflags[4])		printf("  (BAD RADAR)");
+			if (hflags[5])		printf("  (BAD DOPSCALE)");
+			printf("\n");
+			fflush(stdout);
+
+			/* Display reduced chi-square and individual penalty values after
+			 * every 20th parameter adjustment. Setting showvals to 1 here
+			 * means that these things will be displayed next time objective(x)
+			 * is evaluated - at start of NEXT parameter adjustment.  Specifi-
+			 * cally, they will be displayed when routine mnbrak evaluates
+			 * objective(x) for *unadjusted* parameter value ax (see comment
+			 * above).
+			 * Also rewrite model and obs files after every 20th parameter
+			 * adjustment. Most of obs file doesn't change, but some floating
+			 * parameters (i.e. delay correction polynomial coefficients) do.  */
+			if (++cntr >= npar_update) {
+				cntr = 0;
+				showvals = 1;
+				calc_fits_gpu(dpar, dmod, ddat, verts, nviews,
+						nframes, lc_n, htype, nsets, nf, bf_stream, max_frames);
+				chi2_gpu(dpar, ddat, htype, dtype, nframes,
+						lc_n, 0, nsets, bf_stream, max_frames);
+
+				//write_mod( par, mod);
+				//write_dat( par, dat);
+			}
+		}  // End fitpar loop
+
+		/* End of this iteration: Write model and data to disk, and display the
+		 * region within each delay-Doppler or Doppler frame for which model
+		 * power is nonzero.                                               */
+		if (cntr != 0) {
+			calc_fits_gpu(dpar, dmod, ddat, verts, nviews,
+					nframes, lc_n, htype, nsets, nf, bf_stream, max_frames);
+			chi2_gpu(dpar, ddat, htype, dtype, nframes,
+					lc_n, 0, nsets, bf_stream, max_frames);
+
+			//write_mod( par, mod);
+			//write_dat( par, dat);
+		}
+		show_deldoplim_gpu(ddat, htype, nsets, nframes, max_frames);
+
+		/* Check if we should start a new iteration  */
+		if (iter == term_maxiter) {
+			/* Just completed last iteration permitted by "term_maxiter" para-
+			 * meter, so stop iterating; note that since iter is 1-based, this
+			 * test is always false if "term_maxiter" = 0 (its default value)  */
+			keep_iterating = 0;
+
+		} else if (first_fitpar > 0) {
+			/* Just completed partial iteration (possible for iteration 1): if
+			 * "objfunc_start" parameter was given, check if fractional decrea-
+			 * se in objective function *relative to objfunc_start* during the
+			 * just-completed iteration was larger than term_prec, thus
+			 * justifying a new iteration; if it wasn't specified, definitely
+			 * proceed to a new iteration.                            */
+			if (objfunc_start > 0.0)
+				keep_iterating = ((objfunc_start - enderr)/enderr >= term_prec);
+			else
+				keep_iterating = 1;
+			first_fitpar = 0;     /* for all iterations after the first iteration */
+
+		} else if (term_badmodel && (hflags[0] || hflags[1] || hflags[2] ||
+				hflags[3] || hflags[4] || hflags[5]) ) {
+
+			/* Just completed a full iteration, stop iterating because "term_
+			 * badmodel" parameter is turned on and model has a fatal flaw: it
+			 * extends beyond POS frame OR it one or more illegal photometric
+			 * parameters OR it has one or more tiny or negative ellipsoid dia-
+			 * meters OR it has plane-of-sky fit frames too small to "contain"
+			 * model OR it is too wide in delay-Doppler space for (delay-)
+			 * Doppler fit frames to be correctly constructed OR it has out-of-
+			 * range values for one or more Doppler scaling factors    */
+			keep_iterating = 0;
+
+		} else {
+			/* Just completed a full iteration and the model has no fatal flaws
+			 * (or else the "term_badmodel" parameter is turned off): keep
+			 * iterating if fractional decrease objective function during the
+			 * just-completed iteration was greater than term_prec         */
+			keep_iterating = ((beginerr - enderr)/enderr >= term_prec);
+		}
+
+	} while (keep_iterating);
+
+		/* Show final values of reduced chi-square, individual penalty functions,
+		 * and the objective function  */
+		final_chi2 = chi2_gpu(dpar, ddat, htype, dtype, nframes,
+				lc_n, 1, nsets, bf_stream, max_frames);
+
+		final_redchi2 = final_chi2/dat->dof;
+		printf("# search completed\n");
+
+		/* Launch single-thread kernel to get these final flags from dev->par:
+		 * pen.n, baddiam, badphoto, posbnd, badposet, badradar, baddopscale */
+		/* Launch single-thread kernel to retrieve flags in dev_par */
+		bf_get_flags_krnl<<<1,1>>>(dpar, flags);
+		checkErrorAfterKernelLaunch("bf_get_flags_krnl");
+		gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+				cudaMemcpyDeviceToHost));
+
+		if (par->pen.n > 0 || hflags[0] || hflags[1] || hflags[2]	|| hflags[3] ||
+				hflags[4] || hflags[5]) {
+			printf("#\n");
+			printf("# %15s %e\n", "reduced chi2", final_redchi2);
+			if (par->pen.n > 0) {
+				par->showstate = 1;
+			penalties_gpu(dpar, dmod, ddat);
+			par->showstate = 0;
+		}
+		if (hflags[0])
+			printf("# objective func multiplied by %.1f: illegal ellipsoid diameters\n",
+					baddiam_factor);
+		if (hflags[1])
+			printf("# objective func multiplied by %.1f: illegal photometric parameters\n",
+					badphoto_factor);
+		if (hflags[2])
+			printf("# objective func multiplied by %.1f: model extends beyond POS frame\n",
+					posbnd_factor);
+		if (hflags[3])
+			printf("# objective func multiplied by %.1f: "
+					"model extends beyond plane-of-sky fit image\n",
+					badposet_factor);
+		if (hflags[4])
+			printf("# objective func multiplied by %.1f: "
+					"model is too wide in delay-Doppler space to construct fit image\n",
+					badradar_factor);
+		if (hflags[5])
+			printf("# objective func multiplied by %.1f: illegal Doppler scaling factors\n",
+					baddopscale_factor);
+		printf("# ----------------------------\n");
+		printf("# %15s %e\n", "objective func", enderr);
+		printf("#\n");
+	}
+	intifpossible( dofstring, MAXLEN, dat->dof, SMALLVAL, "%f");
 	printf("# final chi2 = %e for %s dof (reduced chi2 = %f)\n",
 			final_chi2, dofstring, final_redchi2);
 	printf("#\n");
 	fflush(stdout);
 
 	/* Destroy the streams */
-//	cudaSetDevice(GPU0);
-//	for (int f=0; f<max_frames; f++)
-//		cudaStreamDestroy(bf_stream[f]);
-//
+	cudaSetDevice(GPU0);
+	for (int f=0; f<max_frames; f++)
+		cudaStreamDestroy(bf_stream[f]);
 
 
-//	free(hflags);
-//	free(htype);
-//	free(nframes);
-//	free(lc_n);
-//	free(nviews);
-//	free(hfparstep);
-//	free(hfpartol);
-//	free(hfparabstol);
-////	free(fpartype);
-//	cudaFree(sdev_par);
-//	cudaFree(sdev_mod);
-//	cudaFree(sdev_dat);
-//	cudaFree(fparstep);
-//	cudaFree(fpartol);
-//	cudaFree(fparabstol);
-//	cudaFree(fpartype);
-//	cudaFree(fpntr);
-//	cudaFree(flags);
-//	cudaFree(dtype);
-//	cudaFree(verts);
-//	cudaDeviceReset();
-//	//cudaProfilerStop();
+
+	free(hflags);
+	free(htype);
+	free(nframes);
+	free(lc_n);
+	free(nviews);
+	free(hfparstep);
+	free(hfpartol);
+	free(hfparabstol);
+	free(hfpartype);
+	cudaFree(sdev_par);
+	cudaFree(sdev_mod);
+	cudaFree(sdev_dat);
+	cudaFree(fparstep);
+	cudaFree(fpartol);
+	cudaFree(fparabstol);
+	cudaFree(fpartype);
+	cudaFree(fpntr);
+	cudaFree(flags);
+	cudaFree(dtype);
+	cudaFree(verts);
+	cudaDeviceReset();
+	//cudaProfilerStop();
 	return enderr;
 }
 

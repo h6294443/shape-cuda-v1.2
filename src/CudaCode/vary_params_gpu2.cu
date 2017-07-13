@@ -227,8 +227,6 @@ __global__ void cosdelta_krnl(struct dat_t *ddat, int s, int size) {
 	}
 }
 
-
-
 __global__ void finalize_krnl(struct dat_t *ddat) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
@@ -288,9 +286,9 @@ __global__ void dop_params_krnl(struct par_t *dpar, struct dat_t *ddat,
 __global__ void lghtcrv_params_krnl(struct par_t *dpar, struct dat_t *ddat,
 		struct pos_t **pos, int *posn, int *bistatic, int s, int size) {
 	/* nframes-threaded kernel */
-	int f = blockIdx.x * blockDim.x + threadIdx.x;
+	int f = blockIdx.x * blockDim.x + threadIdx.x + 1;
 
-	if (f < size) {
+	if (f <= size) {
 		pos[f] = &ddat->set[s].desc.lghtcrv.rend[f].pos;
 		posn[f] = pos[f]->n;
 		bistatic[f] = pos[f]->bistatic;

@@ -9,7 +9,7 @@
  */
 #include "../shape/head.h"
 
-int CUDA   = 1;		/* Use CUDA code or run CPU code 	*/
+int CUDA   = 0;		/* Use CUDA code or run CPU code 	*/
 int TIMING = 0;		/* Time certain kernel executions	*/
 int GPU0   = 1;		/* Which GPU will run code 			*/
 int GPU1   = 0;

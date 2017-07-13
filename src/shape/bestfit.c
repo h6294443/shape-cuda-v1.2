@@ -561,8 +561,8 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 				chi2( par, dat, 0);
 //				if (mpi_nproc > 1)
 //					get_calfact( dat);
-//				write_mod( par, mod);
-//				write_dat( par, dat);
+				write_mod( par, mod);
+				write_dat( par, dat);
 			}
 		}
 
@@ -574,8 +574,8 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			chi2( par, dat, 0);
 //			if (mpi_nproc > 1)
 //				get_calfact( dat);
-//			write_mod( par, mod);
-//			write_dat( par, dat);
+			write_mod( par, mod);
+			write_dat( par, dat);
 		}
 		show_deldoplim( dat);
 
@@ -614,7 +614,10 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			 * range values for one or more Doppler scaling factors    */
 			keep_iterating = 0;
 
-		} else {
+		}
+//		else if (iter == 4)
+//			keep_iterating = 0;
+		else {
 			/* Just completed a full iteration and the model has no fatal flaws
 			 * (or else the "term_badmodel" parameter is turned off): keep
 			 * iterating if fractional decrease objective function during the

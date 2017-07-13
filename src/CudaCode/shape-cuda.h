@@ -87,6 +87,11 @@ __host__ void calc_fits_gpu(struct par_t *dpar, struct mod_t *dmod,
 		*nframes, int *lc_n, unsigned char *type, int nsets, int nf,
 		cudaStream_t *cf_stream, int max_frames);
 
+__host__ void calc_fits_gpu2(struct par_t *dpar, struct mod_t *dmod,
+		struct dat_t *ddat, struct vertices_t **verts, int *nviews, int
+		*nframes, int *lc_n, unsigned char *type, int nsets, int nf,
+		cudaStream_t *cf_stream, int max_frames);
+
 __host__ void calc_fits_mgpu(struct par_t *dpar, struct mod_t *dmod, struct
 		dat_t *ddat, int *nviews, int *hnframes, int *lc_n, unsigned char *type,
 		int nsets, int nf, cudaStream_t *gpu0_stream, cudaStream_t *gpu1_stream,
@@ -215,6 +220,12 @@ __host__ void vary_params_gpu(struct par_t *dpar, struct mod_t *dmod,
 		double *opt_brightness, double *cos_subradarlat, int *hnframes, int *hlc_n,
 		int *nviews, struct vertices_t **verts, unsigned char *htype,
 		unsigned char *dtype, int nf, int nsets, cudaStream_t *vp_stream, int max_frames);
+
+__host__ void vary_params_gpu2(struct par_t *dpar, struct mod_t *dmod, struct
+		dat_t *ddat, int action, double *deldop_zmax, double *rad_xsec, double
+		*opt_brightness, double *cos_subradarlat, int *hnframes, int *hlc_n,
+		int *nviews, struct vertices_t **verts, unsigned char *htype, unsigned
+		char *dtype, int nf, int nsets, cudaStream_t *vp_stream, int max_frames);
 
 __host__ void vary_params_mgpu(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, int action, double *deldop_zmax, double *rad_xsec,
