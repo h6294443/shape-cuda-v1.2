@@ -25,7 +25,7 @@ __host__ void dbg_print_pos_arrays2_host(struct pos_t *pos) {
 	 *  all of length nPixels in the lghtcrv specified by 'set' in 'ddat' */
 	int i, j, n;
 	FILE *fp_cosi, *fp_cose, *fp_b;
-	char *fn;
+	const char *fn;
 	n = pos->n;
 
 	fn = "dbg_pos_cosi_CPU.csv";
@@ -106,7 +106,7 @@ __host__ void dbg_print_pos_arrays_full(struct pos_t **pos, int f, int f_real,
 	float *b, *cosi, *cose, *zz;
 	FILE *fp_b, *fp_cosi, *fp_cose, *fp_z;
 	dim3 BLK,THD;
-	char *filename;
+	const char *filename;
 	int i, j, pxa, thd = 256;
 
 	/* For multi-GPU, figure out which GPU to use */
@@ -204,7 +204,7 @@ __host__ void dbg_print_pos_arrays_full_host(struct pos_t *pos) {
 	 *  all of length nPixels in the lghtcrv specified by 'set' in 'ddat' */
 	int i, j, n;
 	FILE *fp_cosi, *fp_cose, *fp_b, *fp_z;
-	char *fn;
+	const char *fn;
 	n = pos->n;
 
 	fn = "CPU_pos-cosi.csv";

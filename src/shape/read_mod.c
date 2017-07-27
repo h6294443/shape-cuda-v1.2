@@ -198,6 +198,7 @@ int read_mod( struct par_t *par, struct mod_t *mod)
 
 	printf("\n# reading model from file: %s ...\n", mod->name);
 	fflush(stdout);
+	gpuErrchk(cudaSetDevice(GPU0));
 
 	FOPEN( fp, mod->name, "r");
 	nfpar += read_shape( fp, par, mod);

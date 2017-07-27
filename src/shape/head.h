@@ -15,6 +15,7 @@ Top-level header file for shape-cuda - adapted from head.h in v2.10.0 of shape.
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include "build.h"
 #include "../nr/nr.h"

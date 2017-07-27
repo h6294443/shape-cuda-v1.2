@@ -9,8 +9,8 @@ __host__ void dbg_print_array(float *data, int x, int y) {
 	int n, i, j;
 	float *host;
 	FILE *fp_fit;
-	char *filename_fit;
-	double *fit;
+	const char *filename_fit;
+	//double *fit;
 	dim3 BLK,THD;
 
 	filename_fit = "dbg_array_cuda.csv";
@@ -46,8 +46,8 @@ __host__ void dbg_print_array1D(float *data, int size) {
 	int i;
 	float *host;
 	FILE *fp_fit;
-	char *filename_fit;
-	double *fit;
+	const char *filename_fit;
+	//double *fit;
 	dim3 BLK,THD;
 
 	filename_fit = "dbg_array1D_cuda.csv";

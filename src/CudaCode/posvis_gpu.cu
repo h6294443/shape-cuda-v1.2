@@ -89,53 +89,8 @@ __device__ static float atomicMaxf(float* address, float val) {
 	} while (assumed != old);
 	return __int_as_float(old);
 }
+
 __global__ void posvis_init_krnl(
-		struct par_t *dpar,
-		struct pos_t **pos,
-		float4 *ijminmax_overall,
-		float3 *oa,
-		float3 *usrc,
-		int *outbndarr,
-		int c,
-		int f,
-		int start,
-		int end,
-		int src) {
-
-	/* Single-threaded, streamed kernel */
-	if (threadIdx.x == 0) {
-		if (f == start) {
-			posvis_streams_outbnd = 0;
-			pvst_smooth = dpar->pos_smooth;
-		}
-		ijminmax_overall[f].w = ijminmax_overall[f].y = HUGENUMBER;
-		ijminmax_overall[f].x = ijminmax_overall[f].z = -HUGENUMBER;
-		pos[f]->posbnd_logfactor = 0.0;
-
-		dev_mtrnsps3(oa, pos[f]->ae, f);
-
-		if (src) {
-			/* We're viewing the model from the sun: at the center of each pixel
-			 * in the projected view, we want cos(incidence angle), distance from
-			 * the COM towards the sun, and the facet number.                */
-			dev_mmmul3(oa, pos[f]->se, oa, f); /* oa takes ast into sun coords           */
-		} else {
-			/* We're viewing the model from Earth: at the center of each POS pixel
-			 * we want cos(scattering angle), distance from the COM towards Earth,
-			 * and the facet number.  For bistatic situations (lightcurves) we also
-									 want cos(incidence angle) and the unit vector towards the source.     */
-			dev_mmmul3(oa, pos[f]->oe, oa, f); /* oa takes ast into obs coords */
-			if (pos[f]->bistatic) {
-				usrc[f].x = usrc[f].y = 0.0; /* unit vector towards source */
-				usrc[f].z = 1.0;
-				dev_cotrans9(&usrc[f], pos[f]->se, usrc[f], -1);
-				dev_cotrans9(&usrc[f], pos[f]->oe, usrc[f], 1); /* in observer coordinates */
-			}
-		}
-		outbndarr[f] = 0;
-	}
-}
-__global__ void posvis_init_krnl2(
 		struct par_t *dpar,
 		struct pos_t **pos,
 		float4 *ijminmax_overall,
@@ -182,6 +137,7 @@ __global__ void posvis_init_krnl2(
 		outbndarr[f] = 0;
 	}
 }
+
 __global__ void posvis_facet_krnl(
 		struct pos_t **pos,
 		struct vertices_t **verts,
@@ -428,26 +384,8 @@ __global__ void posvis_facet_krnl(
 		} /* End if (n[2] > 0.0) */
 	} /* end if (f < nf) */
 }
-__global__ void posvis_outbnd_krnl(struct pos_t **pos, int posn,
-		int *outbndarr, float4 *ijminmax_overall, int f) {
-	/* Single-threaded, streamed kernel */
-	double xfactor, yfactor;
-	if (threadIdx.x == 0) {
-		if (outbndarr[f]) {
-			/* ijminmax_overall.w = imin_overall
-			 * ijminmax_overall.x = imax_overall
-			 * ijminmax_overall.y = jmin_overall
-			 * ijminmax_overall.z = jmax_overall	 */
-			xfactor = (MAX( ijminmax_overall[f].x,  posn) -
-					MIN( ijminmax_overall[f].w, -posn) + 1) / (2*posn+1);
-			yfactor = (MAX( ijminmax_overall[f].z,  posn) -
-					MIN( ijminmax_overall[f].y, -posn) + 1) / (2*posn+1);
-			pos[f]->posbnd_logfactor = log(xfactor*yfactor);
-		}
-	}
-}
 
-__global__ void posvis_outbnd_krnl2(struct pos_t **pos,
+__global__ void posvis_outbnd_krnl(struct pos_t **pos,
 		int *outbndarr, float4 *ijminmax_overall, int size, int start) {
 	/* nfrm_alloc-threaded kernel */
 	int posn, f = blockIdx.x * blockDim.x + threadIdx.x + start;
@@ -469,98 +407,6 @@ __global__ void posvis_outbnd_krnl2(struct pos_t **pos,
 }
 
 __host__ int posvis_gpu(
-		struct par_t *dpar,
-		struct mod_t *dmod,
-		struct dat_t *ddat,
-		struct pos_t **pos,
-		struct vertices_t **verts,
-		float3 orbit_offset,
-		int *posn,
-		int *outbndarr,
-		int set,
-		int nframes,
-		int src,
-		int nf,
-		int body, int comp, unsigned char type, cudaStream_t *posvis_stream) {
-
-	int outbnd, smooth, start, end, frames_alloc;
-	dim3 BLK,THD, BLKfrm, THD64;
-	cudaEvent_t start1, stop1;
-	float milliseconds;
-	float4 *ijminmax_overall;
-	float3 *oa, *usrc;
-
-	/* Launch parameters for the facet_streams kernel */
-	THD.x = maxThreadsPerBlock;	THD64.x = 64;
-	BLK.x = floor((THD.x - 1 + nf) / THD.x);
-	BLKfrm.x = floor((THD64.x - 1 + nframes)/THD64.x);
-
-	/* Set up the offset addressing for lightcurves if this is a lightcurve */
-	if (type == LGHTCRV) {
-		start = 1;	/* fixes the lightcurve offsets */
-		end = nframes + 1;
-		frames_alloc = nframes + 1;
-	} else {
-		start = 0;
-		end = nframes;
-		frames_alloc = nframes;
-	}
-	int oasize = frames_alloc*3;
-	/* Allocate temporary arrays/structs */
-	gpuErrchk(cudaMalloc((void**)&ijminmax_overall, sizeof(float4) * frames_alloc));
-	gpuErrchk(cudaMalloc((void**)&oa, sizeof(float3) * oasize));
-	gpuErrchk(cudaMalloc((void**)&usrc, sizeof(float3) * frames_alloc));
-
-	if (TIMING) {
-		/* Create the timer events */
-		cudaEventCreate(&start1);
-		cudaEventCreate(&stop1);
-		cudaEventRecord(start1);
-	}
-
-	for (int f=start; f<end; f++) {
-
-		/* Initialize via single-thread kernel first */
-		posvis_init_krnl<<<1,1,0,posvis_stream[f-start]>>>(dpar,
-				pos, ijminmax_overall, oa, usrc, outbndarr, comp, f, start,
-				end, src);
-
-		/* Now the main facet kernel */
-		posvis_facet_krnl<<<BLK,THD, 0, posvis_stream[f-start]>>>(pos, verts,
-				ijminmax_overall, orbit_offset, oa, usrc,	src, body, comp,
-				nf, f, smooth, outbndarr);
-
-		/* Take care of any posbnd flags */
-		posvis_outbnd_krnl<<<1,1,0,posvis_stream[f-start]>>>(pos, posn[f],
-				outbndarr, ijminmax_overall, f);
-	}
-
-	if (TIMING) {
-		cudaEventRecord(stop1);
-		cudaEventSynchronize(stop1);
-		milliseconds = 0;
-		cudaEventElapsedTime(&milliseconds, start1, stop1);
-		printf("%i facets in posvis_cuda_2 in %3.3f ms with %i frames.\n", nf, milliseconds, nframes);
-	}
-	checkErrorAfterKernelLaunch("The three posvis_cuda_streams2 kernels");
-	gpuErrchk(cudaMemcpyFromSymbol(&outbnd, posvis_streams_outbnd, sizeof(outbnd), 0,
-			cudaMemcpyDeviceToHost));
-
-	/* Free temp arrays, destroy streams and timers, as applicable */
-
-	cudaFree(ijminmax_overall);
-	cudaFree(oa);
-	cudaFree(usrc);
-
-
-	if (TIMING) {
-		cudaEventDestroy(start1);
-		cudaEventDestroy(stop1);
-	}
-	return outbnd;
-}
-
-__host__ int posvis_gpu2(
 		struct par_t *dpar,
 		struct mod_t *dmod,
 		struct dat_t *ddat,
@@ -603,7 +449,7 @@ __host__ int posvis_gpu2(
 		cudaEventCreate(&stop1);
 		cudaEventRecord(start1);
 	}
-	posvis_init_krnl2<<<BLKfrm,THD64>>>(dpar, pos, ijminmax_overall, oa, usrc,
+	posvis_init_krnl<<<BLKfrm,THD64>>>(dpar, pos, ijminmax_overall, oa, usrc,
 			outbndarr, comp, start, src, nfrm_alloc);
 	checkErrorAfterKernelLaunch("posvis_init_krnl2 in posvis_gpu2");
 
@@ -615,7 +461,7 @@ __host__ int posvis_gpu2(
 	}
 
 	/* Take care of any posbnd flags */
-	posvis_outbnd_krnl2<<<BLKfrm,THD64>>>(pos,
+	posvis_outbnd_krnl<<<BLKfrm,THD64>>>(pos,
 			outbndarr, ijminmax_overall, nfrm_alloc, start);
 	if (TIMING) {
 		cudaEventRecord(stop1);

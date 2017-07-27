@@ -43,45 +43,13 @@ __global__ void deldopoffs_krnl(struct dat_t *ddat, int s, int nframes) {
 		}
 	}
 }
-__global__ void deldopoffs_f_krnl(struct dat_t *ddat, int s, int nframes) {
-	/* nframes-threaded kernel */
-	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	int k, n;
-	float del, dop, arg, x;
 
-	if (f < nframes) {
-		for (k=0; k<ddat->set[s].desc.deldop.nviews; k++) {
-			x = 1.0;
-			dop = 0.0;
-			del = __double2float_rn(ddat->set[s].desc.deldop.delcor.a[0].val);
-			arg = __double2float_rn(ddat->set[s].desc.deldop.frame[f].view[k].t) -
-					__double2float_rn(ddat->set[s].desc.deldop.delcor.t0);
-
-			for (n=1; n<=ddat->set[s].desc.deldop.delcor.n; n++) {
-				dop += n*(__double2float_rn(ddat->set[s].desc.deldop.delcor.a[n].val))*x;
-				del +=   __double2float_rn(ddat->set[s].desc.deldop.delcor.a[n].val)*(x*=arg);
-			}
-
-			/* del has units of usec */
-			ddat->set[s].desc.deldop.frame[f].view[k].deloff =
-					del/ddat->set[s].desc.deldop.del_per_pixel;
-
-			/* dop has units of usec/day and there are 86400 sec/day */
-			ddat->set[s].desc.deldop.frame[f].view[k].dopoff =
-					-dop*ddat->set[s].desc.deldop.Ftx
-					/ (ddat->set[s].desc.deldop.dop_per_pixel*86400.0);
-		}
-	}
-}
 __host__ void deldopoffs_gpu(struct dat_t *ddat, int s, int nframes)
 {
 	dim3 BLK,THD;
 
 	/* Launch nframes-threaded kernel */
 	THD.x = nframes;
-	if (FLOAT)
-		deldopoffs_f_krnl<<<BLK,THD>>>(ddat, s, nframes);
-	else
-		deldopoffs_krnl<<<BLK,THD>>>(ddat, s, nframes);
+	deldopoffs_krnl<<<BLK,THD>>>(ddat, s, nframes);
 	checkErrorAfterKernelLaunch("deldopoffs_cuda_krnl (deldopoffs_cuda)");
 }

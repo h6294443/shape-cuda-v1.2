@@ -40,40 +40,13 @@ __global__ void dopoffs_krnl(struct dat_t *ddat, int s, int nframes) {
 		}
 	}
 }
-__global__ void dopoffs_f_krnl(struct dat_t *ddat, int s, int nframes) {
-	/* nframes-threaded kernel */
-	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	int k, n;
-	float dop, arg, x;
 
-	if (f < nframes) {
-		for (k=0; k<ddat->set[s].desc.doppler.nviews; k++) {
-			x = 1.0;
-			dop = 0.0;
-			arg = __double2float_rn(ddat->set[s].desc.doppler.frame[f].view[k].t) -
-					__double2float_rn(ddat->set[s].desc.doppler.delcor.t0);
-			for (n=1; n<=ddat->set[s].desc.doppler.delcor.n; n++) {
-				dop += n*(__double2float_rn(ddat->set[s].desc.doppler.delcor.a[n].val))*x;
-				x *= arg;
-			}
-
-			/*  dop has units of usec/day and there are 86400 sec/day  */
-			ddat->set[s].desc.doppler.frame[f].view[k].dopoff =
-					-dop*ddat->set[s].desc.doppler.Ftx
-					/ (ddat->set[s].desc.doppler.dop_per_bin*86400.0);
-		}
-	}
-
-}
 __host__ void dopoffs_gpu(struct dat_t *ddat, int s, int nframes)
 {
   dim3 BLK,THD;
 
   /* Launch nframes-threaded kernel */
   THD.x = nframes;
-  if (FLOAT)
-	  dopoffs_krnl<<<BLK,THD>>>(ddat, s, nframes);
-  else
-	  dopoffs_f_krnl<<<BLK,THD>>>(ddat, s, nframes);
+  dopoffs_krnl<<<BLK,THD>>>(ddat, s, nframes);
   checkErrorAfterKernelLaunch("dopoffs_cuda_krnl (dopoffs_cuda)");
 }

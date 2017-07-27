@@ -1238,6 +1238,7 @@ __global__ void comp_moments_facet_krnl(struct mod_t *dmod, int c, float *dvarr,
 		dI20[f] 	= (float)dI[2][0];
 		dI21[f] 	= (float)dI[2][1];
 		dI22[f] 	= (float)dI[2][2];
+
 	}
 }
 __global__ void comp_moments_facet_f_krnl(struct mod_t *dmod, int c, float *dvarr,
@@ -1305,6 +1306,8 @@ __host__ void compute_moments_gpu(struct mod_t *dmod, int nf, cudaStream_t *cm_s
 			*dI10, *dI11, *dI12, *dI20, *dI21, *dI22;
 	size_t arrsz = sizeof(float)*nf;
 	int c=0;
+	gpuErrchk(cudaSetDevice(GPU0));
+
 	/*  Initialize the model's surface area, volume, center-of-mass (COM)
 	 * displacement, and inertia tensor  */
 	comp_moments_1stinit_krnl<<<1,1>>>(dmod, c);
@@ -1343,17 +1346,12 @@ __host__ void compute_moments_gpu(struct mod_t *dmod, int nf, cudaStream_t *cm_s
 	checkErrorAfterKernelLaunch("comp_moments_2ndinit_krnl (compute_moments_cuda)");
 
 	/* Load the temporary arrays with data */
-//	if (FLOAT)
-//		comp_moments_facet_f_krnl<<<nfBLK,nfTHD>>>(dmod, c, dv, dcom0, dcom1, dcom2,
-//				dI00, dI01, dI02, dI10, dI11, dI12, dI20, dI21, dI22);
-//	else
-		comp_moments_facet_krnl<<<nfBLK,nfTHD>>>(dmod, c, dv, dcom0, dcom1, dcom2,
-				dI00, dI01, dI02, dI10, dI11, dI12, dI20, dI21, dI22);
+	comp_moments_facet_krnl<<<nfBLK,nfTHD>>>(dmod, c, dv, dcom0, dcom1, dcom2,
+			dI00, dI01, dI02, dI10, dI11, dI12, dI20, dI21, dI22);
 	checkErrorAfterKernelLaunch("comp_moments_facets_krnl (compute_moments_cuda)");
 
 	/* Calculate surface area for this component; for active facets, also add
 	 * the contributions to the area of the overall model    */
-
 	dvdI_reduce_streams(dmod, dv, dcom0, dcom1, dcom2, dI00, dI01, dI02,
 			dI10, dI11, dI12, dI20, dI21, dI22, nf, c, cm_streams);
 

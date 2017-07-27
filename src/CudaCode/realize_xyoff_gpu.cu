@@ -43,15 +43,62 @@ __global__ void realize_xyoff_gpu_krnl(struct dat_t *ddat, int nsets,
 		}
 	}
 }
+
+__global__ void realize_xyoff_pthreads_krnl(struct dat_t *ddat, int nsets,
+		unsigned char *type, int *GPUID, int gpuid) {
+	/* nset-threaded kernel */
+	int s = blockIdx.x * blockDim.x + threadIdx.x;
+	int j, f;
+	if (s < nsets) {
+		if (GPUID[s]==gpuid) {
+			if (type[s] == POS) {
+
+				for (j=0; j<=1; j++)
+					if (ddat->set[s].desc.poset.frame[0].off[j].state == '=')
+						printf("can't use \"=\" state for the first frame in a plane-of-sky dataset\n");
+
+				for (f=1; f<ddat->set[s].desc.poset.nframes; f++)
+					for (j=0; j<=1; j++)
+						if (ddat->set[s].desc.poset.frame[f].off[j].state == '=')
+							ddat->set[s].desc.poset.frame[f].off[j].val =
+									ddat->set[s].desc.poset.frame[f-1].off[j].val;
+
+			}
+		}
+	}
+}
+
 __host__ void realize_xyoff_gpu( struct dat_t *ddat, int nsets,
 		unsigned char *dtype)
 {
-	dim3 BLK,THD;
-	THD.x = maxThreadsPerBlock;
-	BLK.x = floor((THD.x - 1 + nsets)/THD.x);
+	dim3 BLK,THD64;
+	THD64.x = 64;
+	BLK.x = floor((THD64.x - 1 + nsets)/THD64.x);
 
 	/* Launch nset-threaded kernel */
-	realize_xyoff_gpu_krnl<<<1,THD>>>(ddat, nsets, dtype);
+	realize_xyoff_gpu_krnl<<<BLK,THD64>>>(ddat, nsets, dtype);
 	checkErrorAfterKernelLaunch("realize_xyoff_cuda_streams_krnl (realize_xyoff_cuda_streams");
 
+}
+
+__host__ void realize_xyoff_pthreads( struct dat_t *ddat, int nsets,
+		unsigned char *dtype, int *GPUID)
+{
+	dim3 BLK,THD64;
+	int *dGPUID;
+	THD64.x = 64;
+	BLK.x = floor((THD64.x - 1 + nsets)/THD64.x);
+	cudaCalloc1((void**)&dGPUID, sizeof(int), nsets);
+	gpuErrchk(cudaMemcpy(dGPUID, GPUID, sizeof(int)*nsets, cudaMemcpyHostToDevice));
+
+	gpuErrchk(cudaSetDevice(GPU0));
+	realize_xyoff_pthreads_krnl<<<BLK,THD64>>>(ddat, nsets, dtype, dGPUID, GPU0);
+	checkErrorAfterKernelLaunch("realize_xyoff_pthreads_krnl");
+
+	gpuErrchk(cudaSetDevice(GPU1));
+	realize_xyoff_pthreads_krnl<<<BLK,THD64>>>(ddat, nsets, dtype, dGPUID, GPU1);
+	checkErrorAfterKernelLaunch("realize_xyoff_pthreads_krnl");
+
+	gpuErrchk(cudaSetDevice(GPU0));
+	cudaFree(dGPUID);
 }

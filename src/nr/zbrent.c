@@ -66,6 +66,7 @@ double zbrent( double (*func)(double), double x1, double x2, double tol)
 		fb=(*func)(b);
 	}
 	nrerror("Maximum number of iterations exceeded in ZBRENT");
+	return 0.0;
 }
 
 #undef ITMAX

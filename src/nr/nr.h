@@ -27,7 +27,7 @@ void free_dmatrix(double **, int, int, int, int);
 void free_imatrix(int **, int, int, int, int);
 void free_submatrix(double **, int, int, int, int);
 void free_convert_matrix(double **, int, int, int, int);
-void nrerror(char *);
+void nrerror(const char *);
 
 typedef struct FCOMPLEX {double r,i;} fcomplex;
 

@@ -670,6 +670,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	printf("# final chi2 = %e for %s dof (reduced chi2 = %f)\n",
 			final_chi2, dofstring, final_redchi2);
 	printf("#\n");
+	printf("\nIterations total: %i\n", iter);
 	fflush(stdout);
 
 	return enderr;

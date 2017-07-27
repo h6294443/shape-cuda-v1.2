@@ -7,7 +7,7 @@
 extern "C" {
 #include "../shape/head.h"
 }
-int maxThreadsPerBlock = 0;
+//int maxThreadsPerBlock = 0;
 
 void CUDACount() {
 	int showCUDAInfo = 1;
@@ -23,7 +23,7 @@ void CUDACount() {
 		//pickGPU(GPU0);
 		gpuErrchk(cudaSetDevice(GPU0));
 	}
-	if (nDevices >= 2 && MGPU){
+	if (nDevices >= 2 && (MGPU||MGPU2)){
 		//pickGPU(GPU0);
 		gpuErrchk(cudaDeviceCanAccessPeer(&canAccess0, GPU0, GPU1));
 		gpuErrchk(cudaDeviceCanAccessPeer(&canAccess1, GPU1, GPU0));
@@ -62,7 +62,7 @@ void CUDACount() {
 		}
 		else printf("Peer access not possible");
 	}
-	if (nDevices == 1 && MGPU) {
+	if (nDevices == 1 && (MGPU||MGPU2)) {
 		printf("Dual-GPU mode not possible. Only one GPU detected. Defaulting to single-GPU mode.");
 		MGPU = 0;
 	}

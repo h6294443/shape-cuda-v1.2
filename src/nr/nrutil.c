@@ -1,7 +1,7 @@
 #include "basic.h"
 #define NR_END 1
 
-void nrerror(char error_text[])
+void nrerror(const char error_text[])
 {
 	fprintf(stderr,"Numerical Recipes run-time error...\n");
 	fprintf(stderr,"%s\n",error_text);

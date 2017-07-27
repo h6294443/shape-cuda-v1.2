@@ -14,7 +14,7 @@ Modified 2005 July 15 by CM and MCN:
 
 #include "head.h"
 
-void bailout( char *message)
+void bailout(const char *message)
 {
   fflush( stdout);
   fprintf( stderr, "ERROR: %s", message);

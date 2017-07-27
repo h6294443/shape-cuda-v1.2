@@ -9,11 +9,33 @@ extern "C" {
 #define SIGN(a,b) ((b) > 0.0 ? fabs(a) : -fabs(a))
 #define SHFT(a,b,c,d) (a)=(b);(b)=(c);(c)=(d);
 
-__host__ void mnbrak_gpu(double *ax,double *bx,double *cx,double *fa,double *fb,
-	    double *fc,double (*func)(double, struct vertices_t**, unsigned char*,
-	    		unsigned char*, int*, int*, int*, int, int, cudaStream_t*), struct
-	    		vertices_t **verts, unsigned char *htype, unsigned char *dtype,
-	    		int *nframes, int *nviews, int *lc_n, int nsets, int nf, cudaStream_t *bf_stream )
+__host__ void mnbrak_gpu(
+		double *ax,
+		double *bx,
+		double *cx,
+		double *fa,
+		double *fb,
+	    double *fc,
+	    double (*func)
+	    	(double,
+	    	struct vertices_t**,
+	    	unsigned char*,
+	    	unsigned char*,
+	    	int*,
+	    	int*,
+	    	int*,
+	    	int,
+	    	int,
+	    	cudaStream_t*),
+	    	struct vertices_t **verts,
+	    	unsigned char *htype,
+	    	unsigned char *dtype,
+	    	int *nframes,
+	    	int *nviews,
+	    	int *lc_n,
+	    	int nsets,
+	    	int nf,
+	    	cudaStream_t *bf_stream )
 {
 	double ulim,u,r,q,fu,dum;
 	*fa=(*func)(*ax, verts, htype, dtype, nframes, nviews, lc_n, nsets, nf, bf_stream);

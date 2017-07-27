@@ -2,14 +2,14 @@ extern "C" {
 #include "../shape/head.h"
 }
 
-void checkErrorAfterKernelLaunch(char *location) {
+void checkErrorAfterKernelLaunch(const char *location) {
 	cudaError_t cudaStatus;
 	cudaStatus = cudaGetLastError();
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "Kernel launch failed in %s: %s\n", location, cudaGetErrorString(cudaStatus));
 	}
 }
-void deviceSyncAfterKernelLaunch(char *location) {
+void deviceSyncAfterKernelLaunch(const char *location) {
 	// cudaDeviceSynchronize waits for the kernel to finish, and returns
 	// any errors encountered during the launch.
 	cudaError_t cudaStatus;

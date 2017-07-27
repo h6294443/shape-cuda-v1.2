@@ -201,7 +201,7 @@ __host__ void dbg_print_lghtcrv_pos_arrays(struct dat_t *ddat, int set, int f, i
 	float *b, *cosi, *cose;
 	FILE *fp_b, *fp_cosi, *fp_cose;
 	dim3 BLK,THD;
-	char *filename;
+	const char *filename;
 	int i, j, pxa, thd = 256;
 
 	cudaCalloc((void**)&b, sizeof(float), npixels);
@@ -263,7 +263,7 @@ __host__ void dbg_print_pos_bd(struct pos_t **pos, int f, int npixels, int n) {
 	double *bd;
 	FILE *fp_b;
 	dim3 BLK,THD;
-	char *filename;
+	const char *filename;
 	int i, j, pxa;
 	THD.x = maxThreadsPerBlock;
 
@@ -307,7 +307,7 @@ __host__ void dbg_print_lghtcrv_pos_arrays_host(struct lghtcrv_t *lghtcrv,
 	int i, j, n;
 	FILE *fp_cosi, *fp_cose, *fp_b;
 	struct pos_t *pos;
-	char *fn;
+	const char *fn;
 	pos = &lghtcrv->rend[f].pos;
 	n = pos->n;
 
@@ -362,7 +362,7 @@ __host__ void dbg_print_pos_arrays2(struct pos_t **pos, int f, int npixels, int 
 	float *b, *cosi, *cose;
 	FILE *fp_b, *fp_cosi, *fp_cose;
 	dim3 BLK,THD;
-	char *filename;
+	const char *filename;
 	int i, j, pxa, thd = 256;
 
 	cudaCalloc((void**)&b, sizeof(float), npixels);

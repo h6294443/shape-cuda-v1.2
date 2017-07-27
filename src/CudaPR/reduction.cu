@@ -1056,6 +1056,16 @@ __global__ void set_dv_dcom_di_krnl(float *d_odata_dv, float *d_odata_dcom0,
 		dmod->shape.comp[c].inertia[2][0] = dmod->shape.inertia[2][0] = d_odata_dI20[0];
 		dmod->shape.comp[c].inertia[2][1] = dmod->shape.inertia[2][1] = d_odata_dI21[0];
 		dmod->shape.comp[c].inertia[2][2] = dmod->shape.inertia[2][2] = d_odata_dI22[0];
+
+//		printf("\n# inertia[0][0]=%g", d_odata_dI00[0]);
+//		printf("\n# inertia[0][1]=%g", d_odata_dI01[0]);
+//		printf("\n# inertia[0][2]=%g", d_odata_dI02[0]);
+//		printf("\n# inertia[1][0]=%g", d_odata_dI10[0]);
+//		printf("\n# inertia[1][1]=%g", d_odata_dI11[0]);
+//		printf("\n# inertia[1][2]=%g", d_odata_dI12[0]);
+//		printf("\n# inertia[2][0]=%g", d_odata_dI20[0]);
+//		printf("\n# inertia[2][1]=%g", d_odata_dI21[0]);
+//		printf("\n# inertia[2][2]=%g\n\n", d_odata_dI22[0]);
 	}
 }
 __global__ void set_lghtcrv_values_krnl(struct dat_t *ddat, int s, double *d_odata,
@@ -2668,7 +2678,7 @@ __host__ void dvdI_reduce_streams(struct mod_t *dmod, float *dv, float *dcom0,
 	dim3 dimBlock(numThreads, 1, 1);
 	dim3 dimGrid(numBlocks, 1, 1);
 	size_t arrsz = sizeof(float)*numBlocks;
-
+	cudaSetDevice(GPU0);
 	/* Allocate memory for the device output arrays for first reduction */
 	gpuErrchk(cudaMalloc((void**)&d_odata_dv,    arrsz));
 	gpuErrchk(cudaMalloc((void**)&d_odata_dcom0, arrsz));

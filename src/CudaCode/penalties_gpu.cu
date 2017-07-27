@@ -128,7 +128,7 @@ __device__ float p_a, p_b, p_pen, p_av, p_av2, p_min_extent, p_max_extent,
 			   p_sumrho2[NBIFURCATION], p_nrho2[NBIFURCATION], p_meanrho2[NBIFURCATION],
 			   p_deepest_minimum;
 __device__ double p_volume, p_r_eff, p_ap[3][3], p_DEEVE_radius[3],
-			   p_axis_increment, p_sum, pmoment[3];
+			   p_axis_increment, p_sum=0.0, pmoment[3];
 __device__ unsigned char p_shape_type;
 
 /* Note that the following two custom atomic functions are declared in each
@@ -930,7 +930,6 @@ __global__ void p_nonpa_uni_krnl(struct mod_t *dmod) {
 			dev_diag_inertia(dmod->shape.inertia);//, pmoment);
 			p_got_pa = 1;
 		}
-
 		/* The 0.01 term below avoids biaxial inertia ellipsoids */
 		p_pen = max((pmoment[0]/pmoment[2]) - 1, (pmoment[1]/pmoment[2]) - 1 )
 												  + 0.01;
@@ -1108,6 +1107,8 @@ __global__ void p_impulse_krnl(struct mod_t *dmod) {
 __global__ void p_final_krnl(struct par_t *dpar, int i, char name[80]) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
+//		printf("\n# p_sum = %g #", p_sum);
+//		printf("\n# p_pen[%i]=%g", i, p_pen);
 		if (dpar->pen.weight[i] >= 0.0)
 			dpar->pen.base[i] = p_pen;
 		else
@@ -1120,7 +1121,9 @@ __global__ void p_final_krnl(struct par_t *dpar, int i, char name[80]) {
 			printf("# %15s %e = fabs(%13.6e) * %e\n", name,
 					fabs(dpar->pen.weight[i])*dpar->pen.base[i],
 					dpar->pen.weight[i], dpar->pen.base[i]);
+//		printf("#\n p_sum = %g #\n\n", p_sum);
 	}
+//	__syncthreads();
 }
 
 __host__ double penalties_gpu(struct par_t *dpar, struct mod_t *dmod,
@@ -1135,6 +1138,7 @@ __host__ double penalties_gpu(struct par_t *dpar, struct mod_t *dmod,
 	dim3 BLKs, BLKf, BLKv,THD;
 	THD.x = maxThreadsPerBlock;
 
+	gpuErrchk(cudaSetDevice(GPU0));
 	/* Get # of penalties from dpar */
 	p_get_pen_n_krnl<<<1,1>>>(dpar);
 	checkErrorAfterKernelLaunch("p_get_pen_n_krnl (penalties_cuda)");

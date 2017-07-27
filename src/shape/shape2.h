@@ -1397,7 +1397,7 @@ struct dat_t {
 //                    int **color, double **brightness, double **z);
 double apply_photo( struct mod_t *mod, int ilaw, double phase, double intensityfactor,
                     struct pos_t *pos, int body);
-void bailout( char *message);
+void bailout(const char *message);
 double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat);
 //void branch( struct par_t *par, struct mod_t *mod, struct dat_t *dat);
 void calc_fits( struct par_t *par, struct mod_t *mod, struct dat_t *dat);
