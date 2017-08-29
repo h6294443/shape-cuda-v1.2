@@ -242,9 +242,10 @@ __host__ void realize_dopscale_gpu(struct par_t *dpar, struct dat_t
 	checkErrorAfterKernelLaunch("realize_dopscale_cuda_krnl (realize_dopscale)");
 }
 
-__host__ void realize_dopscale_pthreads(struct par_t *dpar, struct dat_t
-		*ddat, double dopscale_factor, int dopscale_mode, int nsets,
-		unsigned char *dtype, int *GPUID)
+__host__ void realize_dopscale_pthreads(struct par_t *dpar0, struct par_t
+		*dpar1, struct dat_t *ddat0, struct dat_t *ddat1, double
+		dopscale_factor, int dopscale_mode, int nsets, unsigned char *dtype0,
+		unsigned char *dtype1, int *GPUID)
 {
 	/* This version doesn't use streams itself, but it is meant to be used with
 	 * bestfit_cuda2 which uses streams versions to pass launch parameters to */
@@ -262,15 +263,15 @@ __host__ void realize_dopscale_pthreads(struct par_t *dpar, struct dat_t
 	 *   type_dopscale tells whether that dataset is delay-Doppler or Doppler. */
 	gpuErrchk(cudaSetDevice(GPU0));
 	/* Launch nset-threaded kernel */
-	realize_dopscale_pthreads_krnl<<<BLK,THD64>>>(dpar, ddat, dopscale_factor,
-			dopscale_mode, nsets, dtype, dGPUID, GPU0);
+	realize_dopscale_pthreads_krnl<<<BLK,THD64>>>(dpar0, ddat0, dopscale_factor,
+			dopscale_mode, nsets, dtype0, dGPUID, GPU0);
 	checkErrorAfterKernelLaunch("realize_dopscale_pthreads_krnl");
 
 	/* Now the other gpu sets */
 	gpuErrchk(cudaSetDevice(GPU1));
 	/* Launch nset-threaded kernel */
-	realize_dopscale_pthreads_krnl<<<BLK,THD64>>>(dpar, ddat, dopscale_factor,
-			dopscale_mode, nsets, dtype, dGPUID, GPU1);
+	realize_dopscale_pthreads_krnl<<<BLK,THD64>>>(dpar1, ddat1, dopscale_factor,
+			dopscale_mode, nsets, dtype1, dGPUID, GPU1);
 	checkErrorAfterKernelLaunch("realize_dopscale_pthreads_krnl");
 
 	gpuErrchk(cudaSetDevice(GPU0));

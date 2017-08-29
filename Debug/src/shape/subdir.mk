@@ -191,8 +191,8 @@ C_DEPS += \
 src/shape/%.o: ../src/shape/%.c
 	@echo 'Building file: $<'
 	@echo 'Invoking: NVCC Compiler'
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --use_fast_math -gencode arch=compute_35,code=sm_35 -m64 -odir "src/shape" -M -o "$(@:%.o=%.d)" "$<"
-	/usr/local/cuda-8.0/bin/nvcc -G -g -lineinfo -pg -O0 --use_fast_math --compile -m64  -x c -o  "$@" "$<"
+	/usr/local/cuda-9.0/bin/nvcc -G -g -lineinfo -pg -O0 -Xcompiler -rdynamic -gencode arch=compute_35,code=sm_35 -m64 -odir "src/shape" -M -o "$(@:%.o=%.d)" "$<"
+	/usr/local/cuda-9.0/bin/nvcc -G -g -lineinfo -pg -O0 -Xcompiler -rdynamic --compile -m64  -x c -o  "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 

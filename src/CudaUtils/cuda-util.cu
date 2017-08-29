@@ -33,3 +33,26 @@ void pickGPU(int gpuid) {
 		fprintf(stderr, "cudaSetDevice failed!  Do you have a CUDA-capable GPU installed?");
 	}
 }
+
+__global__ void zero_fit_overflow_krnl(struct deldop_t *deldop, int f, int size) {
+	/* MAXOVERFLOW^2 - threaded kernel */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int x = offset % MAXOVERFLOW;
+	int y = offset / MAXOVERFLOW;
+
+	if (offset < size) {
+		deldop->frame[f].fit_overflow[x][y] = 0.0;
+	}
+}
+
+__host__ void zero_fit_overflow(struct deldop_t *deldop, int f) {
+	/* Wrapper function */
+	dim3 THD, BLK;
+	int threads = 0;
+	threads = MAXOVERFLOW*MAXOVERFLOW;
+	THD.x = maxThreadsPerBlock;
+	BLK.x = floor((THD.x - 1 + threads) / THD.x);
+
+	zero_fit_overflow_krnl<<<BLK,THD>>>(deldop, f, threads);
+	checkErrorAfterKernelLaunch("zero_fit_overflow_krnl");
+}

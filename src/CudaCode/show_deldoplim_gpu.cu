@@ -189,3 +189,116 @@ __host__ void show_deldoplim_gpu(struct dat_t *ddat,
  	cudaFree(idellim);
  	cudaFree(idoplim);
  }
+
+__host__ void show_deldoplim_pthread(struct dat_t *ddat0, struct dat_t *ddat1,
+		unsigned char *type, int nsets, int *nframes, int maxframes, int *GPUID)
+ {
+ 	int *ndel, *ndop, *hndel, *hndop, s, f, header_displayed;
+ 	header_displayed = 0;
+ 	int2 *idellim, *idoplim, *hidellim, *hidoplim;
+ 	dim3 BLK[nsets],THD;
+ 	THD.x = maxThreadsPerBlock;
+
+ 	/* Allocate host memory */
+ 	hndel 	 = (int *) malloc(maxframes*sizeof(int));
+ 	hndop 	 = (int *) malloc(maxframes*sizeof(int));
+ 	hidellim = (int2 *) malloc(maxframes*sizeof(int2));
+ 	hidoplim = (int2 *) malloc(maxframes*sizeof(int2));
+
+ 	for (s=0; s<nsets; s++) {
+ 		gpuErrchk(cudaSetDevice(GPUID[s]));
+
+ 		/* Allocate host memory on the right gpu */
+ 		gpuErrchk(cudaMalloc((void**)&ndel, sizeof(int) * nframes[s]));
+ 		gpuErrchk(cudaMalloc((void**)&ndop, sizeof(int) * nframes[s]));
+ 		gpuErrchk(cudaMalloc((void**)&idoplim, sizeof(int2) * nframes[s]));
+ 		gpuErrchk(cudaMalloc((void**)&idellim, sizeof(int2) * nframes[s]));
+
+ 		if (type[s] == DELAY || type[s] == DOPPLER) {
+
+ 			if (!header_displayed) {
+ 				printf("#\n");
+ 				printf("# model delay-Doppler regions (1-based) with nonzero power:\n");
+ 				fflush(stdout);
+ 				header_displayed = 1;
+ 			}
+
+ 			if (type[s] == DELAY) {
+ 				BLK[s] = floor((THD.x - 1 + nsets) / THD.x);
+
+ 				/* Get the delay and Doppler limits*/
+ 				if (GPUID[s]==GPU0)
+ 					sho_ddl_get_lims_krnl<<<BLK[s],THD>>>(ddat0, idellim,
+ 						idoplim, ndel, ndop, s, nframes[s]);
+ 				else if (GPUID[s]==GPU1)
+ 					sho_ddl_get_lims_krnl<<<BLK[s],THD>>>(ddat1, idellim,
+ 							idoplim, ndel, ndop, s, nframes[s]);
+ 				checkErrorAfterKernelLaunch("sho_ddl_get_lims_krnl");
+ 				gpuErrchk(cudaMemcpy(hidellim, idellim, sizeof(int2)*nframes[s],
+ 						cudaMemcpyDeviceToHost));
+ 				gpuErrchk(cudaMemcpy(hidoplim, idoplim, sizeof(int2)*nframes[s],
+ 						cudaMemcpyDeviceToHost));
+ 				gpuErrchk(cudaMemcpy(hndel, ndel, sizeof(int)*nframes[s],
+ 						cudaMemcpyDeviceToHost));
+ 				gpuErrchk(cudaMemcpy(hndop, ndop, sizeof(int)*nframes[s],
+ 						cudaMemcpyDeviceToHost));
+
+ 				for (f=0; f<nframes[s]; f++) {
+ 				/*  Display the limits for this frame  */
+ 				printf("#         Set %2d frame %2d:  rows %2d to %2d , cols %2d to %2d",
+ 						s, f, hidellim[f].x, hidellim[f].y, hidoplim[f].x, hidoplim[f].y);
+ 				if (hidellim[f].y < 1 || hidellim[f].x > hndel[f]
+ 						|| hidoplim[f].y < 1 || hidoplim[f].x > hndop[f])
+ 					printf("  (MODEL ENTIRELY OUTSIDE FRAME)");
+ 				else if (hidellim[f].x < 1 || hidellim[f].y > hndel[f]
+ 						|| hidoplim[f].x < 1 || hidoplim[f].y > hndop[f])
+ 					printf("  (VIGNETTING TOO TIGHT)");
+ 				printf("\n");
+ 				fflush(stdout);
+ 				}
+
+ 			} else {
+ 				BLK[s] = floor((THD.x - 1 + nsets) / THD.x);
+
+ 				/* Get the delay and Doppler limits */
+ 				if (GPUID[s]==GPU0)
+ 					sho_ddl_get_lims_krnl<<<BLK[s],THD>>>(ddat0, idellim,
+ 							idoplim, ndel, ndop, s, nframes[s]);
+ 				if (GPUID[s]==GPU1)
+ 					sho_ddl_get_lims_krnl<<<BLK[s],THD>>>(ddat1, idellim,
+ 							idoplim, ndel, ndop, s, nframes[s]);
+ 				checkErrorAfterKernelLaunch("sho_ddl_get_lims_streams_krnl");
+ 				gpuErrchk(cudaMemcpy(hidoplim, idoplim, sizeof(int2)*nframes[s],
+ 						cudaMemcpyDeviceToHost));
+ 				gpuErrchk(cudaMemcpy(hndop, ndop, sizeof(int)*nframes[s],
+ 						cudaMemcpyDeviceToHost));
+
+ 				for (f=0; f<nframes[s]; f++) {
+ 					/*  Display the limits for this frame  */
+ 					printf("#         Set %2d frame %2d:  bins %2d to %2d",
+ 							s, f, hidoplim[f].x, hidoplim[f].y);
+ 					if (hidoplim[f].y < 1 || hidoplim[f].y > hndop[f])
+ 						printf("  (MODEL ENTIRELY OUTSIDE FRAME)");
+ 					else if (hidoplim[f].x < 1 || hidoplim[f].y > hndop[f])
+ 						printf("  (VIGNETTING TOO TIGHT)");
+ 					printf("\n");
+ 					fflush(stdout);
+ 				}
+ 			}
+ 		}
+ 		cudaFree(ndop);
+ 		cudaFree(ndel);
+ 		cudaFree(idellim);
+ 		cudaFree(idoplim);
+ 	}  /* end loop over datasets */
+ 	gpuErrchk(cudaSetDevice(GPU0));
+
+ 	if (header_displayed) {
+ 		printf("#\n");
+ 		fflush(stdout);
+ 	}
+ 	free(hndop);
+ 	free(hndel);
+ 	free(hidellim);
+ 	free(hidoplim);
+ }

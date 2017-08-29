@@ -463,9 +463,12 @@ __host__ void realize_spin_gpu(
 }
 
 __host__ void realize_spin_pthread(
-		struct par_t *dpar,
-		struct mod_t *dmod,
-		struct dat_t *ddat,
+		struct par_t *dpar0,
+		struct par_t *dpar1,
+		struct mod_t *dmod0,
+		struct mod_t *dmod1,
+		struct dat_t *ddat0,
+		struct dat_t *ddat1,
 		unsigned char *htype,
 		int *nframes,
 		int *nviews,
@@ -493,9 +496,12 @@ __host__ void realize_spin_pthread(
 	data1.gpuid 	 = GPU0;
 	data2.gpuid 	 = GPU1;
 	data1.GPUID 	 = data2.GPUID 		= GPUID;
-	data1.parameter  = data2.parameter 	= dpar;
-	data1.model 	 = data2.model 		= dmod;
-	data1.data		 = data2.data 		= ddat;
+	data1.parameter  = dpar0;
+	data2.parameter  = dpar1;
+	data1.model 	 = dmod0;
+	data2.model 	 = dmod1;
+	data1.data		 = ddat0;
+	data2.data 		 = ddat1;
 	data1.host_type	 = data2.host_type 	= htype;
 	data1.nframes 	 = data2.nframes 	= nframes;
 	data1.nsets 	 = data2.nsets 		= nsets;
@@ -504,15 +510,31 @@ __host__ void realize_spin_pthread(
 	/* Calculate launch parameters for all kernels going over all vertices */
 	nsetsBLK.x = floor((THD.x - 1 + nsets) / THD.x);
 
-	/* Get the three components of the angle and spin offsets for all datasets,
-	 * with any "=" states taken into account. Since sets are split between two
-	 * GPUs we need to switch devices as needed. Only two small kernels are
-	 * involved and both need to be done before the main pthreaded portion.  */
+//	/* Get the three components of the angle and spin offsets for all datasets,
+//	 * with any "=" states taken into account. Since sets are split between two
+//	 * GPUs we need to switch devices as needed. Only two small kernels are
+//	 * involved and both need to be done before the main pthreaded portion.  */
+//	for (s=0; s<nsets; s++) {
+//		gpuErrchk(cudaSetDevice(GPUID[s]));
+//		realize_angleoff_krnl<<<1,1>>>(ddat, GPUID[s]);
+//		realize_omegaoff_krnl<<<nsetsBLK,THD>>>(ddat, GPUID[s]);
+//	} checkErrorAfterKernelLaunch("realize_angleoff_krnl/realize_omegaoff_krnl");
+
+
+	/* Temporary code : */
+	gpuErrchk(cudaSetDevice(GPU0));
 	for (s=0; s<nsets; s++) {
-		gpuErrchk(cudaSetDevice(GPUID[s]));
-		realize_angleoff_krnl<<<1,1>>>(ddat, GPUID[s]);
-		realize_omegaoff_krnl<<<nsetsBLK,THD>>>(ddat, GPUID[s]);
+		//gpuErrchk(cudaSetDevice(GPUID[s]));
+		realize_angleoff_krnl<<<1,1>>>(ddat0, GPUID[s]);
+		realize_omegaoff_krnl<<<nsetsBLK,THD>>>(ddat0, GPUID[s]);
 	} checkErrorAfterKernelLaunch("realize_angleoff_krnl/realize_omegaoff_krnl");
+	gpuErrchk(cudaSetDevice(GPU1));
+	for (s=0; s<nsets; s++) {
+		//gpuErrchk(cudaSetDevice(GPUID[s]));
+		realize_angleoff_krnl<<<1,1>>>(ddat0, GPUID[s]);
+		realize_omegaoff_krnl<<<nsetsBLK,THD>>>(ddat1, GPUID[s]);
+	} checkErrorAfterKernelLaunch("realize_angleoff_krnl/realize_omegaoff_krnl");
+	gpuErrchk(cudaSetDevice(GPU0));
 
 	/* From here, launch the pthreaded subfunction */
 	pthread_create(&thread1, NULL, realize_spin_pthread_sub,(void*)&data1);

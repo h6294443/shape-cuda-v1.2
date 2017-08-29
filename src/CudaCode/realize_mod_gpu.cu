@@ -155,21 +155,34 @@ __device__ float rm_area=0.0, rm_ifarea=0.0, rm_vol=0.0, rm_ifvol=0.0,
 		rm_dcom[3], rm_ifdcom[3], rm_dI[3][3], rm_ifdI[3][3];
 static int nv, nf, ns;
 static dim3 nvBLK,nvTHD,nfBLK,nfTHD,nsBLK,nsTHD;
-__host__ void realize_coordinates_gpu(struct par_t *dpar, struct mod_t *dmod, unsigned char type);
-__host__ void realize_coordinates_gpu_f( struct par_t *dpar, struct mod_t *dmod, unsigned char type);
+__host__ void realize_coordinates_gpu(struct par_t *dpar, struct mod_t *dmod, unsigned char type, int gpuid);
+__host__ void realize_coordinates_gpu_f( struct par_t *dpar, struct mod_t *dmod, unsigned char type, int gpuid);
 __host__ void check_surface_gpu(struct mod_t *dmod, cudaStream_t *rm_streams);
 __host__ void compute_moments_gpu(struct mod_t *dmod, int nf, cudaStream_t *cm_streams);
+void *realize_mod_pthread_sub(void *ptr);
 
-__global__ void set_diam_krnl(struct par_t *dpar, struct mod_t *dmod){
+typedef struct realize_mod_thread_t
+{
+    int thread_no;
+	struct par_t *parameter;
+    struct mod_t *model;
+    int nf;
+    int gpuid;
+    unsigned char type;
+    cudaStream_t *gpu_stream;
+ } realize_mod_data;
+
+__global__ void set_diam_krnl(struct par_t *dpar, struct mod_t *dmod, int gpuid, int gpu0){
 	/* This is a single-thread kernel */
 	if (threadIdx.x == 0) {
-		dpar->baddiam = 0;
-		dpar->baddiam_logfactor = 0;
+		if (gpuid==gpu0) {
+			dpar->baddiam = 0;
+			dpar->baddiam_logfactor = 0;
+		}
 		dnv = dmod->shape.comp[0].real.nv;
 		dnf = dmod->shape.comp[0].real.nf;
 		dns = dmod->shape.comp[0].real.ns;
 	}
-	__syncthreads();
 }
 __global__ void ellipse_diameter_krnl(struct par_t *dpar, struct mod_t *dmod) {
 	/* This is a single-thread kernel */
@@ -899,11 +912,7 @@ __host__ void realize_mod_gpu( struct par_t *dpar, struct mod_t *dmod,
       Additionally, for each facet it computes the outward unit normal,
       the area, the mean coordinates of the corner vertices, and (for
       some scattering laws) the corresponding angular coordinates.        */
-
-	if (FLOAT)
-		realize_coordinates_gpu(dpar, dmod, type);
-	else
-		realize_coordinates_gpu(dpar, dmod, type);
+	realize_coordinates_gpu(dpar, dmod, type, GPU0);
 
 	/*  For multiple-component models, figure out which facets lie on
       the model's surface and which fall within some other component;
@@ -915,9 +924,71 @@ __host__ void realize_mod_gpu( struct par_t *dpar, struct mod_t *dmod,
 	compute_moments_gpu(dmod, nf, rm_streams);
 }
 
+__host__ void realize_mod_pthread(struct par_t *dpar0, struct par_t *dpar1,
+		struct mod_t *dmod0, struct mod_t *dmod1, unsigned char type, int nf,
+		pthread_t thread1, pthread_t thread2, cudaStream_t *gpu0_stream,
+		cudaStream_t *gpu1_stream)
+{
+	/* Note:  The purpose of this p-threaded realize_mod function is to update
+	 * both models - one for each gpu - in the dual gpu mode.  Two models are
+	 * maintained to improve memory access speeds in other functions (mostly
+	 * posvis, though).  Nothing needs to be returned from the second model.
+	 * It exists merely to feed the second GPU and must be updated at the
+	 * same time as the first model (the only model in other modes of shape
+	 * operation) to maintain proper sequence of operations.	 */
+	realize_mod_data data1, data2;
+	data1.thread_no = 0;
+	data2.thread_no = 1;
+	data1.parameter = dpar0;
+	data2.parameter = dpar1;
+	data1.model = dmod0;
+	data2.model = dmod1;
+	data1.nf = data2.nf = nf;
+	data1.gpuid = GPU0;
+	data2.gpuid = GPU1;
+	data1.gpu_stream = gpu0_stream;
+	data2.gpu_stream = gpu1_stream;
+	data1.type = data2.type = type;
+
+	/* From here, launch the pthreaded subfunction */
+	pthread_create(&thread1, NULL, realize_mod_pthread_sub,(void*)&data1);
+	pthread_create(&thread2, NULL, realize_mod_pthread_sub,(void*)&data2);
+
+	pthread_join(thread1, NULL);
+	pthread_join(thread2, NULL);
+
+	gpuErrchk(cudaSetDevice(GPU0));
+}
+
+void *realize_mod_pthread_sub(void *ptr) {
+
+	realize_mod_data *data;
+	data = (realize_mod_data *) ptr;  /* type cast to a pointer to thdata */
+	gpuErrchk(cudaSetDevice(data->gpuid));
+
+	/*  We need to realize each model component as a polyhedral solid with
+      triangular facets.  The first step is to call realize_coordinates,
+      which computes the displacement of each vertex in this realization,
+      represented as a base displacement plus a vertex deviation (either
+      positive or negative) along a specified set of direction cosines.
+      Additionally, for each facet it computes the outward unit normal,
+      the area, the mean coordinates of the corner vertices, and (for
+      some scattering laws) the corresponding angular coordinates.        */
+	realize_coordinates_gpu(data->parameter, data->model, data->type, data->gpuid);
+
+	/*  For multiple-component models, figure out which facets lie on
+      the model's surface and which fall within some other component;
+      such facets will have their "act" (active) flag reset to zero.   */
+	check_surface_gpu(data->model, data->gpu_stream);
+
+	/*  Compute the area and moments (volume, center of mass, and
+      inertia tensor) of each component and of the overall model  */
+	compute_moments_gpu(data->model, data->nf, data->gpu_stream);
+}
+
 /*  Compute the vertex coordinates and (if necessary) facet angular coordinates
     for each component of the model's vertex realization                         */
-__host__ void realize_coordinates_gpu( struct par_t *dpar, struct mod_t *dmod, unsigned char type)
+__host__ void realize_coordinates_gpu( struct par_t *dpar, struct mod_t *dmod, unsigned char type, int gpuid)
 {
 	dim3 BLK, THD;
 	THD.x = maxThreadsPerBlock;
@@ -927,7 +998,7 @@ __host__ void realize_coordinates_gpu( struct par_t *dpar, struct mod_t *dmod, u
 	 * (positive or negative) along a specified set of direction cosines*/
 
 	/*  Call Kernel to initialize flag for tiny/negative ellipsoid diameters  */
-	set_diam_krnl<<<1,1>>>(dpar, dmod);//, dnv, dnf);
+	set_diam_krnl<<<1,1>>>(dpar, dmod, gpuid, GPU0);//, dnv, dnf);
 	checkErrorAfterKernelLaunch("set_diam_krnl");
 
 	/* Note:  The CUDA-code assumes a single-component model for now.  */
@@ -1035,7 +1106,7 @@ __host__ void realize_coordinates_gpu( struct par_t *dpar, struct mod_t *dmod, u
 	calc_vertex_nrmls_krnl<<<nvBLK,nvTHD>>>(dmod);
 	checkErrorAfterKernelLaunch("calc_vertex_nrmls, line 667");
 }
-__host__ void realize_coordinates_gpu_f( struct par_t *dpar, struct mod_t *dmod, unsigned char type)
+__host__ void realize_coordinates_gpu_f( struct par_t *dpar, struct mod_t *dmod, unsigned char type, int gpuid)
 {
 	dim3 BLK, THD;
 	THD.x = maxThreadsPerBlock;
@@ -1045,7 +1116,7 @@ __host__ void realize_coordinates_gpu_f( struct par_t *dpar, struct mod_t *dmod,
 	 * (positive or negative) along a specified set of direction cosines*/
 
 	/*  Call Kernel to initialize flag for tiny/negative ellipsoid diameters  */
-	set_diam_krnl<<<1,1>>>(dpar, dmod);//, dnv, dnf);
+	set_diam_krnl<<<1,1>>>(dpar, dmod, gpuid, GPU0);//, dnv, dnf);
 	checkErrorAfterKernelLaunch("set_diam_krnl");
 
 	/* Note:  The CUDA-code assumes a single-component model for now.  */
@@ -1306,7 +1377,7 @@ __host__ void compute_moments_gpu(struct mod_t *dmod, int nf, cudaStream_t *cm_s
 			*dI10, *dI11, *dI12, *dI20, *dI21, *dI22;
 	size_t arrsz = sizeof(float)*nf;
 	int c=0;
-	gpuErrchk(cudaSetDevice(GPU0));
+//	gpuErrchk(cudaSetDevice(GPU0));
 
 	/*  Initialize the model's surface area, volume, center-of-mass (COM)
 	 * displacement, and inertia tensor  */
@@ -1343,12 +1414,12 @@ __host__ void compute_moments_gpu(struct mod_t *dmod, int nf, cudaStream_t *cm_s
 
 	/* Set area and initialize per-component COM and Inertia arrays */
 	comp_moments_2ndinit_krnl<<<1,1>>>(dmod, area1, area2, c);
-	checkErrorAfterKernelLaunch("comp_moments_2ndinit_krnl (compute_moments_cuda)");
+	checkErrorAfterKernelLaunch("comp_moments_2ndinit_krnl");
 
 	/* Load the temporary arrays with data */
 	comp_moments_facet_krnl<<<nfBLK,nfTHD>>>(dmod, c, dv, dcom0, dcom1, dcom2,
 			dI00, dI01, dI02, dI10, dI11, dI12, dI20, dI21, dI22);
-	checkErrorAfterKernelLaunch("comp_moments_facets_krnl (compute_moments_cuda)");
+	checkErrorAfterKernelLaunch("comp_moments_facets_krnl");
 
 	/* Calculate surface area for this component; for active facets, also add
 	 * the contributions to the area of the overall model    */
@@ -1357,7 +1428,7 @@ __host__ void compute_moments_gpu(struct mod_t *dmod, int nf, cudaStream_t *cm_s
 
 	/* This kernel computes the overall COM vector */
 	comp_moments_com_krnl<<<1,1>>>(dmod);
-	checkErrorAfterKernelLaunch("comp_moments_facets_krnl, line 963");
+	checkErrorAfterKernelLaunch("comp_moments_facets_krnl");
 
 	/* Free up the temporary arrays */
 	cudaFree(dv);

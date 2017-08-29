@@ -144,6 +144,7 @@ double penalties( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
   /*  contribution to the penalty-function sum       */
 
   for (i=1; i<=par->pen.n; i++) {
+
     pen = 0.0;
     switch (par->pen.type[i]) {
     case OPTALBDEL:
@@ -858,10 +859,11 @@ double penalties( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
         r_eff = pow( 3*volume/(4*PIE), 1.0/3.0);
 
         /*  Compute the squared magnitude of the model's COM displacement  */
-
         for (k=0; k<=2; k++)
           pen += mod->shape.com[k]*mod->shape.com[k];
+
         pen /= (r_eff*r_eff);
+
         break;
     case INERTIADEV:
 
@@ -1223,7 +1225,6 @@ double penalties( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 
     /*  Add this penalty to the penalty sum; if desired,
         display the penalty weight and value to the user.  */
-
     sum += fabs(par->pen.weight[i])*par->pen.base[i];
     if (par->showstate)
       printf("# %15s %e = fabs(%13.6e) * %e\n", name,

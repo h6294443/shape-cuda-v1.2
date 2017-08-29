@@ -273,11 +273,13 @@ double chi2( struct par_t *par, struct dat_t *dat, int list_breakdown)
 			dat->set[s].chi2 = chi2_deldop( par, &dat->set[s].desc.deldop,
 					list_breakdown, s, &chi2_all_deldop,
 					&chi2_fit0_deldop, &dof_fit0_deldop);
+//			printf("chi2 for set %i (Delay-Doppler) = %g\n", s, dat->set[s].chi2);
 			break;
 		case DOPPLER:
 			dat->set[s].chi2 = chi2_doppler( par, &dat->set[s].desc.doppler,
 					list_breakdown, s, &chi2_all_doppler,
 					&chi2_fit0_doppler, &dof_fit0_doppler);
+//			printf("chi2 for set %i (Doppler) = %g\n", s, dat->set[s].chi2);
 			break;
 		case POS:
 			dat->set[s].chi2 = chi2_poset( par, &dat->set[s].desc.poset,
@@ -287,6 +289,7 @@ double chi2( struct par_t *par, struct dat_t *dat, int list_breakdown)
 		case LGHTCRV:
 			dat->set[s].chi2 = chi2_lghtcrv( par, &dat->set[s].desc.lghtcrv,
 					list_breakdown, s, &chi2_all_lghtcrv);
+//			printf("chi2 for set %i (Lightcurve) = %g\n", s, dat->set[s].chi2);
 			break;
 		default:
 			bailout("chi2.c: can't handle this type yet\n");
@@ -462,6 +465,9 @@ double chi2_deldop( struct par_t *par, struct deldop_t *deldop, int list_breakdo
 		calval = deldop->frame[f].cal.val;
 		err = weight*(o2 - 2*calval*om + calval*calval*m2);
 		deldop->frame[f].chi2 = err;
+
+//		printf("chi2.c frame %i chi2: %g\n", f, deldop->frame[f].chi2);
+
 		chi2_set += err;
 		if (list_breakdown)
 			*chi2_all_deldop += err;

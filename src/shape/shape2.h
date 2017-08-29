@@ -1128,12 +1128,17 @@ struct deldopfrm_t {
   double overflow_xsec;         /* overflow summed cross section */
   double overflow_delmean;      /* overflow mean delay bin */
   double overflow_dopmean;      /* overflow mean Doppler bin */
+  float overflow_o2f;           /* overflow obs^2 contribution to chi squared */
+  float overflow_m2f;           /* overflow model^2 contribution to chi squared */
+  float overflow_xsecf;         /* overflow summed cross section */
+  float overflow_delmeanf;      /* overflow mean delay bin */
+  float overflow_dopmeanf;      /* overflow mean Doppler bin */
   double dof;                   /* degrees of freedom */
   double badradar_logfactor;    /* multiples obj. fcn. if model too wide in delay-Doppler space */
   double **map_fit;             /* fit image needed for the map action */
   double **map_pos;             /* POS image needed for the map action */
   double **map_facet_power;     /* array of facet contributions needed for the map action */
-  float fit_overflow[MAXOVERFLOW][MAXOVERFLOW];	/* for CUDA AF use */
+  float **fit_overflow;//[MAXOVERFLOW][MAXOVERFLOW];	/* for CUDA AF use */
 };
 
 /* Structure deldop_t describes a delay-Doppler data set. */
@@ -1494,3 +1499,27 @@ void write_mod( struct par_t *par, struct mod_t *mod);
 void write_pos( struct par_t *par, struct mod_t *mod, struct pos_t *pos,
                 double spin_ecl[3], int iradlaw, int color_output, char *name);
 void write_wf( struct mod_t *mod);
+
+
+
+
+
+void read_deldop_ascii(FILE *fin, struct deldop_t *deldop, int iframe,
+		int idel_use[2], int idop_use[2]);
+void read_deldop_binary(FILE *fin, struct deldop_t *deldop, int iframe,
+		int idel_use[2], int idop_use[2],  int swap_bytes);
+void read_deldop_rdf(FILE *fin, struct deldop_t *deldop, int iframe,
+		int idel_use[2], int idop_use[2],  int swap_bytes);
+void read_deldop_fits(char *filename, struct deldop_t *deldop, int iframe,
+		int idel_use[2], int idop_use[2]);
+void read_doppler_ascii(FILE *fin, struct doppler_t *doppler, int iframe,
+		int idop_use[2]);
+void read_doppler_binary(FILE *fin, struct doppler_t *doppler, int iframe,
+		int idop_use[2], int swap_bytes);
+void read_doppler_rdf(FILE *fin, struct doppler_t *doppler, int iframe,
+		int idop_use[2], int swap_bytes);
+void read_doppler_fits(char *filename, struct doppler_t *doppler, int iframe,
+		int idop_use[2]);
+void read_poset_fits(char *filename, struct poset_t *poset, int iframe,
+		int irow_use[2], int icol_use[2], int read_data);
+

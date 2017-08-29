@@ -1,4 +1,4 @@
-																																																																																																																																																																	/*****************************************************************************************
+/*****************************************************************************************
                                                                              pos2deldop.c
 
 Takes a pos_t structure and a deldop_t structure and "fills in" a deldopfrm_t structure
@@ -167,18 +167,20 @@ Modified 2003 April 14 by CM:
         (i.e., does NOT require the cross-section contributions from
         each plane-of-sky pixel to sum to the cross section actually
         present in that POS pixel)
-*****************************************************************************************/
+ *****************************************************************************************/
 extern "C" {
 #include "../shape/head.h"
 }
 
-__device__ int p2ds_any_overflow, p2ds_codemethod, p2ds_spb,
-	p2ds_stride, p2ds_spb_sq, p2ds_dopfftlen, p2ds_spb_over_stride, p2ds_nsinc2_sq;
+__device__ int /*p2ds_any_overflow, */p2ds_codemethod, p2ds_spb,
+p2ds_stride, p2ds_spb_sq, p2ds_dopfftlen, p2ds_spb_over_stride, p2ds_nsinc2_sq;
 __device__ double p2ds_const1, p2ds_const2, p2ds_one_over_spb, p2ds_delfact,
-		p2ds_dopfact;
+p2ds_dopfact;
 __device__ float p2ds_const1f, p2ds_const2f, p2ds_one_over_spbf, p2ds_delfactf, p2ds_dopfactf;
 
-static __device__ float fit_overflow[MAXOVERFLOW][MAXOVERFLOW];
+//__device__ int dbgf0=0, dbgf1=0, dbgf2=0, dbgf3=0;
+
+
 __device__ static float atomicMinf(float* address, float val)
 {
 	int* address_as_i = (int*) address;
@@ -211,13 +213,14 @@ __global__ void pos2deldop_init_krnl(
 		int *ndop,
 		int set,
 		int size,
-		int *badradararr) {
+		int *badradararr,
+		int *any_overflow) {
 	/* nfrm_alloc-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (f < size) {
 		/*  Initialize variables to avoid compilation warnings  */
-		idel0[f] = idop0[f] = p2ds_any_overflow = 0;
+		idel0[f] = idop0[f] = /*p2ds_any_overflow = */0;
 
 		frame[f] = &ddat->set[set].desc.deldop.frame[f];
 		frame[f]->idellim[0] = ndel[f] + 999999;
@@ -229,6 +232,7 @@ __global__ void pos2deldop_init_krnl(
 		frame[f]->doplim[1] = -HUGENUMBER;
 
 		badradararr[f] = 0;
+		any_overflow[f] = 0;
 		frame[f]->badradar_logfactor = 0.0;
 	}
 }
@@ -380,7 +384,8 @@ __global__ void pos2deldop_pixel_krnl(
 		double orbit_xoff,
 		double orbit_yoff,
 		int set,
-		int f) {
+		int f,
+		int *any_overflow) {
 	/* nThreads-threaded kernel */
 
 	/*  Loop through all POS pixels within the rectangular plane-of-sky region spanned by the
@@ -394,12 +399,11 @@ __global__ void pos2deldop_pixel_krnl(
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
 	int x = offset % xspan + pos[f]->xlim[0];
 	int y = offset / xspan + pos[f]->ylim[0];
-	int n;
-	int fac, c, i, j, k, idel, idel_min, idel_max, idop_min, idop_max,
-		idop, m, m_min, m_max, idel1, idel2, idop1, idop2, zaddr, in_bounds;
+	int n, fac, c, i, j, k, idel, idel_min, idel_max, idop_min, idop_max,
+	idop, m, m_min, m_max, idel1, idel2, idop1, idop2, zaddr, in_bounds;
 
 	double delPOS, dopPOS, codefactor, tmp, arg_sample, amp, arg_left,
-		   sinc2arg, sinc2_mean, arg_bl, sumweights, fit_contribution;
+	sinc2arg, sinc2_mean, arg_bl, sumweights, fit_contribution;
 	float del_contribution[MAXBINS], dop_contribution[MAXBINS];
 	n = pos[f]->n;
 	if (offset < nThreads) {
@@ -454,12 +458,8 @@ __global__ void pos2deldop_pixel_krnl(
 				in_bounds = 1;
 			else {
 				in_bounds = 0;
-				if (!p2ds_any_overflow) {
-					//atomicExch(&any_overflow, 1);
-					p2ds_any_overflow = 1;
-					for (i=0; i<MAXOVERFLOW; i++)
-						for (j=0; j<MAXOVERFLOW; j++)
-							frame[f]->fit_overflow[i][j] = 0.0;
+				if (!any_overflow[f]) {
+					atomicExch(&any_overflow[f], 1);
 
 					/* Center the COM in the overflow image:
 					 * pixel [idel][idop] in the fit frame corresponds to
@@ -498,9 +498,9 @@ __global__ void pos2deldop_pixel_krnl(
 						break;
 					case 2:
 						arg_sample = (delPOS - (idel - p2ds_const2)) /
-								p2ds_spb_over_stride;
+						p2ds_spb_over_stride;
 						del_contribution[idel-idel_min] = TRI( arg_sample )
-					                      				+ TRI( arg_sample - 0.5 );
+					                      						+ TRI( arg_sample - 0.5 );
 						del_contribution[idel-idel_min] *= del_contribution[idel-idel_min]/4;
 						break;
 					default:
@@ -582,8 +582,8 @@ __global__ void pos2deldop_pixel_krnl(
 
 			amp = dev_radlaw( &dmod->photo, ddat->set[set].desc.deldop.iradlaw,
 					pos[f]->cose_s[zaddr], pos[f]->comp[x][y], pos[f]->f[x][y])
-			       * pos[f]->km_per_pixel * pos[f]->km_per_pixel
-			       * codefactor / sumweights;
+			    		   * pos[f]->km_per_pixel * pos[f]->km_per_pixel
+			    		   * codefactor / sumweights;
 
 			/* Only add this POS pixel's power contributions to model delay-
 			 * Doppler frame if NONE of those contributions fall outside
@@ -596,7 +596,7 @@ __global__ void pos2deldop_pixel_krnl(
 					for (idop=idop_min; idop<=idop_max; idop++) {
 						k = MIN( idop - idop_min, MAXBINS);
 						fit_contribution = amp * del_contribution[idel-idel_min]
-						                       * dop_contribution[k];
+						                                          * dop_contribution[k];
 
 						atomicAdd(&frame[f]->fit_s[(idop-1)*ndel[f]+(idel-1)],
 								(float)fit_contribution);
@@ -648,8 +648,8 @@ __global__ void pos2deldop_pixel_krnl(
 					for (idop=idop1; idop<=idop2; idop++) {
 						k = MIN( idop - idop_min, MAXBINS);
 						fit_contribution = amp * del_contribution[idel-idel_min]
-						                   * dop_contribution[k];
-						fit_overflow[idel+idel0[f]][idop+idop0[f]] += fit_contribution;
+						                                          * dop_contribution[k];
+						frame[f]->fit_overflow[idel+idel0[f]][idop+idop0[f]] += fit_contribution;
 						if (dpar->action == MAP && dpar->map_mode == MAPMODE_DELDOP)
 							if (idel >= dpar->map_dellim[0] && idel <= dpar->map_dellim[1] &&
 									idop >= dpar->map_doplim[0] && idop <= dpar->map_doplim[1]    ) {
@@ -710,15 +710,18 @@ __global__ void pos2deldop_overflow_krnl(
 		int *ndop,
 		int set,
 		int size,
-		int *badradararr) {
+		int *badradararr,
+		int *any_overflow) {
 	/* nfrm_alloc (size) -threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	int i, i1, i2, j, j1, j2;
-	double lookfact, sdev_sq, variance,dopfactor, delfactor;
+	int i, i1, i2, j, j1, j2, idell0, idopp0;
+	double lookfact, sdev_sq, variance,dopfactor, delfactor, fo;
+	double o2=0.0, m2=0.0, xsec=0.0, delmean=0.0, dopmean=0.0;
 
 	if (f < size) {
-		/*  Calculate the overflow contributions to chi squared:
-		 * 	 o2 = obs^2 contribution, m2 = model^2 contribution.
+
+		/* Calculate the overflow contributions to chi squared:
+		 *  o2 = obs^2 contribution, m2 = model^2 contribution.
 		 *
 		 *  Also compute the summed cross section and the mean delay and Doppler
 		 *  bins for the overflow region, for use with the "delcorinit" action    */
@@ -731,34 +734,45 @@ __global__ void pos2deldop_overflow_krnl(
 		sdev_sq = frame[f]->sdev*frame[f]->sdev;
 		variance = sdev_sq;
 		lookfact = (frame[f]->nlooks > 0.0) ? 1.0/frame[f]->nlooks : 0.0;
-		if (p2ds_any_overflow) {
-			i1 = MAX( frame[f]->idellim[0] + idel0[f], 0);
-			i2 = MIN( frame[f]->idellim[1] + idel0[f], MAXOVERFLOW - 1);
-			j1 = MAX( frame[f]->idoplim[0] + idop0[f], 0);
-			j2 = MIN( frame[f]->idoplim[1] + idop0[f], MAXOVERFLOW - 1);
+
+
+		if (any_overflow[f]) {
+			idell0 = idel0[f];
+			idopp0 = idop0[f];
+			i1 = MAX( frame[f]->idellim[0] + idell0, 0);
+			i2 = MIN( frame[f]->idellim[1] + idell0, MAXOVERFLOW - 1);
+			j1 = MAX( frame[f]->idoplim[0] + idopp0, 0);
+			j2 = MIN( frame[f]->idoplim[1] + idopp0, MAXOVERFLOW - 1);
+
 			for (i=i1; i<=i2; i++)
 				for (j=j1; j<=j2; j++) {
-					if (fit_overflow[i][j] != 0.0) {
+					fo = frame[f]->fit_overflow[i][j];
+					if (fo != 0.0) {
 						if (dpar->speckle)
-							variance = sdev_sq + lookfact *
-							frame[f]->fit_overflow[i][j] * frame[f]->fit_overflow[i][j];
-						frame[f]->overflow_o2 += 1.0;
-						frame[f]->overflow_m2 += frame[f]->fit_overflow[i][j] *
-								frame[f]->fit_overflow[i][j]/variance;
-						frame[f]->overflow_xsec += frame[f]->fit_overflow[i][j];
-						frame[f]->overflow_delmean += (i-idel0[f]) *
-								frame[f]->fit_overflow[i][j];
-						frame[f]->overflow_dopmean += (j-idop0[f]) *
-								frame[f]->fit_overflow[i][j];
+							variance = sdev_sq + lookfact *	fo * fo;
+						o2 += 1.0; /* o2 */
+						m2 += fo * fo / variance;
+						xsec += fo;
+						delmean += (i-idell0) * fo;
+						dopmean += (j-idopp0) * fo;
+//						frame[f]->overflow_o2 += 1.0;
+//						frame[f]->overflow_m2 += fo * fo / variance;
+//						frame[f]->overflow_xsec += fo;
+//						frame[f]->overflow_delmean += (i-idel0[f]) * fo;
+//						frame[f]->overflow_dopmean += (j-idop0[f]) * fo;
 					}
 				}
-			if (frame[f]->overflow_xsec != 0.0) {
-				frame[f]->overflow_delmean /= frame[f]->overflow_xsec;
-				frame[f]->overflow_dopmean /= frame[f]->overflow_xsec;
+
+//			if (frame[f]->overflow_xsec != 0.0) {
+//				frame[f]->overflow_delmean /= frame[f]->overflow_xsec;
+//				frame[f]->overflow_dopmean /= frame[f]->overflow_xsec;
+//			}
+			if (xsec != 0.0) {
+				delmean /= xsec;
+				dopmean /= xsec;
 			}
 
-			/*  Print a warning if the model extends even beyond the overflow image  */
-
+			/* Print a warning if the model extends even beyond the overflow image  */
 			if (((frame[f]->idellim[0] + idel0[f]) < 0)            ||
 					((frame[f]->idellim[1] + idel0[f]) >= MAXOVERFLOW) ||
 					((frame[f]->idoplim[0] + idop0[f]) < 0)            ||
@@ -767,10 +781,10 @@ __global__ void pos2deldop_overflow_krnl(
 				badradararr[f] = 1;
 				delfactor = (MAX(frame[f]->idellim[1] + idel0[f], MAXOVERFLOW)
 						- MIN(frame[f]->idellim[0] + idel0[f], 0)         )
-		                				  / (1.0*MAXOVERFLOW);
+		                						  / (1.0*MAXOVERFLOW);
 				dopfactor = (MAX(frame[f]->idoplim[1] + idop0[f], MAXOVERFLOW)
 						- MIN(frame[f]->idoplim[0] + idop0[f], 0)         )
-		                				  / (1.0*MAXOVERFLOW);
+		                						  / (1.0*MAXOVERFLOW);
 				frame[f]->badradar_logfactor += log(delfactor*dopfactor);
 				if (dpar->warn_badradar) {
 					printf("\nWARNING in pos2deldop_cuda_streams.c for set %2d frame %2d:\n", set, f);
@@ -781,9 +795,38 @@ __global__ void pos2deldop_overflow_krnl(
 							frame[f]->idoplim[0], frame[f]->idoplim[1]);
 				}
 			}
+//			o2m2xsec[f].x = o2;
+//			o2m2xsec[f].y = m2;
+//			o2m2xsec[f].z = xsec;
+//			deldopmean[f].x = delmean;
+//			deldopmean[f].y = dopmean;
+			frame[f]->overflow_o2 = o2;
+			frame[f]->overflow_m2 = m2;
+			frame[f]->overflow_xsec = xsec;
+			frame[f]->overflow_delmean = delmean;
+			frame[f]->overflow_dopmean = dopmean;
 		}
 	}
 }
+
+__global__ void pos2deldop_finish_overflow_krnl(struct deldopfrm_t **frame,
+		float *overflow, int size) {
+
+	int f = blockIdx.x * blockDim.x + threadIdx.x;
+	if (f < size) {
+		frame[f]->overflow_o2 = overflow[f];
+	}
+}
+
+//__global__ void dbg_pos2deldop_krnl() {
+//
+//	if (threadIdx.x == 0) {
+//		printf("frame 0 loops: %i\n", dbgf0);
+//		printf("frame 1 loops: %i\n", dbgf1);
+//		printf("frame 2 loops: %i\n", dbgf2);
+//		printf("frame 3 loops: %i\n", dbgf3);
+//	}
+//}
 
 __host__ void pos2deldop_gpu(
 		struct par_t *dpar,
@@ -804,7 +847,8 @@ __host__ void pos2deldop_gpu(
 		int *badradararr,
 		cudaStream_t *p2d_stream)
 {
-	int xspan[nfrm_alloc], yspan, nThreads[nfrm_alloc], *idop0, *idel0;
+	int xspan[nfrm_alloc], yspan, nThreads[nfrm_alloc], *idop0, *idel0,
+	*any_overflow;
 	float2 *axay, *xyincr, *deldopshift;
 	float3 *w;
 	float4 *dop, *deldoplim;
@@ -813,8 +857,14 @@ __host__ void pos2deldop_gpu(
 	THD.x = maxThreadsPerBlock;	THD64.x = 64;
 	BLKfrm.x = floor((THD64.x - 1 + nfrm_alloc)/THD64.x);
 
+	cudaEvent_t start1, stop1;
+	float milliseconds;
+
+	//int hbadrad[nfrm_alloc];
+
 	gpuErrchk(cudaMalloc((void**)&idop0, sizeof(int)*nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&idel0, sizeof(int)*nfrm_alloc));
+	gpuErrchk(cudaMalloc((void**)&any_overflow, sizeof(int)*nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&w, sizeof(float3)*nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&axay, sizeof(float2)*nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&xyincr, sizeof(float2)*nfrm_alloc));
@@ -824,13 +874,13 @@ __host__ void pos2deldop_gpu(
 
 	/* Launch single-thread initialization kernel */
 	pos2deldop_init_krnl<<<BLKfrm,THD64>>>(ddat, frame, idel0, idop0, ndel,
-			ndop, set, nfrm_alloc, badradararr);
+			ndop, set, nfrm_alloc, badradararr, any_overflow);
 	checkErrorAfterKernelLaunch("pos2deldop_init_krnl2");
 	/* Launch kernel to determine data sampling/radar parameters.  */
 	pos2deldop_data_sampling_krnl<<<BLKfrm,THD64>>>(dpar, ddat, frame, pos,
 			axay, xyincr, deldopshift, w, dop, deldoplim, xylim, set,
 			nfrm_alloc, v, orbit_dopoff, badradararr);
-	checkErrorAfterKernelLaunch("pos2deldop_data_sampling_krnl2");
+	checkErrorAfterKernelLaunch("pos2deldop_data_sampling_krnl");
 	gpuErrchk(cudaMemcpy(host_xylim, xylim, nfrm_alloc*sizeof(int4), cudaMemcpyDeviceToHost));
 
 	/* Figure out the kernel launch parameters for every stream */
@@ -841,24 +891,41 @@ __host__ void pos2deldop_gpu(
 		BLK[f].x = floor((THD.x -1 + nThreads[f]) / THD.x);
 	}
 
+
 	/* Assign 1 stream to each frame's iteration each of the three kernels */
 	for (int f=0; f<nfrm_alloc; f++) {
 		pos2deldop_pixel_krnl<<<BLK[f],THD,0,p2d_stream[f]>>>(dpar, dmod, ddat, pos,
 				frame, deldoplim, dop, deldopshift, axay, xyincr, idel0, idop0,
 				ndel, ndop, xspan[f], nThreads[f], body, orbit_xoff, orbit_yoff,
-				set, f);
-	} checkErrorAfterKernelLaunch("pos2deldop_pixel_krnl in pos2deldop_gpu2");
+				set, f, any_overflow);
+	} checkErrorAfterKernelLaunch("pos2deldop_pixel_krnl");
 
 	/* Launch kernel to copy the deldop limits back to original doubles in
 	 * the frame structures.	 */
 	pos2deldop_deldoplim_krnl<<<BLKfrm,THD64>>>(ddat, frame,
 			deldoplim, dop, deldopshift, set, nfrm_alloc);
-	checkErrorAfterKernelLaunch("pos2deldop_deldoplim_krnl2 in pos2deldop_gpu2");
+	checkErrorAfterKernelLaunch("pos2deldop_deldoplim_krnl");
 
+//	cudaEventCreate(&start1);
+//	cudaEventCreate(&stop1);
+//	cudaEventRecord(start1);
 	/* Launch kernel to take care of any bin overflow */
-	pos2deldop_overflow_krnl<<<BLKfrm,THD64>>>(dpar, frame,
-			idel0, idop0, ndel, ndop, set, nfrm_alloc, badradararr);
-	checkErrorAfterKernelLaunch("pos2deldop_overflow_krnl2 in pos2deldop_gpu2");
+	pos2deldop_overflow_krnl<<<BLKfrm,THD64>>>(dpar, frame, idel0, idop0, ndel,
+			ndop, set, nfrm_alloc, badradararr, any_overflow);
+	checkErrorAfterKernelLaunch("pos2deldop_overflow_krnl");
+
+//	cudaEventRecord(stop1);
+//	cudaEventSynchronize(stop1);
+//	milliseconds = 0;
+//	cudaEventElapsedTime(&milliseconds, start1, stop1);
+//	printf("pos2deldop_overflow_krnl in %3.3f ms.\n", milliseconds);
+
+	//gpuErrchk(cudaMemcpy(hbadrad, badradararr, nfrm_alloc*sizeof(int), cudaMemcpyDeviceToHost));
+	//	for (int f=0; f<nfrm_alloc; f++)
+	//		printf("set %i badradar[%i]=%i\n", set, f, hbadrad[f]);
+
+//	dbg_pos2deldop_krnl<<<1,1>>>();
+//	checkErrorAfterKernelLaunch("dbg_pos2deldop_krnl");
 
 	cudaFree(idop0);
 	cudaFree(idel0);
@@ -868,4 +935,6 @@ __host__ void pos2deldop_gpu(
 	cudaFree(deldopshift);
 	cudaFree(deldoplim);
 	cudaFree(dop);
+
+	//	cudaFree(any_overflow);
 }

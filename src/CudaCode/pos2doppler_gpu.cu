@@ -270,7 +270,7 @@ __global__ void pos2doppler_radar_parameters_krnl(
 	 * Doppler on any given POS pixel's edge and the Doppler at its center                               */
 	/* dop.w - dopdiff_bl
 	 * dop.x - dopdiff_max
-	 * dop.y - dopDC_vig
+	 * dop.y - dopDC_vig (not used in Doppler)
 	 * dop.z - dop_extra		 */
 
 	if (w[f].x != 0.0 || w[f].y != 0.0)
@@ -327,13 +327,14 @@ __global__ void pos2doppler_pixel_krnl(
 		int body,
 		double orbit_xoff,
 		double orbit_yoff,
-		int f) {
+		int f,
+		int debug) {
 
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
 	int x = offset % xspan + pos[f]->xlim[0];
 	int y = offset / xspan + pos[f]->ylim[0];
-	/*__shared__ */int n, nsinc2, sinc2width ;
+	int n, nsinc2, sinc2width ;
 
 	int idop, idop_min, idop_max, idop1, idop2, i, j, c, fac, k, zaddr;
 	double tmp, amp, arg_left, sinc2arg, sinc2_mean, arg_bl, fit_contribution,
@@ -452,7 +453,8 @@ __global__ void pos2doppler_pixel_krnl(
 				k = MIN( idop - idop_min, MAXBINS);
 				sumweights += dop_contribution[k];
 			}
-
+//			if (debug==1 && x==0 && y==0 && f==0)
+//				printf("sumweights at (0,0): %g\n", sumweights);
 			/* The radar cross section within this plane-of-sky pixel is
 			 * [differential radar scattering law]*[POS pixel area in km^2].
 			 * The differential radar scattering law (function radlaw
@@ -463,6 +465,23 @@ __global__ void pos2doppler_pixel_krnl(
 					pos[f]->cose_s[zaddr], pos[f]->comp[x][y], pos[f]->f[x][y])
 		    		 * pos[f]->km_per_pixel * pos[f]->km_per_pixel / sumweights;
 
+//			if (debug==1 && x==0 && y==0 && f==0) {
+//				printf("amp = dev_radlaw arguments\n");
+//				printf("ddat->set[%i].desc.doppler.iradlaw=%i\n", set,ddat->set[set].desc.doppler.iradlaw);
+//				printf("pos[%i]->cose_s[%i] at (0,0)=%f\n",f, zaddr, pos[f]->cose_s[zaddr]);
+//				printf("pos[%i]->comp[%i][%i]=%i\n", f, x, y, pos[f]->comp[x][y]);
+//				printf("pos[%i]->f[%i][%i]=%i\n", f, x, y, pos[f]->f[x][y]);
+//				printf("pos[%i]->km_per_pixel=%g\n", f, pos[f]->km_per_pixel);
+//				printf("sumweights=%g\n", sumweights);
+//				printf("amp=%g\n", amp);
+//				printf("photo law=%i\n", dmod->photo.radtype[ddat->set[set].desc.doppler.iradlaw]);
+//				printf("photo->radar[0].RC.R.val=%g\n", dmod->photo.radar[0].RC.R.val);
+//				printf("photo->radar[0].RC.C.val=%g\n", dmod->photo.radar[0].RC.C.val);
+//
+//			}
+
+//				printf("amp at t(0,0): %g\n", amp);
+
 			/* Only add POS pixel's power contributions to model Doppler spect-
 			 * rum if NONE of those contributions fall outside spectrum limits*/
 			if (pds_in_bounds) {
@@ -470,7 +489,8 @@ __global__ void pos2doppler_pixel_krnl(
 				for (idop=idop_min; idop<=idop_max; idop++) {
 					k = MIN( idop - idop_min, MAXBINS);
 					fit_contribution = amp * dop_contribution[k];
-
+					if (debug==1 && x==0 && y==0 && f==0)
+						printf("fit_contribution for k=%i at (0,0): %g\n", k, fit_contribution);
 
 					atomicAdd(&frame[f]->fit_s[idop], fit_contribution);
 
@@ -672,12 +692,13 @@ __host__ int pos2doppler_gpu(
 		nThreads[f] = xspan[f]*yspan;
 		BLK[f].x = floor((THD.x -1 + nThreads[f]) / THD.x);
 	}
-
+ int debug = 0;
 	for (f=0; f<nfrm_alloc; f++) {
 		/* Loop through all pixels and calculate contributed power */
 		pos2doppler_pixel_krnl<<<BLK[f],THD,0, pds_stream[f]>>>(dpar,dmod,ddat,
 				pos, frame, dop, axay, doplim, xyincr, ndop, idop0, dopshift,
-				xspan[f], set, nfrm_alloc, nThreads[f], body, orbit_xoff, orbit_yoff, f);
+				xspan[f], set, nfrm_alloc, nThreads[f], body, orbit_xoff, orbit_yoff, f,
+				debug);
 	}
 	checkErrorAfterKernelLaunch("pos2doppler_pixel_krnl in pos2doppler_gpu");
 

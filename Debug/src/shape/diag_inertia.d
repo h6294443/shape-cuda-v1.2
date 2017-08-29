@@ -78,27 +78,29 @@ src/shape/diag_inertia.o : ../src/shape/diag_inertia.c \
     /home/matt/git/cfitsio/longnam.h \
     ../src/shape/const.h \
     ../src/shape/../CudaCode/shape-cuda.h \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/cuda.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/cuda.h \
     /usr/lib/gcc/x86_64-linux-gnu/5/include/stdint.h \
     /usr/include/stdint.h \
     /usr/include/x86_64-linux-gnu/bits/wchar.h \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/cuda_runtime_api.h \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/host_defines.h \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/builtin_types.h \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/device_types.h \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/driver_types.h \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/surface_types.h \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/texture_types.h \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/vector_types.h \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/cuda_device_runtime_api.h \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/cuda_runtime.h \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/host_config.h \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/library_types.h \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/channel_descriptor.h \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/driver_functions.h \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/vector_functions.h \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/vector_functions.hpp \
-    /usr/local/cuda-8.0/bin/../targets/x86_64-linux/include/device_launch_parameters.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/cuda_runtime_api.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/host_defines.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/crt/host_defines.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/builtin_types.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/device_types.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/driver_types.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/vector_types.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/surface_types.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/texture_types.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/cuda_device_runtime_api.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/cuda_runtime.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/host_config.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/crt/host_config.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/library_types.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/channel_descriptor.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/driver_functions.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/vector_functions.h \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/vector_functions.hpp \
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/device_launch_parameters.h \
     ../src/shape/../CudaUtils/cuda_utils.h \
     ../src/shape/../DebugCode/debug_routines.h \
     ../src/shape/../CudaPR/parallel_reductions.h

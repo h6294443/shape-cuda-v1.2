@@ -1,7 +1,7 @@
 /* Cuda (and host!) debug functions */
 __host__ void dbg_print_deldop_fit_host(struct dat_t *ddat, int s, int f, char *filename);
 __host__ void dbg_print_fit_host(struct dat_t *ddat, int s, int f, char *filename);
-__host__ void dbg_print_fit(struct dat_t *ddat, int s, int f, char *filename);
+__host__ void dbg_print_fit(struct dat_t *ddat, int s, int f, const char *filename, int gpuid);
 __host__ void dbg_print_deldop_fit(struct dat_t *ddat, int s, int , char *filename);
 __host__ void dbg_print_array(float *data, int x, int y);
 __host__ void dbg_print_array1D(float *data, int size);

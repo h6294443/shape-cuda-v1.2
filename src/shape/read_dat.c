@@ -239,42 +239,203 @@ Modified 2003 April 15 by CM:
 
 int read_deldop( FILE *fp, struct par_t *par, struct deldop_t *deldop,
 		int nradlaws, int s, double *chi2_variance);
-int read_deldop_mgpu2( FILE *fp, struct par_t *par, struct deldop_t *deldop,
-		int nradlaws, int s, double *chi2_variance);
 int read_doppler( FILE *fp, struct par_t *par, struct doppler_t *doppler,
 		int nradlaws, int s, double *chi2_variance);
-int read_doppler_mgpu2( FILE *fp, struct par_t *par, struct doppler_t *doppler,
-		int nradlaws, int s, double *chi2_variance);
 void set_up_pos( struct par_t *par, struct dat_t *dat);
-void set_up_pos_gpu(struct par_t *par, struct dat_t *dat);
-void set_up_pos_pinned(struct par_t *par, struct dat_t *dat);
-void set_up_pos_mgpu(struct par_t *par, struct dat_t *dat);
-void set_up_pos_mgpu2(struct par_t *par, struct dat_t *dat);
 int read_poset( FILE *fp, struct par_t *par, struct poset_t *poset,
 		int noptlaws, int s, double *chi2_variance);
 int read_lghtcrv( struct dat_t *dat, FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
 		int noptlaws, int s, double *chi2_variance);
-int read_lghtcrv_mgpu2( struct dat_t *dat, FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
-		int noptlaws, int s, double *chi2_variance);
-
-void read_deldop_ascii(FILE *fin, struct deldop_t *deldop, int iframe,
-		int idel_use[2], int idop_use[2]);
-void read_deldop_binary(FILE *fin, struct deldop_t *deldop, int iframe,
-		int idel_use[2], int idop_use[2],  int swap_bytes);
-void read_deldop_rdf(FILE *fin, struct deldop_t *deldop, int iframe,
-		int idel_use[2], int idop_use[2],  int swap_bytes);
-void read_deldop_fits(char *filename, struct deldop_t *deldop, int iframe,
-		int idel_use[2], int idop_use[2]);
-void read_doppler_ascii(FILE *fin, struct doppler_t *doppler, int iframe,
-		int idop_use[2]);
-void read_doppler_binary(FILE *fin, struct doppler_t *doppler, int iframe,
-		int idop_use[2], int swap_bytes);
-void read_doppler_rdf(FILE *fin, struct doppler_t *doppler, int iframe,
-		int idop_use[2], int swap_bytes);
-void read_doppler_fits(char *filename, struct doppler_t *doppler, int iframe,
-		int idop_use[2]);
-void read_poset_fits(char *filename, struct poset_t *poset, int iframe,
-		int irow_use[2], int icol_use[2], int read_data);
+//int read_lghtcrv_mgpu2( struct dat_t *dat, FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
+//		int noptlaws, int s, double *chi2_variance);
+//void *read_dat_pthread_sub(void *ptr);
+//int read_deldop_pthread( FILE *fp, struct par_t *par, struct deldop_t *deldop,
+//		int nradlaws, int s, double *chi2_variance, int gpuid, int inputnode);
+//int read_doppler_pthread( FILE *fp, struct par_t *par, struct doppler_t *doppler,
+//		int nradlaws, int s, double *chi2_variance, int gpuid, int inputnode);
+//int read_lghtcrv_pthread( struct dat_t *dat, FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
+//		int noptlaws, int s, double *chi2_variance, int gpuid, int inputnode);
+//void set_up_pos_gpu(struct par_t *par, struct dat_t *dat);
+//void set_up_pos_pinned(struct par_t *par, struct dat_t *dat);
+//void set_up_pos_mgpu2(struct par_t *par, struct dat_t *dat);
+//void read_deldop_ascii(FILE *fin, struct deldop_t *deldop, int iframe,
+//		int idel_use[2], int idop_use[2]);
+//void read_deldop_binary(FILE *fin, struct deldop_t *deldop, int iframe,
+//		int idel_use[2], int idop_use[2],  int swap_bytes);
+//void read_deldop_rdf(FILE *fin, struct deldop_t *deldop, int iframe,
+//		int idel_use[2], int idop_use[2],  int swap_bytes);
+//void read_deldop_fits(char *filename, struct deldop_t *deldop, int iframe,
+//		int idel_use[2], int idop_use[2]);
+//void read_doppler_ascii(FILE *fin, struct doppler_t *doppler, int iframe,
+//		int idop_use[2]);
+//void read_doppler_binary(FILE *fin, struct doppler_t *doppler, int iframe,
+//		int idop_use[2], int swap_bytes);
+//void read_doppler_rdf(FILE *fin, struct doppler_t *doppler, int iframe,
+//		int idop_use[2], int swap_bytes);
+//void read_doppler_fits(char *filename, struct doppler_t *doppler, int iframe,
+//		int idop_use[2]);
+//void read_poset_fits(char *filename, struct poset_t *poset, int iframe,
+//		int irow_use[2], int icol_use[2], int read_data);
+//
+//typedef struct read_dat_thread_t
+//{
+//    int thread_no;
+//	struct par_t *parameter;
+//    struct mod_t *model;
+//    struct dat_t *data;
+//    int nfpar;
+//    int gpuid;
+// } read_dat_data;
+//
+//int read_dat_pthread(struct par_t *par, struct mod_t *mod0, struct mod_t *mod1,
+//		struct dat_t *dat0, struct dat_t *dat1)
+//{
+//	/* The purpose of this function is to create two copies of the data
+//	 * structure - one for each GPU.  However, each dat struct allocates only
+//	 * those sets assigned to it via inputnode.	 */
+//	read_dat_data data1, data2;
+//
+//	data1.thread_no = 0;
+//	data2.thread_no = 1;
+//	data1.parameter = data2.parameter = par;
+//	data1.model = mod0;
+//	data2.model = mod1;
+//	data1.data = dat0;
+//	data2.data = dat1;
+//	data1.nfpar = data2.nfpar = 0;
+//	data1.gpuid = GPU0;
+//	data2.gpuid = GPU1;
+//
+//	/* From here, launch the pthreaded subfunction */
+//	pthread_create(&thread1, NULL, read_mod_pthread_sub,(void*)&data1);
+//	pthread_create(&thread2, NULL, read_mod_pthread_sub,(void*)&data2);
+//
+//	pthread_join(thread1, NULL);
+//	pthread_join(thread2, NULL);
+//
+//	gpuErrchk(cudaSetDevice(GPU0));
+//
+//	return data1.nfpar;
+// }
+//
+//void *read_dat_pthread_sub(void *ptr) {
+//
+//	read_dat_data *data;
+//	data = (read_dat_data *) ptr;  /* type cast to a pointer to thdata */
+//	gpuErrchk(cudaSetDevice(data->gpuid));
+//
+//	FILE *fp;
+//	int s, npar=0, i, cntr=0;
+//	double chi2_variance;
+//	char str[80];
+//
+//	/*  Initialize degrees of freedom, variance of chi2 estimate, and sums of weights */
+//	data->data->dof = data->data->dof_doppler = data->data->dof_deldop =
+//			data->data->dof_poset = data->data->dof_lghtcrv = 0.0;
+//	data->data->chi2_variance = 0.0;
+//	data->data->sum_deldop_zmax_weights = 0.0;
+//	data->data->sum_rad_xsec_weights = 0.0;
+//	data->data->sum_opt_brightness_weights = 0.0;
+//	data->data->sum_cos_subradarlat_weights = 0.0;
+//
+//	/*  Open obs file and read how many datasets there are  */
+//	FOPEN( fp, dat->name, "r");
+//	if ((data->parameter->action == FIT) && (data->gpuid == GPU0))
+//		if(CUDA)		printf("#\n# fitting with GPU\n");
+//		else			printf("#\n# fitting with CPU\n");
+//	printf("#\n# reading data through file: %s ...\n", data->data->name);
+//	fflush(stdout);
+//
+//	data->data->nsets = getint( fp);
+//
+//	cudaCalloc1((void**)&data->data->set, sizeof(struct set_t), data->data->nsets);
+//
+//	/*  Read each dataset in turn  */
+//	for (s=0; s<data->data->nsets; s++) {
+//
+//		/* Old use: Assign a processor node to this dataset.
+//		 * New and improved use: assign a GPU id to this dataset for dual-GPU
+//		 * processing.  */
+//		data->data->set[s].inputnode = getint( fp);
+//		++cntr;
+//		if (data->data.set[s].inputnode == data->gpuid)
+//			printf("# dataset %2d:  assigned to GPU%i.\n", s, dat->set[s].inputnode);
+//		fflush(stdout);
+//
+//		/*  Read the angle and spin offsets for this dataset  */
+//		for (i=0; i<=2; i++) {
+//			npar += readparam( fp, &data->data->set[s].angleoff[i]);
+//			data->data->set[s].angleoff[i].val += 360.0*floor((180.0 -
+//					data->data->set[s].angleoff[i].val)/360.0);
+//			data->data->set[s].angleoff[i].val *= D2R;
+//		}
+//		for (i=0; i<=2; i++) {
+//			npar += readparam( fp, &dat->set[s].omegaoff[i]);
+//			data->data->set[s].omegaoff[i].val *= D2R;
+//		}
+//
+//		/*  Figure out what type of dataset this is (delay-Doppler, Doppler, etc.)
+//	        and call the appropriate routine to read in the rest of the information  */
+//		gettstr( fp, str);
+//		if (!strcmp( str, "doppler")) {
+//			data->data->set[s].type = DOPPLER;
+//			npar += read_doppler( fp, data->parameter, &data->data->set[s].desc.doppler,
+//					data->model->photo.nradlaws, s, &chi2_variance);
+//			data->data->dof_doppler += data->data->set[s].desc.doppler.dof;
+//			data->data->sum_rad_xsec_weights += data->data->set[s].desc.doppler.sum_rad_xsec_weights;
+//			data->data->sum_cos_subradarlat_weights += data->data->set[s].desc.doppler.sum_cos_subradarlat_weights;
+//		}
+//		else if (!strcmp( str, "delay-doppler")) {
+//			data->data->set[s].type = DELAY;
+//			npar += read_deldop( fp, data->parameter, &data->data->set[s].desc.deldop,
+//					data->model->photo.nradlaws, s, &chi2_variance);
+//			data->data->dof_deldop += data->data->set[s].desc.deldop.dof;
+//			data->data->sum_deldop_zmax_weights +=
+//					data->data->set[s].desc.deldop.sum_deldop_zmax_weights;
+//			data->data->sum_rad_xsec_weights += data->data->set[s].desc.deldop.sum_rad_xsec_weights;
+//			data->data->sum_cos_subradarlat_weights += data->data->set[s].desc.deldop.sum_cos_subradarlat_weights;
+//		}
+//		else if (!strcmp( str, "plane-of-sky")) {
+//			data->data->set[s].type = POS;
+//			npar += read_poset( fp, data->parameter, &data->data->set[s].desc.poset, data->model->photo.noptlaws,
+//					s, &chi2_variance);
+//			data->data->dof_poset += data->data->set[s].desc.poset.dof;
+//		}
+//		else if (!strcmp( str, "lightcurve")) {
+//			data->data->set[s].type = LGHTCRV;
+//			npar += read_lghtcrv(data->data, fp, data->parameter, &data->data->set[s].desc.lghtcrv,
+//					data->model->photo.noptlaws, s, &chi2_variance);
+//			data->data->dof_lghtcrv += data->data->set[s].desc.lghtcrv.dof;
+//			data->data->sum_opt_brightness_weights +=
+//					data->data->set[s].desc.lghtcrv.sum_opt_brightness_weights;
+//		}
+//		else {
+//			printf("ERROR: Can't handle type '%s' for dataset %d\n", str, s);
+//			bailout("read_dat.c\n");
+//		}
+//		data->data->chi2_variance += chi2_variance;
+//	}
+//
+//	data->data->dof = data->data->dof_doppler + data->data->dof_deldop + data->data->dof_poset
+//			+ data->data->dof_lghtcrv;
+//	fclose( fp);
+//
+//	/*  Initialize the delay correction polynomials, the horizontal and vertical offsets
+//	      for plane-of-sky datasets, and the plane-of-sky view(s)                           */
+//
+//	realize_delcor(data->data, 0.0, 0);
+//	realize_dopscale(data->parameter, data->data, 1.0, 0);
+//	realize_xyoff(data->data);
+//
+//	set_up_pos_mgpu2(par, dat);
+//
+//	printf("# finished reading obs file\n");
+//	fflush(stdout);
+//
+//	/* Make sure we have switched back to the chosen main GPU */
+//	gpuErrchk(cudaSetDevice(GPU0));
+//	return npar;
+//}
 
 int read_dat( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 {
@@ -319,7 +480,7 @@ int read_dat( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 		 * processing.  */
 		dat->set[s].inputnode = getint( fp);
 		++cntr;
-		if (MGPU2){
+		if (MGPU){
 			printf("# dataset %2d:  assigned to GPU%i.\n", s, dat->set[s].inputnode);
 			gpuErrchk(cudaSetDevice(dat->set[s].inputnode));
 		} else
@@ -393,10 +554,8 @@ int read_dat( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	if (CUDA) {
 		if (PIN)
 			set_up_pos_pinned(par, dat);
-		else if (MGPU)
-			set_up_pos_mgpu(par, dat);
-		else if (MGPU2)
-			set_up_pos_mgpu2(par, dat);
+//		else if (MGPU)
+//			set_up_pos_mgpu(par, dat);
 		else
 			set_up_pos_gpu(par, dat);
 	} else
@@ -568,9 +727,20 @@ int read_deldop( FILE *fp, struct par_t *par, struct deldop_t *deldop,
 	/*  Loop through the frames*/
 
 	for (i=0; i<deldop->nframes; i++) {
+		/* Allocate and set all overflow entries for each deldop frame to zero if this is
+		 * a GPU run 		 */
+		if (CUDA){// && (s==1 || s==2 || s==8 || s==13)){
+			cudaCalloc1((void**)&deldop->frame[i].fit_overflow, sizeof(float*), MAXOVERFLOW);
+			for (int x=0; x<MAXOVERFLOW; x++)
+				cudaCalloc1((void**)&deldop->frame[i].fit_overflow[x], sizeof(float*),
+						MAXOVERFLOW);
+
+			zero_fit_overflow(deldop, i);
+		}
+		gpuErrchk(cudaDeviceSynchronize());
+
 		gettstr( fp, deldop->frame[i].name); // name of data file
 		sprintf( fullname, "%s/%s", deldop->dir, deldop->frame[i].name);
-
 		/*  Read this frame's mid-receive epoch and convert to a Julian date.*/
 		rdcal2jd( fp, &deldop->frame[i].t0);
 
@@ -850,410 +1020,439 @@ int read_deldop( FILE *fp, struct par_t *par, struct deldop_t *deldop,
 	return npar;
 }
 
-int read_deldop_mgpu2( FILE *fp, struct par_t *par, struct deldop_t *deldop,
-		int nradlaws, int s, double *chi2_variance)
-{
-	/* This sub routine splits the allocation of all frames and all associated
-	 * variables and arrays between two GPUs.  gpu0 gets 0->nframes/2 and gpu1
-	 * gets the remaining half.	 */
-	int i, j, npar=0, k, n_equals, swap_bytes, is_binary, is_fits, is_rdf,
-			bufferlength=128, idel_use[2], idop_use[2], jskip, kskip,
-			datafile_is_gzipped, n, nmaskvals;
-	char fullname[160], cmd[255], codestring[10], smearingstring[7], buffer[200],
-	pixweightfile[MAXLEN], datafile_temp[MAXLEN], datafile_gzipped_temp[MAXLEN];
-	FILE *fin, *wp=0;
-	double lookfact, se[3][3], dist, solar_phase, solar_azimuth, dof,
-	**pixweight=NULL;
-
-	/* Initialize degrees of freedom, variance of chi2 estimate, and weight sums*/
-	deldop->dof = 0.0;
-	*chi2_variance = 0.0;
-	deldop->sum_deldop_zmax_weights = 0.0;
-	deldop->sum_rad_xsec_weights = 0.0;
-	deldop->sum_cos_subradarlat_weights = 0.0;
-
-	/* Read which radar scattering law to use for this dataset*/
-	deldop->iradlaw = getint( fp);
-	if (deldop->iradlaw < 0 || deldop->iradlaw >= nradlaws) {
-		printf("ERROR in set %d: must have 0 <= radar scattering law <= %d\n",
-				s, nradlaws-1);
-		bailout("read_deldop in read_dat.c\n");
-	}
-
-	/* Read the asteroid ephemeris*/
-	deldop->astephem.n = getint( fp);  //# of points in ephemeris
-	cudaCalloc1((void**)&deldop->astephem.pnt, sizeof(struct ephpnt_t),
-			deldop->astephem.n);
-
-	for (i=0; i<deldop->astephem.n; i++) {
-		rdcal2jd( fp, &deldop->astephem.pnt[i].t);
-		deldop->astephem.pnt[i].ra = getdouble( fp)*D2R;
-		deldop->astephem.pnt[i].dec = getdouble( fp)*D2R;
-		deldop->astephem.pnt[i].dist = getdouble( fp);
-	}
-
-	/* Read the transmitter frequency (MHz)*/
-	deldop->Ftx = getdouble( fp);
-
-	/* Read delay information for unvignetted images. Note that del_per_pixel
-	 * is NOT necessarily the baud length for multiple-spb data: it is equal to
-	 * the delay height of each pixel (or image row) (baud/(spb/stride). */
-	deldop->ndel = getint( fp);  			//# delay bins
-	deldop->del_per_pixel = getdouble( fp); //pixel height (usec)
-	deldop->spb = getint( fp);  			//# samples per baud in original data
-	deldop->stride = getint( fp); 			// image rows are stride spb's apart
-	if (deldop->spb % deldop->stride != 0)
-		bailout("read_deldop in read_dat.c: stride must divide evenly into spb\n");
-	gettstr( fp, codestring);    				//type of code+reduction used
-	if (!strcmp(codestring, "short"))
-		deldop->codemethod = SHORT;
-	else if (!strcmp(codestring, "long1") || !strcmp(codestring, "long_orig"))
-		deldop->codemethod = LONG_ORIG;
-	else if (!strcmp(codestring, "long2") || !strcmp(codestring, "long_mod"))
-		deldop->codemethod = LONG_MOD;
-	else
-		bailout("read_deldop in read_dat.c: can't do that code method yet\n");
-
-	/* Read Doppler information for the unvignetted images*/
-	deldop->ndop = getint( fp); 			// # doppler bins
-	deldop->dop_per_pixel = getdouble( fp); // pixel width (Hz)
-	deldop->dopcom = getdouble( fp);  		// ephemeris COM doppler bin (1-based)
-	deldop->dopDC = getdouble( fp);  		// Doppler DC bin (1-based)
-	deldop->dopfftlen = getint( fp);  		// Doppler fft length
-
-	/* Compute the reference epoch (JD) for the delay correction polynomial*/
-	rdcal2jd( fp, &deldop->delcor.t0);
-
-	/* Read the delay correction polynomial itself: coefficients have units of
-	 * usec, usec/day, usec/day^2, etc.*/
-	deldop->delcor.n = getint( fp);
-
-	cudaCalloc1((void**)&deldop->delcor.a, sizeof(struct param_t),
-			deldop->delcor.n + 1);
-
-	n_equals = 0;
-	for (i=0; i<=deldop->delcor.n; i++) {
-		npar += readparam( fp, &deldop->delcor.a[i]);
-		if (deldop->delcor.a[i].state == '=')
-			n_equals++;
-	}
-	if (n_equals > 0 && n_equals <= deldop->delcor.n)
-		bailout("can't use \"=\" state for just part of a delay polynomial\n");
-	deldop->delcor.delcor0_save = deldop->delcor.a[0].val;
-
-	/* Read the Doppler scaling factor*/
-	npar += readparam( fp, &deldop->dopscale);
-	deldop->dopscale_save = deldop->dopscale.val;
-
-	/* Read smearing information*/
-	deldop->nviews = getint( fp);  			// # views per frame
-	deldop->view_interval = getdouble( fp); // view interval (s)
-	deldop->view_interval /= 86400;  		// convert to days
-	gettstr( fp, smearingstring);   			// smearing mode
-	if (!strcmp(smearingstring, "center")) {
-		deldop->smearing_mode = SMEAR_CENTER;
-		deldop->v0 = deldop->nviews / 2;
-	} else if (!strcmp(smearingstring, "first")) {
-		deldop->smearing_mode = SMEAR_FIRST;
-		deldop->v0 = 0;
-	} else {
-		bailout("read_deldop in read_dat.c: can't do that smearing mode yet\n");
-	}
-
-	/* Get the data directory and the number of frames in the dataset*/
-	gettstr( fp, deldop->dir);
-	deldop->nframes = getint( fp);
-	int nframes_gpu0 = deldop->nframes/2;
-	int nframes_gpu1 = deldop->nframes - nframes_gpu0;
-	int offset_gpu1 = -(deldop->nframes/2 + 1);
-
-	/*============ Allocate frames split between gpu0 and gpu1 ===============*/
-	gpuErrchk(cudaSetDevice(GPU0));
-	cudaCalloc1((void**)&deldop->frame,sizeof(struct deldopfrm_t),nframes_gpu0);
-	gpuErrchk(cudaSetDevice(GPU1));
-	cudaCalloc1((void**)&deldop->frame,sizeof(struct deldopfrm_t),nframes_gpu1);
-	/*=======================================================================*/
-	/* Now offset the frames on GPU1 by offset_gpu1 to preserve later frame
-	 * indexing going from 0 -> nframes	 */
-	deldop->frame += offset_gpu1;
-	/*=======================================================================*/
-
-	for (i=0; i<deldop->nframes; i++) {
-		if (i <= nframes_gpu0)	gpuErrchk(cudaSetDevice(GPU0));
-		else					gpuErrchk(cudaSetDevice(GPU1));
-
-		/*=======================================================================*/
-		cudaCalloc1((void**)&deldop->frame[i].view, sizeof(struct
-					deldopview_t), deldop->nviews);
-		/*=======================================================================*/
-	}
-
-	/*  Loop through the frames*/
-	for (i=0; i<deldop->nframes; i++) {
-		if (i<=nframes_gpu0)	gpuErrchk(cudaSetDevice(GPU0));
-		else					gpuErrchk(cudaSetDevice(GPU1));
-
-		gettstr( fp, deldop->frame[i].name); // name of data file
-		sprintf( fullname, "%s/%s", deldop->dir, deldop->frame[i].name);
-
-		/*  Read this frame's mid-receive epoch and convert to a Julian date.*/
-		rdcal2jd( fp, &deldop->frame[i].t0);
-
-		/*  Read sdev, calibration factor, number of looks, and
-        ephemeris COM delay bin (1-based) for this frame*/
-
-		deldop->frame[i].sdev = getdouble( fp);
-		readparam( fp, &deldop->frame[i].cal);
-		if (deldop->frame[i].cal.val <= 0.0 && deldop->frame[i].cal.state == 'c') {
-			printf("ERROR in set %d: frame %d has constant calfact <= 0.0\n", s, i);
-			bailout("read_deldop in read_dat.c\n");
-		}
-		if ((deldop->frame[i].nlooks = getdouble( fp)) > 0)
-			lookfact = 1/sqrt(deldop->frame[i].nlooks);
-		else
-			lookfact = 0.0;
-		deldop->frame[i].delcom = getdouble( fp);
-
-		/*  Read this frame's relative weight and add to three weight sums
-		 */
-		deldop->frame[i].weight = getdouble( fp);
-		if (deldop->delcor.a[0].state != 'c')
-			deldop->sum_deldop_zmax_weights += deldop->frame[i].weight;
-		if (deldop->frame[i].cal.state == 'c')
-			deldop->sum_rad_xsec_weights += deldop->frame[i].weight;
-		if (deldop->dopscale.state != 'c')
-			deldop->sum_cos_subradarlat_weights += deldop->frame[i].weight;
-
-		/*  Read this frame's pixel-weighting "mask" flag
-		 */
-		deldop->frame[i].pixels_weighted = getint( fp);
-
-		/*  If a pixel-weighting mask is being used, check that it has the
-        expected number of values and read them in, and then get the
-        frame's vignetted dimensions and number of degrees of freedom */
-		dof = 0.0;
-		if (deldop->frame[i].pixels_weighted) {
-
-			/*  Open the mask file, count the entries, and make sure that it's the
-            expected number of entries (in case someone has changed the numbering
-            of datasets without changing mask filenames accordingly)
-
-            Note that the countdata routine resets the file position indicator to
-            its initial value after it finishes reading data entries*/
-
-			if (strcmp( par->maskdir, "")) {
-				if (deldop->nframes > 100)
-					sprintf( pixweightfile, "%s/mask_%02d_%03d.txt", par->maskdir, s, i);
-				else
-					sprintf( pixweightfile, "%s/mask_%02d_%02d.txt", par->maskdir, s, i);
-			} else {
-				if (deldop->nframes > 100)
-					sprintf( pixweightfile, "%s/mask_%02d_%03d.txt", deldop->dir, s, i);
-				else
-					sprintf( pixweightfile, "%s/mask_%02d_%02d.txt", deldop->dir, s, i);
-			}
-			FOPEN( wp, pixweightfile, "r");
-			nmaskvals = countdata( wp);
-			if (nmaskvals != deldop->ndel * deldop->ndop) {
-				fprintf(stderr,"ERROR: expected %d x %d = %d mask weights for set %2d frame %2d\n",
-						deldop->ndel, deldop->ndop, deldop->ndel * deldop->ndop, s, i);
-				fprintf(stderr,"       -- instead there are %d weights in %s\n",
-						nmaskvals, pixweightfile);
-				bailout("read_deldop in read_dat.c\n");
-			}
-
-			/* Allocate memory for the mask values and read them in*/
-			pixweight = matrix( 1, deldop->ndel, 1, deldop->ndop);
-			idel_use[0] = deldop->ndel + 1;
-			idel_use[1] = 0;
-			idop_use[0] = deldop->ndop + 1;
-			idop_use[1] = 0;
-			for (j=1; j<=deldop->ndel; j++)
-				for (k=1; k<=deldop->ndop; k++) {
-					pixweight[j][k] = getdouble( wp);
-					if (pixweight[j][k] > 0.0) {
-						dof += deldop->frame[i].weight;
-						*chi2_variance += 2 * deldop->frame[i].weight * deldop->frame[i].weight;
-						idel_use[0] = MIN( idel_use[0], j);
-						idel_use[1] = MAX( idel_use[1], j);
-						idop_use[0] = MIN( idop_use[0], k);
-						idop_use[1] = MAX( idop_use[1], k);
-					}
-				}
-			fclose( wp);
-		} else {
-			dof = deldop->frame[i].weight * deldop->ndel * deldop->ndop;
-			*chi2_variance += 2 * deldop->frame[i].weight * deldop->frame[i].weight
-					* deldop->ndel * deldop->ndop;
-			idel_use[0] = 1;
-			idel_use[1] = deldop->ndel;
-			idop_use[0] = 1;
-			idop_use[1] = deldop->ndop;
-		}
-		deldop->frame[i].dof = dof;
-		deldop->dof += dof;
-		deldop->frame[i].ndel = idel_use[1] - idel_use[0] + 1;
-		deldop->frame[i].ndop = idop_use[1] - idop_use[0] + 1;
-		deldop->frame[i].idelvig[0] = idel_use[0];
-		deldop->frame[i].idelvig[1] = idel_use[1];
-		deldop->frame[i].idopvig[0] = idop_use[0];
-		deldop->frame[i].idopvig[1] = idop_use[1];
-		deldop->frame[i].delcom_vig = deldop->frame[i].delcom - idel_use[0] + 1;
-		deldop->frame[i].dopcom_vig = deldop->dopcom - idop_use[0] + 1;
-		deldop->frame[i].dopDC_vig = deldop->dopDC - idop_use[0] + 1;
-
-		/* Allocate memory for observed data and fits*/
-		int ndel = deldop->frame[i].ndel, ndop = deldop->frame[i].ndop;
-		int k, nbins = ndel * ndop;
-
-		/* Allocate the unrolled single pointers and offset addressing */
-		cudaCalloc1((void**)&deldop->frame[i].fit_s, sizeof(float), nbins);
-
-		/* Allocate double pointers (outer loop) and offset addressing */
-		cudaCalloc1((void**)&deldop->frame[i].fit, sizeof(double*), ndel);
-		cudaCalloc1((void**)&deldop->frame[i].obs, sizeof(double*), ndel);
-		cudaCalloc1((void**)&deldop->frame[i].oneovervar, sizeof(double*), ndel);
-		deldop->frame[i].fit -= 1;
-		deldop->frame[i].obs -= 1;
-		deldop->frame[i].oneovervar -= 1;
-
-		/* Allocate double pointers (inner loop) and offset addressing */
-		for (k=1; k<=ndel; k++) {
-			cudaCalloc1((void**)&deldop->frame[i].fit[k], sizeof(double), ndop);
-			cudaCalloc1((void**)&deldop->frame[i].obs[k], sizeof(double), ndop);
-			cudaCalloc1((void**)&deldop->frame[i].oneovervar[k], sizeof(double), ndop);
-			deldop->frame[i].fit[k] -= 1;
-			deldop->frame[i].obs[k] -= 1;
-			deldop->frame[i].oneovervar[k] -= 1;
-		}
-
-		/*  If file is gzipped, copy to a temporary file, unzip, then read*/
-
-		if (!strcmp( ".gz", &fullname[strlen(fullname)-3])) {
-			datafile_is_gzipped = 1;
-			tempname(datafile_temp, MAXLEN, "datafile.temp", "dat");
-			strcpy(datafile_gzipped_temp, datafile_temp);
-			strcat(datafile_gzipped_temp, ".gz");
-			sprintf( cmd, "cp %s %s", fullname, datafile_gzipped_temp);
-			if (!system( cmd))
-				bailout("read_deldop in read_dat.c: can't make copy of gzipped data file\n");
-			sprintf( cmd, "gunzip -f %s", datafile_gzipped_temp);
-			if (!system( cmd))
-				bailout("read_deldop in read_dat.c: can't unzip gzipped data file\n");
-			FOPEN( fin, datafile_temp, "r");
-		} else {
-			datafile_is_gzipped = 0;
-			FOPEN( fin, fullname, "r");
-		}
-
-		/*  Read first line of file so that we can identify file type*/
-
-		if (!fread(buffer, bufferlength, 1, fin))
-			bailout("read_deldop in read_dat.c: can't read first line of data file\n");
-		rewind(fin);
-
-		/*  Set binary flag if first line is not ASCII*/
-
-		is_binary = 0;
-		for (j=0; j<bufferlength; j++)
-			if (!isascii(buffer[j]))
-				is_binary = 1;
-
-		/*  Read data according to file type*/
-
-		swap_bytes = ( is_little_endian() && par->endian == BIG_ENDIAN_DATA) ||
-				(!is_little_endian() && par->endian == LITTLE_ENDIAN_DATA);
-		is_fits = !is_binary && (strstr(buffer, "SIMPLE") != NULL);
-		lowcase(buffer);
-		is_rdf = !is_binary && !is_fits && (strstr(buffer, "type") != NULL);
-
-		if (is_fits)
-			read_deldop_fits(fullname, deldop, i, idel_use, idop_use);
-		else if (is_rdf)
-			read_deldop_rdf(fin, deldop, i, idel_use, idop_use, swap_bytes);
-		else if (is_binary)
-			read_deldop_binary(fin, deldop, i, idel_use, idop_use, swap_bytes);
-		else
-			read_deldop_ascii(fin, deldop, i, idel_use, idop_use);
-
-		/*  Get variance for each pixel;
-          apply gamma, speckle, and pixel weighting if desired*/
-
-		jskip = idel_use[0] - 1;
-		kskip = idop_use[0] - 1;
-
-		for (j=1; j<=deldop->frame[i].ndel; j++)
-			for (k=1; k<=deldop->frame[i].ndop; k++) {
-				if (par->dd_gamma != 1.0)
-					gamma_trans( &deldop->frame[i].obs[j][k], par->dd_gamma);
-				if (par->speckle)
-					deldop->frame[i].oneovervar[j][k] =
-							1/( pow(deldop->frame[i].sdev,2.0) +
-									pow(lookfact*deldop->frame[i].obs[j][k],2.0) );
-				else
-					deldop->frame[i].oneovervar[j][k] = 1/pow(deldop->frame[i].sdev,2.0);
-				if (deldop->frame[i].pixels_weighted)
-					deldop->frame[i].oneovervar[j][k] *= pixweight[j+jskip][k+kskip];
-			}
-
-		fclose( fin);
-		if (datafile_is_gzipped) {
-			sprintf( cmd, "\\rm -f %s %s", datafile_temp, datafile_gzipped_temp);
-			if (!system( cmd))
-				bailout("read_deldop in read_dat.c: can't delete gzipped and unzipped data files\n");
-		}
-
-		/* Free memory for the pixel-weighting mask*/
-		if (deldop->frame[i].pixels_weighted)
-			free_matrix( pixweight, 1, deldop->ndel, 1, deldop->ndop);
-
-		/* Loop through all views contributing to this (smeared) frame*/
-		for (k=0; k<deldop->nviews; k++) {
-			/* Compute the epoch of this view, uncorrected for light-travel time*/
-			deldop->frame[i].view[k].t = deldop->frame[i].t0
-					+ (k - deldop->v0)*deldop->view_interval;
-
-			/*  Use this dataset's ephemeris (and linear interpolation) to get the target's
-          distance (AU) at this view's epoch.  Also compute frame[i].view[k].oe, the
-          transformation matrix from ecliptic to observer coordinates at that epoch,
-          and frame[i].view[k].orbspin, the plane-of-sky-motion contribution to the
-          apparent spin vector at that epoch.  (orbspin is in ecliptic coordinates.)
-
-          Note that the final "0" in the call to ephem2mat signifies monostatic
-          observations; this means that arguments 2 and 5, which would pertain to
-          the Sun's ephemeris, are unused here, and arguments 7 and 8 (solar phase
-          angle and azimuth angle) are returned as 0.*/
-
-			dist = ephem2mat( deldop->astephem, deldop->astephem,
-					deldop->frame[i].view[k].t, deldop->frame[i].view[k].oe, se,
-					deldop->frame[i].view[k].orbspin, &solar_phase, &solar_azimuth, 0);
-
-			/*  If the perform_ltc parameter is turned on, use the distance just
-          obtained to subtract the one-way light-travel time from this view's
-          epoch; then go back to the ephemeris and recompute frame[i].view[k].oe
-          and frame[i].view[k].orbspin for the corrected epoch. */
-			if (par->perform_ltc) {
-				deldop->frame[i].view[k].t -= DAYSPERAU*dist;
-				ephem2mat( deldop->astephem, deldop->astephem,
-						deldop->frame[i].view[k].t, deldop->frame[i].view[k].oe, se,
-						deldop->frame[i].view[k].orbspin, &solar_phase, &solar_azimuth, 0);
-			}
-
-		}
-
-		/* Initialize quantities related to spin impulses*/
-		deldop->frame[i].n_integrate = -999;
-		for (n=0; n<MAXIMP+2; n++) {
-			deldop->frame[i].t_integrate[n] = -HUGENUMBER;
-			for (j=0; j<=2; j++)
-				deldop->frame[i].impulse[n][j] = 0.0;
-		}
-
-		printf("#     %s\n", fullname);
-		fflush(stdout);
-	}
-	return npar;
-}
+//int read_deldop_pthread( FILE *fp, struct par_t *par, struct deldop_t *deldop,
+//		int nradlaws, int s, double *chi2_variance, int gpuid, int inputnode)
+//{
+//	int i, j, npar=0, k, n_equals, swap_bytes, is_binary, is_fits, is_rdf,
+//			bufferlength=128, idel_use[2], idop_use[2], jskip, kskip,
+//			datafile_is_gzipped, n, nmaskvals;
+//	char fullname[160], cmd[255], codestring[10], smearingstring[7], buffer[200],
+//	pixweightfile[MAXLEN], datafile_temp[MAXLEN], datafile_gzipped_temp[MAXLEN];
+//	FILE *fin, *wp=0;
+//	double lookfact, se[3][3], dist, solar_phase, solar_azimuth, dof,
+//	**pixweight=NULL;
+//
+//	/* Initialize degrees of freedom, variance of chi2 estimate, and weight sums*/
+//	deldop->dof = 0.0;
+//	*chi2_variance = 0.0;
+//	deldop->sum_deldop_zmax_weights = 0.0;
+//	deldop->sum_rad_xsec_weights = 0.0;
+//	deldop->sum_cos_subradarlat_weights = 0.0;
+//
+//	/* Read which radar scattering law to use for this dataset*/
+//	deldop->iradlaw = getint( fp);
+//	if (deldop->iradlaw < 0 || deldop->iradlaw >= nradlaws) {
+//		printf("ERROR in set %d: must have 0 <= radar scattering law <= %d\n",
+//				s, nradlaws-1);
+//		bailout("read_deldop in read_dat.c\n");
+//	}
+//
+//	/* Read the asteroid ephemeris*/
+//	deldop->astephem.n = getint( fp);  //# of points in ephemeris
+//	if (gpuid==inputnode) {
+//		cudaCalloc1((void**)&deldop->astephem.pnt, sizeof(struct ephpnt_t),
+//				deldop->astephem.n);
+//
+//		for (i=0; i<deldop->astephem.n; i++) {
+//			rdcal2jd( fp, &deldop->astephem.pnt[i].t);
+//			deldop->astephem.pnt[i].ra = getdouble( fp)*D2R;
+//			deldop->astephem.pnt[i].dec = getdouble( fp)*D2R;
+//			deldop->astephem.pnt[i].dist = getdouble( fp);
+//		}
+//	}
+//
+//	/* Read the transmitter frequency (MHz)*/
+//	deldop->Ftx = getdouble( fp);
+//
+//	/* Read delay information for the unvignetted images.*/
+//
+//	/* Note that del_per_pixel is NOT necessarily the baud length
+//      for multiple-spb data: it is equal to the delay height of
+//      each pixel (or image row), which is baud / (spb/stride). */
+//	deldop->ndel = getint( fp);  			//# delay bins
+//	deldop->del_per_pixel = getdouble( fp); //pixel height (usec)
+//	deldop->spb = getint( fp);  			//# samples per baud in original data
+//	deldop->stride = getint( fp); 			// image rows are stride spb's apart
+//	if (deldop->spb % deldop->stride != 0)
+//		bailout("read_deldop in read_dat.c: stride must divide evenly into spb\n");
+//	gettstr( fp, codestring);    				//type of code+reduction used
+//	if (!strcmp(codestring, "short"))
+//		deldop->codemethod = SHORT;
+//	else if (!strcmp(codestring, "long1") || !strcmp(codestring, "long_orig"))
+//		deldop->codemethod = LONG_ORIG;
+//	else if (!strcmp(codestring, "long2") || !strcmp(codestring, "long_mod"))
+//		deldop->codemethod = LONG_MOD;
+//	else
+//		bailout("read_deldop in read_dat.c: can't do that code method yet\n");
+//
+//	/* Read Doppler information for the unvignetted images*/
+//	deldop->ndop = getint( fp); 			// # doppler bins
+//	deldop->dop_per_pixel = getdouble( fp); // pixel width (Hz)
+//	deldop->dopcom = getdouble( fp);  		// ephemeris COM doppler bin (1-based)
+//	deldop->dopDC = getdouble( fp);  		// Doppler DC bin (1-based)
+//	deldop->dopfftlen = getint( fp);  		// Doppler fft length
+//
+//	/* Compute the reference epoch (JD) for the delay correction polynomial*/
+//	rdcal2jd( fp, &deldop->delcor.t0);
+//
+//	/* Read the delay correction polynomial itself:
+//      coefficients have units of usec, usec/day, usec/day^2, etc.*/
+//	deldop->delcor.n = getint( fp);
+//	/*=======================================================================*/
+//	if (gpuid==inputnode)
+//		cudaCalloc1((void**)&deldop->delcor.a, sizeof(struct param_t),
+//				deldop->delcor.n + 1);
+//
+//	n_equals = 0;
+//	for (i=0; i<=deldop->delcor.n; i++) {
+//		npar += readparam( fp, &deldop->delcor.a[i]);
+//		if (deldop->delcor.a[i].state == '=')
+//			n_equals++;
+//	}
+//	if (n_equals > 0 && n_equals <= deldop->delcor.n)
+//		bailout("can't use \"=\" state for just part of a delay polynomial\n");
+//	deldop->delcor.delcor0_save = deldop->delcor.a[0].val;
+//
+//	/*  Read the Doppler scaling factor*/
+//
+//	npar += readparam( fp, &deldop->dopscale);
+//	deldop->dopscale_save = deldop->dopscale.val;
+//
+//	/*  Read smearing information*/
+//
+//	deldop->nviews = getint( fp);  			// # views per frame
+//	deldop->view_interval = getdouble( fp); // view interval (s)
+//	deldop->view_interval /= 86400;  		// convert to days
+//	gettstr( fp, smearingstring);   			// smearing mode
+//	if (!strcmp(smearingstring, "center")) {
+//		deldop->smearing_mode = SMEAR_CENTER;
+//		deldop->v0 = deldop->nviews / 2;
+//	} else if (!strcmp(smearingstring, "first")) {
+//		deldop->smearing_mode = SMEAR_FIRST;
+//		deldop->v0 = 0;
+//	} else {
+//		bailout("read_deldop in read_dat.c: can't do that smearing mode yet\n");
+//	}
+//
+//	/*  Get the data directory and the number of frames in the dataset*/
+//
+//	gettstr( fp, deldop->dir);
+//	deldop->nframes = getint( fp);
+//	/*=======================================================================*/
+//	if (CUDA)
+//		cudaCalloc1((void**)&deldop->frame, sizeof(struct deldopfrm_t),
+//				deldop->nframes);
+//	else
+//		deldop->frame = (struct deldopfrm_t *) calloc( deldop->nframes,
+//				sizeof(struct deldopfrm_t));
+//	/*=======================================================================*/
+//
+//	for (i=0; i<deldop->nframes; i++) {
+//		/*=======================================================================*/
+//		if (CUDA)
+//			cudaCalloc1((void**)&deldop->frame[i].view, sizeof(struct
+//					deldopview_t), deldop->nviews);
+//		else
+//			deldop->frame[i].view = (struct deldopview_t *) calloc
+//			( deldop->nviews, sizeof(struct deldopview_t));
+//		/*=======================================================================*/
+//	}
+//
+//	/*  Loop through the frames*/
+//
+//	for (i=0; i<deldop->nframes; i++) {
+//		/* Allocate and set all overflow entries for each deldop frame to zero if this is
+//		 * a GPU run 		 */
+////		if (CUDA){// && (s==1 || s==2 || s==8 || s==13)){
+////			cudaCalloc1((void**)&deldop->frame[i].fit_overflow, sizeof(float*), MAXOVERFLOW);
+////			for (int x=0; x<MAXOVERFLOW; x++)
+////				cudaCalloc1((void**)&deldop->frame[i].fit_overflow[x], sizeof(float*),
+////						MAXOVERFLOW);
+////
+////			zero_fit_overflow(deldop, i);
+////		}
+////		gpuErrchk(cudaDeviceSynchronize());
+//
+//		gettstr( fp, deldop->frame[i].name); // name of data file
+//		sprintf( fullname, "%s/%s", deldop->dir, deldop->frame[i].name);
+//		/*  Read this frame's mid-receive epoch and convert to a Julian date.*/
+//		rdcal2jd( fp, &deldop->frame[i].t0);
+//
+//		/*  Read sdev, calibration factor, number of looks, and
+//        ephemeris COM delay bin (1-based) for this frame*/
+//
+//		deldop->frame[i].sdev = getdouble( fp);
+//		readparam( fp, &deldop->frame[i].cal);
+//		if (deldop->frame[i].cal.val <= 0.0 && deldop->frame[i].cal.state == 'c') {
+//			printf("ERROR in set %d: frame %d has constant calfact <= 0.0\n", s, i);
+//			bailout("read_deldop in read_dat.c\n");
+//		}
+//		if ((deldop->frame[i].nlooks = getdouble( fp)) > 0)
+//			lookfact = 1/sqrt(deldop->frame[i].nlooks);
+//		else
+//			lookfact = 0.0;
+//		deldop->frame[i].delcom = getdouble( fp);
+//
+//		/*  Read this frame's relative weight and add to three weight sums
+//		 */
+//		deldop->frame[i].weight = getdouble( fp);
+//		if (deldop->delcor.a[0].state != 'c')
+//			deldop->sum_deldop_zmax_weights += deldop->frame[i].weight;
+//		if (deldop->frame[i].cal.state == 'c')
+//			deldop->sum_rad_xsec_weights += deldop->frame[i].weight;
+//		if (deldop->dopscale.state != 'c')
+//			deldop->sum_cos_subradarlat_weights += deldop->frame[i].weight;
+//
+//		/*  Read this frame's pixel-weighting "mask" flag
+//		 */
+//		deldop->frame[i].pixels_weighted = getint( fp);
+//
+//		/*  If a pixel-weighting mask is being used, check that it has the
+//        expected number of values and read them in, and then get the
+//        frame's vignetted dimensions and number of degrees of freedom */
+//		dof = 0.0;
+//		if (deldop->frame[i].pixels_weighted) {
+//
+//			/*  Open the mask file, count the entries, and make sure that it's the
+//            expected number of entries (in case someone has changed the numbering
+//            of datasets without changing mask filenames accordingly)
+//
+//            Note that the countdata routine resets the file position indicator to
+//            its initial value after it finishes reading data entries*/
+//
+//			if (strcmp( par->maskdir, "")) {
+//				if (deldop->nframes > 100)
+//					sprintf( pixweightfile, "%s/mask_%02d_%03d.txt", par->maskdir, s, i);
+//				else
+//					sprintf( pixweightfile, "%s/mask_%02d_%02d.txt", par->maskdir, s, i);
+//			} else {
+//				if (deldop->nframes > 100)
+//					sprintf( pixweightfile, "%s/mask_%02d_%03d.txt", deldop->dir, s, i);
+//				else
+//					sprintf( pixweightfile, "%s/mask_%02d_%02d.txt", deldop->dir, s, i);
+//			}
+//			FOPEN( wp, pixweightfile, "r");
+//			nmaskvals = countdata( wp);
+//			if (nmaskvals != deldop->ndel * deldop->ndop) {
+//				fprintf(stderr,"ERROR: expected %d x %d = %d mask weights for set %2d frame %2d\n",
+//						deldop->ndel, deldop->ndop, deldop->ndel * deldop->ndop, s, i);
+//				fprintf(stderr,"       -- instead there are %d weights in %s\n",
+//						nmaskvals, pixweightfile);
+//				bailout("read_deldop in read_dat.c\n");
+//			}
+//
+//			/*  Allocate memory for the mask values and read them in*/
+//
+//			pixweight = matrix( 1, deldop->ndel, 1, deldop->ndop);
+//			idel_use[0] = deldop->ndel + 1;
+//			idel_use[1] = 0;
+//			idop_use[0] = deldop->ndop + 1;
+//			idop_use[1] = 0;
+//			for (j=1; j<=deldop->ndel; j++)
+//				for (k=1; k<=deldop->ndop; k++) {
+//					pixweight[j][k] = getdouble( wp);
+//					if (pixweight[j][k] > 0.0) {
+//						dof += deldop->frame[i].weight;
+//						*chi2_variance += 2 * deldop->frame[i].weight * deldop->frame[i].weight;
+//						idel_use[0] = MIN( idel_use[0], j);
+//						idel_use[1] = MAX( idel_use[1], j);
+//						idop_use[0] = MIN( idop_use[0], k);
+//						idop_use[1] = MAX( idop_use[1], k);
+//					}
+//				}
+//			fclose( wp);
+//		} else {
+//			dof = deldop->frame[i].weight * deldop->ndel * deldop->ndop;
+//			*chi2_variance += 2 * deldop->frame[i].weight * deldop->frame[i].weight
+//					* deldop->ndel * deldop->ndop;
+//			idel_use[0] = 1;
+//			idel_use[1] = deldop->ndel;
+//			idop_use[0] = 1;
+//			idop_use[1] = deldop->ndop;
+//		}
+//		deldop->frame[i].dof = dof;
+//		deldop->dof += dof;
+//		deldop->frame[i].ndel = idel_use[1] - idel_use[0] + 1;
+//		deldop->frame[i].ndop = idop_use[1] - idop_use[0] + 1;
+//		deldop->frame[i].idelvig[0] = idel_use[0];
+//		deldop->frame[i].idelvig[1] = idel_use[1];
+//		deldop->frame[i].idopvig[0] = idop_use[0];
+//		deldop->frame[i].idopvig[1] = idop_use[1];
+//		deldop->frame[i].delcom_vig = deldop->frame[i].delcom - idel_use[0] + 1;
+//		deldop->frame[i].dopcom_vig = deldop->dopcom - idop_use[0] + 1;
+//		deldop->frame[i].dopDC_vig = deldop->dopDC - idop_use[0] + 1;
+//
+//		/*  If this node handles this dataset,
+//        allocate memory for observed data and fits*/
+//		if (CUDA) {
+//			int ndel = deldop->frame[i].ndel, ndop = deldop->frame[i].ndop;
+//			int k, nbins = ndel * ndop;
+//
+//			/* Allocate the unrolled single pointers and offset addressing */
+//			cudaCalloc1((void**)&deldop->frame[i].fit_s, sizeof(float), nbins);
+//
+//			/* Allocate double pointers (outer loop) and offset addressing */
+//			cudaCalloc1((void**)&deldop->frame[i].fit, sizeof(double*), ndel);
+//			cudaCalloc1((void**)&deldop->frame[i].obs, sizeof(double*), ndel);
+//			cudaCalloc1((void**)&deldop->frame[i].oneovervar, sizeof(double*), ndel);
+//			deldop->frame[i].fit -= 1;
+//			deldop->frame[i].obs -= 1;
+//			deldop->frame[i].oneovervar -= 1;
+//
+//			/* Allocate double pointers (inner loop) and offset addressing */
+//			for (k=1; k<=ndel; k++) {
+//				cudaCalloc1((void**)&deldop->frame[i].fit[k], sizeof(double), ndop);
+//				cudaCalloc1((void**)&deldop->frame[i].obs[k], sizeof(double), ndop);
+//				cudaCalloc1((void**)&deldop->frame[i].oneovervar[k], sizeof(double), ndop);
+//				deldop->frame[i].fit[k] -= 1;
+//				deldop->frame[i].obs[k] -= 1;
+//				deldop->frame[i].oneovervar[k] -= 1;
+//			}
+//		}
+//		if (!CUDA) {
+//			deldop->frame[i].obs = matrix( 1, deldop->frame[i].ndel,
+//					1, deldop->frame[i].ndop);
+//			deldop->frame[i].fit = matrix( 1, deldop->frame[i].ndel, //outer
+//					1, deldop->frame[i].ndop);
+//			deldop->frame[i].oneovervar = matrix( 1, deldop->frame[i].ndel,
+//					1, deldop->frame[i].ndop);
+//		}
+//
+//
+//		/*  If file is gzipped, copy to a temporary file, unzip, then read*/
+//
+//		if (!strcmp( ".gz", &fullname[strlen(fullname)-3])) {
+//			datafile_is_gzipped = 1;
+//			tempname(datafile_temp, MAXLEN, "datafile.temp", "dat");
+//			strcpy(datafile_gzipped_temp, datafile_temp);
+//			strcat(datafile_gzipped_temp, ".gz");
+//			sprintf( cmd, "cp %s %s", fullname, datafile_gzipped_temp);
+//			if (!system( cmd))
+//				bailout("read_deldop in read_dat.c: can't make copy of gzipped data file\n");
+//			sprintf( cmd, "gunzip -f %s", datafile_gzipped_temp);
+//			if (!system( cmd))
+//				bailout("read_deldop in read_dat.c: can't unzip gzipped data file\n");
+//			FOPEN( fin, datafile_temp, "r");
+//		} else {
+//			datafile_is_gzipped = 0;
+//			FOPEN( fin, fullname, "r");
+//		}
+//
+//		/*  Read first line of file so that we can identify file type*/
+//
+//		if (!fread(buffer, bufferlength, 1, fin))
+//			bailout("read_deldop in read_dat.c: can't read first line of data file\n");
+//		rewind(fin);
+//
+//		/*  Set binary flag if first line is not ASCII*/
+//
+//		is_binary = 0;
+//		for (j=0; j<bufferlength; j++)
+//			if (!isascii(buffer[j]))
+//				is_binary = 1;
+//
+//		/*  Read data according to file type*/
+//
+//		swap_bytes = ( is_little_endian() && par->endian == BIG_ENDIAN_DATA) ||
+//				(!is_little_endian() && par->endian == LITTLE_ENDIAN_DATA);
+//		is_fits = !is_binary && (strstr(buffer, "SIMPLE") != NULL);
+//		lowcase(buffer);
+//		is_rdf = !is_binary && !is_fits && (strstr(buffer, "type") != NULL);
+//
+//		if (is_fits)
+//			read_deldop_fits(fullname, deldop, i, idel_use, idop_use);
+//		else if (is_rdf)
+//			read_deldop_rdf(fin, deldop, i, idel_use, idop_use, swap_bytes);
+//		else if (is_binary)
+//			read_deldop_binary(fin, deldop, i, idel_use, idop_use, swap_bytes);
+//		else
+//			read_deldop_ascii(fin, deldop, i, idel_use, idop_use);
+//
+//		/*  Get variance for each pixel;
+//          apply gamma, speckle, and pixel weighting if desired*/
+//
+//		jskip = idel_use[0] - 1;
+//		kskip = idop_use[0] - 1;
+//
+//		for (j=1; j<=deldop->frame[i].ndel; j++)
+//			for (k=1; k<=deldop->frame[i].ndop; k++) {
+//				if (par->dd_gamma != 1.0)
+//					gamma_trans( &deldop->frame[i].obs[j][k], par->dd_gamma);
+//				if (par->speckle)
+//					deldop->frame[i].oneovervar[j][k] =
+//							1/( pow(deldop->frame[i].sdev,2.0) +
+//									pow(lookfact*deldop->frame[i].obs[j][k],2.0) );
+//				else
+//					deldop->frame[i].oneovervar[j][k] = 1/pow(deldop->frame[i].sdev,2.0);
+//				if (deldop->frame[i].pixels_weighted)
+//					deldop->frame[i].oneovervar[j][k] *= pixweight[j+jskip][k+kskip];
+//			}
+//
+//		fclose( fin);
+//		if (datafile_is_gzipped) {
+//			sprintf( cmd, "\\rm -f %s %s", datafile_temp, datafile_gzipped_temp);
+//			if (!system( cmd))
+//				bailout("read_deldop in read_dat.c: can't delete gzipped and unzipped data files\n");
+//		}
+//		//    } // end if block
+//
+//
+//		/*  Free memory for the pixel-weighting mask*/
+//
+//		if (deldop->frame[i].pixels_weighted)
+//			free_matrix( pixweight, 1, deldop->ndel, 1, deldop->ndop);
+//
+//		/*  Loop through all views contributing to this (smeared) frame*/
+//
+//		for (k=0; k<deldop->nviews; k++) {
+//
+//			/*  Compute the epoch of this view, uncorrected for light-travel time*/
+//
+//			deldop->frame[i].view[k].t = deldop->frame[i].t0
+//					+ (k - deldop->v0)*deldop->view_interval;
+//
+//			/*  Use this dataset's ephemeris (and linear interpolation) to get the target's
+//          distance (AU) at this view's epoch.  Also compute frame[i].view[k].oe, the
+//          transformation matrix from ecliptic to observer coordinates at that epoch,
+//          and frame[i].view[k].orbspin, the plane-of-sky-motion contribution to the
+//          apparent spin vector at that epoch.  (orbspin is in ecliptic coordinates.)
+//
+//          Note that the final "0" in the call to ephem2mat signifies monostatic
+//          observations; this means that arguments 2 and 5, which would pertain to
+//          the Sun's ephemeris, are unused here, and arguments 7 and 8 (solar phase
+//          angle and azimuth angle) are returned as 0.*/
+//
+//			dist = ephem2mat( deldop->astephem, deldop->astephem,
+//					deldop->frame[i].view[k].t, deldop->frame[i].view[k].oe, se,
+//					deldop->frame[i].view[k].orbspin, &solar_phase, &solar_azimuth, 0);
+//
+//			/*  If the perform_ltc parameter is turned on, use the distance just
+//          obtained to subtract the one-way light-travel time from this view's
+//          epoch; then go back to the ephemeris and recompute frame[i].view[k].oe
+//          and frame[i].view[k].orbspin for the corrected epoch. */
+//			if (par->perform_ltc) {
+//				deldop->frame[i].view[k].t -= DAYSPERAU*dist;
+//				ephem2mat( deldop->astephem, deldop->astephem,
+//						deldop->frame[i].view[k].t, deldop->frame[i].view[k].oe, se,
+//						deldop->frame[i].view[k].orbspin, &solar_phase, &solar_azimuth, 0);
+//			}
+//
+//		}
+//
+//		/*  Initialize quantities related to spin impulses*/
+//
+//		deldop->frame[i].n_integrate = -999;
+//		for (n=0; n<MAXIMP+2; n++) {
+//			deldop->frame[i].t_integrate[n] = -HUGENUMBER;
+//			for (j=0; j<=2; j++)
+//				deldop->frame[i].impulse[n][j] = 0.0;
+//		}
+//
+//		printf("#     %s\n", fullname);
+//		fflush(stdout);
+//	}
+//	return npar;
+//}
 
 int read_doppler( FILE *fp, struct par_t *par, struct doppler_t *doppler,
 		int nradlaws, int s, double *chi2_variance)
@@ -1618,320 +1817,6 @@ int read_doppler( FILE *fp, struct par_t *par, struct doppler_t *doppler,
 	return npar;
 }
 
-int read_doppler_mgpu2( FILE *fp, struct par_t *par, struct doppler_t *doppler,
-		int nradlaws, int s, double *chi2_variance)
-{
-	int i, j, npar=0, k, n_equals, swap_bytes, is_binary, is_fits, is_rdf,
-			bufferlength=128, idop_use[2], kskip, n, nmaskvals;
-	char fullname[160], smearingstring[7], buffer[200], binweightfile[MAXLEN];
-	FILE *fin, *wp=0;
-	double lookfact, se[3][3], dist, solar_phase, solar_azimuth, dof,
-	*binweight=NULL;
-
-	/* Initialize degrees of freedom, variance of chi2 estimate, and weight sum  */
-	doppler->dof = 0.0;
-	*chi2_variance = 0.0;
-	doppler->sum_rad_xsec_weights = 0.0;
-	doppler->sum_cos_subradarlat_weights = 0.0;
-
-	/* Read which radar scattering law to use for this dataset  */
-	doppler->iradlaw = getint( fp);
-	if (doppler->iradlaw < 0 || doppler->iradlaw >= nradlaws) {
-		printf("ERROR in set %d: must have 0 <= radar scattering law <= %d\n",
-				s, nradlaws-1);
-		bailout("read_doppler in read_dat.c\n");
-	}
-
-	/* Read the asteroid ephemeris  */
-	doppler->astephem.n = getint( fp); /* # of points in ephemeris */
-
-	cudaCalloc1((void**)&doppler->astephem.pnt, sizeof(struct ephpnt_t),
-			doppler->astephem.n);
-
-	for (i=0; i<doppler->astephem.n; i++) {
-		rdcal2jd( fp, &doppler->astephem.pnt[i].t);
-		doppler->astephem.pnt[i].ra = getdouble( fp)*D2R;
-		doppler->astephem.pnt[i].dec = getdouble( fp)*D2R;
-		doppler->astephem.pnt[i].dist = getdouble( fp);
-	}
-
-	/* Read the transmitter frequency (MHz)  */
-	doppler->Ftx = getdouble( fp);
-
-	/* Read Doppler information for the unvignetted spectra  */
-	doppler->ndop = getint( fp); /* # doppler bins */
-	doppler->dop_per_bin = getdouble( fp); /* bin width (Hz) */
-	doppler->dopcom = getdouble( fp); /* ephemeris COM doppler bin */
-
-	/* Compute the reference epoch (JD) for the delay correction polynomial  */
-	rdcal2jd( fp, &doppler->delcor.t0);
-
-	/* Read the delay correction polynomial itself:
-	 * coefficients have units of usec, usec/day, usec/day^2, etc.  */
-	doppler->delcor.n = getint( fp);
-
-	cudaCalloc1((void**)&doppler->delcor.a, sizeof(struct param_t),
-			doppler->delcor.n+1);
-
-	n_equals = 0;
-	for (i=0; i<=doppler->delcor.n; i++) {
-		npar += readparam( fp, &doppler->delcor.a[i]);
-		if (doppler->delcor.a[i].state == '=')
-			n_equals++;
-	}
-	if (doppler->delcor.a[0].state == 'f')
-		bailout("can't use \"f\" state for a Doppler dataset's 0th-order delay polynomial coefficient\n");
-	if (n_equals > 0 && n_equals <= doppler->delcor.n)
-		bailout("can't use \"=\" state for just part of a delay polynomial\n");
-	doppler->delcor.delcor0_save = doppler->delcor.a[0].val;
-
-	/* Read the Doppler scaling factor  */
-	npar += readparam( fp, &doppler->dopscale);
-	doppler->dopscale_save = doppler->dopscale.val;
-
-	/* Read smearing information  */
-	doppler->nviews = getint( fp); /* # views per frame */
-	doppler->view_interval = getdouble( fp); /* view interval (s) */
-	doppler->view_interval /= 86400; /* convert to days */
-	gettstr( fp, smearingstring);   /* smearing mode */
-	if (!strcmp(smearingstring, "center")) {
-		doppler->smearing_mode = SMEAR_CENTER;
-		doppler->v0 = doppler->nviews / 2;
-	} else if (!strcmp(smearingstring, "first")) {
-		doppler->smearing_mode = SMEAR_FIRST;
-		doppler->v0 = 0;
-	} else {
-		bailout("read_doppler in read_dat.c: can't do that smearing mode yet\n");
-	}
-
-	/* Get the data directory and the number of frames in the dataset  */
-	gettstr( fp, doppler->dir);
-	doppler->nframes = getint( fp);
-
-	/* Allocate all Doppler frames - first half goes to gpu0, second half goes
-	 * to gpu1. The gpu1 addressing is then offset by offset_gpu1 to preserve
-	 * standard frame indexing 0 -> nframes	 */
-	int nframes_gpu0 = doppler->nframes/2;
-	int nframes_gpu1 = doppler->nframes - nframes_gpu0;
-	int offset_gpu1 = -(doppler->nframes/2 + 1);
-	gpuErrchk(cudaSetDevice(GPU0));
-	cudaCalloc1((void**)&doppler->frame, sizeof(struct dopfrm_t),
-			nframes_gpu0);
-	gpuErrchk(cudaSetDevice(GPU1));
-	cudaCalloc1((void**)&doppler->frame, sizeof(struct dopfrm_t),
-			nframes_gpu1);
-	//doppler->
-
-	for (i=0; i<doppler->nframes; i++){
-		if (i<=nframes_gpu0)	gpuErrchk(cudaSetDevice(GPU0));
-		else					gpuErrchk(cudaSetDevice(GPU1));
-
-		cudaCalloc1((void**)&doppler->frame[i].view, sizeof(struct dopview_t),
-				doppler->nviews);
-	}
-
-	/* Loop through the frames  */
-	for (i=0; i<doppler->nframes; i++) {
-		if (i<=nframes_gpu0)	gpuErrchk(cudaSetDevice(GPU0));
-		else					gpuErrchk(cudaSetDevice(GPU1));
-
-		gettstr( fp, doppler->frame[i].name); /* name of data file */
-		sprintf( fullname, "%s/%s", doppler->dir, doppler->frame[i].name);
-
-		/* Read this frame's mid-receive epoch and convert to a Julian date.  */
-		rdcal2jd( fp, &doppler->frame[i].t0);
-
-		/* Read sdev, calibration factor, and number of looks for this frame  */
-		doppler->frame[i].sdev = getdouble( fp);
-		readparam( fp, &doppler->frame[i].cal);
-		if (doppler->frame[i].cal.val <= 0.0 && doppler->frame[i].cal.state == 'c') {
-			printf("ERROR in set %d: frame %d has constant calfact <= 0.0\n", s, i);
-			bailout("read_doppler in read_dat.c\n");
-		}
-		if ((doppler->frame[i].nlooks = getdouble( fp)) > 0)
-			lookfact = 1/sqrt(doppler->frame[i].nlooks);
-		else
-			lookfact = 0.0;
-
-		/* Read this frame's relative weight and add to two weight sums  */
-		doppler->frame[i].weight = getdouble( fp);
-		if (doppler->frame[i].cal.state == 'c')
-			doppler->sum_rad_xsec_weights += doppler->frame[i].weight;
-		if (doppler->dopscale.state != 'c')
-			doppler->sum_cos_subradarlat_weights += doppler->frame[i].weight;
-
-		/* Read this frame's pixel-weighting "mask" flag  */
-		doppler->frame[i].pixels_weighted = getint( fp);
-
-		/* If a bin-weighting mask is being used, check that it has the
-        expected number of values and read them in, and then get the
-        frame's vignetted dimensions and number of degrees of freedom   */
-		dof = 0.0;
-		if (doppler->frame[i].pixels_weighted) {
-
-			/*  Open the mask file, count the entries, and make sure that it's the
-            expected number of entries (in case someone has changed the numbering
-            of datasets without changing mask filenames accordingly)
-
-            Note that the countdata routine resets the file position indicator to
-            its initial value after it finishes reading data entries               */
-
-			if (strcmp( par->maskdir, "")) {
-				if (doppler->nframes > 100)
-					sprintf( binweightfile, "%s/mask_%02d_%03d.txt", par->maskdir, s, i);
-				else
-					sprintf( binweightfile, "%s/mask_%02d_%02d.txt", par->maskdir, s, i);
-			} else {
-				if (doppler->nframes > 100)
-					sprintf( binweightfile, "%s/mask_%02d_%03d.txt", doppler->dir, s, i);
-				else
-					sprintf( binweightfile, "%s/mask_%02d_%02d.txt", doppler->dir, s, i);
-			}
-			FOPEN( wp, binweightfile, "r");
-			nmaskvals = countdata( wp);
-			if (nmaskvals != doppler->ndop) {
-				fprintf(stderr,"ERROR: expected 1 x %d = %d mask weights for set %2d frame %2d\n",
-						doppler->ndop, doppler->ndop, s, i);
-				fprintf(stderr,"       -- instead there are %d weights in %s\n",
-						nmaskvals, binweightfile);
-				bailout("read_doppler in read_dat.c\n");
-			}
-
-			/* Allocate memory for the mask values and read them in  */
-			binweight = vector( 1, doppler->ndop);
-			idop_use[0] = doppler->ndop + 1;
-			idop_use[1] = 0;
-			for (k=1; k<=doppler->ndop; k++) {
-				binweight[k] = getdouble( wp);
-				if (binweight[k] > 0.0) {
-					dof += doppler->frame[i].weight;
-					*chi2_variance += 2 * doppler->frame[i].weight * doppler->frame[i].weight;
-					idop_use[0] = MIN( idop_use[0], k);
-					idop_use[1] = MAX( idop_use[1], k);
-				}
-			}
-			fclose( wp);
-		} else {
-			dof = doppler->frame[i].weight * doppler->ndop;
-			*chi2_variance += 2 * doppler->frame[i].weight * doppler->frame[i].weight
-					* doppler->ndop;
-			idop_use[0] = 1;
-			idop_use[1] = doppler->ndop;
-		}
-		doppler->frame[i].dof = dof;
-		doppler->dof += dof;
-		doppler->frame[i].ndop = idop_use[1] - idop_use[0] + 1;
-		doppler->frame[i].idopvig[0] = idop_use[0];
-		doppler->frame[i].idopvig[1] = idop_use[1];
-		doppler->frame[i].dopcom_vig = doppler->dopcom - idop_use[0] + 1;
-
-		/* Allocate memory for observed data and fits  */
-		int ndop = doppler->frame[i].ndop;
-		cudaCalloc1((void**)&doppler->frame[i].obs, sizeof(double), ndop);
-		cudaCalloc1((void**)&doppler->frame[i].fit, sizeof(double), ndop);
-		cudaCalloc1((void**)&doppler->frame[i].oneovervar, sizeof(double), ndop);
-		cudaCalloc1((void**)&doppler->frame[i].fit_s, sizeof(float), ndop);
-		doppler->frame[i].obs -= 1;
-		doppler->frame[i].fit -= 1;
-		doppler->frame[i].fit_s -= 1;
-		doppler->frame[i].oneovervar -= 1;
-
-		FOPEN( fin, fullname, "r");
-
-		/* Read first line of file so that we can identify file type  */
-		if (!fread(buffer, bufferlength, 1, fin))
-			bailout("read_doppler in read_dat.c: can't read first line of data file\n");
-		rewind(fin);
-
-		/* Set binary flag if first line is not ASCII  */
-		is_binary = 0;
-		for (j=0; j<bufferlength; j++)
-			if (!isascii(buffer[j]))
-				is_binary = 1;
-
-		/* Read data according to file type  */
-		swap_bytes = ( is_little_endian() && par->endian == BIG_ENDIAN_DATA) ||
-				(!is_little_endian() && par->endian == LITTLE_ENDIAN_DATA);
-		is_fits = !is_binary && (strstr(buffer, "SIMPLE") != NULL);
-		lowcase(buffer);
-		is_rdf = !is_binary && !is_fits && (strstr(buffer, "type") != NULL);
-
-		/* Note:  is_fits has been commented out to preclude use of the cfitsio package for now*/
-		if (is_fits)
-			read_doppler_fits(fullname, doppler, i, idop_use);
-		else if (is_rdf)
-			read_doppler_rdf(fin, doppler, i, idop_use, swap_bytes);
-		else if (is_binary)
-			read_doppler_binary(fin, doppler, i, idop_use, swap_bytes);
-		else
-			read_doppler_ascii(fin, doppler, i, idop_use);
-
-		/* Get variance for each bin; apply and bin weighting if desired  */
-		kskip = idop_use[0] - 1;
-
-		for (k=1; k<=doppler->frame[i].ndop; k++) {
-			if (par->speckle)
-				doppler->frame[i].oneovervar[k] =
-						1/( pow(doppler->frame[i].sdev,2.0) +
-								pow(lookfact*doppler->frame[i].obs[k],2.0) );
-			else
-				doppler->frame[i].oneovervar[k] = 1/pow(doppler->frame[i].sdev,2.0);
-			if (doppler->frame[i].pixels_weighted)
-				doppler->frame[i].oneovervar[k] *= binweight[k+kskip];
-		}
-		fclose( fin);
-
-		/* Free memory for the bin-weighting mask  */
-		if (doppler->frame[i].pixels_weighted)
-			free_vector( binweight, 1, doppler->ndop);
-
-		/* Loop through all views contributing to this (smeared) frame  */
-		for (k=0; k<doppler->nviews; k++) {
-
-			/* Compute the epoch of this view, uncorrected for light-travel time  */
-			doppler->frame[i].view[k].t = doppler->frame[i].t0
-					+ (k - doppler->v0)*doppler->view_interval;
-
-			/*  Use this dataset's ephemeris (and linear interpolation) to get the target's
-          distance (AU) at this view's epoch.  Also compute frame[i].view[k].oe, the
-          transformation matrix from ecliptic to observer coordinates at that epoch,
-          and frame[i].view[k].orbspin, the plane-of-sky-motion contribution to the
-          apparent spin vector at that epoch.  (orbspin is in ecliptic coordinates.)
-
-          Note that the final "0" in the call to ephem2mat signifies monostatic
-          observations; this means that arguments 2 and 5, which would pertain to
-          the Sun's ephemeris, are unused here, and arguments 7 and 8 (solar phase
-          angle and azimuth angle) are returned as 0.                                  */
-			dist = ephem2mat( doppler->astephem, doppler->astephem,
-					doppler->frame[i].view[k].t, doppler->frame[i].view[k].oe, se,
-					doppler->frame[i].view[k].orbspin, &solar_phase, &solar_azimuth, 0);
-
-			/*  If the perform_ltc parameter is turned on, use the distance just
-          obtained to subtract the one-way light-travel time from this view's
-          epoch; then go back to the ephemeris and recompute frame[i].view[k].oe
-          and frame[i].view[k].orbspin for the corrected epoch.                   */
-			if (par->perform_ltc) {
-				doppler->frame[i].view[k].t -= DAYSPERAU*dist;
-				ephem2mat( doppler->astephem, doppler->astephem,
-						doppler->frame[i].view[k].t, doppler->frame[i].view[k].oe, se,
-						doppler->frame[i].view[k].orbspin, &solar_phase, &solar_azimuth, 0);
-			}
-		}
-
-		/* Initialize quantities related to spin impulses  */
-		doppler->frame[i].n_integrate = -999;
-		for (n=0; n<MAXIMP+2; n++) {
-			doppler->frame[i].t_integrate[n] = -HUGENUMBER;
-			for (j=0; j<=2; j++)
-				doppler->frame[i].impulse[n][j] = 0.0;
-		}
-
-		printf("#     %s\n", fullname);
-		fflush(stdout);
-	}
-	return npar;
-}
-
 void set_up_pos( struct par_t *par, struct dat_t *dat)
 {
 	int s, f, i, n;
@@ -2086,1554 +1971,6 @@ void set_up_pos( struct par_t *par, struct dat_t *dat)
 	}
 }
 
-void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
-{
-	int s, f, i, j, n, size, npx;
-
-	/*  Allocate memory for a plane-of-sky rendering for the data as a whole;
-      as discussed below, if pos_scope = "global" then this will be the
-      ONLY memory allocated for POS renderings.                              */
-
-	/* Get number of pixels away from origin */
-	n = (par->pos_pixels - 1)/2;
-	dat->pos.n = n;
-	size = (2*n+1)*(2*n+1);
-
-	/* allocate all double pointers as cudaMallocManaged */
-	cudaCalloc1((void**)&dat->pos.b, 	 sizeof(double*), (2*n+1));
-	cudaCalloc1((void**)&dat->pos.cosi, 	 sizeof(double*), (2*n+1));
-	cudaCalloc1((void**)&dat->pos.cose, 	 sizeof(double*), (2*n+1));
-	cudaCalloc1((void**)&dat->pos.z, 	 sizeof(double*), (2*n+1));
-	cudaCalloc1((void**)&dat->pos.cosill, sizeof(double*), (2*n+1));
-	cudaCalloc1((void**)&dat->pos.zill, 	 sizeof(double*), (2*n+1));
-	cudaCalloc1((void**)&dat->pos.body, 	 sizeof(int*), 	  (2*n+1));
-	cudaCalloc1((void**)&dat->pos.comp, 	 sizeof(int*), 	  (2*n+1));
-	cudaCalloc1((void**)&dat->pos.f, 	 sizeof(int*), 	  (2*n+1));
-	cudaCalloc1((void**)&dat->pos.bodyill,sizeof(int*), 	  (2*n+1));
-	cudaCalloc1((void**)&dat->pos.compill,sizeof(int*), 	  (2*n+1));
-	cudaCalloc1((void**)&dat->pos.fill, 	 sizeof(int*), 	  (2*n+1));
-
-	/* allocate the single-precision pointers */
-	cudaCalloc1((void**)&dat->pos.b_s, 		sizeof(float), size);
-	cudaCalloc1((void**)&dat->pos.cosi_s,	sizeof(float), size);
-	cudaCalloc1((void**)&dat->pos.cose_s,	sizeof(float), size);
-	cudaCalloc1((void**)&dat->pos.z_s, 		sizeof(float), size);
-	cudaCalloc1((void**)&dat->pos.zill_s,	sizeof(float), size);
-	cudaCalloc1((void**)&dat->pos.cosill_s,	sizeof(float), size);
-	/* Offset indexing for these double pointers */
-	dat->pos.b 			-= -n;
-	dat->pos.cosi 		-= -n;
-	dat->pos.cose 		-= -n;
-	dat->pos.z 			-= -n;
-	dat->pos.cosill 	-= -n;
-	dat->pos.zill 		-= -n;
-	dat->pos.body 		-= -n;
-	dat->pos.comp 		-= -n;
-	dat->pos.f 			-= -n;
-	dat->pos.bodyill 	-= -n;
-	dat->pos.compill 	-= -n;
-	dat->pos.fill 		-= -n;
-
-
-	/* Inner loop of allocating the single pointers along the outer loop */
-	for (i=-n; i<=n; i++) {
-		/* First allocate with cuda managed memory */
-		cudaCalloc1((void**)&dat->pos.b[i], 			sizeof(double), (2*n+1));
-		cudaCalloc1((void**)&dat->pos.cosi[i], 		sizeof(double), (2*n+1));
-		cudaCalloc1((void**)&dat->pos.cose[i], 		sizeof(double), (2*n+1));
-		cudaCalloc1((void**)&dat->pos.z[i], 			sizeof(double), (2*n+1));
-		cudaCalloc1((void**)&dat->pos.cosill[i], 	sizeof(double), (2*n+1));
-		cudaCalloc1((void**)&dat->pos.zill[i], 		sizeof(double), (2*n+1));
-		cudaCalloc1((void**)&dat->pos.body[i],	 	sizeof(int), 	(2*n+1));
-		cudaCalloc1((void**)&dat->pos.comp[i], 		sizeof(int), 	(2*n+1));
-		cudaCalloc1((void**)&dat->pos.f[i], 			sizeof(int), 	(2*n+1));
-		cudaCalloc1((void**)&dat->pos.bodyill[i],	sizeof(int), 	(2*n+1));
-		cudaCalloc1((void**)&dat->pos.compill[i],	sizeof(int), 	(2*n+1));
-		cudaCalloc1((void**)&dat->pos.fill[i], 		sizeof(int), 	(2*n+1));
-
-		/* Now offset indexing for the inner loop */
-		dat->pos.b[i] 		-= -n;
-		dat->pos.cosi[i] 	-= -n;
-		dat->pos.cose[i] 	-= -n;
-		dat->pos.z[i] 		-= -n;
-		dat->pos.cosill[i] 	-= -n;
-		dat->pos.zill[i] 	-= -n;
-		dat->pos.body[i] 	-= -n;
-		dat->pos.comp[i] 	-= -n;
-		dat->pos.f[i] 		-= -n;
-		dat->pos.bodyill[i]	-= -n;
-		dat->pos.compill[i]	-= -n;
-		dat->pos.fill[i] 	-= -n;
-	}
-
-	dat->pos.km_per_pixel = par->pos_width/(2.0*n);
-	dat->pos.bistatic = 1;
-
-	/*  If the pos_scope parameter is "global" then there is just ONE chunk of memory
-      allocated for a POS image and associated variables (a pos_t structure), and
-      every delay-Doppler frame, Doppler frame, POS frame, and lightcurve point
-      shares this one memory slot for its POS rendering.  Hence these POS images
-      and associated variables -- e.g., cos(scattering angle) for each POS pixel --
-      amount to (very) temporary workspace, soon to be overwritten.
-
-      If pos_scope = "local" then each data frame or lightcurve point gets its own
-      pos_t structure in memory, so the POS images and associated variables persist
-      rather than being overwritten by other frames/points.                            */
-	if (CUDA) {
-		par->pos_scope = LOCAL;
-		printf("POS-SCOPE is LOCAL (more memory)\n");
-	}
-	else
-		printf("POS-SCOPE is GLOBAL (less memory)\n");
-
-	switch (par->pos_scope) {
-	case GLOBAL:
-		for (s=0; s<dat->nsets; s++) {
-			switch (dat->set[s].type) {
-			case DELAY:
-				for (f=0; f<dat->set[s].desc.deldop.nframes; f++)
-					dat->set[s].desc.deldop.frame[f].pos = dat->pos;
-				break;
-			case DOPPLER:
-				for (f=0; f<dat->set[s].desc.doppler.nframes; f++)
-					dat->set[s].desc.doppler.frame[f].pos = dat->pos;
-				break;
-			case POS:
-				for (f=0; f<dat->set[s].desc.poset.nframes; f++)
-					dat->set[s].desc.poset.frame[f].pos = dat->pos;
-				break;
-			case LGHTCRV:
-				for (i=1; i<=dat->set[s].desc.lghtcrv.ncalc; i++)
-					dat->set[s].desc.lghtcrv.rend[i].pos = dat->pos;
-				break;
-			default:
-				bailout("set_up_pos in read_dat.c: can't do that type yet\n");
-			}
-		}
-		break;
-	case LOCAL:
-		for (s=0; s<dat->nsets; s++) {
-			switch (dat->set[s].type) {
-			case DELAY:
-				for (f=0; f<dat->set[s].desc.deldop.nframes; f++) {
-					dat->set[s].desc.deldop.frame[f].pos.n = n;
-					dat->set[s].desc.deldop.frame[f].pos.km_per_pixel = par->pos_width/(2.0*n);
-					dat->set[s].desc.deldop.frame[f].pos.bistatic = 0;
-					npx = (2*n+1)*(2*n+1);
-
-					/* First allocate the outer loop with cuda managed memory */
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.body,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.comp,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.f,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.bodyill,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.compill,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.fill,
-							sizeof(int*), 	(2*n+1));
-					/* Single-precisision unrolled 1D pointers: */
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.b_s,
-							sizeof(float),  npx);
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.cosi_s,
-							sizeof(float),  npx);
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.cose_s,
-							sizeof(float),  npx);
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.z_s,
-							sizeof(float),  npx);
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.cosill_s,
-							sizeof(float),  npx);
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.zill_s,
-							sizeof(float),  npx);
-
-
-					/* Offset indexing for these double pointers */
-					dat->set[s].desc.deldop.frame[f].pos.body 		-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.comp 		-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.f 			-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.bodyill	-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.compill 	-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.fill 		-= -n;
-
-					for (i=-n; i<=n; i++) {
-						/* First allocate the outer loop with cuda managed memory */
-						cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.body[i],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.comp[i],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.f[i],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.bodyill[i],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.compill[i],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.fill[i],
-								sizeof(int), 	(2*n+1));
-
-						/* Now offset indexing for the inner loop */
-						dat->set[s].desc.deldop.frame[f].pos.body[i] 	-= -n;
-						dat->set[s].desc.deldop.frame[f].pos.comp[i] 	-= -n;
-						dat->set[s].desc.deldop.frame[f].pos.f[i] 		-= -n;
-						dat->set[s].desc.deldop.frame[f].pos.bodyill[i] -= -n;
-						dat->set[s].desc.deldop.frame[f].pos.compill[i] -= -n;
-						dat->set[s].desc.deldop.frame[f].pos.fill[i] 	-= -n;
-					}
-				}
-				break;
-			case DOPPLER:
-				for (f=0; f<dat->set[s].desc.doppler.nframes; f++) {
-					dat->set[s].desc.doppler.frame[f].pos.n = n;
-					dat->set[s].desc.doppler.frame[f].pos.km_per_pixel = par->pos_width/(2.0*n);
-					dat->set[s].desc.doppler.frame[f].pos.bistatic = 0;
-					npx = (2*n+1)*(2*n+1);
-
-					/* First allocate the outer loop with cuda managed memory */
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.body,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.comp,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.f,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.bodyill,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.compill,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.fill,
-							sizeof(int*), 	(2*n+1));
-					/* Single-precision unrolled 1D pointers: */
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.b_s,
-							sizeof(float),  npx);
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.cosi_s,
-							sizeof(float),  npx);
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.cose_s,
-							sizeof(float),  npx);
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.z_s,
-							sizeof(float),  npx);
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.cosill_s,
-							sizeof(float),  npx);
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.zill_s,
-							sizeof(float),  npx);
-
-					/* Offset indexing for these double pointers */
-					dat->set[s].desc.doppler.frame[f].pos.body 		-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.comp 		-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.f 		-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.bodyill	-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.compill 	-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.fill 		-= -n;
-
-					for (i=-n; i<=n; i++) {
-						/* First allocate the outer loop with cuda managed memory */
-						cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.body[i],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.comp[i],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.f[i],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.bodyill[i],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.compill[i],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.fill[i],
-								sizeof(int), 	(2*n+1));
-
-						/* Now offset indexing for the inner loop */
-						dat->set[s].desc.doppler.frame[f].pos.body[i] 	-= -n;
-						dat->set[s].desc.doppler.frame[f].pos.comp[i] 	-= -n;
-						dat->set[s].desc.doppler.frame[f].pos.f[i] 		-= -n;
-						dat->set[s].desc.doppler.frame[f].pos.bodyill[i]-= -n;
-						dat->set[s].desc.doppler.frame[f].pos.compill[i]-= -n;
-						dat->set[s].desc.doppler.frame[f].pos.fill[i] 	-= -n;
-					}
-				}
-				break;
-			case POS:
-				for (f=0; f<dat->set[s].desc.poset.nframes; f++) {
-					dat->set[s].desc.poset.frame[f].pos.n = n;
-					dat->set[s].desc.poset.frame[f].pos.km_per_pixel = par->pos_width/(2.0*n);
-					dat->set[s].desc.poset.frame[f].pos.bistatic = 1;
-					npx = (2*n+1)*(2*n+1);
-
-					/* First allocate the outer loop with cuda managed memory */
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.body,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.comp,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.f,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.bodyill,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.compill,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.fill,
-							sizeof(int*), 	(2*n+1));
-					/* Single-precision unrolled 1D pointers: */
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.b_s,
-							sizeof(float),  npx);
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.cosi_s,
-							sizeof(float),  npx);
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.cose_s,
-							sizeof(float),  npx);
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.z_s,
-							sizeof(float),  npx);
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.cosill_s,
-							sizeof(float),  npx);
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.zill_s,
-							sizeof(float),  npx);
-
-					/* Offset indexing for these double pointers */
-					dat->set[s].desc.poset.frame[f].pos.body 	-= -n;
-					dat->set[s].desc.poset.frame[f].pos.comp 	-= -n;
-					dat->set[s].desc.poset.frame[f].pos.f 		-= -n;
-					dat->set[s].desc.poset.frame[f].pos.bodyill	-= -n;
-					dat->set[s].desc.poset.frame[f].pos.compill -= -n;
-					dat->set[s].desc.poset.frame[f].pos.fill 	-= -n;
-
-					for (i=-n; i<=n; i++) {
-						/* First allocate the outer loop with cuda managed memory */
-						cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.body[i],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.comp[i],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.f[i],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.bodyill[i],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.compill[i],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.fill[i],
-								sizeof(int), 	(2*n+1));
-
-						/* Now offset indexing for the inner loop */
-						dat->set[s].desc.poset.frame[f].pos.body[i] 	-= -n;
-						dat->set[s].desc.poset.frame[f].pos.comp[i] 	-= -n;
-						dat->set[s].desc.poset.frame[f].pos.f[i] 		-= -n;
-						dat->set[s].desc.poset.frame[f].pos.bodyill[i]	-= -n;
-						dat->set[s].desc.poset.frame[f].pos.compill[i]	-= -n;
-						dat->set[s].desc.poset.frame[f].pos.fill[i] 	-= -n;
-					}
-				}
-				break;
-			case LGHTCRV:
-				for (i=1; i<=dat->set[s].desc.lghtcrv.ncalc; i++) {
-					dat->set[s].desc.lghtcrv.rend[i].pos.n = n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.km_per_pixel = par->pos_width/(2.0*n);
-					dat->set[s].desc.lghtcrv.rend[i].pos.bistatic = 1;
-					npx = (2*n+1)*(2*n+1);
-
-					/* First allocate the outer loop with cuda managed memory */
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.body,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.comp,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.f,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.bodyill,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.compill,
-							sizeof(int*), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.fill,
-							sizeof(int*), 	(2*n+1));
-					/* Single-precision unrolled 1D pointers: */
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.b_s,
-							sizeof(float), npx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosi_s,
-							sizeof(float), npx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cose_s,
-							sizeof(float), npx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.z_s,
-							sizeof(float), npx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosill_s,
-							sizeof(float), npx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.zill_s,
-							sizeof(float), npx);
-					/* Double precision 1-D pointer */
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.b_d,
-							sizeof(double), npx);
-
-
-					/* Offset indexing for these double pointers */
-					dat->set[s].desc.lghtcrv.rend[i].pos.body 		-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.comp 		-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.f 			-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.bodyill	-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.compill	-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.fill 		-= -n;
-
-					for (j=-n; j<=n; j++) {
-						/* First allocate the outer loop with cuda managed memory */
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.body[j],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.comp[j],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.f[j],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.bodyill[j],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.compill[j],
-								sizeof(int), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.fill[j],
-								sizeof(int),	(2*n+1));
-
-						/* Now offset indexing for the inner loop */
-						dat->set[s].desc.lghtcrv.rend[i].pos.body[j]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.comp[j]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.f[j] 		-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.bodyill[j]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.compill[j]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.fill[j]	-= -n;
-					}
-				}
-				break;
-			default:
-				bailout("set_up_pos in read_dat.c: can't do that type yet\n");
-			}
-		}
-		break;
-	default:
-		bailout("set_up_pos in read_dat.c: undefined case\n");
-	}
-}
-
-void set_up_pos_pinned( struct par_t *par, struct dat_t *dat)
-{
-	int s, f, i, j, n, size, npx;
-
-	/* This function allocates memory for the indidual data frames and pos
-	 * frames for gpu calculations. This version uses pinned host memory for
-	 * this purpose, which performs slower.  Instead of using on-gpu memory,
-	 * pinned host memory is allocated on the host instead. 'Pinned' refers to
-	 * the fact that this memory thusly allocated cannot be paged out, which is
-	 * required for some GPU operations if this host memory is to be used.
-	 * So why would anyone want to use pinned host memory?  Large datasets can
-	 * take half a dozen gigabytes of memory.
-	 * Device of compute capability >= 6.x are allowed to over-allocate
-	 * memory and will perform fine even when datasets are larger than onboard
-	 * gpu memory.
-	 * Devices of compute capability < 6.x may not over-allocate.  Shape will
-	 * crash if a dataset is larger than what can be allocated in device
-	 * memory.  In such situations, setting the PIN flag to use pinned host
-	 * memory allows gpu calculations on large datasets, albeit at a large
-	 * performance penalty.   */
-
-	/* Get number of pixels away from origin */
-	n = (par->pos_pixels - 1)/2;
-	dat->pos.n = n;
-	size = (2*n+1)*(2*n+1);
-	printf("\nUsing pinned memory.\n");
-
-	/* allocate all double pointers as cudaMallocManaged */
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.b, sizeof(double*)*(2*n+1)));
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.cosi, sizeof(double*)*(2*n+1)));
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.cose, sizeof(double*)*(2*n+1)));
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.z, sizeof(double*)*(2*n+1)));
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.cosill, sizeof(double*)*(2*n+1)));
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.zill, sizeof(double*)*(2*n+1)));
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.body, sizeof(int*)*(2*n+1)));
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.comp, sizeof(int*)*(2*n+1)));
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.f, sizeof(int*)*(2*n+1)));
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.bodyill,sizeof(int*)*(2*n+1)));
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.compill,sizeof(int*)*(2*n+1)));
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.fill, sizeof(int*)*(2*n+1)));
-
-	/* allocate the single-precision pointers */
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.b_s,	sizeof(float)*size));
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.cosi_s, sizeof(float)*size));
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.cose_s, sizeof(float)*size));
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.z_s, sizeof(float)*size));
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.zill_s, sizeof(float)*size));
-	gpuErrchk(cudaMallocHost((void**)&dat->pos.cosill_s, sizeof(float)*size));
-	/* Offset indexing for these double pointers */
-	dat->pos.b 			-= -n;
-	dat->pos.cosi 		-= -n;
-	dat->pos.cose 		-= -n;
-	dat->pos.z 			-= -n;
-	dat->pos.cosill 	-= -n;
-	dat->pos.zill 		-= -n;
-	dat->pos.body 		-= -n;
-	dat->pos.comp 		-= -n;
-	dat->pos.f 			-= -n;
-	dat->pos.bodyill 	-= -n;
-	dat->pos.compill 	-= -n;
-	dat->pos.fill 		-= -n;
-
-	/* Inner loop of allocating the single pointers along the outer loop */
-	for (i=-n; i<=n; i++) {
-		/* First allocate with cuda managed memory */
-		gpuErrchk(cudaMallocHost((void**)&dat->pos.b[i], sizeof(double)*(2*n+1)));
-		gpuErrchk(cudaMallocHost((void**)&dat->pos.cosi[i],	sizeof(double)*(2*n+1)));
-		gpuErrchk(cudaMallocHost((void**)&dat->pos.cose[i],	sizeof(double)*(2*n+1)));
-		gpuErrchk(cudaMallocHost((void**)&dat->pos.z[i], sizeof(double)*(2*n+1)));
-		gpuErrchk(cudaMallocHost((void**)&dat->pos.cosill[i], sizeof(double)*(2*n+1)));
-		gpuErrchk(cudaMallocHost((void**)&dat->pos.zill[i], sizeof(double)*(2*n+1)));
-		gpuErrchk(cudaMallocHost((void**)&dat->pos.body[i],	sizeof(int)*(2*n+1)));
-		gpuErrchk(cudaMallocHost((void**)&dat->pos.comp[i], sizeof(int)*(2*n+1)));
-		gpuErrchk(cudaMallocHost((void**)&dat->pos.f[i], sizeof(int)*(2*n+1)));
-		gpuErrchk(cudaMallocHost((void**)&dat->pos.bodyill[i], sizeof(int)*(2*n+1)));
-		gpuErrchk(cudaMallocHost((void**)&dat->pos.compill[i], sizeof(int)*(2*n+1)));
-		gpuErrchk(cudaMallocHost((void**)&dat->pos.fill[i], sizeof(int)*(2*n+1)));
-
-		/* Now offset indexing for the inner loop */
-		dat->pos.b[i] 		-= -n;
-		dat->pos.cosi[i] 	-= -n;
-		dat->pos.cose[i] 	-= -n;
-		dat->pos.z[i] 		-= -n;
-		dat->pos.cosill[i] 	-= -n;
-		dat->pos.zill[i] 	-= -n;
-		dat->pos.body[i] 	-= -n;
-		dat->pos.comp[i] 	-= -n;
-		dat->pos.f[i] 		-= -n;
-		dat->pos.bodyill[i]	-= -n;
-		dat->pos.compill[i]	-= -n;
-		dat->pos.fill[i] 	-= -n;
-	}
-
-	dat->pos.km_per_pixel = par->pos_width/(2.0*n);
-	dat->pos.bistatic = 1;
-
-	/*  If the pos_scope parameter is "global" then there is just ONE chunk of memory
-      allocated for a POS image and associated variables (a pos_t structure), and
-      every delay-Doppler frame, Doppler frame, POS frame, and lightcurve point
-      shares this one memory slot for its POS rendering.  Hence these POS images
-      and associated variables -- e.g., cos(scattering angle) for each POS pixel --
-      amount to (very) temporary workspace, soon to be overwritten.
-
-      If pos_scope = "local" then each data frame or lightcurve point gets its own
-      pos_t structure in memory, so the POS images and associated variables persist
-      rather than being overwritten by other frames/points.                            */
-	if (CUDA) {
-		par->pos_scope = LOCAL;
-		printf("POS-SCOPE is LOCAL (more memory)\n");
-	}
-	else
-		printf("POS-SCOPE is GLOBAL (less memory)\n");
-
-	switch (par->pos_scope) {
-	case GLOBAL:
-		for (s=0; s<dat->nsets; s++) {
-			switch (dat->set[s].type) {
-			case DELAY:
-				for (f=0; f<dat->set[s].desc.deldop.nframes; f++)
-					dat->set[s].desc.deldop.frame[f].pos = dat->pos;
-				break;
-			case DOPPLER:
-				for (f=0; f<dat->set[s].desc.doppler.nframes; f++)
-					dat->set[s].desc.doppler.frame[f].pos = dat->pos;
-				break;
-			case POS:
-				for (f=0; f<dat->set[s].desc.poset.nframes; f++)
-					dat->set[s].desc.poset.frame[f].pos = dat->pos;
-				break;
-			case LGHTCRV:
-				for (i=1; i<=dat->set[s].desc.lghtcrv.ncalc; i++)
-					dat->set[s].desc.lghtcrv.rend[i].pos = dat->pos;
-				break;
-			default:
-				bailout("set_up_pos in read_dat.c: can't do that type yet\n");
-			}
-		}
-		break;
-	case LOCAL:
-		for (s=0; s<dat->nsets; s++) {
-			switch (dat->set[s].type) {
-			case DELAY:
-				for (f=0; f<dat->set[s].desc.deldop.nframes; f++) {
-					dat->set[s].desc.deldop.frame[f].pos.n = n;
-					dat->set[s].desc.deldop.frame[f].pos.km_per_pixel = par->pos_width/(2.0*n);
-					dat->set[s].desc.deldop.frame[f].pos.bistatic = 0;
-					npx = (2*n+1)*(2*n+1);
-
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.body,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.comp,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.f,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.bodyill,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.compill,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.fill,
-							sizeof(int*)*(2*n+1)));
-					/* Single-precisision unrolled 1D pointers: */
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.b_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.cosi_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.cose_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.z_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.cosill_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.zill_s,
-							sizeof(float)*npx));
-
-					dat->set[s].desc.deldop.frame[f].pos.body 		-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.comp 		-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.f 			-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.bodyill	-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.compill 	-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.fill 		-= -n;
-
-					for (i=-n; i<=n; i++) {
-
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.body[i],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.comp[i],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.f[i],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.bodyill[i],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.compill[i],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.deldop.frame[f].pos.fill[i],
-								sizeof(int)*(2*n+1)));
-
-						/* Now offset indexing for the inner loop */
-						dat->set[s].desc.deldop.frame[f].pos.body[i] 	-= -n;
-						dat->set[s].desc.deldop.frame[f].pos.comp[i] 	-= -n;
-						dat->set[s].desc.deldop.frame[f].pos.f[i] 		-= -n;
-						dat->set[s].desc.deldop.frame[f].pos.bodyill[i] -= -n;
-						dat->set[s].desc.deldop.frame[f].pos.compill[i] -= -n;
-						dat->set[s].desc.deldop.frame[f].pos.fill[i] 	-= -n;
-					}
-				}
-				break;
-			case DOPPLER:
-				for (f=0; f<dat->set[s].desc.doppler.nframes; f++) {
-					dat->set[s].desc.doppler.frame[f].pos.n = n;
-					dat->set[s].desc.doppler.frame[f].pos.km_per_pixel = par->pos_width/(2.0*n);
-					dat->set[s].desc.doppler.frame[f].pos.bistatic = 0;
-					npx = (2*n+1)*(2*n+1);
-
-					/* First allocate the outer loop with cuda managed memory */
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.body,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.comp,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.f,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.bodyill,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.compill,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.fill,
-							sizeof(int*)*(2*n+1)));
-					/* Single-precision unrolled 1D pointers: */
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.b_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.cosi_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.cose_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.z_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.cosill_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.zill_s,
-							sizeof(float)*npx));
-
-					/* Offset indexing for these double pointers */
-					dat->set[s].desc.doppler.frame[f].pos.body 		-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.comp 		-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.f 		-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.bodyill	-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.compill 	-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.fill 		-= -n;
-
-					for (i=-n; i<=n; i++) {
-						/* First allocate the outer loop with cuda managed memory */
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.body[i],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.comp[i],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.f[i],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.bodyill[i],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.compill[i],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.doppler.frame[f].pos.fill[i],
-								sizeof(int)*(2*n+1)));
-
-						/* Now offset indexing for the inner loop */
-						dat->set[s].desc.doppler.frame[f].pos.body[i] 	-= -n;
-						dat->set[s].desc.doppler.frame[f].pos.comp[i] 	-= -n;
-						dat->set[s].desc.doppler.frame[f].pos.f[i] 		-= -n;
-						dat->set[s].desc.doppler.frame[f].pos.bodyill[i]-= -n;
-						dat->set[s].desc.doppler.frame[f].pos.compill[i]-= -n;
-						dat->set[s].desc.doppler.frame[f].pos.fill[i] 	-= -n;
-					}
-				}
-				break;
-			case POS:
-				for (f=0; f<dat->set[s].desc.poset.nframes; f++) {
-					dat->set[s].desc.poset.frame[f].pos.n = n;
-					dat->set[s].desc.poset.frame[f].pos.km_per_pixel = par->pos_width/(2.0*n);
-					dat->set[s].desc.poset.frame[f].pos.bistatic = 1;
-					npx = (2*n+1)*(2*n+1);
-
-					/* First allocate the outer loop with cuda managed memory */
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.body,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.comp,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.f,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.bodyill,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.compill,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.fill,
-							sizeof(int*)*(2*n+1)));
-					/* Single-precision unrolled 1D pointers: */
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.b_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.cosi_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.cose_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.z_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.cosill_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.zill_s,
-							sizeof(float)*npx));
-
-					/* Offset indexing for these double pointers */
-					dat->set[s].desc.poset.frame[f].pos.body 	-= -n;
-					dat->set[s].desc.poset.frame[f].pos.comp 	-= -n;
-					dat->set[s].desc.poset.frame[f].pos.f 		-= -n;
-					dat->set[s].desc.poset.frame[f].pos.bodyill	-= -n;
-					dat->set[s].desc.poset.frame[f].pos.compill -= -n;
-					dat->set[s].desc.poset.frame[f].pos.fill 	-= -n;
-
-					for (i=-n; i<=n; i++) {
-						/* First allocate the outer loop with cuda managed memory */
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.body[i],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.comp[i],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.f[i],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.bodyill[i],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.compill[i],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.poset.frame[f].pos.fill[i],
-								sizeof(int)*(2*n+1)));
-
-						/* Now offset indexing for the inner loop */
-						dat->set[s].desc.poset.frame[f].pos.body[i] 	-= -n;
-						dat->set[s].desc.poset.frame[f].pos.comp[i] 	-= -n;
-						dat->set[s].desc.poset.frame[f].pos.f[i] 		-= -n;
-						dat->set[s].desc.poset.frame[f].pos.bodyill[i]	-= -n;
-						dat->set[s].desc.poset.frame[f].pos.compill[i]	-= -n;
-						dat->set[s].desc.poset.frame[f].pos.fill[i] 	-= -n;
-					}
-				}
-				break;
-			case LGHTCRV:
-				for (i=1; i<=dat->set[s].desc.lghtcrv.ncalc; i++) {
-					dat->set[s].desc.lghtcrv.rend[i].pos.n = n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.km_per_pixel = par->pos_width/(2.0*n);
-					dat->set[s].desc.lghtcrv.rend[i].pos.bistatic = 1;
-					npx = (2*n+1)*(2*n+1);
-
-					/* First allocate the outer loop with cuda managed memory */
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.body,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.comp,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.f,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.bodyill,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.compill,
-							sizeof(int*)*(2*n+1)));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.fill,
-							sizeof(int*)*(2*n+1)));
-					/* Single-precision unrolled 1D pointers: */
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.b_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosi_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cose_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.z_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosill_s,
-							sizeof(float)*npx));
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.zill_s,
-							sizeof(float)*npx));
-					/* Double precision 1-D pointer */
-					gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.b_d,
-							sizeof(double)*npx));
-
-
-					/* Offset indexing for these double pointers */
-					dat->set[s].desc.lghtcrv.rend[i].pos.body 		-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.comp 		-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.f 			-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.bodyill	-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.compill	-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.fill 		-= -n;
-
-					for (j=-n; j<=n; j++) {
-						/* First allocate the outer loop with cuda managed memory */
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.body[j],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.comp[j],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.f[j],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.bodyill[j],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.compill[j],
-								sizeof(int)*(2*n+1)));
-						gpuErrchk(cudaMallocHost((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.fill[j],
-								sizeof(int)*(2*n+1)));
-
-						/* Now offset indexing for the inner loop */
-						dat->set[s].desc.lghtcrv.rend[i].pos.body[j]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.comp[j]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.f[j] 		-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.bodyill[j]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.compill[j]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.fill[j]	-= -n;
-					}
-				}
-				break;
-			default:
-				bailout("set_up_pos in read_dat.c: can't do that type yet\n");
-			}
-		}
-		break;
-	default:
-		bailout("set_up_pos in read_dat.c: undefined case\n");
-	}
-}
-
-void set_up_pos_mgpu( struct par_t *par, struct dat_t *dat)
-{
-	int s, f, i, j, n, size, nx, npx;
-
-	/* Allocate memory for all frames and pos frames. This version allocates
-	 * for a dual-gpu system.  Frames are allocated interweaved, i.e. gpu0
-	 * will get even frames and gpu1 will get odd frames. */
-
-	/* Get number of pixels away from origin */
-	n = (par->pos_pixels - 1)/2;
-	dat->pos.n = n;
-	nx = 2*n+1;
-	size = nx*nx;
-	size_t dbl_pntr = sizeof(double*)*nx;
-	size_t dbl = sizeof(double)*nx;
-	size_t int_pntr = sizeof(int*)*nx;
-	size_t flt = sizeof(float)*size;
-	size_t intsz = sizeof(int)*nx;
-
-	printf("\nAllocating pos frames interweaved in dual-GPU mode...\n");
-
-	/* The following allocations are for the global pos structures.  I am not
-	 * sure these are needed for proper operation with everything local */
-
-	gpuErrchk(cudaSetDevice(GPU0));
-
-	/* allocate all double pointers as cudaMallocManaged */
-	cudaCalloc1((void**)&dat->pos.b, sizeof(double*), nx);
-	cudaCalloc1((void**)&dat->pos.cosi, sizeof(double*), nx);
-	cudaCalloc1((void**)&dat->pos.cose, sizeof(double*), nx);
-	cudaCalloc1((void**)&dat->pos.z, sizeof(double*), nx);
-	cudaCalloc1((void**)&dat->pos.cosill, sizeof(double*), nx);
-	cudaCalloc1((void**)&dat->pos.zill, sizeof(double*), nx);
-	cudaCalloc1((void**)&dat->pos.body, sizeof(int*), nx);
-	cudaCalloc1((void**)&dat->pos.comp, sizeof(int*), nx);
-	cudaCalloc1((void**)&dat->pos.f, sizeof(int*), nx);
-	cudaCalloc1((void**)&dat->pos.bodyill, sizeof(int*), nx);
-	cudaCalloc1((void**)&dat->pos.compill, sizeof(int*), nx);
-	cudaCalloc1((void**)&dat->pos.fill, sizeof(int*), nx);
-
-	/* allocate the single-precision pointers */
-	gpuErrchk(cudaMalloc((void**)&dat->pos.b_s, 	flt));
-	gpuErrchk(cudaMalloc((void**)&dat->pos.cosi_s,	flt));
-	gpuErrchk(cudaMalloc((void**)&dat->pos.cose_s,	flt));
-	gpuErrchk(cudaMalloc((void**)&dat->pos.z_s, 	flt));
-	gpuErrchk(cudaMalloc((void**)&dat->pos.zill_s,	flt));
-	gpuErrchk(cudaMalloc((void**)&dat->pos.cosill_s,flt));
-	/* Offset indexing for these double pointers */
-	dat->pos.b 			-= -n;
-	dat->pos.cosi 		-= -n;
-	dat->pos.cose 		-= -n;
-	dat->pos.z 			-= -n;
-	dat->pos.cosill 	-= -n;
-	dat->pos.zill 		-= -n;
-	dat->pos.body 		-= -n;
-	dat->pos.comp 		-= -n;
-	dat->pos.f 			-= -n;
-	dat->pos.bodyill 	-= -n;
-	dat->pos.compill 	-= -n;
-	dat->pos.fill 		-= -n;
-
-	/* Inner loop of allocating the single pointers along the outer loop */
-	for (i=-n; i<=n; i++) {
-		/* First allocate with cuda managed memory */
-		cudaCalloc1((void**)&dat->pos.b[i],	sizeof(double), nx);
-		cudaCalloc1((void**)&dat->pos.cosi[i], 	sizeof(double), nx);
-		cudaCalloc1((void**)&dat->pos.cose[i], 	sizeof(double), nx);
-		cudaCalloc1((void**)&dat->pos.z[i], sizeof(double), nx);
-		cudaCalloc1((void**)&dat->pos.cosill[i],sizeof(double), nx);
-		cudaCalloc1((void**)&dat->pos.zill[i], sizeof(double), nx);
-		cudaCalloc1((void**)&dat->pos.body[i], sizeof(int), nx);
-		cudaCalloc1((void**)&dat->pos.comp[i], sizeof(int), nx);
-		cudaCalloc1((void**)&dat->pos.f[i], sizeof(int), nx);
-		cudaCalloc1((void**)&dat->pos.bodyill[i], sizeof(int), nx);
-		cudaCalloc1((void**)&dat->pos.compill[i], sizeof(int), nx);
-		cudaCalloc1((void**)&dat->pos.fill[i], sizeof(int), nx);
-
-		/* Now offset indexing for the inner loop */
-		dat->pos.b[i] 		-= -n;
-		dat->pos.cosi[i] 	-= -n;
-		dat->pos.cose[i] 	-= -n;
-		dat->pos.z[i] 		-= -n;
-		dat->pos.cosill[i] 	-= -n;
-		dat->pos.zill[i] 	-= -n;
-		dat->pos.body[i] 	-= -n;
-		dat->pos.comp[i] 	-= -n;
-		dat->pos.f[i] 		-= -n;
-		dat->pos.bodyill[i]	-= -n;
-		dat->pos.compill[i]	-= -n;
-		dat->pos.fill[i] 	-= -n;
-	}
-
-	dat->pos.km_per_pixel = par->pos_width/(2.0*n);
-	dat->pos.bistatic = 1;
-
-	/*  If the pos_scope parameter is "global" then there is just ONE chunk of memory
-      allocated for a POS image and associated variables (a pos_t structure), and
-      every delay-Doppler frame, Doppler frame, POS frame, and lightcurve point
-      shares this one memory slot for its POS rendering.  Hence these POS images
-      and associated variables -- e.g., cos(scattering angle) for each POS pixel --
-      amount to (very) temporary workspace, soon to be overwritten.
-
-      If pos_scope = "local" then each data frame or lightcurve point gets its own
-      pos_t structure in memory, so the POS images and associated variables persist
-      rather than being overwritten by other frames/points.                            */
-	if (CUDA) {
-		par->pos_scope = LOCAL;
-		printf("POS-SCOPE is LOCAL (more memory)\n");
-	}
-	else
-		printf("POS-SCOPE is GLOBAL (less memory)\n");
-
-	switch (par->pos_scope) {
-	case GLOBAL:
-		for (s=0; s<dat->nsets; s++) {
-			switch (dat->set[s].type) {
-			case DELAY:
-				for (f=0; f<dat->set[s].desc.deldop.nframes; f++)
-					dat->set[s].desc.deldop.frame[f].pos = dat->pos;
-				break;
-			case DOPPLER:
-				for (f=0; f<dat->set[s].desc.doppler.nframes; f++)
-					dat->set[s].desc.doppler.frame[f].pos = dat->pos;
-				break;
-			case POS:
-				for (f=0; f<dat->set[s].desc.poset.nframes; f++)
-					dat->set[s].desc.poset.frame[f].pos = dat->pos;
-				break;
-			case LGHTCRV:
-				for (i=1; i<=dat->set[s].desc.lghtcrv.ncalc; i++)
-					dat->set[s].desc.lghtcrv.rend[i].pos = dat->pos;
-				break;
-			default:
-				bailout("set_up_pos in read_dat.c: can't do that type yet\n");
-			}
-		}
-		break;
-	case LOCAL:
-		for (s=0; s<dat->nsets; s++) {
-			switch (dat->set[s].type) {
-			case DELAY:
-				for (f=0; f<dat->set[s].desc.deldop.nframes; f++) {
-					/* Even frames for GPU0, odd frames for GPU1 */
-					if ((f%2)==0)		/* Even */
-						gpuErrchk(cudaSetDevice(GPU0));
-					else if ((f%2)!=0)	/* Odd */
-						gpuErrchk(cudaSetDevice(GPU1));
-
-					dat->set[s].desc.deldop.frame[f].pos.n = n;
-					dat->set[s].desc.deldop.frame[f].pos.km_per_pixel = par->pos_width/(2.0*n);
-					dat->set[s].desc.deldop.frame[f].pos.bistatic = 0;
-					npx = (2*n+1)*(2*n+1);
-					int_pntr = sizeof(int*)*(2*n+1);
-					intsz = sizeof(int)*(2*n+1);
-					flt = sizeof(float)*npx;
-
-					/* First allocate the outer loop with cuda managed memory */
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.body, sizeof(int*),nx);
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.comp, sizeof(int*),nx);
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.f, sizeof(int*),nx);
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.bodyill, sizeof(int*),nx);
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.compill, sizeof(int*),nx);
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.fill, sizeof(int*),nx);
-					/* Single-precisision unrolled 1D pointers: */
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.deldop.frame[f].pos.b_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.deldop.frame[f].pos.cosi_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.deldop.frame[f].pos.cose_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.deldop.frame[f].pos.z_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.deldop.frame[f].pos.cosill_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.deldop.frame[f].pos.zill_s, flt));
-
-					/* Offset indexing for these double pointers */
-					dat->set[s].desc.deldop.frame[f].pos.body 		-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.comp 		-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.f 			-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.bodyill	-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.compill 	-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.fill 		-= -n;
-
-					for (i=-n; i<=n; i++) {
-						/* First allocate the outer loop with cuda managed memory */
-						cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.body[i], sizeof(int),nx);
-						cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.comp[i], sizeof(int),nx);
-						cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.f[i], sizeof(int),nx);
-						cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.bodyill[i], sizeof(int),nx);
-						cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.compill[i], sizeof(int),nx);
-						cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.fill[i], sizeof(int),nx);
-
-						/* Now offset indexing for the inner loop */
-						dat->set[s].desc.deldop.frame[f].pos.body[i] 	-= -n;
-						dat->set[s].desc.deldop.frame[f].pos.comp[i] 	-= -n;
-						dat->set[s].desc.deldop.frame[f].pos.f[i] 		-= -n;
-						dat->set[s].desc.deldop.frame[f].pos.bodyill[i] -= -n;
-						dat->set[s].desc.deldop.frame[f].pos.compill[i] -= -n;
-						dat->set[s].desc.deldop.frame[f].pos.fill[i] 	-= -n;
-					}
-				}
-				break;
-			case DOPPLER:
-				for (f=0; f<dat->set[s].desc.doppler.nframes; f++) {
-					dat->set[s].desc.doppler.frame[f].pos.n = n;
-					dat->set[s].desc.doppler.frame[f].pos.km_per_pixel = par->pos_width/(2.0*n);
-					dat->set[s].desc.doppler.frame[f].pos.bistatic = 0;
-					npx = (2*n+1)*(2*n+1);
-					int_pntr = sizeof(int*)*(2*n+1);
-					intsz = sizeof(int)*(2*n+1);
-					flt = sizeof(float)*npx;
-
-					/* Even frames for GPU0, odd frames for GPU1 */
-					if ((f%2)==0)		/* Even */
-						gpuErrchk(cudaSetDevice(GPU0));
-					else if ((f%2)!=0)	/* Odd */
-						gpuErrchk(cudaSetDevice(GPU1));
-
-					/* First allocate the outer loop with cuda managed memory */
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.body, sizeof(int*), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.comp, sizeof(int*), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.f, sizeof(int*), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.bodyill, sizeof(int*), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.compill, sizeof(int*), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.fill, sizeof(int*), nx);
-					/* Single-precision unrolled 1D pointers: */
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.doppler.frame[f].pos.b_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.doppler.frame[f].pos.cosi_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.doppler.frame[f].pos.cose_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.doppler.frame[f].pos.z_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.doppler.frame[f].pos.cosill_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.doppler.frame[f].pos.zill_s, flt));
-
-					/* Offset indexing for these double pointers */
-					dat->set[s].desc.doppler.frame[f].pos.body 		-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.comp 		-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.f 		-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.bodyill	-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.compill 	-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.fill 		-= -n;
-
-					for (i=-n; i<=n; i++) {
-						/* First allocate the outer loop with cuda managed memory */
-						cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.body[i], sizeof(int), nx);
-						cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.comp[i], sizeof(int), nx);
-						cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.f[i], sizeof(int), nx);
-						cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.bodyill[i], sizeof(int), nx);
-						cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.compill[i], sizeof(int), nx);
-						cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.fill[i], sizeof(int), nx);
-
-						/* Now offset indexing for the inner loop */
-						dat->set[s].desc.doppler.frame[f].pos.body[i] 	-= -n;
-						dat->set[s].desc.doppler.frame[f].pos.comp[i] 	-= -n;
-						dat->set[s].desc.doppler.frame[f].pos.f[i] 		-= -n;
-						dat->set[s].desc.doppler.frame[f].pos.bodyill[i]-= -n;
-						dat->set[s].desc.doppler.frame[f].pos.compill[i]-= -n;
-						dat->set[s].desc.doppler.frame[f].pos.fill[i] 	-= -n;
-					}
-				}
-				break;
-			case POS:
-				for (f=0; f<dat->set[s].desc.poset.nframes; f++) {
-					dat->set[s].desc.poset.frame[f].pos.n = n;
-					dat->set[s].desc.poset.frame[f].pos.km_per_pixel = par->pos_width/(2.0*n);
-					dat->set[s].desc.poset.frame[f].pos.bistatic = 1;
-					npx = (2*n+1)*(2*n+1);
-					int_pntr = sizeof(int*)*(2*n+1);
-					intsz = sizeof(int)*(2*n+1);
-					flt = sizeof(float)*npx;
-
-					/* Even frames for GPU0, odd frames for GPU1 */
-					if ((f%2)==0)		/* Even */
-						gpuErrchk(cudaSetDevice(GPU0));
-					else if ((f%2)!=0)	/* Odd */
-						gpuErrchk(cudaSetDevice(GPU1));
-
-					/* First allocate the outer loop with cuda managed memory */
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.body, sizeof(int*), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.comp, sizeof(int*), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.f, sizeof(int*), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.bodyill, sizeof(int*), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.compill, sizeof(int*), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.fill, sizeof(int*), nx);
-					/* Single-precision unrolled 1D pointers: */
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.poset.frame[f].pos.b_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.poset.frame[f].pos.cosi_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.poset.frame[f].pos.cose_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.poset.frame[f].pos.z_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.poset.frame[f].pos.cosill_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.poset.frame[f].pos.zill_s, flt));
-
-					/* Offset indexing for these double pointers */
-					dat->set[s].desc.poset.frame[f].pos.body 	-= -n;
-					dat->set[s].desc.poset.frame[f].pos.comp 	-= -n;
-					dat->set[s].desc.poset.frame[f].pos.f 		-= -n;
-					dat->set[s].desc.poset.frame[f].pos.bodyill	-= -n;
-					dat->set[s].desc.poset.frame[f].pos.compill -= -n;
-					dat->set[s].desc.poset.frame[f].pos.fill 	-= -n;
-
-					for (i=-n; i<=n; i++) {
-						/* First allocate the outer loop with cuda managed memory */
-						cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.body[i], sizeof(int), nx);
-						cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.comp[i], sizeof(int), nx);
-						cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.f[i], sizeof(int), nx);
-						cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.bodyill[i], sizeof(int), nx);
-						cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.compill[i], sizeof(int), nx);
-						cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.fill[i], sizeof(int), nx);
-
-						/* Now offset indexing for the inner loop */
-						dat->set[s].desc.poset.frame[f].pos.body[i] 	-= -n;
-						dat->set[s].desc.poset.frame[f].pos.comp[i] 	-= -n;
-						dat->set[s].desc.poset.frame[f].pos.f[i] 		-= -n;
-						dat->set[s].desc.poset.frame[f].pos.bodyill[i]	-= -n;
-						dat->set[s].desc.poset.frame[f].pos.compill[i]	-= -n;
-						dat->set[s].desc.poset.frame[f].pos.fill[i] 	-= -n;
-					}
-				}
-				break;
-			case LGHTCRV:
-				for (i=1; i<=dat->set[s].desc.lghtcrv.ncalc; i++) {
-					dat->set[s].desc.lghtcrv.rend[i].pos.n = n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.km_per_pixel = par->pos_width/(2.0*n);
-					dat->set[s].desc.lghtcrv.rend[i].pos.bistatic = 1;
-					npx = (2*n+1)*(2*n+1);
-					int_pntr = sizeof(int*)*(2*n+1);
-					intsz = sizeof(int)*(2*n+1);
-					flt = sizeof(float)*npx;
-
-					/* Even frames for GPU0, odd frames for GPU1 */
-					if ((f%2)==0)		/* Even */
-						gpuErrchk(cudaSetDevice(GPU0));
-					else if ((f%2)!=0)	/* Odd */
-						gpuErrchk(cudaSetDevice(GPU1));
-
-					/* First allocate the outer loop with cuda managed memory */
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.body, sizeof(int*), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.comp, sizeof(int*), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.f, sizeof(int*), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.bodyill, sizeof(int*), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.compill, sizeof(int*), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.fill, sizeof(int*), nx);
-					/* Single-precision unrolled 1D pointers: */
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.b_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosi_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cose_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.z_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosill_s, flt));
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.zill_s, flt));
-					/* Double precision 1-D pointer */
-					gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.b_d,
-							sizeof(double)*npx));
-
-
-					/* Offset indexing for these double pointers */
-					dat->set[s].desc.lghtcrv.rend[i].pos.body 		-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.comp 		-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.f 			-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.bodyill	-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.compill	-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.fill 		-= -n;
-
-					for (j=-n; j<=n; j++) {
-						/* First allocate the outer loop with cuda managed memory */
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.body[j], sizeof(int), nx);
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.comp[j], sizeof(int), nx);
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.f[j], sizeof(int), nx);
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.bodyill[j], sizeof(int), nx);
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.compill[j], sizeof(int), nx);
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.fill[j], sizeof(int), nx);
-
-						/* Now offset indexing for the inner loop */
-						dat->set[s].desc.lghtcrv.rend[i].pos.body[j]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.comp[j]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.f[j] 		-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.bodyill[j]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.compill[j]	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.fill[j]	-= -n;
-					}
-				}
-				break;
-			default:
-				bailout("set_up_pos in read_dat.c: can't do that type yet\n");
-			}
-		}
-		break;
-	default:
-		bailout("set_up_pos in read_dat.c: undefined case\n");
-	}
-}
-
-void set_up_pos_mgpu2( struct par_t *par, struct dat_t *dat)
-{
-	int s, f, i, j, n, size, nx, npx;
-
-	/* Allocate memory for all frames and pos frames. This version allocates
-	 * for a dual-gpu system.  Each set is allocated to:
-	 * 		 GPU # (dat->set[s].inputnode) */
-
-	/* Get number of pixels away from origin */
-	n = (par->pos_pixels - 1)/2;
-	dat->pos.n = n;
-	nx = 2*n+1;
-	size = nx*nx;
-	size_t dbl_pntr = sizeof(double*)*nx;
-	size_t dbl = sizeof(double)*nx;
-	size_t int_pntr = sizeof(int*)*nx;
-	size_t flt = sizeof(float)*size;
-	size_t intsz = sizeof(int)*nx;
-
-	printf("\nAllocating pos frames in dual-GPU + pThreads mode...\n");
-
-	/* The following allocations are for the global pos structures.  I am not
-	 * sure these are needed for proper operation with everything local */
-
-	gpuErrchk(cudaSetDevice(GPU0));
-
-	/* allocate all double pointers as cudaMallocManaged */
-	cudaCalloc1((void**)&dat->pos.b, sizeof(double*), nx);
-	cudaCalloc1((void**)&dat->pos.cosi, sizeof(double*), nx);
-	cudaCalloc1((void**)&dat->pos.cose, sizeof(double*), nx);
-	cudaCalloc1((void**)&dat->pos.z, sizeof(double*), nx);
-	cudaCalloc1((void**)&dat->pos.cosill, sizeof(double*), nx);
-	cudaCalloc1((void**)&dat->pos.zill, sizeof(double*), nx);
-	cudaCalloc1((void**)&dat->pos.body, sizeof(int*), nx);
-	cudaCalloc1((void**)&dat->pos.comp, sizeof(int*), nx);
-	cudaCalloc1((void**)&dat->pos.f, sizeof(int*), nx);
-	cudaCalloc1((void**)&dat->pos.bodyill, sizeof(int*), nx);
-	cudaCalloc1((void**)&dat->pos.compill, sizeof(int*), nx);
-	cudaCalloc1((void**)&dat->pos.fill, sizeof(int*), nx);
-
-	/* allocate the single-precision pointers */
-	gpuErrchk(cudaMalloc((void**)&dat->pos.b_s, 	flt));
-	gpuErrchk(cudaMalloc((void**)&dat->pos.cosi_s,	flt));
-	gpuErrchk(cudaMalloc((void**)&dat->pos.cose_s,	flt));
-	gpuErrchk(cudaMalloc((void**)&dat->pos.z_s, 	flt));
-	gpuErrchk(cudaMalloc((void**)&dat->pos.zill_s,	flt));
-	gpuErrchk(cudaMalloc((void**)&dat->pos.cosill_s,flt));
-	/* Offset indexing for these double pointers */
-	dat->pos.b 			-= -n;
-	dat->pos.cosi 		-= -n;
-	dat->pos.cose 		-= -n;
-	dat->pos.z 			-= -n;
-	dat->pos.cosill 	-= -n;
-	dat->pos.zill 		-= -n;
-	dat->pos.body 		-= -n;
-	dat->pos.comp 		-= -n;
-	dat->pos.f 			-= -n;
-	dat->pos.bodyill 	-= -n;
-	dat->pos.compill 	-= -n;
-	dat->pos.fill 		-= -n;
-
-	/* Inner loop of allocating the single pointers along the outer loop */
-	for (i=-n; i<=n; i++) {
-		/* First allocate with cuda managed memory */
-		cudaCalloc1((void**)&dat->pos.b[i],	sizeof(double), nx);
-		cudaCalloc1((void**)&dat->pos.cosi[i], 	sizeof(double), nx);
-		cudaCalloc1((void**)&dat->pos.cose[i], 	sizeof(double), nx);
-		cudaCalloc1((void**)&dat->pos.z[i], sizeof(double), nx);
-		cudaCalloc1((void**)&dat->pos.cosill[i],sizeof(double), nx);
-		cudaCalloc1((void**)&dat->pos.zill[i], sizeof(double), nx);
-		cudaCalloc1((void**)&dat->pos.body[i], sizeof(int), nx);
-		cudaCalloc1((void**)&dat->pos.comp[i], sizeof(int), nx);
-		cudaCalloc1((void**)&dat->pos.f[i], sizeof(int), nx);
-		cudaCalloc1((void**)&dat->pos.bodyill[i], sizeof(int), nx);
-		cudaCalloc1((void**)&dat->pos.compill[i], sizeof(int), nx);
-		cudaCalloc1((void**)&dat->pos.fill[i], sizeof(int), nx);
-
-		/* Now offset indexing for the inner loop */
-		dat->pos.b[i] 		-= -n;
-		dat->pos.cosi[i] 	-= -n;
-		dat->pos.cose[i] 	-= -n;
-		dat->pos.z[i] 		-= -n;
-		dat->pos.cosill[i] 	-= -n;
-		dat->pos.zill[i] 	-= -n;
-		dat->pos.body[i] 	-= -n;
-		dat->pos.comp[i] 	-= -n;
-		dat->pos.f[i] 		-= -n;
-		dat->pos.bodyill[i]	-= -n;
-		dat->pos.compill[i]	-= -n;
-		dat->pos.fill[i] 	-= -n;
-	}
-
-	dat->pos.km_per_pixel = par->pos_width/(2.0*n);
-	dat->pos.bistatic = 1;
-
-	/*  If the pos_scope parameter is "global" then there is just ONE chunk of memory
-      allocated for a POS image and associated variables (a pos_t structure), and
-      every delay-Doppler frame, Doppler frame, POS frame, and lightcurve point
-      shares this one memory slot for its POS rendering.  Hence these POS images
-      and associated variables -- e.g., cos(scattering angle) for each POS pixel --
-      amount to (very) temporary workspace, soon to be overwritten.
-
-      If pos_scope = "local" then each data frame or lightcurve point gets its own
-      pos_t structure in memory, so the POS images and associated variables persist
-      rather than being overwritten by other frames/points.                            */
-
-	par->pos_scope = LOCAL;
-	printf("POS-SCOPE is LOCAL (more memory)\n");
-	int nframes, ncalc;
-	for (s=0; s<dat->nsets; s++) {
-		gpuErrchk(cudaSetDevice(dat->set[s].inputnode));	/* Pick GPU assigned to set */
-		switch (dat->set[s].type) {
-		case DELAY:
-			//nframes = dat->set[s].desc.deldop.nframes;
-			for (f=0; f<dat->set[s].desc.deldop.nframes; f++) {
-				dat->set[s].desc.deldop.frame[f].pos.n = n;
-				dat->set[s].desc.deldop.frame[f].pos.km_per_pixel = par->pos_width/(2.0*n);
-				dat->set[s].desc.deldop.frame[f].pos.bistatic = 0;
-				npx = (2*n+1)*(2*n+1);
-				int_pntr = sizeof(int*)*(2*n+1);
-				intsz = sizeof(int)*(2*n+1);
-				flt = sizeof(float)*npx;
-
-				/* First allocate the outer loop with cuda managed memory */
-				cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.body, sizeof(int*),nx);
-				cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.comp, sizeof(int*),nx);
-				cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.f, sizeof(int*),nx);
-				cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.bodyill, sizeof(int*),nx);
-				cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.compill, sizeof(int*),nx);
-				cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.fill, sizeof(int*),nx);
-				/* Single-precisision unrolled 1D pointers: */
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.deldop.frame[f].pos.b_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.deldop.frame[f].pos.cosi_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.deldop.frame[f].pos.cose_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.deldop.frame[f].pos.z_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.deldop.frame[f].pos.cosill_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.deldop.frame[f].pos.zill_s, flt));
-
-				/* Offset indexing for these double pointers */
-				dat->set[s].desc.deldop.frame[f].pos.body 		-= -n;
-				dat->set[s].desc.deldop.frame[f].pos.comp 		-= -n;
-				dat->set[s].desc.deldop.frame[f].pos.f 			-= -n;
-				dat->set[s].desc.deldop.frame[f].pos.bodyill	-= -n;
-				dat->set[s].desc.deldop.frame[f].pos.compill 	-= -n;
-				dat->set[s].desc.deldop.frame[f].pos.fill 		-= -n;
-
-				for (i=-n; i<=n; i++) {
-					/* First allocate the outer loop with cuda managed memory */
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.body[i], sizeof(int),nx);
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.comp[i], sizeof(int),nx);
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.f[i], sizeof(int),nx);
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.bodyill[i], sizeof(int),nx);
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.compill[i], sizeof(int),nx);
-					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.fill[i], sizeof(int),nx);
-
-					/* Now offset indexing for the inner loop */
-					dat->set[s].desc.deldop.frame[f].pos.body[i] 	-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.comp[i] 	-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.f[i] 		-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.bodyill[i] -= -n;
-					dat->set[s].desc.deldop.frame[f].pos.compill[i] -= -n;
-					dat->set[s].desc.deldop.frame[f].pos.fill[i] 	-= -n;
-				}
-			}
-			break;
-		case DOPPLER:
-			for (f=0; f<dat->set[s].desc.doppler.nframes; f++) {
-				dat->set[s].desc.doppler.frame[f].pos.n = n;
-				dat->set[s].desc.doppler.frame[f].pos.km_per_pixel = par->pos_width/(2.0*n);
-				dat->set[s].desc.doppler.frame[f].pos.bistatic = 0;
-				npx = (2*n+1)*(2*n+1);
-				int_pntr = sizeof(int*)*(2*n+1);
-				intsz = sizeof(int)*(2*n+1);
-				flt = sizeof(float)*npx;
-
-				/* First allocate the outer loop with cuda managed memory */
-				cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.body, sizeof(int*), nx);
-				cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.comp, sizeof(int*), nx);
-				cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.f, sizeof(int*), nx);
-				cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.bodyill, sizeof(int*), nx);
-				cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.compill, sizeof(int*), nx);
-				cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.fill, sizeof(int*), nx);
-				/* Single-precision unrolled 1D pointers: */
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.doppler.frame[f].pos.b_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.doppler.frame[f].pos.cosi_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.doppler.frame[f].pos.cose_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.doppler.frame[f].pos.z_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.doppler.frame[f].pos.cosill_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.doppler.frame[f].pos.zill_s, flt));
-
-				/* Offset indexing for these double pointers */
-				dat->set[s].desc.doppler.frame[f].pos.body 		-= -n;
-				dat->set[s].desc.doppler.frame[f].pos.comp 		-= -n;
-				dat->set[s].desc.doppler.frame[f].pos.f 		-= -n;
-				dat->set[s].desc.doppler.frame[f].pos.bodyill	-= -n;
-				dat->set[s].desc.doppler.frame[f].pos.compill 	-= -n;
-				dat->set[s].desc.doppler.frame[f].pos.fill 		-= -n;
-
-				for (i=-n; i<=n; i++) {
-					/* First allocate the outer loop with cuda managed memory */
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.body[i], sizeof(int), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.comp[i], sizeof(int), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.f[i], sizeof(int), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.bodyill[i], sizeof(int), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.compill[i], sizeof(int), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.fill[i], sizeof(int), nx);
-
-					/* Now offset indexing for the inner loop */
-					dat->set[s].desc.doppler.frame[f].pos.body[i] 	-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.comp[i] 	-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.f[i] 		-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.bodyill[i]-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.compill[i]-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.fill[i] 	-= -n;
-				}
-			}
-			break;
-		case POS:
-			for (f=0; f<dat->set[s].desc.poset.nframes; f++) {
-				dat->set[s].desc.poset.frame[f].pos.n = n;
-				dat->set[s].desc.poset.frame[f].pos.km_per_pixel = par->pos_width/(2.0*n);
-				dat->set[s].desc.poset.frame[f].pos.bistatic = 1;
-				npx = (2*n+1)*(2*n+1);
-				int_pntr = sizeof(int*)*(2*n+1);
-				intsz = sizeof(int)*(2*n+1);
-				flt = sizeof(float)*npx;
-
-				/* First allocate the outer loop with cuda managed memory */
-				cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.body, sizeof(int*), nx);
-				cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.comp, sizeof(int*), nx);
-				cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.f, sizeof(int*), nx);
-				cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.bodyill, sizeof(int*), nx);
-				cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.compill, sizeof(int*), nx);
-				cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.fill, sizeof(int*), nx);
-				/* Single-precision unrolled 1D pointers: */
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.poset.frame[f].pos.b_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.poset.frame[f].pos.cosi_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.poset.frame[f].pos.cose_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.poset.frame[f].pos.z_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.poset.frame[f].pos.cosill_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.poset.frame[f].pos.zill_s, flt));
-
-				/* Offset indexing for these double pointers */
-				dat->set[s].desc.poset.frame[f].pos.body 	-= -n;
-				dat->set[s].desc.poset.frame[f].pos.comp 	-= -n;
-				dat->set[s].desc.poset.frame[f].pos.f 		-= -n;
-				dat->set[s].desc.poset.frame[f].pos.bodyill	-= -n;
-				dat->set[s].desc.poset.frame[f].pos.compill -= -n;
-				dat->set[s].desc.poset.frame[f].pos.fill 	-= -n;
-
-				for (i=-n; i<=n; i++) {
-					/* First allocate the outer loop with cuda managed memory */
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.body[i], sizeof(int), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.comp[i], sizeof(int), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.f[i], sizeof(int), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.bodyill[i], sizeof(int), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.compill[i], sizeof(int), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.fill[i], sizeof(int), nx);
-
-					/* Now offset indexing for the inner loop */
-					dat->set[s].desc.poset.frame[f].pos.body[i] 	-= -n;
-					dat->set[s].desc.poset.frame[f].pos.comp[i] 	-= -n;
-					dat->set[s].desc.poset.frame[f].pos.f[i] 		-= -n;
-					dat->set[s].desc.poset.frame[f].pos.bodyill[i]	-= -n;
-					dat->set[s].desc.poset.frame[f].pos.compill[i]	-= -n;
-					dat->set[s].desc.poset.frame[f].pos.fill[i] 	-= -n;
-				}
-			}
-			break;
-		case LGHTCRV:
-			for (i=1; i<=dat->set[s].desc.lghtcrv.ncalc; i++) {
-				dat->set[s].desc.lghtcrv.rend[i].pos.n = n;
-				dat->set[s].desc.lghtcrv.rend[i].pos.km_per_pixel = par->pos_width/(2.0*n);
-				dat->set[s].desc.lghtcrv.rend[i].pos.bistatic = 1;
-				npx = (2*n+1)*(2*n+1);
-				int_pntr = sizeof(int*)*(2*n+1);
-				intsz = sizeof(int)*(2*n+1);
-				flt = sizeof(float)*npx;
-
-				/* First allocate the outer loop with cuda managed memory */
-				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.body, sizeof(int*), nx);
-				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.comp, sizeof(int*), nx);
-				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.f, sizeof(int*), nx);
-				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.bodyill, sizeof(int*), nx);
-				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.compill, sizeof(int*), nx);
-				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.fill, sizeof(int*), nx);
-				/* Single-precision unrolled 1D pointers: */
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.b_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosi_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cose_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.z_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosill_s, flt));
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.zill_s, flt));
-				/* Double precision 1-D pointer */
-				gpuErrchk(cudaMalloc((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.b_d,
-						sizeof(double)*npx));
-
-				/* Offset indexing for these double pointers */
-				dat->set[s].desc.lghtcrv.rend[i].pos.body 		-= -n;
-				dat->set[s].desc.lghtcrv.rend[i].pos.comp 		-= -n;
-				dat->set[s].desc.lghtcrv.rend[i].pos.f 			-= -n;
-				dat->set[s].desc.lghtcrv.rend[i].pos.bodyill	-= -n;
-				dat->set[s].desc.lghtcrv.rend[i].pos.compill	-= -n;
-				dat->set[s].desc.lghtcrv.rend[i].pos.fill 		-= -n;
-
-				for (j=-n; j<=n; j++) {
-					/* First allocate the outer loop with cuda managed memory */
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.body[j], sizeof(int), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.comp[j], sizeof(int), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.f[j], sizeof(int), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.bodyill[j], sizeof(int), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.compill[j], sizeof(int), nx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.fill[j], sizeof(int), nx);
-
-					/* Now offset indexing for the inner loop */
-					dat->set[s].desc.lghtcrv.rend[i].pos.body[j]	-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.comp[j]	-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.f[j] 		-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.bodyill[j]	-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.compill[j]	-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.fill[j]	-= -n;
-				}
-			}
-			break;
-		default:
-			bailout("set_up_pos in read_dat.c: can't do that type yet\n");
-		}
-	}
-}
-
 int read_poset( FILE *fp, struct par_t *par, struct poset_t *poset,
 		int noptlaws, int s, double *chi2_variance)
 {
@@ -3765,7 +2102,7 @@ int read_poset( FILE *fp, struct par_t *par, struct poset_t *poset,
 		if (poset->frame[i].pixels_weighted) {
 			/*  Open the mask file, count the entries, and make sure that it's the
             expected number of entries (in case someone has changed the numbering
-            of datasets without changing mask filenames accordingly) 
+            of datasets without changing mask filenames accordingly)
 
             Note that the countdata routine resets the file position indicator to
             its initial value after it finishes reading data entries*/
@@ -4276,350 +2613,6 @@ int read_lghtcrv( struct dat_t *dat, FILE *fp, struct par_t *par, struct lghtcrv
 			lghtcrv->rend = (struct crvrend_t *) calloc( lghtcrv->ncalc+1,
 					sizeof( struct crvrend_t));
 		/*=======================================================================*/
-
-		for (i=1; i<=lghtcrv->ncalc; i++) {
-			lghtcrv->x[i] = lghtcrv->x0[i] = obsepoch_unique[i];
-			dist = ephem2mat(lghtcrv->astephem, lghtcrv->solephem,
-					lghtcrv->x0[i],
-					lghtcrv->rend[i].oe, lghtcrv->rend[i].se,
-					lghtcrv->rend[i].orbspin,
-					&lghtcrv->solar_phase[i],&lghtcrv->solar_azimuth[i],1);
-			if (par->perform_ltc) {                        /* apply light-time correction*/
-				lghtcrv->x[i] = lghtcrv->x0[i] - DAYSPERAU*dist;
-				ephem2mat( lghtcrv->astephem, lghtcrv->solephem,
-						lghtcrv->x[i],
-						lghtcrv->rend[i].oe, lghtcrv->rend[i].se,
-						lghtcrv->rend[i].orbspin,
-						&lghtcrv->solar_phase[i], &lghtcrv->solar_azimuth[i], 1);
-			}
-		}
-		free_vector( obsepoch_unique, 1, lghtcrv->n);
-	}
-
-	printf("#     %s\n", lghtcrv->name);
-	fflush(stdout);
-
-	/*  Initialize quantities related to spin impulses*/
-	for (i=1; i<=lghtcrv->ncalc; i++) {
-		lghtcrv->rend[i].n_integrate = -999;
-		for (n=0; n<MAXIMP+2; n++) {
-			lghtcrv->rend[i].t_integrate[n] = -HUGENUMBER;
-			for (j=0; j<=2; j++)
-				lghtcrv->rend[i].impulse[n][j] = 0.0;
-		} /* Initialize quantities related to spin impulses*/
-	}
-
-	/*  If this node handles this dataset, check if the interpolations needed to obtain
-      observed lightcurve points from calculated lightcurve points (in the "calc_fits"
-      routine) will actually involve extrapolations beyond the calculated points, and if
-      so, give a warning.  This problem is most likely to arise when modeling smearing.
-    Additional note by Matt Engels:  condition has been removed from executing this block.*/
-
-	extrapolate_flag = 0;
-	for (i=1; i<=lghtcrv->n; i++)
-		for (k=0; k<lghtcrv->nviews; k++)
-			if (lghtcrv->t[i][k] < lghtcrv->x[1]
-			                                  || lghtcrv->t[i][k] > lghtcrv->x[lghtcrv->ncalc])
-				extrapolate_flag = 1;
-	if (extrapolate_flag) {
-		fprintf(stderr,"\n");
-		fprintf(stderr,"WARNING for dataset %2d:\n", s);
-		fprintf(stderr,"            observed lightcurve intensities will be extrapolated\n");
-		fprintf(stderr,"            outside the time span of calculated intensities\n");
-		fprintf(stderr,"\n");
-	}
-
-	return npar;
-}
-
-int read_lghtcrv_mgpu2( struct dat_t *dat, FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
-		int noptlaws, int s, double *chi2_variance)
-{
-	int i, k, npar=0, np, nunique, n, j, extrapolate_flag;
-	char smearingstring[7];
-	FILE *fin;
-	double orbspin[3], dist, solar_phase, solar_azimuth, oe[3][3], se[3][3],
-	t1, t2, dt, obsepoch, obsmag, obsmagerr, obsintens, obsintenserr;
-	double *obsepoch_raw, *obsepoch_unique;
-
-	/* Set GPU0 first */
-	gpuErrchk(cudaSetDevice(GPU0));
-
-	/* Initialize some variables to avoid compilation warnings*/
-	t1 = t2 = dt = 0.0;
-	obsepoch_raw = NULL;
-
-	/* Read which optical scattering law to use for this dataset*/
-	lghtcrv->ioptlaw = getint( fp);
-	if (lghtcrv->ioptlaw < 0 || lghtcrv->ioptlaw >= noptlaws) {
-		printf("ERROR in set %d: must have 0 <= optical scattering law <= %d\n",
-				s, noptlaws-1);
-		bailout("read_lghtcrv in read_dat.c\n");
-	}
-
-	/* Read the asteroid ephemeris*/
-	lghtcrv->astephem.n = getint( fp); /* # of points in ephemeris*/
-
-	cudaCalloc1((void**)&lghtcrv->astephem.pnt, sizeof(struct ephpnt_t),
-			lghtcrv->astephem.n);
-
-	for (i=0; i<lghtcrv->astephem.n; i++) {
-		rdcal2jd( fp, &lghtcrv->astephem.pnt[i].t);
-		lghtcrv->astephem.pnt[i].ra = getdouble( fp)*D2R;
-		lghtcrv->astephem.pnt[i].dec = getdouble( fp)*D2R;
-		lghtcrv->astephem.pnt[i].dist = getdouble( fp);
-	}
-
-	/* Read the solar ephemeris*/
-	lghtcrv->solephem.n = getint( fp); /* # of points in ephemeris*/
-
-	cudaCalloc1((void**)&lghtcrv->solephem.pnt, sizeof(struct ephpnt_t),
-			lghtcrv->solephem.n);
-
-	for (i=0; i<lghtcrv->solephem.n; i++) {
-		rdcal2jd( fp, &lghtcrv->solephem.pnt[i].t);
-		lghtcrv->solephem.pnt[i].ra = getdouble( fp)*D2R;
-		lghtcrv->solephem.pnt[i].dec = getdouble( fp)*D2R;
-		lghtcrv->solephem.pnt[i].dist = getdouble( fp);
-	}
-
-	/* Get the number of epochs at which to calculate the model brightness:
-          positive --> an explicit list of epochs follows
-          zero     --> specification of evenly spaced epochs follows
-          negative --> use the same epochs as for the observations*/
-	np = lghtcrv->ncalc_obsfile = getint( fp);
-	if (np != 0)
-		lghtcrv->jdstart = lghtcrv->jdstop = lghtcrv->jdinterval = -HUGENUMBER;
-
-	/* If the next lines explicitly or implicitly specify the calculation epochs,
-	 * read them now and then generate the relevant quantities for each epoch
-	 * (coordinate transformation matrices, POS spin components, solar phase
-	 * angles, solar azimuth angles in the POS)*/
-	if (np >= 0) {
-		if (np > 0) {
-			/*  We have an explicit list of calculated points*/
-			lghtcrv->ncalc = np;
-		} else {
-			/*  Generate the list of calculated points from JD start/stop/interval*/
-			t1 = lghtcrv->jdstart    = getdouble( fp);  /* start time */
-			t2 = lghtcrv->jdstop     = getdouble( fp);  /* stop time  */
-			dt = lghtcrv->jdinterval = getdouble( fp);  /* time step  */
-			if (t2 < t1 || dt <= 0) {
-				printf("ERROR in set %d calculation epochs: need t2 >= t1 and dt > 0\n", s);
-				bailout("read_lghtcrv in read_dat.c\n");
-			}
-			lghtcrv->ncalc = ((int)floor((t2 - t1)/dt)) + 1;  /* # points*/
-		}
-		int ncalc = lghtcrv->ncalc;
-		int ncalc_gpu0 = ncalc/2;
-		int ncalc_gpu1 = ncalc-ncalc_gpu0;
-
-		/* Allocate memory for CUDA and standard CPU code */
-		cudaCalloc1((void**)&lghtcrv->x0, 			sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->x,  			sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->y,  			sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->y2, 			sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->rotphase_calc, sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->solar_phase,   sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->solar_azimuth, sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->x_s, sizeof(float), ncalc);
-		cudaCalloc1((void**)&lghtcrv->y_s, sizeof(float), ncalc);
-		cudaCalloc1((void**)&lghtcrv->y2_s, sizeof(float), ncalc);
-
-		lghtcrv->x0 		   -= 1;
-		lghtcrv->x  		   -= 1;
-		lghtcrv->y  		   -= 1;
-		lghtcrv->y2 		   -= 1;
-		lghtcrv->rotphase_calc -= 1;
-		lghtcrv->solar_phase   -= 1;
-		lghtcrv->solar_azimuth -= 1;
-		lghtcrv->x_s 		   -= 1;
-		lghtcrv->y_s		   -= 1;
-		lghtcrv->y2_s		   -= 1;
-
-		cudaMallocManaged((void**)&lghtcrv->rend, sizeof(struct crvrend_t)*
-				(lghtcrv->ncalc+1), cudaMemAttachGlobal);
-
-		if (np > 0) {
-			for (i=1; i<=lghtcrv->ncalc; i++)
-				lghtcrv->x[i] = lghtcrv->x0[i] = getdouble( fp);
-			for (i=2; i<=lghtcrv->ncalc; i++) {
-				if (lghtcrv->x0[i] <= lghtcrv->x0[i-1]) {
-					printf("ERROR in set %d: calculation epoch %d <= epoch %d\n", s, i, i-1);
-					bailout("read_lghtcrv in read_dat.c\n");
-				}
-			}
-		} else {
-			for (i=1; i<=lghtcrv->ncalc; i++)
-				lghtcrv->x[i] = lghtcrv->x0[i] = t1 + (i - 1)*dt;
-		}
-
-		for (i=1; i<=lghtcrv->ncalc; i++) {
-			dist = ephem2mat( lghtcrv->astephem, lghtcrv->solephem,
-					lghtcrv->x0[i],
-					lghtcrv->rend[i].oe, lghtcrv->rend[i].se,
-					lghtcrv->rend[i].orbspin,
-					&lghtcrv->solar_phase[i], &lghtcrv->solar_azimuth[i], 1);
-			if (par->perform_ltc) {                        /*  apply light-time correction*/
-				lghtcrv->x[i] = lghtcrv->x0[i] - DAYSPERAU*dist;
-				ephem2mat( lghtcrv->astephem, lghtcrv->solephem,
-						lghtcrv->x[i],
-						lghtcrv->rend[i].oe, lghtcrv->rend[i].se,
-						lghtcrv->rend[i].orbspin,
-						&lghtcrv->solar_phase[i], &lghtcrv->solar_azimuth[i], 1);
-			}
-		}
-	}
-
-	/*  Read smearing information*/
-	lghtcrv->nviews = getint( fp); 			/* # views per point*/
-	lghtcrv->view_interval = getdouble( fp); 	/* view interval (s)*/
-	lghtcrv->view_interval /= 86400; 			/* convert to days*/
-	gettstr( fp, smearingstring);   			/* smearing mode*/
-	if (!strcmp(smearingstring, "center")) {
-		lghtcrv->smearing_mode = SMEAR_CENTER;
-		lghtcrv->v0 = lghtcrv->nviews / 2;
-	} else if (!strcmp(smearingstring, "first")) {
-		lghtcrv->smearing_mode = SMEAR_FIRST;
-		lghtcrv->v0 = 0;
-	} else {
-		bailout("read_lghtcrv in read_dat.c: can't do that smearing mode yet\n");
-	}
-
-	/*  Read the number of observed lightcurve points, the datafile name,
-      and the calibration factor for this lightcurve*/
-	lghtcrv->n = getint( fp);
-	gettstr( fp, lghtcrv->name);
-	readparam( fp, &lghtcrv->cal);
-
-	/*  Read the relative weight for this lightcurve, compute degrees
-      of freedom contributed to this dataset, and compute weight sum*/
-	lghtcrv->weight = getdouble( fp);
-	lghtcrv->dof = lghtcrv->weight * lghtcrv->n;
-	*chi2_variance = 2 * lghtcrv->weight * lghtcrv->weight * lghtcrv->n;
-	if (lghtcrv->cal.state == 'c')
-		lghtcrv->sum_opt_brightness_weights = lghtcrv->weight * lghtcrv->n;
-	else
-		lghtcrv->sum_opt_brightness_weights = 0.0;
-
-
-	cudaCalloc1((void**)&lghtcrv->t0, 			 sizeof(double), lghtcrv->n);
-	cudaCalloc1((void**)&lghtcrv->obs, 		 sizeof(double), lghtcrv->n);
-	cudaCalloc1((void**)&lghtcrv->fit, 		 sizeof(double), lghtcrv->n);
-	cudaCalloc1((void**)&lghtcrv->oneovervar, 	 sizeof(double), lghtcrv->n);
-	cudaCalloc1((void**)&lghtcrv->rotphase_obs, sizeof(double), lghtcrv->n);
-	cudaCalloc1((void**)&lghtcrv->t0, 			 sizeof(double), lghtcrv->n);
-	cudaCalloc1((void**)&lghtcrv->t, 			 sizeof(double*),lghtcrv->n);
-
-	/* Offset the outer loop of lghtcrv->t */
-	lghtcrv->t -= 1;
-
-	/* Do inner loop for double pointers */
-	for (int j=1; j<=lghtcrv->n; j++)
-		cudaCalloc1((void**)&lghtcrv->t[j], sizeof(double), (lghtcrv->nviews+1));
-
-	/* If we are setting calculation epochs equal to the unique observation
-	 * epochs, create a vector to hold the raw observation epochs - later to be
-	 * sorted so that repeated values can be skipped over.*/
-	if (np < 0)
-		obsepoch_raw = vector( 1, lghtcrv->n);
-
-	if (np < 0) {
-		FOPEN( fin, lghtcrv->name, "r");
-		i = 0;
-		while (!feof(fin) && i < lghtcrv->n) {
-			i++;
-
-			/*  Read a single lightcurve point: epoch (JD), magnitude, rms error*/
-			obsepoch = getdouble( fin);
-			obsmag = getdouble( fin);
-			obsmagerr = getdouble( fin);
-
-			/*  Convert from magnitude to intensity (relative to solar intensity)*/
-			obsintens = exp( -0.4 * LN10 * (obsmag - par->sun_appmag));
-			obsintenserr = (0.4 * LN10 * obsmagerr) * obsintens;
-
-			/*  Build up the vector containing the epochs (later to be sorted)*/
-			if (np < 0)
-				obsepoch_raw[i] = obsepoch;
-
-			lghtcrv->t0[i] = obsepoch;
-			lghtcrv->obs[i] = obsintens;
-			lghtcrv->oneovervar[i] = 1.0/(obsintenserr*obsintenserr);   /* 1/variance*/
-
-			/*  Loop through all views contributing to this (smeared) observed point*/
-			for (k=0; k<lghtcrv->nviews; k++) {
-				/*  Compute the epoch of this view, uncorrected for light-travel time*/
-				lghtcrv->t[i][k] = lghtcrv->t0[i] + (k - lghtcrv->v0) *
-						lghtcrv->view_interval;
-
-				/*  Correct for one-way light-travel time if desired*/
-				if (par->perform_ltc) {
-					dist = ephem2mat( lghtcrv->astephem, lghtcrv->solephem,
-							lghtcrv->t[i][k],
-							oe, se, orbspin, &solar_phase, &solar_azimuth, 1);
-					lghtcrv->t[i][k] -= DAYSPERAU*dist;
-				}
-			}
-		}
-		if (i != lghtcrv->n) {
-			printf("ERROR: fix obs file: %d lightcurve pts, not %d, were read for dataset %d\n",
-					i, lghtcrv->n, s);
-			bailout("read_lghtcrv in read_dat.c\n");
-		} else if (!nomoredata( fin)) {
-			printf("ERROR: fix obs file: > %d lightcurve pts were read for dataset %d\n",
-					lghtcrv->n, s);
-			bailout("read_lghtcrv in read_dat.c\n");
-		}
-		fclose( fin);
-	}
-
-	/*  Sort the observation epochs, count how many unique observation epochs
-      there are, and create a vector containing only these sorted, unique epochs*/
-	if (np < 0) {
-		hpsort( lghtcrv->n, obsepoch_raw);
-		nunique = 1;
-		for (i=2; i<=lghtcrv->n; i++)
-			if (obsepoch_raw[i] > obsepoch_raw[i-1])
-				nunique++;
-		obsepoch_unique = vector( 1, nunique);
-		obsepoch_unique[1] = obsepoch_raw[1];
-		k = 1;
-		for (i=2; i<=lghtcrv->n; i++)
-			if (obsepoch_raw[i] > obsepoch_raw[i-1])
-				obsepoch_unique[++k] = obsepoch_raw[i];
-		free_vector( obsepoch_raw, 1, lghtcrv->n);
-
-		/*  We now know how many unique observation epochs there are, so we can
-        allocate memory for the various calculation-related arrays/vectors,
-        assign epochs, and (if specified) correct them for light-travel time.*/
-		lghtcrv->ncalc = nunique;
-		int ncalc = lghtcrv->ncalc;
-
-		cudaCalloc1((void**)&lghtcrv->x0, 			sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->x,  			sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->y,  			sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->y2, 			sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->rotphase_calc, sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->solar_phase,   sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->solar_azimuth, sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->x_s, sizeof(float), ncalc);
-		cudaCalloc1((void**)&lghtcrv->y_s, sizeof(float), ncalc);
-		cudaCalloc1((void**)&lghtcrv->y2_s, sizeof(float), ncalc);
-
-		lghtcrv->x0 		   -= 1;
-		lghtcrv->x  		   -= 1;
-		lghtcrv->y  		   -= 1;
-		lghtcrv->y2 		   -= 1;
-		lghtcrv->rotphase_calc -= 1;
-		lghtcrv->solar_phase   -= 1;
-		lghtcrv->solar_azimuth -= 1;
-		lghtcrv->x_s		   -= 1;
-		lghtcrv->y_s		   -= 1;
-		lghtcrv->y2_s		   -= 1;
-
-		cudaCalloc1((void**)&lghtcrv->rend, sizeof(struct crvrend_t),
-				lghtcrv->ncalc+1);
 
 		for (i=1; i<=lghtcrv->ncalc; i++) {
 			lghtcrv->x[i] = lghtcrv->x0[i] = obsepoch_unique[i];

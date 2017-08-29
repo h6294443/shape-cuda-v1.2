@@ -190,6 +190,16 @@ void setuprealver( struct mod_t *mod, int c, int **iv, int nt, int *np);
 void setuprealfac( struct mod_t *mod, int c, int **iv, int nt, int *np);
 void setupsides( struct vertices_t *vt);
 void setupvertices( struct vertices_t *vt);
+void *read_mod_pthread_sub(void *ptr);
+
+typedef struct read_mod_thread_t
+{
+    int thread_no;
+	struct par_t *parameter;
+    struct mod_t *model;
+    int nfpar;
+    int gpuid;
+ } read_mod_data;
 
 int read_mod( struct par_t *par, struct mod_t *mod)
 {
@@ -198,7 +208,7 @@ int read_mod( struct par_t *par, struct mod_t *mod)
 
 	printf("\n# reading model from file: %s ...\n", mod->name);
 	fflush(stdout);
-	gpuErrchk(cudaSetDevice(GPU0));
+	//gpuErrchk(cudaSetDevice(GPU0));
 
 	FOPEN( fp, mod->name, "r");
 	nfpar += read_shape( fp, par, mod);
@@ -216,6 +226,65 @@ int read_mod( struct par_t *par, struct mod_t *mod)
 	return nfpar;
 }
 
+__host__ int read_mod_pthread( struct par_t *par, struct mod_t *mod0, struct mod_t *mod1,
+		pthread_t thread1, pthread_t thread2)
+{
+	/* Note:  The purpose of pthreading read_mod is to create a mod for each
+	 * pthread and associated gpu.  This reduces memory access bottlenecks in
+	 * later functions, primarily posvis_gpu. */
+	read_mod_data data1, data2;
+
+	data1.thread_no = 0;
+	data2.thread_no = 1;
+	data1.parameter = data2.parameter = par;
+	data1.model = mod0;
+	data2.model = mod1;
+	data1.nfpar = data2.nfpar = 0;
+	data1.gpuid = GPU0;
+	data2.gpuid = GPU1;
+
+	/* From here, launch the pthreaded subfunction */
+	pthread_create(&thread1, NULL, read_mod_pthread_sub,(void*)&data1);
+	pthread_create(&thread2, NULL, read_mod_pthread_sub,(void*)&data2);
+
+	pthread_join(thread1, NULL);
+	pthread_join(thread2, NULL);
+
+	gpuErrchk(cudaSetDevice(GPU0));
+
+	return data1.nfpar;
+}
+
+void *read_mod_pthread_sub(void *ptr) {
+
+	FILE *fp;
+	int c, nfpar=0;
+	read_mod_data *data;
+	data = (read_mod_data *) ptr;  /* type cast to a pointer to thdata */
+	gpuErrchk(cudaSetDevice(data->gpuid));
+
+	if (data->gpuid==GPU0) {
+		printf("\n# reading model from file: %s ...\n", data->model->name);
+		fflush(stdout);
+	}
+
+	FOPEN( fp, data->model->name, "r");
+	data->nfpar += read_shape(fp, data->parameter, data->model);
+	setupreal(data->model);
+	data->nfpar += read_photo(fp, data->parameter, data->model);
+	data->nfpar += read_spin(fp, data->model);
+	fclose(fp);
+
+	if (data->gpuid==GPU0) {
+		printf("# finished reading model file\n");
+		fflush(stdout);
+	}
+
+	for (c=0; c<data->model->shape.ncomp; c++) {
+		setupsides(&data->model->shape.comp[c].real);
+		setupvertices(&data->model->shape.comp[c].real);
+	}
+}
 
 int read_shape( FILE *fp, struct par_t *par, struct mod_t *mod)
 {

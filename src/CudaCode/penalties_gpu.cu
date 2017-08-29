@@ -196,15 +196,16 @@ __global__ void p_get_pen_type_krnl(struct par_t *dpar, struct mod_t
 		*dmod, int i) {
 	/* Single-threaded kernel */
 	int c=0;
-	int n, k, j;
+	int k, j;
 	if (threadIdx.x == 0) {
-		n = dpar->pen.n;
+		//n = dpar->pen.n;
 		p_pen_type = dpar->pen.type[i];
 		p_shape_type = dmod->shape.comp[c].type;
 		for (k=0; k<3; k++)
 			for (j=0; j<3; j++)
 				p_ap[k][j] = 0.0;
 		p_ntot = 0;
+		p_pen = 0.0;
 	}
 }
 __global__ void p_get_real_info_krnl(struct mod_t *dmod) {
@@ -1107,8 +1108,6 @@ __global__ void p_impulse_krnl(struct mod_t *dmod) {
 __global__ void p_final_krnl(struct par_t *dpar, int i, char name[80]) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
-//		printf("\n# p_sum = %g #", p_sum);
-//		printf("\n# p_pen[%i]=%g", i, p_pen);
 		if (dpar->pen.weight[i] >= 0.0)
 			dpar->pen.base[i] = p_pen;
 		else
@@ -1121,9 +1120,7 @@ __global__ void p_final_krnl(struct par_t *dpar, int i, char name[80]) {
 			printf("# %15s %e = fabs(%13.6e) * %e\n", name,
 					fabs(dpar->pen.weight[i])*dpar->pen.base[i],
 					dpar->pen.weight[i], dpar->pen.base[i]);
-//		printf("#\n p_sum = %g #\n\n", p_sum);
 	}
-//	__syncthreads();
 }
 
 __host__ double penalties_gpu(struct par_t *dpar, struct mod_t *dmod,

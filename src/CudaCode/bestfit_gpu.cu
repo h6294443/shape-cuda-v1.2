@@ -234,9 +234,9 @@ extern "C" {
 }
 //static __device__ double *hotparam;
 static __device__ int dmax_frames;
-static struct par_t *spar, *sdev_par;
-static struct mod_t *smod, *sdev_mod;
-static struct dat_t *sdat, *sdev_dat;
+static struct par_t *spar, *sdev_par, *sdev_par1;
+static struct mod_t *smod, *smod1, *sdev_mod, *sdev_mod1;
+static struct dat_t *sdat, *sdev_dat, *sdev_dat1;
 
 static int newsize, newshape, newspin, newphoto, newdelcor, newdopscale, newxyoff,
 showvals=0, vary_delcor0_size, vary_delcor0_shapespin, vary_dopscale_spin,
@@ -252,11 +252,11 @@ static double hotparamval;
 __host__ double objective_gpu(double x, struct vertices_t **verts,
 		unsigned char *htype, unsigned char *dtype, int *nframes, int *nviews,
 		int *lc_n, int nsets, int nf, cudaStream_t *bf_stream);
-__host__ double objective_pthreads(double x, struct vertices_t **verts,
-		unsigned char *htype, unsigned char *dtype, int *nframes, int *nviews,
-		int *lc_n, int *GPUID, int nsets, int nf, int max_frames, pthread_t
-		thread1,  pthread_t thread2, cudaStream_t *gpu0_stream,
-		cudaStream_t *gpu1_stream);
+__host__ double objective_pthreads(double x, struct vertices_t **verts0, struct
+		vertices_t **verts1, unsigned char *htype, unsigned char *dtype0, unsigned char *dtype1, int
+		*nframes, int *nviews, int *lc_n, int *GPUID, int nsets, int nf, int
+		max_frames, pthread_t thread1,  pthread_t thread2, cudaStream_t
+		*gpu0_stream, cudaStream_t *gpu1_stream);
 
 __device__ double bf_hotparamval, bf_dummyval=0.0, *hotparam;
 __device__ int bf_partype;
@@ -405,7 +405,6 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	else	max_streams = max_frames;
 
 	/* Create streams for gpu0 (the only gpu in single-GPU mode) */
-	gpuErrchk(cudaSetDevice(GPU0));
 	cudaStream_t bf_stream[max_streams];
 	for (int f=0; f<max_streams; f++)
 		gpuErrchk(cudaStreamCreate(&bf_stream[f]));
@@ -494,7 +493,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 
 	/* Compute deldop_zmax_save, cos_subradarlat_save, rad_xsec_save, and
 	 * opt_brightness_save for the initial model  */
-	call_vary_params=1;
+	//call_vary_params=1;
 	if (call_vary_params)
 	{
 		realize_mod_gpu(dpar, dmod, type, nf, bf_stream);
@@ -836,8 +835,8 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 				chi2_gpu(dpar, ddat, htype, dtype, nframes,
 						lc_n, 0, nsets, bf_stream, max_frames);
 
-				write_mod( dpar, dmod);
-				write_dat( dpar, ddat);
+//				write_mod( dpar, dmod);
+//				write_dat( dpar, ddat);
 			}
 		}  // End fitpar loop
 
@@ -850,8 +849,8 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			chi2_gpu(dpar, ddat, htype, dtype, nframes,
 					lc_n, 0, nsets, bf_stream, max_frames);
 
-			write_mod( dpar, dmod);
-			write_dat( dpar, ddat);
+//			write_mod( dpar, dmod);
+//			write_dat( dpar, ddat);
 		}
 		show_deldoplim_gpu(ddat, htype, nsets, nframes, max_frames);
 
@@ -952,6 +951,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			final_chi2, dofstring, final_redchi2);
 	printf("#\n");
 	printf("\nIterations total: %i\n", iter);
+	printf("GPU fit enderr: %g\n", enderr);
 	fflush(stdout);
 
 	/* Destroy the streams */
@@ -986,9 +986,11 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	return enderr;
 }
 
-__host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
-		struct dat_t *ddat, struct par_t *par, struct mod_t *mod,
-		struct dat_t *dat)
+__host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct par_t *dpar1,
+		struct mod_t *dmod, struct mod_t *dmod1, struct dat_t *ddat, struct
+		dat_t *ddat1, struct par_t *par, struct par_t *par1, struct mod_t *mod,
+		struct mod_t *mod1,	struct dat_t *dat, struct dat_t *dat1, pthread_t
+		thread1, pthread_t thread2)
 {
 	char hostname[MAXLEN], dofstring[MAXLEN];
 	int i, iter=0, p, cntr, first_fitpar, partype, keep_iterating=1, ilaw, nf, term_maxiter;
@@ -998,10 +1000,10 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 	final_redchi2, dummyval2, dummyval3, dummyval4, delta_delcor0,
 	dopscale_factor, radalb_factor, optalb_factor, *hfparstep, *hfpartol,
 	*hfparabstol, objfunc_start, term_prec;
-	unsigned char *flags, *hflags, *htype, *dtype, action, avoid_badpos, term_badmodel;
+	unsigned char *flags, *hflags, *htype, *dtype0, *dtype1, action, avoid_badpos, term_badmodel;
 	int nsets, *nframes, *lc_n, *nviews, nfpar, *hfpartype, npar_update,
 	max_frames=0, max_streams=0, *GPUID;
-	struct vertices_t **verts;
+	struct vertices_t **verts0, **verts1;	/* One for each GPU */
 	dim3 THD, BLK;
 
 	gpuErrchk(cudaSetDevice(GPU0));
@@ -1023,8 +1025,12 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 	lc_n	= (int *) malloc(nsets*sizeof(int));
 	nviews 	= (int *) malloc(nsets*sizeof(int));
 	GPUID 	= (int *) malloc(nsets*sizeof(int));
-	gpuErrchk(cudaMalloc((void**)&dtype, sizeof(unsigned char)*nsets));
-	gpuErrchk(cudaMalloc((void**)&verts, sizeof(struct vertices_t*)*2));
+	gpuErrchk(cudaMalloc((void**)&dtype0, sizeof(unsigned char)*nsets));
+	gpuErrchk(cudaMalloc((void**)&verts0, sizeof(struct vertices_t*)*2));
+	gpuErrchk(cudaSetDevice(GPU1));
+	gpuErrchk(cudaMalloc((void**)&dtype1, sizeof(unsigned char)*nsets));
+	gpuErrchk(cudaMalloc((void**)&verts1, sizeof(struct vertices_t*)*2));
+	gpuErrchk(cudaSetDevice(GPU0));
 
 	for (int s=0; s<nsets; s++) {
 		htype[s] = dat->set[s].type;
@@ -1056,7 +1062,9 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 		}
 		if (nframes[s]>max_frames)	max_frames = nframes[s];
 	}
-	gpuErrchk(cudaMemcpy(dtype, htype, sizeof(unsigned char)*nsets,
+	gpuErrchk(cudaMemcpy(dtype0, htype, sizeof(unsigned char)*nsets,
+			cudaMemcpyHostToDevice));
+	gpuErrchk(cudaMemcpy(dtype1, htype, sizeof(unsigned char)*nsets,
 			cudaMemcpyHostToDevice));
 
 	/* The following check is necessary to ensure the dVdIdCOM reduction has
@@ -1084,7 +1092,7 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 	printf("#\n# CUDA fit (pid %ld on %s)\n", pid_long, hostname);
 	fflush(stdout);
 
-	/* Allocate memory for pointers, steps, and tolerances on bothhost and
+	/* Allocate memory for pointers, steps, and tolerances on both host and
 	 * device. fpntr remains a cudaMallocManaged allocation because it is a
 	 * double pointer.  */
 	gpuErrchk(cudaMalloc((void**)&sdev_par, sizeof(struct par_t)));
@@ -1093,7 +1101,17 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 	gpuErrchk(cudaMemcpy(sdev_mod, &mod, sizeof(struct mod_t), cudaMemcpyHostToDevice));
 	gpuErrchk(cudaMalloc((void**)&sdev_dat, sizeof(struct dat_t)));
 	gpuErrchk(cudaMemcpy(sdev_dat, &dat, sizeof(struct dat_t), cudaMemcpyHostToDevice));
-	gpuErrchk(cudaMalloc((void**)&flags, sizeof(unsigned char) * 7));
+
+	gpuErrchk(cudaSetDevice(GPU1));
+	gpuErrchk(cudaMalloc((void**)&sdev_par1, sizeof(struct par_t)));
+	gpuErrchk(cudaMemcpy(sdev_par1, &par1, sizeof(struct par_t), cudaMemcpyHostToDevice));
+	gpuErrchk(cudaMalloc((void**)&sdev_mod1, sizeof(struct mod_t)));
+	gpuErrchk(cudaMemcpy(sdev_mod1, &mod1, sizeof(struct mod_t), cudaMemcpyHostToDevice));
+	gpuErrchk(cudaMalloc((void**)&sdev_dat1, sizeof(struct dat_t)));
+	gpuErrchk(cudaMemcpy(sdev_dat1, &dat1, sizeof(struct dat_t), cudaMemcpyHostToDevice));
+	gpuErrchk(cudaSetDevice(GPU0));
+
+	gpuErrchk(cudaMalloc((void**)&flags, sizeof(unsigned char) * 6));
 	gpuErrchk(cudaMalloc((void**)&fparstep,   sizeof(double)  * nfpar));
 	gpuErrchk(cudaMalloc((void**)&fpartol,    sizeof(double)  * nfpar));
 	gpuErrchk(cudaMalloc((void**)&fparabstol, sizeof(double)  * nfpar));
@@ -1103,22 +1121,27 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 	hfpartol	 = (double *) malloc(nfpar*sizeof(double));
 	hfparabstol  = (double *) malloc(nfpar*sizeof(double));
 	hfpartype 	 = (int *) 	  malloc(nfpar*sizeof(int));
-	hflags 		 = (unsigned char *) malloc(7*sizeof(unsigned char));
+	hflags 		 = (unsigned char *) malloc(6*sizeof(unsigned char));
 
 	for (i=0; i<nfpar; i++)
 		gpuErrchk(cudaMalloc((void**)&fpntr[i], sizeof(double) * 1));
 
 	/* Set vertices shortcut and also set max_frames (the maximum number of
 	 * frames for any one set) to device so that objective_gpu
-	 * can retrieve it later */
+	 * can retrieve it later. Have to set verts0 for gpu0 and verts1 for gpu1 */
 	gpuErrchk(cudaSetDevice(GPU0));
-	set_verts_shortcut_krnl<<<1,1>>>(dmod, verts, max_frames);
+	set_verts_shortcut_krnl<<<1,1>>>(dmod, verts0, max_frames);
 	checkErrorAfterKernelLaunch("set_verts_shortcut_krnl");
+	gpuErrchk(cudaSetDevice(GPU1));
+	set_verts_shortcut_krnl<<<1,1>>>(dmod1, verts1, max_frames);
+	checkErrorAfterKernelLaunch("set_verts_shortcut_krnl");
+	gpuErrchk(cudaSetDevice(GPU0));
 
 	/* Initialize static global pointers used by objective(x) below
       to be compatible with "Numerical Recipes in C" routines       */
 	spar = par;			smod = mod;			sdat = dat;
 	sdev_par = dpar;	sdev_mod = dmod;	sdev_dat = ddat;
+	sdev_par1 = dpar1;	sdev_mod1 = dmod1;	sdev_dat1 = ddat1;
 
 	/*  Initialize static global parameters  */
 	newsize = newshape = newspin = newphoto = newdelcor = newdopscale = newxyoff = 1;
@@ -1155,28 +1178,30 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 	gpuErrchk(cudaMemcpy(hfparabstol, fparabstol, sizeof(double)*nfpar, cudaMemcpyDeviceToHost));
 	gpuErrchk(cudaMemcpy(hfpartype,	fpartype, sizeof(int)*nfpar, cudaMemcpyDeviceToHost));
 
-	/* Create our pThreads */
-	pthread_t thread1, thread2;	/* Thread 1 is the default thread */
-
 	/* Compute deldop_zmax_save, cos_subradarlat_save, rad_xsec_save, and
 	 * opt_brightness_save for the initial model  */
-	if (call_vary_params)
-	{
-		realize_mod_gpu(dpar, dmod, type, nf, gpu0_stream);
+	if (call_vary_params) {
 
-		realize_spin_pthread(dpar, dmod, ddat, htype, nframes, nviews, GPUID,
-				nsets, thread1, thread2, gpu0_stream, gpu1_stream);
+		realize_mod_pthread(dpar, dpar1, dmod, dmod1, type, nf, thread1,
+				thread2, gpu0_stream, gpu1_stream);
 
-		realize_photo_gpu(dpar, dmod, 1.0, 1.0, 0, nf);  /* set R_save to R */
+		realize_photo_pthread(dpar, dpar1, dmod, dmod1, 1.0, 1.0, 0, nf,
+				thread1, thread2);
 
-		vary_params_pthreads(dpar, dmod, ddat, action, &deldop_zmax_save,
-				&rad_xsec_save,	&opt_brightness_save, &cos_subradarlat_save,
-				nframes, lc_n, nviews, GPUID, verts, htype, dtype, nf, nsets,
-				max_frames, thread1, thread2, gpu0_stream, gpu1_stream);
+		realize_spin_pthread(dpar, dpar1, dmod, dmod1, ddat, ddat1, htype,
+				nframes, nviews, GPUID, nsets, thread1, thread2, gpu0_stream,
+				gpu1_stream);
+
+		vary_params_pthreads(dpar, dpar1, dmod, dmod1, ddat, ddat1, action,
+				&deldop_zmax_save, &rad_xsec_save, &opt_brightness_save,
+				&cos_subradarlat_save, nframes, lc_n, nviews, GPUID, verts0,
+				verts1, htype, dtype0, dtype1, nf, nsets, max_frames, thread1,
+				thread2, gpu0_stream, gpu1_stream);
 	}
 	printf("rad_xsec: %f\n", rad_xsec_save);
 	printf("deldop_zmax: %f\n", (float)deldop_zmax_save);
 	gpuErrchk(cudaSetDevice(GPU0));
+
 	/* Point hotparam to a dummy variable (dummyval) rather than to a model pa-
 	 * rameter; then call objective(0.0) to set dummy variable = 0.0, realize
 	 * the initial model, calculate the fits, return initial model's objective
@@ -1184,15 +1209,15 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 	bf_set_hotparam_initial_krnl<<<1,1>>>();
 	checkErrorAfterKernelLaunch("bf_set_hotparam_initial_krnl");
 
-	enderr = objective_pthreads(0.0, verts, htype, dtype, nframes, nviews,
-			lc_n, GPUID, nsets, nf, max_frames, thread1, thread2, gpu0_stream,
-			gpu1_stream);
+	enderr = objective_pthreads(0.0, verts0, verts1, htype, dtype0, dtype1, nframes,
+			nviews, lc_n, GPUID, nsets, nf, max_frames, thread1, thread2,
+			gpu0_stream, gpu1_stream);
 
 	printf("#\n# searching for best fit ...\n");
 	printf("%4d %8.6f to begin", 0, enderr);
 
-	/* Launch single-thread kernel to retrieve flags in dev_par */
-	/*		flags[0] = dpar->baddiam;
+	/* Launch single-thread kernel to retrieve flags in dev_par
+			flags[0] = dpar->baddiam;
 			flags[1] = dpar->badphoto;
 			flags[2] = dpar->posbnd;
 			flags[3] = dpar->badposet;
@@ -1201,7 +1226,7 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 
 	bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 	checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-	gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+	gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*6,
 			cudaMemcpyDeviceToHost));
 
 	/* Now act on the flags just retrieved from dev_par */
@@ -1218,8 +1243,8 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 	 * any region extends beyond the data limits: the vignetting is too tight,
 	 * or else some model parameter (such as a delay correction polynomial co-
 	 * efficient) is seriously in error.   */
-	show_deldoplim_gpu(ddat, htype, nsets, nframes, max_frames);
-
+	//show_deldoplim_gpu(ddat, htype, nsets, nframes, max_frames);
+	show_deldoplim_pthread(ddat, ddat1, htype, nsets, nframes, max_frames, GPUID);
 	/* Set the starting fit parameter for the first iteration only  */
 	first_fitpar = par->first_fitpar;
 	term_maxiter = par->term_maxiter;
@@ -1241,7 +1266,7 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 		/* Launch single-thread kernel to retrieve flags in dev_par */
 		bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 		checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-		gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+		gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*6,
 				cudaMemcpyDeviceToHost));
 
 		/* Now act on the flags just retrieved from dev_par */
@@ -1254,16 +1279,14 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 		fflush(stdout);
 
 		/* Show breakdown of chi-square by data type    */
-		chi2_pthreads(dpar, ddat, htype, dtype, nframes, lc_n, GPUID,
-				1, nsets, max_frames, thread1, thread2, gpu0_stream,
-				gpu1_stream);
+		chi2_pthreads(dpar,	dpar1, ddat, ddat1, htype, dtype0, dtype1, nframes,
+				lc_n, GPUID, 1, nsets, max_frames, thread1, thread2,
+				gpu0_stream, gpu1_stream);
 
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % npar_update;
 		//p = first_fitpar = 1;
 		for (p=first_fitpar; p<nfpar; p++) {
-
-			//		p = first_fitpar;
 			/*  Adjust only parameter p on this try  */
 			bf_set_hotparam_pntr_krnl<<<1,1>>>(fpntr, fpartype, p);
 			checkErrorAfterKernelLaunch("bf_set_hotparam_pntr_krnl");
@@ -1289,7 +1312,7 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 			if (avoid_badpos && partype == SIZEPAR) {
 				bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 				checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-				gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+				gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*6,
 						cudaMemcpyDeviceToHost));
 
 				/* Get value of (*hotparam) */
@@ -1299,14 +1322,14 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 						sizeof(double),	0, cudaMemcpyDeviceToHost));
 
 				while (hflags[2]) {
-					objective_pthreads(hotparamval, verts, htype, dtype,
-							nframes, nviews, lc_n, GPUID, nsets, nf,
-							max_frames, thread1, thread2, gpu0_stream,
+					objective_pthreads(hotparamval, verts0, verts1, htype,
+							dtype0, dtype1, nframes, nviews, lc_n, GPUID, nsets,
+							nf,	max_frames, thread1, thread2, gpu0_stream,
 							gpu1_stream);
 
 					bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 					checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-					gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+					gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*6,
 							cudaMemcpyDeviceToHost));
 
 					if (hflags[2]) {
@@ -1339,15 +1362,9 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 			bx = ax + hfparstep[p]; /* par usage us fine here */
 
 			mnbrak_pthreads(&ax, &bx, &cx, &obja, &objb, &objc,
-					objective_pthreads,
-					verts,
-					htype,
-					dtype,
-					nframes,
-					nviews, lc_n, GPUID, nsets, nf, max_frames, thread1,
-					thread2,
-					gpu0_stream,
-					gpu1_stream);
+					objective_pthreads,	verts0,	verts1, htype, dtype0,	dtype1,
+					nframes, nviews, lc_n, GPUID, nsets, nf, max_frames,
+					thread1, thread2, gpu0_stream, gpu1_stream);
 
 			/* Before homing in on local minimum, initialize flags that will
 			 * tell us if model extended beyond POS frame (sky rendering) for
@@ -1368,10 +1385,10 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 			 * fractional tolerance.                                      */
 
 			enderr = brent_abs_pthreads(ax, bx, cx,
-					objective_pthreads,
-					hfpartol[p], hfparabstol[p], &xmin, verts, htype, dtype,
-					nframes, nviews, lc_n, GPUID, nsets, nf, max_frames,
-					thread1, thread2, gpu0_stream, gpu1_stream);
+					objective_pthreads, hfpartol[p], hfparabstol[p], &xmin,
+					verts0, verts1, htype, dtype0, dtype1, nframes, nviews,
+					lc_n, GPUID, nsets, nf, max_frames, thread1, thread2,
+					gpu0_stream, gpu1_stream);
 
 			/* Realize whichever part(s) of the model has changed.
 			 *
@@ -1393,34 +1410,37 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 					sizeof(double),	0, cudaMemcpyDeviceToHost));
 
 			if (newsize || newshape)
-				realize_mod_gpu(dpar, dmod, type, nf, gpu0_stream);
+				realize_mod_pthread(dpar, dpar1, dmod, dmod1, type, nf, thread1,
+					thread2, gpu0_stream, gpu1_stream);
 			if (newspin)
-				realize_spin_pthread(dpar, dmod, ddat, htype, nframes, GPUID,
-						nviews, nsets, thread1, thread2, gpu0_stream,
-						gpu1_stream);
+				realize_spin_pthread(dpar, dpar1, dmod, dmod1, ddat, ddat1,
+						htype, nframes, GPUID, nviews, nsets, thread1, thread2,
+						gpu0_stream, gpu1_stream);
 
 			if ((newsize && vary_alb_size) || ((newshape ||
 					newspin) && vary_alb_shapespin))
-				realize_photo_gpu(dpar, dmod, 1.0, 1.0, 1, nf);  /* set R to R_save */
+				realize_photo_pthread(dpar, dpar1, dmod, dmod1, 1.0, 1.0, 1, nf,
+						thread1, thread2);
 			if ((newsize && vary_delcor0_size) || ((newshape || newspin)
 					&& vary_delcor0_shapespin)) {
-				realize_delcor_pthreads(ddat, 0.0, 1, nsets, nframes, GPUID,
-						htype, thread1, thread2);
+				realize_delcor_pthreads(ddat, ddat1, 0.0, 1, nsets, nframes,
+						GPUID, htype, thread1, thread2);
 				/* set delcor0 to delcor0_save */
 			}
 			if ((newspin && vary_dopscale_spin) || ((newsize || newshape)
 					&& vary_dopscale_sizeshape))
-				realize_dopscale_pthreads(dpar, ddat, 1.0, 1, nsets, dtype,
-						GPUID);/* set dopscale to dopscale_save */
+				realize_dopscale_pthreads(dpar, dpar1, ddat, ddat1, 1.0, 1,
+						nsets, dtype0, dtype1, GPUID);/* set dopscale to dopscale_save */
 
 			if (call_vary_params) {
 				/* Call vary_params to get the adjustments to 0th-order delay
 				 * correction polynomial coefficients, to Doppler scaling fac-
 				 * tors, and to radar and optical albedos                  */
-				vary_params_pthreads(dpar, dmod, ddat, 11, &deldop_zmax,
-						&rad_xsec, &opt_brightness, &cos_subradarlat, nframes,
-						lc_n, nviews, GPUID, verts, htype, dtype, nf, nsets,
-						max_frames, thread1, thread2, gpu0_stream, gpu1_stream);
+				vary_params_pthreads(dpar, dpar1, dmod, dmod1, ddat, ddat1, 11,
+						&deldop_zmax, &rad_xsec, &opt_brightness,
+						&cos_subradarlat, nframes, lc_n, nviews, GPUID, verts0,
+						verts1, htype, dtype0, dtype1, nf, nsets, max_frames,
+						thread1, thread2, gpu0_stream, gpu1_stream);
 
 				delta_delcor0 = (deldop_zmax - deldop_zmax_save)*KM2US;
 				if (cos_subradarlat != 0.0)
@@ -1432,50 +1452,49 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 			}
 			if ((newsize && vary_alb_size) || ((newshape || newspin) &&
 					vary_alb_shapespin)) {
-				realize_photo_gpu(dpar, dmod, radalb_factor, optalb_factor, 2, nf);  /* reset R, then R_save */
+				realize_photo_pthread(dpar, dpar1, dmod, dmod1, radalb_factor,
+						optalb_factor, 2, nf, thread1, thread2);
 
 				/* Must update opt_brightness_save for Hapke optical scattering
 				 * law, since single-scattering albedo w isn't just an overall
 				 * scaling factor  */
 				if (vary_hapke) {
-					vary_params_pthreads(dpar, dmod, ddat, 12, &dummyval2,
-							&dummyval3, &opt_brightness, &dummyval4, nframes,
-							lc_n, nviews, GPUID, verts, htype, dtype, nf, nsets,
-							max_frames, thread1, thread2, gpu0_stream, gpu1_stream);
-//					vary_params_gpu(dpar,dmod,ddat,12,&dummyval2,
-//							&dummyval3,&opt_brightness,&dummyval4,
-//							nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-//							bf_stream, max_frames);
+					vary_params_pthreads(dpar, dpar1, dmod, dmod1, ddat, ddat1,
+							12, &dummyval2,	&dummyval3, &opt_brightness,
+							&dummyval4, nframes, lc_n, nviews, GPUID, verts0,
+							verts1, htype, dtype0, dtype1, nf, nsets, max_frames,
+							thread1, thread2, gpu0_stream, gpu1_stream);
 				}
 			} else if (newphoto) {
 				rad_xsec_save = rad_xsec;
 				opt_brightness_save = opt_brightness;
-				realize_photo_gpu(dpar, dmod, 1.0, 1.0, 0, nf);  /* set R_save to R */
+				realize_photo_pthread(dpar, dpar1, dmod, dmod1, 1.0, 1.0, 0, nf,
+						thread1, thread2);	/* set R_save to R */
 			}
 			if ((newsize && vary_delcor0_size) || ((newshape || newspin) &&
 					vary_delcor0_shapespin)) {
 				deldop_zmax_save = deldop_zmax;
 				/* reset delcor0, then delcor0_save */
-				realize_delcor_pthreads(ddat, delta_delcor0, 2, nsets, nframes,
-						GPUID, htype, thread1, thread2);
+				realize_delcor_pthreads(ddat, ddat1, delta_delcor0, 2, nsets,
+						nframes, GPUID, htype, thread1, thread2);
 			} else if (newdelcor)
-				realize_delcor_pthreads(ddat, 0.0, 0, nsets, nframes,
+				realize_delcor_pthreads(ddat, ddat1, 0.0, 0, nsets, nframes,
 						GPUID, htype, thread1, thread2);
-//				realize_delcor_gpu(ddat, 0.0, 0, nsets, nframes);  /* set delcor0_save to delcor0 */
+			/* set delcor0_save to delcor0 */
 
 			if ((newspin && vary_dopscale_spin) || ((newsize || newshape) &&
 					vary_dopscale_sizeshape)) {
 				cos_subradarlat_save = cos_subradarlat;
 				/* reset dopscale, then dopscale_save */
-				realize_dopscale_pthreads(dpar, ddat, dopscale_factor, 2, nsets,
-						dtype, GPUID);
+				realize_dopscale_pthreads(dpar, dpar1, ddat, ddat1,
+						dopscale_factor, 2, nsets, dtype0, dtype1, GPUID);
 			} else if (newdopscale) {
 				/* set dopscale_save to dopscale */
-				realize_dopscale_pthreads(dpar, ddat, 1.0, 0, nsets, dtype,
-						GPUID);
+				realize_dopscale_pthreads(dpar, dpar1, ddat, ddat1, 1.0, 0,
+						nsets, dtype0, dtype1, GPUID);
 			}
 			if (newxyoff)
-				realize_xyoff_pthreads(ddat, nsets, dtype, GPUID);
+				realize_xyoff_pthreads(ddat, ddat1, nsets, dtype0, dtype1, GPUID);
 
 			/* If the model extended beyond POS frame (sky rendering) for any
 			 * trial parameter value(s), if it extended beyond any plane-of-
@@ -1494,14 +1513,14 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 			 * adjusted) equal to itself (i.e., no change) and then calls
 			 * calc_fits to evaluate the model for all datasets.          */
 			if (check_posbnd || check_badposet || check_badradar)
-				objective_pthreads(hotparamval, verts, htype, dtype, nframes,
-						nviews, lc_n, GPUID, nsets, nf, max_frames, thread1,
-						thread2, gpu0_stream,	gpu1_stream);
+				objective_pthreads(hotparamval, verts0, verts1, htype, dtype0,
+						dtype1, nframes, nviews, lc_n, GPUID, nsets, nf,
+						max_frames, thread1, thread2, gpu0_stream, gpu1_stream);
 
 			/* Launch single-thread kernel to retrieve flags in dev_par */
 			bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 			checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-			gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+			gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*6,
 					cudaMemcpyDeviceToHost));
 			/* Display the objective function after each parameter adjustment.  */
 			printf("%4d %8.6f %d", p, enderr, iround(par->fpartype[p]));
@@ -1527,16 +1546,17 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 			if (++cntr >= npar_update) {
 				cntr = 0;
 				showvals = 1;
-				calc_fits_pthreads(dpar, dmod, dat, verts, nviews, nframes,
-						lc_n, GPUID, htype, nsets, nf, max_frames, thread1,
-						thread2, gpu0_stream, gpu1_stream);
-
-				chi2_pthreads(dpar, ddat, htype, dtype, nframes, lc_n, GPUID,
-						0, nsets, max_frames, thread1, thread2, gpu0_stream,
+				calc_fits_pthreads(dpar, dpar1, dmod, dmod1, ddat, ddat1,
+						verts0, verts1, nviews, nframes, lc_n, GPUID, htype,
+						nsets, nf, max_frames, thread1,	thread2, gpu0_stream,
 						gpu1_stream);
 
-				write_mod( dpar, dmod);
-				write_dat( dpar, ddat);
+				chi2_pthreads(dpar, dpar1, ddat, ddat1, htype, dtype0, dtype1,
+						nframes, lc_n, GPUID, 0, nsets, max_frames, thread1,
+						thread2, gpu0_stream, gpu1_stream);
+
+//				write_mod( dpar, dmod);
+//				write_dat( dpar, ddat);
 			}
 		}  // End fitpar loop
 
@@ -1544,18 +1564,18 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 		 * region within each delay-Doppler or Doppler frame for which model
 		 * power is nonzero.                                               */
 		if (cntr != 0) {
-			calc_fits_pthreads(dpar, dmod, dat, verts, nviews, nframes,
-					lc_n, GPUID, htype, nsets, nf, max_frames, thread1,
+			calc_fits_pthreads(dpar, dpar1, dmod, dmod1, ddat, ddat1, verts0,
+					verts1, nviews, nframes, lc_n, GPUID, htype, nsets, nf,
+					max_frames, thread1, thread2, gpu0_stream, gpu1_stream);
+
+			chi2_pthreads(dpar, dpar1, ddat, ddat1, htype, dtype0, dtype1,
+					nframes, lc_n, GPUID, 0, nsets, max_frames, thread1,
 					thread2, gpu0_stream, gpu1_stream);
 
-			chi2_pthreads(dpar, ddat, htype, dtype, nframes, lc_n, GPUID,
-					0, nsets, max_frames, thread1, thread2, gpu0_stream,
-					gpu1_stream);
-
-			write_mod( dpar, dmod);
-			write_dat( dpar, ddat);
+//			write_mod( dpar, dmod);
+//			write_dat( dpar, ddat);
 		}
-		show_deldoplim_gpu(ddat, htype, nsets, nframes, max_frames);
+		show_deldoplim_pthread(ddat, ddat1, htype, nsets, nframes, max_frames, GPUID);
 
 		/* Check if we should start a new iteration  */
 		if (iter == term_maxiter) {
@@ -1602,8 +1622,9 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 
 	/* Show final values of reduced chi-square, individual penalty functions,
 	 * and the objective function  */
-	final_chi2 = chi2_pthreads(dpar, ddat, htype, dtype, nframes, lc_n, GPUID,
-			1, nsets, max_frames, thread1, thread2, gpu0_stream, gpu1_stream);
+	final_chi2 = chi2_pthreads(dpar, dpar1, ddat, ddat1, htype, dtype0, dtype1,
+			nframes, lc_n, GPUID, 1, nsets, max_frames, thread1, thread2,
+			gpu0_stream, gpu1_stream);
 
 	final_redchi2 = final_chi2/dat->dof;
 	printf("# search completed\n");
@@ -1613,7 +1634,7 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 	/* Launch single-thread kernel to retrieve flags in dev_par */
 	bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 	checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-	gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+	gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*6,
 			cudaMemcpyDeviceToHost));
 
 	if (par->pen.n > 0 || hflags[0] || hflags[1] || hflags[2]	|| hflags[3] ||
@@ -1665,7 +1686,7 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 	for (int f=0; f<max_frames; f++)
 		cudaStreamDestroy(gpu1_stream[f]);
 
-	cudaSetDevice(GPU1);
+	cudaSetDevice(GPU0);
 
 	free(hflags);
 	free(htype);
@@ -1685,8 +1706,10 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct mod_t *dmod,
 	cudaFree(fpartype);
 	cudaFree(fpntr);
 	cudaFree(flags);
-	cudaFree(dtype);
-	cudaFree(verts);
+	cudaFree(dtype0);
+	cudaFree(dtype1);
+	cudaFree(verts0);
+	cudaFree(verts1 );
 	cudaDeviceReset();
 	//cudaProfilerStop();
 	return enderr;
@@ -1713,7 +1736,7 @@ __host__ double objective_gpu(
 	unsigned char *dflags, *hflags;
 	int max_frames;
 
-	gpuErrchk(cudaSetDevice(GPU0));
+//	gpuErrchk(cudaSetDevice(GPU0));
 	gpuErrchk(cudaMalloc((void**)&dflags, sizeof(unsigned char)*7));
 	gpuErrchk(cudaMalloc((void**)&dlogfactors, sizeof(double)*7));
 	hflags 	 	= (unsigned char *) malloc(7*sizeof(unsigned char));
@@ -1797,9 +1820,10 @@ __host__ double objective_gpu(
 	err = chi2_gpu(sdev_par, sdev_dat, htype, dtype, nframes, lc_n, 0, nsets,
 			bf_stream, max_frames);
 
+
 	/* Divide chi-square by DOF to get reduced chi-square.    */
 	err /= sdat->dof;
-
+//	printf("(GPU MODE) chi2_gpu error: %g with DOF = %g\n", err, sdat->dof);
 	/* If bestfit has set showvals = 1, display reduced chi-square. Then set
 	 * spar->showstate = 1, so that when function penalties is called later,
 	 * it "knows" that it should display the individual penalty values.
@@ -1814,8 +1838,10 @@ __host__ double objective_gpu(
 	/* Compute penalties and add to reduced chi-square. Individual penalty values
 	 * will be displayed if we set spar->showstate = 1 a few lines back.        */
 	pens = penalties_gpu(sdev_par, sdev_mod, sdev_dat);
+//	printf("(GPU MODE) penalties: %g\n", pens);
 	err += pens;
-
+//	printf("(GPU MODE) err + pens = %g\n", err);
+//	showvals = 1;
 	/* Double the objective function if there's an ellipsoid component with tiny
 	 * or negative diameter, if any optical photometric parameters have invalid
 	 * values, if any portion of the model lies outside specified POS window or
@@ -1864,6 +1890,7 @@ __host__ double objective_gpu(
 	if (hflags[2]) {
 		check_posbnd = 1;     /* tells bestfit about this problem */
 		posbnd_factor = hlogfactors[0] * exp(hlogfactors[3]);
+//		printf("# hlogfactors[0] = %g and hlogfactors[3] = %g\n", hlogfactors[0], hlogfactors[3]);
 		err *= posbnd_factor;
 		if (showvals)
 			printf("# objective func multiplied by %.1f: model extends beyond POS frame\n",
@@ -1903,6 +1930,7 @@ __host__ double objective_gpu(
 	free(hlogfactors);
 	cudaFree(dflags);
 	cudaFree(dlogfactors);
+//	printf("(GPU MODE) err (return value): %g\n", err);
 	return err;
 }
 
@@ -1913,9 +1941,11 @@ __host__ double objective_gpu(
  * arrays (2 gpus)  */
 __host__ double objective_pthreads(
 		double x,
-		struct vertices_t **verts,
+		struct vertices_t **verts0,
+		struct vertices_t **verts1,
 		unsigned char *htype,
-		unsigned char *dtype,
+		unsigned char *dtype0,
+		unsigned char *dtype1,
 		int *nframes,
 		int *nviews,
 		int *lc_n,
@@ -1933,9 +1963,9 @@ __host__ double objective_pthreads(
 	unsigned char *dflags, *hflags;
 
 	gpuErrchk(cudaSetDevice(GPU0));
-	gpuErrchk(cudaMalloc((void**)&dflags, sizeof(unsigned char)*7));
+	gpuErrchk(cudaMalloc((void**)&dflags, sizeof(unsigned char)*6));
 	gpuErrchk(cudaMalloc((void**)&dlogfactors, sizeof(double)*7));
-	hflags 	 	= (unsigned char *) malloc(7*sizeof(unsigned char));
+	hflags 	 	= (unsigned char *) malloc(6*sizeof(unsigned char));
 	hlogfactors	= (double *) malloc(7*sizeof(double));
 
 	/* Initialize local parameters  */
@@ -1959,30 +1989,35 @@ __host__ double objective_pthreads(
 	 * reset to their saved values via the appropriate calls to realize_delcor
 	 * and realize_dopscale, respectively.*/
 	if (newsize || newshape)
-		realize_mod_gpu(sdev_par, sdev_mod, type, nf, gpu0_stream);
+		realize_mod_pthread(sdev_par, sdev_par1, sdev_mod, sdev_mod1, type, nf,
+				thread1, thread2, gpu0_stream, gpu1_stream);
 	if (newspin)
-		realize_spin_pthread(sdev_par, sdev_mod, sdev_dat, htype, nframes, GPUID,
-				nviews, nsets, thread1, thread2, gpu0_stream, gpu1_stream);
+		realize_spin_pthread(sdev_par, sdev_par1, sdev_mod, sdev_mod1, sdev_dat,
+				sdev_dat1, htype, nframes, nviews, GPUID, nsets, thread1,
+				thread2, gpu0_stream, gpu1_stream);
 
 	if ((newsize && vary_alb_size) || ((newshape || newspin) && vary_alb_shapespin))
-		realize_photo_gpu(sdev_par, sdev_mod, 1.0, 1.0, 1, nf);  /* set R to R_save */
+		realize_photo_pthread(sdev_par, sdev_par1, sdev_mod, sdev_mod1, 1.0,
+				1.0, 1, nf, thread1, thread2);
 	if ((newsize && vary_delcor0_size) || ((newshape || newspin) && vary_delcor0_shapespin)) {
 		/* set delcor0 to delcor0_save */
-		realize_delcor_pthreads(sdev_dat, 0.0, 1, nsets, nframes, GPUID, htype,
+		realize_delcor_pthreads(sdev_dat, sdev_dat1, 0.0, 1, nsets, nframes, GPUID, htype,
 				thread1, thread2);
 	}
 
 	if ((newspin && vary_dopscale_spin) || ((newsize || newshape) && vary_dopscale_sizeshape))
 		/* set dopscale to dopscale_save */
-		realize_dopscale_pthreads(sdev_par, sdev_dat, 1.0, 1, nsets, dtype, GPUID);
+		realize_dopscale_pthreads(sdev_par, sdev_par1, sdev_dat, sdev_dat1,
+				1.0, 1, nsets, dtype0, dtype1,GPUID);
 	if (call_vary_params) {
-		/* Call vary_params to get the trial adjustments to 0th-order delay correc-
-		 * tion polynomial coefficients, to Doppler scaling factors,and to radar
-		 * and optical albedos, then send them to the branch nodes  */
-		vary_params_pthreads(sdev_par, sdev_mod, sdev_dat, spar->action,
-				&deldop_zmax, &rad_xsec,	&opt_brightness, &cos_subradarlat,
-				nframes, lc_n, nviews, GPUID, verts, htype, dtype, nf, nsets,
-				max_frames, thread1, thread2, gpu0_stream, gpu1_stream);
+		/* Call vary_params to get the trial adjustments to 0th-order delay
+		 * correction polynomial coefficients, to Doppler scaling factors, and
+		 * to radar and optical albedos, then send them to the branch nodes  */
+		vary_params_pthreads(sdev_par, sdev_par1, sdev_mod, sdev_mod1, sdev_dat,
+				sdev_dat1, spar->action, &deldop_zmax, &rad_xsec,
+				&opt_brightness,&cos_subradarlat, nframes, lc_n, nviews, GPUID,
+				verts0, verts1, htype, dtype0, dtype1, nf, nsets, max_frames,
+				thread1, thread2, gpu0_stream, gpu1_stream);
 
 		delta_delcor0 = (deldop_zmax - deldop_zmax_save)*KM2US;
 		if (cos_subradarlat != 0.0)
@@ -1994,35 +2029,39 @@ __host__ double objective_pthreads(
 	}
 
 	if ((newsize && vary_alb_size) || ((newshape || newspin) && vary_alb_shapespin))
-		realize_photo_gpu(sdev_par, sdev_mod, radalb_factor, optalb_factor, 1, nf);  /* adjust R */
+		realize_photo_pthread(sdev_par, sdev_par1, sdev_mod, sdev_mod1,
+				radalb_factor, optalb_factor, 1, nf, thread1, thread2);  /* adjust R */
 	else if (newphoto)
-		realize_photo_gpu(sdev_par, sdev_mod, 1.0, 1.0, 0, nf);  /* set R_save to R */
+		realize_photo_pthread(sdev_par, sdev_par1, sdev_mod, sdev_mod1, 1.0,
+				1.0, 0, nf,	thread1, thread2);  /* set R_save to R */
 	if ((newsize && vary_delcor0_size) || ((newshape || newspin) && vary_delcor0_shapespin)) {
 		/* adjust delcor0 */
-		realize_delcor_pthreads(sdev_dat, delta_delcor0, 1, nsets, nframes,
-				GPUID, htype, thread1, thread2);
+		realize_delcor_pthreads(sdev_dat, sdev_dat1, delta_delcor0, 1, nsets,
+				nframes, GPUID, htype, thread1, thread2);
 	}
 	else if (newdelcor) {
 		/* set delcor0_save to delcor0 */
-		realize_delcor_pthreads(sdev_dat, 0.0, 0, nsets, nframes, GPUID, htype,
-				thread1, thread2);
+		realize_delcor_pthreads(sdev_dat, sdev_dat1, 0.0, 0, nsets, nframes,
+				GPUID, htype, thread1, thread2);
 	}
-	if ((newspin && vary_dopscale_spin) || ((newsize || newshape) && vary_dopscale_sizeshape))
+	if ((newspin && vary_dopscale_spin) || ((newsize || newshape) &&
+			vary_dopscale_sizeshape))
 		/* adjust dopscale */
-		realize_dopscale_pthreads(sdev_par, sdev_dat, dopscale_factor, 1,
-				nsets, dtype, GPUID);
+		realize_dopscale_pthreads(sdev_par, sdev_par1, sdev_dat, sdev_dat1,
+				dopscale_factor, 1, nsets, dtype0, dtype1, GPUID);
 	else if (newdopscale)
 		/* set dopscale_save to dopscale */
-		realize_dopscale_pthreads(sdev_par, sdev_dat, 1.0, 0, nsets, dtype, GPUID);
+		realize_dopscale_pthreads(sdev_par, sdev_par1, sdev_dat, sdev_dat1,
+				1.0, 0, nsets, dtype0, dtype1, GPUID);
 	if (newxyoff)
-		realize_xyoff_pthreads(sdev_dat, nsets, dtype, GPUID);
+		realize_xyoff_pthreads(sdev_dat,sdev_dat1,nsets,dtype0,dtype1,GPUID);
 
-	calc_fits_pthreads(sdev_par, sdev_mod, sdev_dat, verts, nviews, nframes,
-			lc_n, GPUID, htype, nsets, nf, max_frames, thread1, thread2,
-			gpu0_stream, gpu1_stream);
-
-	err = chi2_pthreads(sdev_par, sdev_dat, htype, dtype, nframes, lc_n, GPUID,
-			0, nsets, max_frames, thread1, thread2, gpu0_stream, gpu1_stream);
+	calc_fits_pthreads(sdev_par, sdev_par1, sdev_mod, sdev_mod1, sdev_dat,
+			sdev_dat1, verts0, verts1, nviews, nframes, lc_n, GPUID, htype,
+			nsets, nf, max_frames,thread1, thread2, gpu0_stream, gpu1_stream);
+	err = chi2_pthreads(sdev_par, sdev_par1, sdev_dat, sdev_dat1, htype,
+			dtype0,	dtype1, nframes, lc_n, GPUID, 0, nsets, max_frames, thread1,
+			thread2, gpu0_stream, gpu1_stream);
 
 	/* Divide chi-square by DOF to get reduced chi-square.    */
 	err /= sdat->dof;
@@ -2069,9 +2108,9 @@ __host__ double objective_pthreads(
 	 */
 	ocs_get_flags_krnl<<<1,1>>>(sdev_par, dflags, dlogfactors);
 	checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-	gpuErrchk(cudaMemcpy(hflags, dflags, sizeof(unsigned char)*7,
+	gpuErrchk(cudaMemcpy(hflags, dflags, sizeof(unsigned char)*6,
 			cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpy(hlogfactors, dlogfactors, sizeof(double)*6,
+	gpuErrchk(cudaMemcpy(hlogfactors, dlogfactors, sizeof(double)*7,
 			cudaMemcpyDeviceToHost));
 
 	if (hflags[0]) {

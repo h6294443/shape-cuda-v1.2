@@ -81,8 +81,8 @@ __host__ void realize_xyoff_gpu( struct dat_t *ddat, int nsets,
 
 }
 
-__host__ void realize_xyoff_pthreads( struct dat_t *ddat, int nsets,
-		unsigned char *dtype, int *GPUID)
+__host__ void realize_xyoff_pthreads( struct dat_t *ddat0, struct dat_t *ddat1,
+		int nsets, unsigned char *dtype0, unsigned char *dtype1, int *GPUID)
 {
 	dim3 BLK,THD64;
 	int *dGPUID;
@@ -92,11 +92,11 @@ __host__ void realize_xyoff_pthreads( struct dat_t *ddat, int nsets,
 	gpuErrchk(cudaMemcpy(dGPUID, GPUID, sizeof(int)*nsets, cudaMemcpyHostToDevice));
 
 	gpuErrchk(cudaSetDevice(GPU0));
-	realize_xyoff_pthreads_krnl<<<BLK,THD64>>>(ddat, nsets, dtype, dGPUID, GPU0);
+	realize_xyoff_pthreads_krnl<<<BLK,THD64>>>(ddat0, nsets, dtype0, dGPUID, GPU0);
 	checkErrorAfterKernelLaunch("realize_xyoff_pthreads_krnl");
 
 	gpuErrchk(cudaSetDevice(GPU1));
-	realize_xyoff_pthreads_krnl<<<BLK,THD64>>>(ddat, nsets, dtype, dGPUID, GPU1);
+	realize_xyoff_pthreads_krnl<<<BLK,THD64>>>(ddat1, nsets, dtype1, dGPUID, GPU1);
 	checkErrorAfterKernelLaunch("realize_xyoff_pthreads_krnl");
 
 	gpuErrchk(cudaSetDevice(GPU0));

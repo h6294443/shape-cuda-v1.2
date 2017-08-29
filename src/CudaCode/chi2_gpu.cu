@@ -621,7 +621,10 @@ __global__ void c2s_doppler_add_o2_krnl(struct dat_t *ddat, float *o2, float *m2
 				ddat->set[s].desc.doppler.frame[f].fit_s[j] *
 				ddat->set[s].desc.doppler.frame[f].oneovervar[j];
 		atomicAdd(&m2[f], temp);
-
+//		printf("#     set[%i], frame[%i]:  fit_s[%i]=%g\n", s, f, j,
+//				ddat->set[s].desc.doppler.frame[f].fit_s[j]);
+//		printf("#     set[%i], frame[%i]:  obs[%i]=%g\n", s, f, j,
+//				ddat->set[s].desc.doppler.frame[f].obs[j]);
 		/* Next 2 lines implement: om += fit[j]*obs[j]*oneovervar[j];		 */
 		temp = ddat->set[s].desc.doppler.frame[f].fit_s[j] *
 				ddat->set[s].desc.doppler.frame[f].obs[j] *
@@ -820,6 +823,7 @@ __host__ double chi2_gpu(
 	double dof_deldop, dof_doppler, dof_poset, dof_lghtcrv;
 	char dofstring[MAXLEN], dof0string[MAXLEN];
 
+	//gpuErrchk(cudaSetDevice(GPU0));
 	/*  Initialize variables that accumulate chi-square values  */
 	chi2_all_deldop = chi2_all_doppler = chi2_all_poset = chi2_all_lghtcrv =
 			chi2_fit0_deldop = chi2_fit0_doppler /*= chi2_fit0_poset*/ = 0.0;
@@ -839,6 +843,7 @@ __host__ double chi2_gpu(
 					hnframes[s], c2s_stream);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl, chi2_cuda_streams");
+//			printf("chi2 for set %i (Delay-Doppler) = %g\n", s, chi2);
 			break;
 		case DOPPLER:
 			chi2 = chi2_doppler_gpu(dpar, ddat, s,list_breakdown,
@@ -846,6 +851,7 @@ __host__ double chi2_gpu(
 					hnframes[s], c2s_stream);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl, chi2_cuda_streams");
+//			printf("chi2 for set %i (Doppler) = %g\n", s, chi2);
 			break;
 		case POS:
 			printf("\nWrite chi2_poset_cuda!\n");
@@ -856,6 +862,7 @@ __host__ double chi2_gpu(
 					&chi2_all_lghtcrv, hnframes[s], hlc_n[s]);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl, chi2_cuda");
+//			printf("chi2 for set %i (Lightcurve) = %g\n", s, chi2);
 			break;
 		default:
 			printf("chi2_cuda_streams.cu: can't handle this type yet\n");
@@ -974,10 +981,13 @@ __host__ double chi2_gpu(
 }
 
 __host__ double chi2_pthreads(
-		struct par_t *dpar,
-		struct dat_t *ddat,
+		struct par_t *dpar0,
+		struct par_t *dpar1,
+		struct dat_t *ddat0,
+		struct dat_t *ddat1,
 		unsigned char *htype,
-		unsigned char *dtype,
+		unsigned char *dtype0,
+		unsigned char *dtype1,
 		int *hnframes,
 		int *hlc_n,
 		int *GPUID,
@@ -1021,9 +1031,12 @@ __host__ double chi2_pthreads(
 	data1.gpu_stream = gpu0_stream;
 	data2.gpu_stream = gpu1_stream;
 	data1.GPUID = data2.GPUID = GPUID;
-	data1.data = data2.data = ddat;
-	data1.parameter = data2.parameter = dpar;
-	data1.dtype = data2.dtype = dtype;
+	data1.data = ddat0;
+	data2.data = ddat1;
+	data1.parameter = dpar0;
+	data2.parameter = dpar1;
+	data1.dtype = dtype0;
+	data2.dtype = dtype1;
 	data1.htype = data2.htype = htype;
 	data1.hlc_n = data2.hlc_n = hlc_n;
 	data1.list_breakdown = data2.list_breakdown = list_breakdown;
@@ -1043,8 +1056,12 @@ __host__ double chi2_pthreads(
 	data1.chi2 = data2.chi2 = 0.0;
 
 	/* Initialize variables that accumulate chi-square values  */
-	c2s_init_krnl<<<1,1>>>(ddat, dtype, nsets);
-	checkErrorAfterKernelLaunch("c2s_init_krnl2");
+	c2s_init_krnl<<<1,1>>>(ddat0, dtype0, nsets);
+	checkErrorAfterKernelLaunch("c2s_init_krnl for GPU0");
+	gpuErrchk(cudaSetDevice(GPU1));
+	c2s_init_krnl<<<1,1>>>(ddat1, dtype1, nsets);
+	checkErrorAfterKernelLaunch("c2s_init_krnl for GPU1");
+	gpuErrchk(cudaSetDevice(GPU0));
 
 	/* From here, launch the pthreaded subfunction */
 	pthread_create(&thread1, NULL, chi2_pthread_sub,(void*)&data1);
@@ -1058,9 +1075,12 @@ __host__ double chi2_pthreads(
 	/* Complete calculations of values that will be used during a fit to
 	 * increase the objective function for models with bad properties   */
 	gpuErrchk(cudaSetDevice(GPU0));
-
-	set_global_chi2_krnl<<<1,1>>>(ddat, data1.chi2, data2.chi2);
+	set_global_chi2_krnl<<<1,1>>>(ddat0, data1.chi2, data2.chi2);
 	checkErrorAfterKernelLaunch("set_global_chi2_krnl");
+	gpuErrchk(cudaSetDevice(GPU1));
+	set_global_chi2_krnl<<<1,1>>>(ddat1, data1.chi2, data2.chi2);
+	checkErrorAfterKernelLaunch("set_global_chi2_krnl");
+	gpuErrchk(cudaSetDevice(GPU0));
 
 	/* Recombine/update the all-data-type values */
 	chi2 = data1.chi2 + data2.chi2;
@@ -1076,7 +1096,7 @@ __host__ double chi2_pthreads(
 	dof_fit0_poset = data1.dof_fit0_poset + data2.dof_fit0_poset;
 
 	/* Call kernel to get flags from ddat */
-	c2s_get_prntflgs_krnl<<<1,1>>>(dpar, ddat);
+	c2s_get_prntflgs_krnl<<<1,1>>>(dpar0, ddat0);
 	checkErrorAfterKernelLaunch("c2s_get_prntflgs_krnl, chi2_cuda_streams");
 	gpuErrchk(cudaMemcpyFromSymbol(&print_breakdown, c2s_print_breakdown,
 			sizeof(int), 0, cudaMemcpyDeviceToHost));
@@ -1146,11 +1166,12 @@ __host__ double chi2_pthreads(
 			intifpossible( dofstring, MAXLEN, dof, SMALLVAL, "%f");
 			printf("ALLDATA chi2 = %e for %s dof (reduced chi2 = %f)",
 					chi2, dofstring, chi2/dof);
-		} else {
-			intifpossible( dofstring, MAXLEN, ddat->dof, SMALLVAL, "%f");
-			printf("        chi2 = %e for %s dof (reduced chi2 = %f)",
-					chi2, dofstring, chi2/dof);
 		}
+//		} else {
+//			intifpossible( dofstring, MAXLEN, ddat->dof, SMALLVAL, "%f");
+//			printf("        chi2 = %e for %s dof (reduced chi2 = %f)",
+//					chi2, dofstring, chi2/dof);
+//		}
 
 	if (baddiam)		printf("  (BAD DIAMS)");
 	if (badphoto)		printf("  (BAD PHOTO) (chi2_cuda)");
@@ -1194,6 +1215,7 @@ void *chi2_pthread_sub(void *ptr)
 						data->nframes[s], data->gpu_stream);
 				c2_set_chi2_krnl<<<1,1>>>(data->data, chi2, s);
 				checkErrorAfterKernelLaunch("c2_set_chi2_krnl");
+//				printf("chi2 for set %i (Delay-Doppler) = %g\n", s, chi2);
 				break;
 			case DOPPLER:
 				chi2 = chi2_doppler_gpu(data->parameter, data->data, s,
@@ -1202,6 +1224,7 @@ void *chi2_pthread_sub(void *ptr)
 						data->nframes[s], data->gpu_stream);
 				c2_set_chi2_krnl<<<1,1>>>(data->data, chi2, s);
 				checkErrorAfterKernelLaunch("c2_set_chi2_krnl");
+//				printf("chi2 for set %i (Doppler) = %g\n", s, chi2);
 				break;
 			case POS:
 				printf("\nWrite chi2_poset_cuda!\n");
@@ -1213,6 +1236,7 @@ void *chi2_pthread_sub(void *ptr)
 						data->nframes[s], data->hlc_n[s]);
 				c2_set_chi2_krnl<<<1,1>>>(data->data, chi2, s);
 				checkErrorAfterKernelLaunch("c2_set_chi2_krnl");
+				//printf("chi2 for set %i (Lightcurve) = %g\n", s, chi2);
 				break;
 			default:
 				printf("chi2_pthread_sub: can't handle this type yet\n");
@@ -1222,7 +1246,6 @@ void *chi2_pthread_sub(void *ptr)
 	}
 	pthread_exit(0);
 }
-
 
 __host__ double chi2_deldop_gpu(
 		struct par_t *dpar,
@@ -1258,7 +1281,6 @@ __host__ double chi2_deldop_gpu(
 	hreturns[0] = hreturns[1] = 0.0;
 
 	/* Get values for ndel and ndop, and the overflow parameters o2, m2, om */
-	//for (f=0; f<nframes; f++)
 	c2s_deldop_init_krnl2<<<BLKfrm,THD64>>>(ddat, s, ndel, ndop, o2, m2, om,
 			weight, nframes);
 	checkErrorAfterKernelLaunch("c2s_deldop_init_krnl, chi2_deldop_gpu");
@@ -1290,6 +1312,7 @@ __host__ double chi2_deldop_gpu(
 	/* Add all frames from device memory to host memory and destroy streams */
 	for (f=0; f<nframes; f++) {
 		chi2_set += h_chi2_deldop_frame[f];
+//		printf("Deldop frame %i chi2: %g\n", f, h_chi2_deldop_frame[f]);
 
 		if (list_breakdown)
 			*chi2_all_deldop += h_chi2_deldop_frame[f];
@@ -1306,7 +1329,6 @@ __host__ double chi2_deldop_gpu(
 		*chi2_fit0_deldop = (double)hreturns[0];
 		*dof_fit0_deldop = (double)hreturns[1];
 	}
-
 
 	cudaFree(o2);
 	cudaFree(m2);

@@ -354,7 +354,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	 * tive function at each step. Stop when fractional decrease in the objec-
 	 * tive function from one iteration to the next is less than term_prec.   */
 
-	do {
+//	do {
 		showvals = 1;        /* show reduced chi-square and penalties at beginning */
 		beginerr = enderr;
 		printf("# iteration %d %f", ++iter, beginerr);
@@ -561,8 +561,8 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 				chi2( par, dat, 0);
 //				if (mpi_nproc > 1)
 //					get_calfact( dat);
-				write_mod( par, mod);
-				write_dat( par, dat);
+//				write_mod( par, mod);
+//				write_dat( par, dat);
 			}
 		}
 
@@ -574,8 +574,8 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			chi2( par, dat, 0);
 //			if (mpi_nproc > 1)
 //				get_calfact( dat);
-			write_mod( par, mod);
-			write_dat( par, dat);
+//			write_mod( par, mod);
+//			write_dat( par, dat);
 		}
 		show_deldoplim( dat);
 
@@ -625,7 +625,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			keep_iterating = ((beginerr - enderr)/enderr >= par->term_prec);
 		}
 
-	} while (keep_iterating);
+//	} while (keep_iterating);
 
 	/* Show final values of reduced chi-square, individual penalty functions,
 	 * and the objective function  */
@@ -671,6 +671,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			final_chi2, dofstring, final_redchi2);
 	printf("#\n");
 	printf("\nIterations total: %i\n", iter);
+	printf("CPU fit enderr: %g\n", enderr);
 	fflush(stdout);
 
 	return enderr;
@@ -761,10 +762,10 @@ double objective( double x)
 
 	calc_fits( spar, smod, sdat);
 	err = chi2( spar, sdat, 0);
-
+//	printf("(CPU MODE) chi2 error: %g with DOF = %g\n", err, sdat->dof);
 	/* Divide chi-square by DOF to get reduced chi-square.    */
 	err /= sdat->dof;
-
+//	printf("(CPU MODE) chi2 err/dof = %g\n", err);
 	/* If bestfit has set showvals = 1, display reduced chi-square. Then set
 	 * spar->showstate = 1, so that when function penalties is called later,
 	 * it "knows" that it should display the individual penalty values.
@@ -779,8 +780,10 @@ double objective( double x)
 	/* Compute penalties and add to reduced chi-square. Individual penalty values
 	 * will be displayed if we set spar->showstate = 1 a few lines back.        */
 	pens = penalties( spar, smod, sdat);
+//	printf("(CPU MODE) penalties: %g\n", pens);
 	err += pens;
-
+//	printf("(CPU MODE) err + pens = %g\n", err);
+	showvals = 1;
 	/* Double the objective function if there's an ellipsoid component with tiny
 	 * or negative diameter, if any optical photometric parameters have invalid
 	 * values, if any portion of the model lies outside specified POS window or
@@ -804,6 +807,8 @@ double objective( double x)
 	if (spar->posbnd) {
 		check_posbnd = 1;     /* tells bestfit about this problem */
 		posbnd_factor = spar->bad_objfactor * exp(spar->posbnd_logfactor);
+//		printf("# spar->bad_objfactor = %g and spar->posbnd_logfactor = %g\n",
+//				spar->bad_objfactor, spar->posbnd_logfactor);
 		err *= posbnd_factor;
 		if (showvals)
 			printf("# objective func multiplied by %.1f: model extends beyond POS frame\n",
@@ -838,6 +843,5 @@ double objective( double x)
 	if (showvals)
 		fflush( stdout);
 	showvals = 0;
-
 	return err;
 }

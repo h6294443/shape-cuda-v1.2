@@ -26,12 +26,13 @@ __global__ void dbg_print_fit_krnl1(struct dat_t *ddat, int s, int f){
 		}
 	}
 }
-__global__ void dbg_print_fit_krnl2(struct dat_t *ddat, double *fit, int s, int f) {
+__global__ void dbg_print_fit_krnl2(struct dat_t *ddat, float *fit, int s, int f) {
 	/* ndop-threaded kernel */
-	int idop = blockIdx.x * blockDim.x + threadIdx.x + 1;
+	int idop = blockIdx.x * blockDim.x + threadIdx.x;// +1 ;
 
-	if (idop <= dbg_ndop1) {
+	if (idop < dbg_ndop1) {
 		fit[idop] = ddat->set[s].desc.doppler.frame[f].fit_s[idop];
+		printf("fit_s[%i]=%g\n", idop, ddat->set[s].desc.doppler.frame[f].fit_s[idop]);
 	}
 }
 __global__ void dbg_print_lc_fit_krnl(struct dat_t *ddat, double *fit, int s, int n) {
@@ -50,15 +51,18 @@ __global__ void dbg_print_fit_deldop_krnl2(struct dat_t *ddat, float *fit, int s
 		fit[offset] = ddat->set[s].desc.deldop.frame[f].fit_s[offset];
 }
 
-__host__ void dbg_print_fit(struct dat_t *ddat, int s, int f, char *filename_fit) {
+__host__ void dbg_print_fit(struct dat_t *ddat, int s, int f, const char
+		*filename_fit, int gpuid) {
 	/* Debug function that prints all Doppler frame fit values to csv */
 
 	int idop, nThreads, ndop, xlim[2], ylim[2];
 	FILE *fp_fit;
-	double *fit;
+	float *fit, *host_fit;
 	dim3 BLK,THD;
-
+	//gpuid = GPU0;
+	cudaSetDevice(gpuid);
 	printf("\n %sfile created",filename_fit);
+
 
 	/* Launch 1st debug kernel to get ndop and xlim/ylim	 */
 	dbg_print_fit_krnl1<<<1,1>>>(ddat, s, f);
@@ -76,8 +80,8 @@ __host__ void dbg_print_fit(struct dat_t *ddat, int s, int f, char *filename_fit
 			0, cudaMemcpyDeviceToHost));
 
 	nThreads = (xlim[1] - xlim[0] + 1) * (ylim[1] - ylim[0] + 1);
-	cudaCalloc((void**)&fit, sizeof(double), ndop);
-	fit -= 1;
+	cudaCalloc((void**)&fit, sizeof(float), ndop);
+//	host_fit = (float *)malloc(sizeof(float) * ndop);
 	int maxThreads = 128;
 	BLK.x = floor((maxThreads - 1 + ndop)/maxThreads);
 	THD.x = maxThreads; // Thread block dimensions
@@ -85,18 +89,21 @@ __host__ void dbg_print_fit(struct dat_t *ddat, int s, int f, char *filename_fit
 	dbg_print_fit_krnl2<<<BLK,THD>>>(ddat, fit, s, f);
 	checkErrorAfterKernelLaunch("dbg_print_fit_krnl_2");
 	deviceSyncAfterKernelLaunch("dbg_print_fit_krnl_2");
+//	gpuErrchk(cudaMemcpy(&host_fit, fit, sizeof(float)*ndop,
+//			cudaMemcpyDeviceToHost));
 
-	fp_fit = fopen(filename_fit, "w+");
-	fprintf(fp_fit, "idop , ");
-	for (idop=1; idop<=ndop; idop++)
-		fprintf(fp_fit,	"\n%i , %g", idop, fit[idop]);
-	fprintf(fp_fit, "\nxlim0 , %i", xlim[0]);
-	fprintf(fp_fit, "\nxlim1 , %i", xlim[1]);
-	fprintf(fp_fit, "\nylim0 , %i", ylim[0]);
-	fprintf(fp_fit, "\nylim1 , %i", ylim[1]);
-	fprintf(fp_fit, "\nthreads , %i", nThreads);
-	fclose(fp_fit);
-	//cudaFree(fit);
+//	fp_fit = fopen(filename_fit, "w+");
+//	fprintf(fp_fit, "idop , ");
+//	for (idop=0; idop<ndop; idop++)
+//		fprintf(fp_fit,	"\n%i , %g", idop, fit[idop]);
+//	fprintf(fp_fit, "\nxlim0 , %i", xlim[0]);
+//	fprintf(fp_fit, "\nxlim1 , %i", xlim[1]);
+//	fprintf(fp_fit, "\nylim0 , %i", ylim[0]);
+//	fprintf(fp_fit, "\nylim1 , %i", ylim[1]);
+//	fprintf(fp_fit, "\nthreads , %i", nThreads);
+//	fclose(fp_fit);
+	cudaFree(fit);
+//	free(host_fit);
 }
 
 __host__ void dbg_print_fit_host(struct dat_t *ddat, int s, int f, char *filename_fit) {

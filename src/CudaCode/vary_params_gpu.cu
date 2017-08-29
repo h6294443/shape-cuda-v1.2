@@ -166,18 +166,41 @@ __global__ void init_krnl(
 						&& ddat->set[s].desc.deldop.dopscale.state != 'c');
 				compute_zmax[s] = (dpar->vary_delcor0 != VARY_NONE
 						&& ddat->set[s].desc.deldop.delcor.a[0].state != 'c');
+				compute_brightness[s] = 0;
 				break;
 			case DOPPLER:
 				compute_cosdelta[s] = (dpar->vary_dopscale != VARY_NONE &&
 						ddat->set[s].desc.doppler.dopscale.state != 'c');
+				compute_zmax[s] = 0;
+				compute_brightness[s] = 0;
 				break;
 			case POS:
 				break;
 			case LGHTCRV:
+				compute_cosdelta[s] = 0;
+				compute_zmax[s] = 0;
 				compute_brightness[s] = (dpar->vary_optalb != VARY_NONE
 						&& ddat->set[s].desc.lghtcrv.cal.state == 'c');
 			}
 		}
+	}
+}
+
+__global__ void init_krnl2() {
+	/* Single-threaded kernel, to be performed by GPU0 */
+
+	if (threadIdx.x == 0) {
+		/* Initialize __device__ (file scope) variables to zero */
+		gpu_deldop_cross_section = 0.0;
+		gpu_doppler_cross_section = 0.0;
+		gpu_sum_rad_xsec = 0.0;
+		gpu_sum_cos_subradarlat = 0.0;
+		gpu_sum_deldop_zmax = 0.0;
+		gpu_sum_opt_brightness  = 0.0;
+		gpu_deldop_zmax = 0.0;
+		gpu_rad_xsec = 0.0;
+		gpu_opt_brightness = 0.0;
+		gpu_cos_subradarlat = 0.0;
 	}
 }
 
@@ -538,8 +561,9 @@ __host__ void vary_params_gpu(
 		/* Get the allocation right as the indices for lghtcrv start with 1
 		 * instead of 0 everywhere else. To not run into problems at the end
 		 * or start of the array, we allocate one more than strictly needed */
-		if (htype[s]==LGHTCRV)			nfrm_alloc = hnframes[s] + 1;
-		else							nfrm_alloc = hnframes[s];
+
+		if (htype[s]==LGHTCRV)	nfrm_alloc = hnframes[s] + 1;
+		else					nfrm_alloc = hnframes[s];
 
 		/* Set up initial kernel launch parameter */
 		BLK[0].x = floor((THD.x - 1 + nfrm_alloc) / THD.x);
@@ -867,9 +891,12 @@ __host__ void vary_params_gpu(
 }
 
 __host__ void vary_params_pthreads(
-		struct par_t *dpar,
-		struct mod_t *dmod,
-		struct dat_t *ddat,
+		struct par_t *dpar0,
+		struct par_t *dpar1,
+		struct mod_t *dmod0,
+		struct mod_t *dmod1,
+		struct dat_t *ddat0,
+		struct dat_t *ddat1,
 		int action,
 		double *deldop_zmax,
 		double *rad_xsec,
@@ -879,9 +906,11 @@ __host__ void vary_params_pthreads(
 		int *hlc_n,
 		int *nviews,
 		int *GPUID,
-		struct vertices_t **verts,
+		struct vertices_t **verts0,
+		struct vertices_t **verts1,
 		unsigned char *htype,
-		unsigned char *dtype,
+		unsigned char *dtype0,
+		unsigned char *dtype1,
 		int nf,
 		int nsets,
 		int max_frames,
@@ -910,29 +939,34 @@ __host__ void vary_params_pthreads(
 	 */
 
 	int *compute_brightness, *compute_zmax, *compute_cosdelta,
-		hcomp_cosdelta[nsets], hcomp_zmax[nsets+1], hcomp_brightness[nsets+1];
+		hcomp_cosdelta[nsets], hcomp_zmax[nsets], hcomp_brightness[nsets];
 	double vparam_returns_1[4], vparam_returns_2[4];
 
 	cudaEvent_t start1, stop1;
 	float milliseconds;
 
 	/* Allocate memory */
-	gpuErrchk(cudaMalloc((void**)&compute_brightness, sizeof(int) * (nsets+1)));
-	gpuErrchk(cudaMalloc((void**)&compute_zmax, sizeof(int) * (nsets+1)));
-	gpuErrchk(cudaMalloc((void**)&compute_cosdelta, sizeof(int) * (nsets+1)));
+	gpuErrchk(cudaMalloc((void**)&compute_brightness, sizeof(int) * nsets));
+	gpuErrchk(cudaMalloc((void**)&compute_zmax, sizeof(int) * nsets));
+	gpuErrchk(cudaMalloc((void**)&compute_cosdelta, sizeof(int) * nsets));
 
 	/* Get flags from all sets about computing zmax, cross section, initialize
 	 * the device file-scope variables, then copy them to host arrays. */
-	init_krnl<<<1,1>>>(dpar, ddat, compute_zmax, compute_cosdelta,
-			compute_brightness, dtype,nsets);
+	init_krnl<<<1,1>>>(dpar0, ddat0, compute_zmax, compute_cosdelta,
+			compute_brightness, dtype0, nsets);
 	checkErrorAfterKernelLaunch("init_krnl in vary_params_pthreads");
 
+	gpuErrchk(cudaSetDevice(GPU1));
+	init_krnl2<<<1,1>>>();
+	checkErrorAfterKernelLaunch("init_krnl2");
+	gpuErrchk(cudaSetDevice(GPU0));
+
 	gpuErrchk(cudaMemcpy(&hcomp_cosdelta, compute_cosdelta,
-			sizeof(int)*(nsets+1), cudaMemcpyDeviceToHost));
+			sizeof(int)*(nsets), cudaMemcpyDeviceToHost));
 	gpuErrchk(cudaMemcpy(&hcomp_zmax, compute_zmax,
-			sizeof(int)*(nsets+1), cudaMemcpyDeviceToHost));
+			sizeof(int)*(nsets), cudaMemcpyDeviceToHost));
 	gpuErrchk(cudaMemcpy(&hcomp_brightness, compute_brightness,
-			sizeof(int)*(nsets+1), cudaMemcpyDeviceToHost));
+			sizeof(int)*(nsets), cudaMemcpyDeviceToHost));
 	/* --------------------------------------------------------------------- */
 	/* Initialize the return value constructs */
 	for (int i=0; i<4; i++)
@@ -950,18 +984,23 @@ __host__ void vary_params_pthreads(
 	data1.returns = vparam_returns_1;
 	data2.returns = vparam_returns_2;
 	data1.GPUID = data2.GPUID = GPUID;
-	data1.data = data2.data = ddat;
-	data1.dev_type = data2.dev_type = dtype;
+	data1.data = ddat0;
+	data2.data = ddat1;
+	data1.dev_type = dtype0;
+	data2.dev_type = dtype1;
 	data1.host_type = data2.host_type = htype;
 	data1.hlc_n = data2.hlc_n = hlc_n;
 	data1.max_frames = data2.max_frames = max_frames;
-	data1.model = data2.model = dmod;
+	data1.model = dmod0;
+	data2.model = dmod1;
 	data1.nf = data2.nf = nf;
 	data1.nframes = data2.nframes = hnframes;
 	data1.nsets = data2.nsets = nsets;
 	data1.nviews = data2.nviews = nviews;
-	data1.parameter = data2.parameter = dpar;
-	data1.verts = data2.verts = verts;
+	data1.parameter = dpar0;
+	data2.parameter = dpar1;
+	data1.verts = verts0;
+	data2.verts = verts1;
 	data1.brightness_flag = data2.brightness_flag = hcomp_brightness;
 	data1.zmax_flag = data2.zmax_flag = hcomp_zmax;
 	data1.cosdelta_flag = data2.cosdelta_flag = hcomp_cosdelta;
@@ -978,13 +1017,13 @@ __host__ void vary_params_pthreads(
 
 	/* Calculate the zmax, radar cross-section, optical brightness, and cosine
 	 * subradar latitude */
-	double dd_zmax, rd_xsec, opt_brtns, cs_sb_rdr_lat;
+	double dd_zmax=0.0, rd_xsec=0.0, opt_brtns=0.0, cs_sb_rdr_lat=0.0;
 	dd_zmax = data1.returns[0] + data2.returns[0];
 	rd_xsec = data1.returns[1] + data2.returns[1];
 	opt_brtns = data1.returns[2] + data2.returns[2];
 	cs_sb_rdr_lat = data1.returns[3] + data2.returns[3];
 
-	finalize_pthreads_krnl<<<1,1>>>(ddat, dd_zmax, rd_xsec, opt_brtns,
+	finalize_pthreads_krnl<<<1,1>>>(ddat0, dd_zmax, rd_xsec, opt_brtns,
 			cs_sb_rdr_lat);
 	checkErrorAfterKernelLaunch("finalize_pthreads_krnl");
 	gpuErrchk(cudaMemcpyFromSymbol(&dd_zmax, gpu_deldop_zmax,
@@ -1072,7 +1111,7 @@ void *vary_params_pthread_sub(void *ptr) {
 
 			switch (data->host_type[s]) {
 			case DELAY:
-
+				//printf("GPUID[%i]=%i and gpuid=%i, Delay-Doppler\n", s, data->GPUID[s], data->gpuid);
 				/* Launch nframes-threaded kernel to get all relevant parameters */
 				delay_params_krnl<<<BLK[0],THD>>>(data->parameter, data->data, pos,
 						ddframe, compute_xsec, posn, ndel, ndop, s, nfrm_alloc);
@@ -1149,6 +1188,8 @@ void *vary_params_pthread_sub(void *ptr) {
 				}
 				break;
 		case DOPPLER:
+			//printf("GPUID[%i]=%i and gpuid=%i, Doppler\n", s, data->GPUID[s], data->gpuid);
+
 			/* Launch nframes-threaded kernel to get all relevant parameters */
 			dop_params_krnl<<<BLK[0],THD>>>(data->parameter, data->data, pos,
 					dframe, compute_xsec, posn, ndop, s, nfrm_alloc);

@@ -79,6 +79,7 @@ __device__ int posvis_streams_outbnd, pvst_smooth;
 
 /* Note that the following custom atomic functions must be declared in each
  * file it is needed (consequence of being a static device function) */
+
 __device__ static float atomicMaxf(float* address, float val) {
 	int* address_as_i = (int*) address;
 	int old = *address_as_i, assumed;
@@ -100,7 +101,8 @@ __global__ void posvis_init_krnl(
 		int c,
 		int start,
 		int src,
-		int size) {
+		int size,
+		int set) {
 
 	/* nfrm_alloc-threaded */
 	int f = blockIdx.x * blockDim.x + threadIdx.x + start;
@@ -115,7 +117,6 @@ __global__ void posvis_init_krnl(
 		pos[f]->posbnd_logfactor = 0.0;
 
 		dev_mtrnsps3(oa, pos[f]->ae, f);
-
 		if (src) {
 			/* We're viewing the model from the sun: at the center of each pixel
 			 * in the projected view, we want cos(incidence angle), distance from
@@ -151,7 +152,8 @@ __global__ void posvis_facet_krnl(
 		int nfacets,
 		int frm,
 		int smooth,
-		int *outbndarr) {
+		int *outbndarr,
+		int set) {
 	/* (nf * nframes)-threaded kernel.  This version eliminates as much double
 	 * math as possible */
 
@@ -184,9 +186,9 @@ __global__ void posvis_facet_krnl(
 
 		/* Get the normal to this facet in body-fixed (asteroid) coordinates
 		 * and convert it to observer coordinates     */
-		n.x = verts[0]->f[f].n[0];
-		n.y = verts[0]->f[f].n[1];
-		n.z = verts[0]->f[f].n[2];
+		n.x = __double2float_rn(verts[0]->f[f].n[0]);
+		n.y = __double2float_rn(verts[0]->f[f].n[1]);
+		n.z = __double2float_rn(verts[0]->f[f].n[2]);
 
 		dev_cotrans8(&n, oa, n, 1, frm);
 
@@ -202,15 +204,9 @@ __global__ void posvis_facet_krnl(
 			dev_cotrans8(&v1, oa, tv1, 1, frm);
 			dev_cotrans8(&v2, oa, tv2, 1, frm);
 
-			v0.x += orbit_offs.x;
-			v0.y += orbit_offs.x;
-			v0.z += orbit_offs.x;
-			v1.x += orbit_offs.y;
-			v1.y += orbit_offs.y;
-			v1.z += orbit_offs.y;
-			v2.x += orbit_offs.z;
-			v2.y += orbit_offs.z;
-			v2.z += orbit_offs.z;
+			v0.x += orbit_offs.x;	v0.y += orbit_offs.x;	v0.z += orbit_offs.x;
+			v1.x += orbit_offs.y;	v1.y += orbit_offs.y;	v1.z += orbit_offs.y;
+			v2.x += orbit_offs.z;	v2.y += orbit_offs.z;	v2.z += orbit_offs.z;
 
 			/* Find rectangular region (in POS pixels) containing the projected
 			 * facet - use floats in case model has illegal parameters and the
@@ -231,7 +227,7 @@ __global__ void posvis_facet_krnl(
 			/*  Set the outbnd flag if the facet extends beyond the POS window  */
 			if ((imin < (-pn)) || (imax > pn) || (jmin < (-pn))	|| (jmax > pn)) {
 				posvis_streams_outbnd = 1;
-				outbndarr[f] = 1;
+				atomicExch(&outbndarr[frm], 1);
 			}
 
 			/* Figure out if facet projects at least partly within POS window;
@@ -249,9 +245,8 @@ __global__ void posvis_facet_krnl(
 
 			} else {
 
-				dev_POSrect_gpu(pos, src, __double2float_rn(i1),
-						__double2float_rn(i2), __double2float_rn(j1),
-						__double2float_rn(j2), ijminmax_overall, frm);
+				dev_POSrect_gpu(pos, src, (float)i1, (float)i2, (float)j1,
+						(float)j2, ijminmax_overall, frm);
 
 				/* Facet is at least partly within POS frame: find all POS
 				 * pixels whose centers project onto this facet  */
@@ -336,11 +331,9 @@ __global__ void posvis_facet_krnl(
 										 * form from body to observer coordina-
 										 * tes; and make sure that it points
 										 * somewhat in our direction.         */
-
 										n.x = tv0.x + s * (tv1.x - tv0.x) + t * (tv2.x - tv1.x);
 										n.y = tv0.y + s * (tv1.y - tv0.y) + t * (tv2.y - tv1.y);
 										n.z = tv0.z + s * (tv1.z - tv0.z) + t * (tv2.z - tv1.z);
-
 										dev_cotrans8(&n, oa, n, 1, frm);
 										dev_normalize2(n);
 									}
@@ -450,19 +443,24 @@ __host__ int posvis_gpu(
 		cudaEventRecord(start1);
 	}
 	posvis_init_krnl<<<BLKfrm,THD64>>>(dpar, pos, ijminmax_overall, oa, usrc,
-			outbndarr, comp, start, src, nfrm_alloc);
-	checkErrorAfterKernelLaunch("posvis_init_krnl2 in posvis_gpu2");
+			outbndarr, comp, start, src, nfrm_alloc, set);
+	checkErrorAfterKernelLaunch("posvis_init_krnl");
 
 	for (f=start; f<nfrm_alloc; f++) {
 		/* Now the main facet kernel */
 		posvis_facet_krnl<<<BLK,THD, 0, pv_stream[f-start]>>>(pos, verts,
 				ijminmax_overall, orbit_offset, oa, usrc,	src, body, comp,
-				nf, f, smooth, outbndarr);
+				nf, f, smooth, outbndarr, set);
 	}
+	checkErrorAfterKernelLaunch("posvis_facet_krnl");
 
 	/* Take care of any posbnd flags */
 	posvis_outbnd_krnl<<<BLKfrm,THD64>>>(pos,
 			outbndarr, ijminmax_overall, nfrm_alloc, start);
+	checkErrorAfterKernelLaunch("posvis_outbnd_krnl");
+	gpuErrchk(cudaMemcpyFromSymbol(&outbnd, posvis_streams_outbnd, sizeof(int), 0,
+			cudaMemcpyDeviceToHost));
+
 	if (TIMING) {
 		cudaEventRecord(stop1);
 		cudaEventSynchronize(stop1);
@@ -470,9 +468,7 @@ __host__ int posvis_gpu(
 		cudaEventElapsedTime(&milliseconds, start1, stop1);
 		printf("%i facets in posvis_cuda_2 in %3.3f ms with %i frames.\n", nf, milliseconds, nfrm_alloc);
 	}
-	checkErrorAfterKernelLaunch("The three posvis_cuda_streams2 kernels");
-	gpuErrchk(cudaMemcpyFromSymbol(&outbnd, posvis_streams_outbnd, sizeof(int), 0,
-			cudaMemcpyDeviceToHost));
+
 
 	/* Free temp arrays, destroy streams and timers, as applicable */
 

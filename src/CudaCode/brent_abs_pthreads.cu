@@ -17,6 +17,8 @@ __host__ double brent_abs_pthreads(
 		double (*f)
 			(double,
 			struct vertices_t**,
+			struct vertices_t**,
+			unsigned char*,
 			unsigned char*,
 			unsigned char*,
 			int*,
@@ -33,9 +35,11 @@ __host__ double brent_abs_pthreads(
 		double tol,
 		double abstol,
 		double *xmin,
-		struct vertices_t **verts,
+		struct vertices_t **verts0,
+		struct vertices_t **verts1,
 		unsigned char *htype,
-		unsigned char *dtype,
+		unsigned char *dtype0,
+		unsigned char *dtype1,
 		int *nframes,
 		int *nviews,
 		int *lc_n,
@@ -56,8 +60,9 @@ __host__ double brent_abs_pthreads(
 	a=((ax < cx) ? ax : cx);
 	b=((ax > cx) ? ax : cx);
 	x=w=v=bx;
-	fw=fv=fx=(*f)(x, verts, htype, dtype, nframes, nviews, lc_n, GPUID, nsets,
-			nf, max_frames, thread1, thread2, gpu0_stream, gpu1_stream);
+	fw=fv=fx=(*f)(x, verts0, verts1, htype, dtype0, dtype1, nframes, nviews,
+			lc_n, GPUID, nsets, nf, max_frames, thread1, thread2, gpu0_stream,
+			gpu1_stream);
 	for (iter=1;iter<=ITMAX;iter++) {
 		xm=0.5*(a+b);
 		tol2=2.0*(tol1=tol*fabs(x)+abstol_use);
@@ -86,8 +91,9 @@ __host__ double brent_abs_pthreads(
 			d=CGOLD*(e=(x >= xm ? a-x : b-x));
 		}
 		u=(fabs(d) >= tol1 ? x+d : x+SIGN(tol1,d));
-		fu=(*f)(u, verts, htype, dtype, nframes, nviews, lc_n, GPUID, nsets,
-				nf, max_frames, thread1, thread2, gpu0_stream, gpu1_stream);
+		fu=(*f)(u, verts0, verts1, htype, dtype0, dtype1, nframes, nviews, lc_n,
+				GPUID, nsets, nf, max_frames, thread1, thread2, gpu0_stream,
+				gpu1_stream);
 		if (fu <= fx) {
 			if (u >= x) a=x; else b=x;
 			SHFT(v,w,x,u)

@@ -2678,7 +2678,7 @@ __host__ void dvdI_reduce_streams(struct mod_t *dmod, float *dv, float *dcom0,
 	dim3 dimBlock(numThreads, 1, 1);
 	dim3 dimGrid(numBlocks, 1, 1);
 	size_t arrsz = sizeof(float)*numBlocks;
-	cudaSetDevice(GPU0);
+	//cudaSetDevice(GPU0);
 	/* Allocate memory for the device output arrays for first reduction */
 	gpuErrchk(cudaMalloc((void**)&d_odata_dv,    arrsz));
 	gpuErrchk(cudaMalloc((void**)&d_odata_dcom0, arrsz));

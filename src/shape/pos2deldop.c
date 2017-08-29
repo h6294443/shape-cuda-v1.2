@@ -299,9 +299,8 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
    *  Only compute contributions from POS pixels that project onto the right body, in case this
    *  is the "orbit" action (for which this routine is called twice, once for each of the two
    *  orbiting bodies). */
-int dbg_occ = 0;
   for (x=pos->xlim[0]; x<=pos->xlim[1]; x++)
-    for (y=pos->ylim[0]; y<=pos->ylim[1]; y++) {dbg_occ++;
+    for (y=pos->ylim[0]; y<=pos->ylim[1]; y++) {
       if (pos->cose[x][y] > 0.0 && pos->body[x][y] == body) {
 
         /*  Get the (floating-point) delay and Doppler bin of the POS pixel center: delPOS and dopPOS.
@@ -349,9 +348,9 @@ int dbg_occ = 0;
          *  fall within the data frame; if not, initialize the "overflow" image if necessary.         */
         if ((idel_min >= 1) && (idel_max <= ndel) &&
              (idop_min >= 1) && (idop_max <= ndop))
-          in_bounds = 1;
+        	in_bounds = 1;
         else {
-          in_bounds = 0;
+        	in_bounds = 0;
           if (!any_overflow) {
             any_overflow = 1;
             for (i=0; i<MAXOVERFLOW; i++)
@@ -581,7 +580,7 @@ int dbg_occ = 0;
    *
    *  Also compute the summed cross section and the mean delay and Doppler
    *  bins for the overflow region, for use with the "delcorinit" action    */
-
+//int dbgf3=0;
   frame->overflow_o2 = 0.0;
   frame->overflow_m2 = 0.0;
   frame->overflow_xsec = 0.0;
@@ -598,6 +597,7 @@ int dbg_occ = 0;
     for (i=i1; i<=i2; i++)
       for (j=j1; j<=j2; j++) {
         if (fit_overflow[i][j] != 0.0) {
+//        	if (frm==3) dbgf3++;
           if (par->speckle)
             variance = sdev_sq + lookfact*fit_overflow[i][j]*fit_overflow[i][j];
           frame->overflow_o2 += 1.0;
@@ -611,7 +611,7 @@ int dbg_occ = 0;
       frame->overflow_delmean /= frame->overflow_xsec;
       frame->overflow_dopmean /= frame->overflow_xsec;
     }
-
+//    printf("occurences in frame 3: %i\n", dbgf3);
     /*  Print a warning if the model extends even beyond the overflow image  */
 
     if ( ((frame->idellim[0] + idel0) < 0)            ||
@@ -637,6 +637,7 @@ int dbg_occ = 0;
       }
     }
   }
-
+//  if (badradar==1)
+//	  printf("badradar in set %i frame %i is......%i\n", set, frm, badradar);
   return badradar;
 }

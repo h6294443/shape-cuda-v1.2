@@ -15,28 +15,28 @@ int GPU0   = 1;		/* Which GPU will run code 			*/
 int GPU1   = 0;
 int FLOAT  = 0;
 int MGPU   = 0;		/* Switch for dual-gpu mode (interweave) 		*/
-int MGPU2  = 1;
 int PIN    = 0;
 int maxThreadsPerBlock = 0;
 
 int main(int argc, char *argv[])
- {
-	printf("Shape-CUDA-v1.2 running\n");
-	printf("Now with even more face-melting concurrency.\n");
-	/* Check available CUDA devices, if any, before proceeding */
-	CUDACount();
-	maxThreadsPerBlock = 256;
+{
+//	printf("Shape-CUDA-v1.2 running\n");
+//	printf("Now with even more face-melting concurrency.\n");
+//	/* Check available CUDA devices, if any, before proceeding */
+//	CUDACount();
+//	maxThreadsPerBlock = 256;
+	long x;	/* For gpuid read-in */
 
 	/* Declare variables */
 	char progname[MAXLEN], errormessage[MAXLEN], localtimestring[MAXLEN];
 	char *slashptr;
-	struct par_t par;					// the parameter structure
-	struct mod_t mod, mod2, mod3;		// the model structure
-	struct dat_t dat, dat2, dat3;		// the data structure
+	struct par_t par, par1;				// the parameter structure
+	struct mod_t mod, mod1, mod2, mod3;	// the model structure
+	struct dat_t dat, dat1, dat2, dat3;	// the data structure
 	struct rusage usage;				// the usage structure
-	struct par_t *dev_par;
-	struct mod_t *dev_mod;
-	struct dat_t *dev_dat;
+	struct par_t *dev_par, *dev_par1;
+	struct mod_t *dev_mod, *dev_mod1;
+	struct dat_t *dev_dat, *dev_dat1;
 
 	/* Get program name (minus the path)  */
 	slashptr = strrchr(argv[0], '/');
@@ -48,9 +48,62 @@ int main(int argc, char *argv[])
 	/*  initialize  */
 	init( argc, argv, progname);
 
+
+
+	if (argc == 6) {
+		if (strcmp(argv[4], "-GPU")==0) {
+			CUDA = 1;
+			MGPU = 0;
+			x = strtol(argv[5], NULL, 10);
+			GPU0 = (int)x;
+		}
+		else if (strcmp(argv[4],"-MGPU")==0) {
+			CUDA = 1;
+			MGPU = 1;
+			x = strtol(argv[5], NULL, 10);
+			GPU0 = (int)x;
+			if (GPU0==0)	GPU1 = 1;
+			else GPU1 = 0;
+		}
+		else
+			CUDA = 0;
+	}
+	else if (argc == 7){
+		if (strcmp(argv[4],"MGPU")==0) {
+			CUDA = 1;
+			MGPU = 1;
+			x = strtol(argv[5], NULL, 10);
+			GPU0 = (int)x;
+			x = strtol(argv[6], NULL, 10);
+			GPU1 = (int)x;
+		}
+		else {
+			CUDA = 0;
+			MGPU = 0;
+		}
+	}
+
+	if (CUDA) {
+		printf("Shape-CUDA-v1.2 running\n");
+		printf("Now with even more face-melting concurrency.\n");
+		/* Check available CUDA devices, if any, before proceeding */
+		CUDACount();
+		maxThreadsPerBlock = 256;
+		gpuErrchk(cudaSetDevice(GPU0));
+	}
+
+
+
+
 	/* Read the par file, get the action, and make sure actions other than
-	 * "fit" do NOT use parallel processing  */
+	 * "fit" do NOT use parallel processing. If in CUDA dual-GPU mode, read
+	 * the par file again into par1 for the other card.  */
 	read_par( argv[1], &par);
+	if (CUDA&&MGPU) {
+		gpuErrchk(cudaSetDevice(GPU1));
+		read_par( argv[1], &par1);
+	}
+
 	printf("%s\n", argv[2]);
 	printf("%s\n", argv[3]);
 
@@ -70,14 +123,68 @@ int main(int argc, char *argv[])
 			sprintf( dat3.name, "%s", argv[5]);
 		}
 	} else {
-		if (argc > 2)
+		if (argc > 2) {
 			sprintf( mod.name, "%s", argv[2]);
-		if (argc > 3)
+			sprintf(mod1.name, "%s", argv[2]);
+		}
+		if (argc > 3) {
 			sprintf( dat.name, "%s", argv[3]);
+			sprintf(dat1.name, "%s", argv[3]);
+		}
 	}
-
 	printf("\nmod.name: %s", mod.name);
 	printf("\ndat.name: %s", dat.name);
+
+//	if (par.action == FIT) {
+//		if (argc == 4) {
+//			CUDA = 0;
+//			MGPU = 0;
+//		}
+//		else if (argc == 6) {
+//			printf("\n%s\n", argv[4]);
+//			int test = strcmp(argv[4], "-GPU");
+//			if (strcmp(argv[4], "-GPU")==0) {
+//				CUDA = 1;
+//				MGPU = 0;
+//				x = strtol(argv[5], NULL, 10);
+//				GPU0 = (int)x;
+//			}
+//			else if (strcmp(argv[4],"-MGPU")==0) {
+//				CUDA = 1;
+//				MGPU = 1;
+//				x = strtol(argv[5], NULL, 10);
+//				GPU0 = (int)x;
+//				if (GPU0==0)	GPU1 = 1;
+//				else GPU1 = 0;
+//			}
+//			else
+//				CUDA = 0;
+//		}
+//		else if (argc == 7){
+//			if (strcmp(argv[4],"MGPU")==0) {
+//				CUDA = 1;
+//				MGPU = 1;
+//				x = strtol(argv[5], NULL, 10);
+//				GPU0 = (int)x;
+//				x = strtol(argv[6], NULL, 10);
+//				GPU1 = (int)x;
+//			}
+//			else {
+//				CUDA = 0;
+//				MGPU = 0;
+//			}
+//		}
+//	}
+//	if (CUDA) {
+//		printf("Shape-CUDA-v1.2 running\n");
+//		printf("Now with even more face-melting concurrency.\n");
+//		/* Check available CUDA devices, if any, before proceeding */
+//		CUDACount();
+//		maxThreadsPerBlock = 256;
+//		gpuErrchk(cudaSetDevice(GPU0));
+//		if (MGPU)
+//			read_par( argv[1], &par1);
+//	}
 
 	/*  Carry out the desired action - 'fit' only for now */
 	switch (par.action) {
@@ -131,34 +238,76 @@ int main(int argc, char *argv[])
 			write_dat( &par, &dat);
 		break;
 	case FIT:
+
+
 		if (argc != 4) {
-			if (argc > 4 ) {
-				printf("\nWARNING: extra command-line arguments (%d instead of 3)\n",
-						argc-1);
-				printf("         -- MPI functionality in shape-cuda is deprecated.\n");
-				fflush(stdout);
-			}
-			sprintf(errormessage, "usage - %s fitpar modfile obsfile\n", progname);
-			bailout(errormessage);
+//			if (argc > 4 ) {
+//				printf("\nWARNING: extra command-line arguments (%d instead of 3)\n",
+//						argc-1);
+//				printf("         -- MPI functionality in shape-cuda is deprecated.\n");
+//				fflush(stdout);
+//			}
+//			sprintf(errormessage, "usage - %s fitpar modfile obsfile\n", progname);
+//			bailout(errormessage);
 		}
+		/* Create our pThreads */
+		pthread_t thread1, thread2;	/* Thread 1 is the default thread */
+
 		par.nfpar = 0;
-		par.nfpar += read_mod( &par, &mod);
-		par.nfpar += read_dat( &par, &mod, &dat);
+		if (CUDA && MGPU) {
+			//			par.nfpar += read_mod_pthread(&par, &mod, &mod1, thread1, thread2);
+			gpuErrchk(cudaSetDevice(GPU0));
+			par.nfpar += read_mod(&par, &mod);
+			gpuErrchk(cudaSetDevice(GPU1));
+			read_mod(&par1, &mod1);
+			//gpuErrchk(cudaSetDevice(GPU0));
+			par.nfpar += read_dat_mgpu( &par, &mod, &dat, GPU0);
+			//gpuErrchk(cudaSetDevice(GPU1));
+			read_dat_mgpu( &par1, &mod1, &dat1, GPU1);
+			gpuErrchk(cudaSetDevice(GPU0));
+		}
+		else {
+			par.nfpar += read_mod( &par, &mod);
+			par.nfpar += read_dat( &par, &mod, &dat);
+		}
 		mkparlist( &par, &mod, &dat);
 
 		/* Make CUDA device copies of par, mod, dat (these copies reside
 		 * in device memory and are inaccessible by the host (CPU) code */
 		if (CUDA) {
-			gpuErrchk(cudaMallocManaged((void**)&dev_par, sizeof(struct par_t), cudaMemAttachGlobal));
-			gpuErrchk(cudaMemcpy(dev_par, &par, sizeof(struct par_t), cudaMemcpyHostToDevice));
-			gpuErrchk(cudaMallocManaged((void**)&dev_mod, sizeof(struct mod_t), cudaMemAttachGlobal));
-			gpuErrchk(cudaMemcpy(dev_mod, &mod, sizeof(struct mod_t), cudaMemcpyHostToDevice));
-			gpuErrchk(cudaMallocManaged((void**)&dev_dat, sizeof(struct dat_t), cudaMemAttachGlobal));
-			gpuErrchk(cudaMemcpy(dev_dat, &dat, sizeof(struct dat_t), cudaMemcpyHostToDevice));
-			/*if (MGPU)
-				bestfit_mgpu(dev_par, dev_mod, dev_dat, &par, &mod, &dat);
-			else */if (MGPU2)
-				bestfit_gpu_pthreads(dev_par, dev_mod, dev_dat, &par, &mod, &dat);
+
+			gpuErrchk(cudaMallocManaged((void**)&dev_par, sizeof(struct par_t),
+					cudaMemAttachGlobal));
+			gpuErrchk(cudaMemcpy(dev_par, &par, sizeof(struct par_t),
+					cudaMemcpyHostToDevice));
+			gpuErrchk(cudaMallocManaged((void**)&dev_mod, sizeof(struct mod_t),
+					cudaMemAttachGlobal));
+			gpuErrchk(cudaMemcpy(dev_mod, &mod, sizeof(struct mod_t),
+					cudaMemcpyHostToDevice));
+			gpuErrchk(cudaMallocManaged((void**)&dev_dat, sizeof(struct dat_t),
+					cudaMemAttachGlobal));
+			gpuErrchk(cudaMemcpy(dev_dat, &dat, sizeof(struct dat_t),
+					cudaMemcpyHostToDevice));
+
+			if (MGPU) {
+				gpuErrchk(cudaSetDevice(GPU1));
+				gpuErrchk(cudaMallocManaged((void**)&dev_par1, sizeof(struct par_t),
+						cudaMemAttachGlobal));
+				gpuErrchk(cudaMemcpy(dev_par1, &par1, sizeof(struct par_t),
+						cudaMemcpyHostToDevice));
+				gpuErrchk(cudaMallocManaged((void**)&dev_mod1, sizeof(struct mod_t),
+						cudaMemAttachGlobal));
+				gpuErrchk(cudaMemcpy(dev_mod1, &mod1, sizeof(struct mod_t),
+						cudaMemcpyHostToDevice));
+				gpuErrchk(cudaMallocManaged((void**)&dev_dat1, sizeof(struct dat_t),
+						cudaMemAttachGlobal));
+				gpuErrchk(cudaMemcpy(dev_dat1, &dat1, sizeof(struct dat_t),
+						cudaMemcpyHostToDevice));
+				gpuErrchk(cudaSetDevice(GPU0));
+				bestfit_gpu_pthreads(dev_par, dev_par1, dev_mod, dev_mod1,
+						dev_dat, dev_dat1, &par, &par1, &mod, &mod1, &dat,
+						&dat1, thread1, thread2);
+			}
 			else
 				bestfit_gpu(dev_par,dev_mod,dev_dat, &par,&mod,&dat);
 		} else
@@ -456,16 +605,16 @@ int main(int argc, char *argv[])
 	if (CUDA) {
 		int i=0, j;
 
-//		for (j=0; j<=mod.shape.comp[i].desc.har.nhar; j++) {
-//			cudaFree(mod.shape.comp[i].desc.har.a[j]);
-//			cudaFree(mod.shape.comp[i].desc.har.b[j]);
-//
-//		}
-//		cudaFree(dev_mod->shape.comp[i].desc.ver.v);
-//		cudaFree(mod.shape.comp[i].desc.ver.f);
-//		cudaFree(mod.shape.comp[0].desc.har.a);
-//		cudaFree(mod.shape.comp[0].desc.har.b);
-//		cudaFree(&mod.shape.comp[0]);
+		//		for (j=0; j<=mod.shape.comp[i].desc.har.nhar; j++) {
+		//			cudaFree(mod.shape.comp[i].desc.har.a[j]);
+		//			cudaFree(mod.shape.comp[i].desc.har.b[j]);
+		//
+		//		}
+		//		cudaFree(dev_mod->shape.comp[i].desc.ver.v);
+		//		cudaFree(mod.shape.comp[i].desc.ver.f);
+		//		cudaFree(mod.shape.comp[0].desc.har.a);
+		//		cudaFree(mod.shape.comp[0].desc.har.b);
+		//		cudaFree(&mod.shape.comp[0]);
 	}
 
 

@@ -526,7 +526,11 @@ void calc_deldop( struct par_t *par, struct mod_t *mod, struct deldop_t *deldop,
 						(int) par->pos_smooth, 0, 0, c) && v == deldop->v0) {
 					par->posbnd = 1;
 					par->posbnd_logfactor += frame->dof * pos->posbnd_logfactor;
+//					printf("(CPU MODE) frame %i is out of bounds\n", f);
+//					printf("(CPU MODE) frame->dof=%g and posbnd_logfactor=%g\n",
+//							frame->dof, pos->posbnd_logfactor);
 				}
+
 
 			/*  Go through all POS pixels which are visible with sufficiently low
           scattering angle, and mark the facets which project onto their

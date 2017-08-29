@@ -457,6 +457,8 @@ __host__ void calc_fits_gpu(
 	dim3 BLK,THD;
 	THD.x = maxThreadsPerBlock;
 
+//	gpuErrchk(cudaSetDevice(GPU0));
+
 	/* Allocate memory for all arrays that are needed for any possible data set.
 	 * This is done to avoid repeat allocations/deallocations	 */
 	gpuErrchk(cudaMalloc((void**)&pos, sizeof(pos_t*) * nfrm_alloc));
@@ -547,10 +549,14 @@ __host__ void calc_fits_gpu(
 }
 
 __host__ void calc_fits_pthreads(
-		struct par_t *dpar,
-		struct mod_t *dmod,
-		struct dat_t *ddat,
-		struct vertices_t **verts,
+		struct par_t *dpar0,
+		struct par_t *dpar1,
+		struct mod_t *dmod0,
+		struct mod_t *dmod1,
+		struct dat_t *ddat0,
+		struct dat_t *ddat1,
+		struct vertices_t **verts0,
+		struct vertices_t **verts1,
 		int *nviews,
 		int *nframes,
 		int *lc_n,
@@ -576,15 +582,19 @@ __host__ void calc_fits_pthreads(
 	data1.gpu_stream = gpu0_stream;
 	data2.gpu_stream = gpu1_stream;
 	data1.GPUID = data2.GPUID = GPUID;
-	data1.data = data2.data = ddat;
-	data1.parameter = data2.parameter = dpar;
-	data1.model = data2.model = dmod;
+	data1.data = ddat0;
+	data2.data = ddat1;
+	data1.parameter = dpar0;
+	data2.parameter = dpar1;
+	data1.model = dmod0;
+	data2.model = dmod1;
 	data1.hlc_n = data2.hlc_n = lc_n;
 	data1.type = data2.type = type;
 	data1.nf = data2.nf = nf;
 	data1.nframes = data2.nframes = nframes;
 	data1.nsets = data2.nsets = nsets;
-	data1.verts = data2.verts = verts;
+	data1.verts = verts0;
+	data2.verts = verts1;
 	data1.nviews = data2.nviews = nviews;
 	data1.max_frames = data2.max_frames = max_frames;
 
@@ -593,18 +603,12 @@ __host__ void calc_fits_pthreads(
 	 * model is too wide in (delay-)Doppler space to create (delay-)Doppler fit
 	 * frames.  Note that this also gets mod->shape.nf and nsets            */
 
-	cfs_init_devpar_krnl<<<1,1>>>(dpar);
+	cfs_init_devpar_krnl<<<1,1>>>(dpar0);
 	checkErrorAfterKernelLaunch("cfs_init_devpar_krnl");
-
-	/* Initialize the flags that indicate whether or not each facet of each
-	 * model component is ever visible and unshadowed from Earth
-	 * Note:  Single component only for now.  */
-	THD.x = maxThreadsPerBlock;
-	BLK.x = floor((THD.x - 1 + nf)/THD.x);
-	//for (c=0; c<mod->shape.ncomp; c++)
-	int c = 0;
-	cf_init_seen_flags_krnl<<<BLK,THD>>>(dmod,nf,c);
-	checkErrorAfterKernelLaunch("cf_init_seen_flags_krnl (calc_fits_cuda_streams)");
+	gpuErrchk(cudaSetDevice(GPU1));
+	cfs_init_devpar_krnl<<<1,1>>>(dpar1);
+	checkErrorAfterKernelLaunch("cfs_init_devpar_krnl");
+	gpuErrchk(cudaSetDevice(GPU0));
 
 	/* From here, launch the pthreaded subfunction */
 	pthread_create(&thread1, NULL, calc_fits_pthread_sub,(void*)&data1);
@@ -616,14 +620,18 @@ __host__ void calc_fits_pthreads(
 	/* Complete calculations of values that will be used during a fit to
 	 * increase the objective function for models with bad properties   */
 	gpuErrchk(cudaSetDevice(GPU0));
-	cf_set_final_pars_krnl<<<1,1>>>(dpar, ddat);
-	checkErrorAfterKernelLaunch("cf_set_final_pars_krnl (calc_fits_cuda)");
+	cf_set_final_pars_krnl<<<1,1>>>(dpar0, ddat0);
+	checkErrorAfterKernelLaunch("cf_set_final_pars_krnl on GPU0");
+	gpuErrchk(cudaSetDevice(GPU1));
+	cf_set_final_pars_krnl<<<1,1>>>(dpar1, ddat1);
+	checkErrorAfterKernelLaunch("cf_set_final_pars_krnl on GPU1");
+	gpuErrchk(cudaSetDevice(GPU0));
 
 }
 
 void *calc_fits_pthread_sub(void *ptr) {
 
-	int s, nfrm_alloc, *ndel, *ndop, *posn, *bistatic, *outbndarr;
+	int c=0, s, nfrm_alloc, *ndel, *ndop, *posn, *bistatic, *outbndarr;
 	int4 *xylim;
 	float **fit_store, *overflow, *pxlpkm;
 	double *u;
@@ -640,6 +648,14 @@ void *calc_fits_pthread_sub(void *ptr) {
 	nfrm_alloc = data->max_frames + 1;
 	THD.x = maxThreadsPerBlock;
 	gpuErrchk(cudaSetDevice(data->gpuid));
+
+	/* Initialize the flags that indicate whether or not each facet of each
+	 * model component is ever visible and unshadowed from Earth
+	 * Note:  Single component only for now.  */
+	BLK.x = floor((THD.x - 1 + data->nf)/THD.x);
+	//for (c=0; c<mod->shape.ncomp; c++)
+	cf_init_seen_flags_krnl<<<BLK,THD>>>(data->model, data->nf, c);
+	checkErrorAfterKernelLaunch("cf_init_seen_flags_krnl");
 
 	/* Allocate memory for all arrays that are needed for any possible data set.
 	 * This is done to avoid repeat allocations/deallocations	 */
@@ -1190,7 +1206,9 @@ __host__ void calc_deldop_gpu(struct par_t *dpar, struct mod_t *dmod,
 			cf_gamma_trans_krnl<<<BLKdd[f],THD,0,cf_stream[f]>>>(dpar, ddat, s, f, nThreadsdd[f], type, FLOAT);
 		} checkErrorAfterKernelLaunch("cf_finish_fit_store_streams kernels and "
 				"cf_gamma_trans_krnl");
+		cudaFree(fit_store);
 	}
+
 }
 
 __host__ void calc_doppler_gpu(struct par_t *dpar, struct mod_t *dmod,
@@ -1302,6 +1320,8 @@ __host__ void calc_doppler_gpu(struct par_t *dpar, struct mod_t *dmod,
 			clrvect_krnl<<<BLKd[f],THD,0,cf_stream[f]>>>(ddat, hndop[f], s, f);
 		} checkErrorAfterKernelLaunch("clrvect_krnl and cf_mark_pixels_seen_streams_krnl");
 	}
+
+
 	/* Call pos2deldop to calculate the Doppler radar fit image */
 	for (v2=v0_index+1; v2<=v0_index+nviews; v2++) {
 		pos2doppler_gpu(dpar, dmod, ddat, pos, frame, xylim,0.0,0.0,0.0, ndop,
@@ -1351,6 +1371,7 @@ __host__ void calc_doppler_gpu(struct par_t *dpar, struct mod_t *dmod,
 					ddat, s, f, ndop[f], type, FLOAT);
 		} checkErrorAfterKernelLaunch("cf_finish_fit_store_streams kernels and "
 				"cf_gamma_trans_krnl (calc_doppler_cuda_streams");
+		cudaFree(fit_store);
 	}
 }
 
@@ -1563,7 +1584,7 @@ __host__ void calc_lghtcrv_gpu(
 		double *u,
 		cudaStream_t *cf_stream)
 {
-	int ncalc, c=0, n, nThreads, exclude_seen, f, bistatic_all;
+	int ncalc, c=0, n, nThreads, exclude_seen, f, bistatic_all=0;
 	int nfplus = nframes+1; /* This is to accomodate the +1 start in lghtcrv */
 	float3 orbit_off3;
 	orbit_off3.x = orbit_off3.y = orbit_off3.z = 0.0;
@@ -1618,45 +1639,45 @@ __host__ void calc_lghtcrv_gpu(
 			houtbndarr[f]=0;
 		}
 	}
-	gpuErrchk(cudaMemcpy(&hbistatic, bistatic, sizeof(int)*(nfplus), cudaMemcpyDeviceToHost));
+	//gpuErrchk(cudaMemcpy(&hbistatic, bistatic, sizeof(int)*(nfplus), cudaMemcpyDeviceToHost));
 
 	/* Now view model from source (sun) and get facet number and distance
 	 * toward source of each pixel in this projected view; use this
 	 * information to determine which POS pixels are shadowed       */
 	/* Because posvis_gpu processes all frames at the same time, if
 	 * any of the frames are bistatic, all of them get calculated again  */
-	for (f=1; f<=nframes; f++)
-		if (hbistatic[f])
-			bistatic_all = 1;
+//	for (f=1; f<=nframes; f++)
+//		if (hbistatic[f])
+//			bistatic_all = 1;
 
-	if (bistatic_all) {
-		posvis_gpu(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
-				outbndarr, s, (nframes+1), 1, nf, 0, c, type, cf_stream);
+//	if (bistatic_all) {
+	posvis_gpu(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
+			outbndarr, s, (nframes+1), 1, nf, 0, c, type, cf_stream);
 
-		/* Copy the posbnd flag returns for all frames to a host copy */
-		gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nfplus,
-				cudaMemcpyDeviceToHost));
+	/* Copy the posbnd flag returns for all frames to a host copy */
+	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nfplus,
+			cudaMemcpyDeviceToHost));
 
-		/* Now check the outbndarr for the posbnd flag for each frame */
-		for (f=1; f<=nframes; f++) {
-			if (houtbndarr[f]) {
-				/* Call single-threaded kernel to set dpar->posbnd and dpar->posbnd_logfactor */
-				cfs_set_posbnd_krnl<<<1,1,0,cf_stream[f-1]>>>(dpar, ddat, pos, s, f, type);
-			}
-		}
-		/* Initialize this stream for the posmask kernel to follow */
-		posmask_init_krnl<<<BLKfrm,THD64>>>(pos, so, pxlpkm, nframes);
-
-		for (f=1; f<=nframes; f++) {
-			if (houtbndarr[f]) {
-				/* Now call posmask kernel for this stream, then loop
-				 * to next stream and repeat 	 */
-				posmask_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(
-						dpar, pos, so, pxlpkm, posn, nThreadspx[f],	span[f].x, f);
-
-			} checkErrorAfterKernelLaunch("posmask_krnl");
+	/* Now check the outbndarr for the posbnd flag for each frame */
+	for (f=1; f<=nframes; f++) {
+		if (houtbndarr[f]) {
+			/* Call single-threaded kernel to set dpar->posbnd and dpar->posbnd_logfactor */
+			cfs_set_posbnd_krnl<<<1,1,0,cf_stream[f-1]>>>(dpar, ddat, pos, s, f, type);
 		}
 	}
+	/* Initialize this stream for the posmask kernel to follow */
+	posmask_init_krnl<<<BLKfrm,THD64>>>(pos, so, pxlpkm, nframes);
+
+	for (f=1; f<=nframes; f++) {
+		if (houtbndarr[f]) {
+			/* Now call posmask kernel for this stream, then loop
+			 * to next stream and repeat 	 */
+			posmask_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(
+					dpar, pos, so, pxlpkm, posn, nThreadspx[f],	span[f].x, f);
+
+		} checkErrorAfterKernelLaunch("posmask_krnl");
+	}
+//	}
 
 	/* Go through all visible and unshadowed POS pixels with low enough
 	 * scattering and incidence angles, and mark facets which project onto

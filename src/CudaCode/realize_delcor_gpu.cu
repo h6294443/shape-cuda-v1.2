@@ -212,9 +212,9 @@ __host__ void realize_delcor_gpu(struct dat_t *ddat, double delta_delcor0, int d
 	}
 }
 
-__host__ void realize_delcor_pthreads(struct dat_t *ddat, double delta_delcor0,
-		int delcor0_mode, int nsets, int *nframes, int *GPUID, unsigned char
-		*type, pthread_t thread1, pthread_t thread2)
+__host__ void realize_delcor_pthreads(struct dat_t *ddat0, struct dat_t *ddat1,
+		double delta_delcor0, int delcor0_mode, int nsets, int *nframes, int
+		*GPUID, unsigned char *type, pthread_t thread1, pthread_t thread2)
 {
 	/* Note: This version splits the work into two host threads (pthreads)
 	 * that each use their own assigned GPU.  	 */
@@ -230,7 +230,8 @@ __host__ void realize_delcor_pthreads(struct dat_t *ddat, double delta_delcor0,
 	 * the pthreaded sub function 	 */
 	rdelcor_data data1, data2;
 	data1.GPUID = data2.GPUID = GPUID;
-	data1.data = data2.data = ddat;
+	data1.data = ddat0;
+	data2.data = ddat1;
 	data1.delcor0_mode = data2.delcor0_mode = delcor0_mode;
 	data1.delta_delcor0 = data2.delta_delcor0 = delta_delcor0;
 	data1.nframes = data2.nframes = nframes;
