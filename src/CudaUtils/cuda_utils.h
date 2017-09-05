@@ -1,16 +1,10 @@
 /* Cuda utility functions */
 __device__ double atomicAdd_dbl(double* address, double val);
 __global__ void cf_gamma_trans_streams_krnl(struct par_t *dpar, struct dat_t *ddat,
-		int s, int f, int nThreads, unsigned char type, int flt);
+		int s, int f, int nThreads, unsigned char type);
 __global__ void clrvect_krnl(struct dat_t *ddat, int size, int s, int f);
-__global__ void clrvect_krnl1(struct dat_t *ddat, int size, int s, int f);
-__global__ void clrvect_krnl2(struct dat_t *ddat, int size, int s, int f);
-__global__ void clrvect_krnl3(struct dat_t *ddat, int size, int s, int f);
-__global__ void clrvect_krnl4(struct dat_t *ddat, int size, int s, int f);
 __global__ void zero_fit_overflow_krnl(struct dat_t *ddat, int s, int f, int size);
-//__global__ void clrvect_streams_krnl(struct dat_t *ddat, int size, int s, int f);
 __device__ int cubic_realroots_cuda( double *coeff, double *realroot);
-__device__ int cubic_realroots_f_cuda( float4 coeff, float3 *realroot);
 __device__ void dev_bsstep(double *y, double *dydx, int nv, double *xx, double htry, double eps,
 		double *yscal, double *hdid, double *hnext, void (*derivs)(double,double *,double *));
 __device__ double dev_cel(double qqc, double pp, double aa, double bb);
@@ -24,20 +18,13 @@ __device__ void dev_cotrans7(float3 *y, double3 *a, float3 x, int dir, int frm);
 __device__ void dev_cotrans8(float3 *y, float3 *a, float3 x, int dir, int frm);
 __device__ void dev_cotrans9(float3 *y, double a[3][3], float3 x, int dir);
 __device__ double dev_cross( double z[3], double x[3], double y[3]);
-__device__ float dev_cross_f( double z[3], float3 x, float3 y);
 __device__ double dev_dot( double x[3], double y[3]);
-__device__ double dev_dot2( double x[3], double3 y);
-__device__ double dev_dot3( float3 x, double3 y);
-__device__ float dev_dot4(float3 x, float3 y);
+__device__ float dev_dot_f3(float3 x, float3 y);
 __device__ void dev_euler2mat( double m[3][3], double phi, double theta, double psi);
 __device__ void dev_facmom( double fv0[3], double fv1[3], double fv2[3], double fn[3],
         double *dv, double dvr[3], double dI[3][3]);
-__device__ void dev_facmom_f( float3 fv0, float3 fv1, float3 fv2, float3 fn,
-             float *dv, float3 *dvr, float3 dI[3]);
 __device__ double dev_facnrm( struct vertices_t verts, int fi);
-__device__ float dev_facnrm_f( struct vertices_t verts, int fi);
 __device__ int dev_gamma_trans(float *datum, double gamma);
-__device__ int dev_gamma_trans_f(float *datum, float gamma);
 __device__ double dev_gammln(double xx);
 __device__ double dev_hapke( double cosi, double cose, double phase,
         double w, double h, double B0, double g, double theta);
@@ -47,16 +34,10 @@ __device__ void dev_inteuler( struct spin_t spin, double t[], double impulse[][3
 		double w[3], double m[3][3], unsigned char pa, unsigned char method, double int_abstol);
 __global__ void euler2mat_krnl( double m[3][3], double phi, double theta, double psi);
 __global__ void euler2mat_realize_mod_krnl(struct mod_t *dmod);
-__global__ void lghtcrv_spline_streams_krnl(struct dat_t *ddat, int set, double
-		yp1, double ypn, double *u, int ncalc);
-__global__ void lghtcrv_spline_streams_f_krnl(struct dat_t *ddat, int set,
-		float yp1, float ypn, float *u, int ncalc);
 __device__ void dev_lghtcrv_splint(double *xa,double *ya,double *y2a,int n,double x,double *y);
-__global__ void lghtcrv_splint_streams3_krnl(struct dat_t *ddat, int set, int n, int ncalc);
-__global__ void lghtcrv_splint_streams3f_krnl(struct dat_t *ddat, int set, int ncalc);
-__global__ void lghtcrv_spline_streams_test_krnl(struct dat_t *ddat, int set, double
+__global__ void lghtcrv_spline_krnl(struct dat_t *ddat, int set, double
 		yp1, double ypn, double *u, int ncalc);
-__global__ void lghtcrv_splint_streams3_test_krnl(struct dat_t *ddat, int set, int n, int ncalc);
+__global__ void lghtcrv_splint_krnl(struct dat_t *ddat, int set, int n, int ncalc);
 __device__ void dev_mat2euler( double m[3][3], double *phi, double *theta, double *psi);
 __device__ void dev_mmid( double *y, double *dydx, int nvar1, double xs, double htot,
 		int nstep, double *yout, void (*dev_derivs)( double, double *, double *));
@@ -67,7 +48,6 @@ __device__ void dev_mmmul4( float x[3][3], double y[3][3], float z[3][3]);
 __device__ void dev_mtrnsps( double a[3][3], double b[3][3]);
 __device__ void dev_mtrnsps2(double3 *a, double b[3][3], int f);
 __device__ void dev_mtrnsps3(float3 *a, double b[3][3], int frm);
-__device__ void dev_mtrnsps4( float a[3][3], double b[3][3]);
 __device__ double dev_normalize(double *u);
 __device__ float dev_normalize2(float3 u);
 __device__ void dev_odeint( double *ystart, int nvar, double x1, double x2, double eps,
@@ -76,7 +56,6 @@ __device__ void dev_odeint( double *ystart, int nvar, double x1, double x2, doub
 			*,double *,double *,void (*)(double,double *,double *)));
 __device__ double dev_plgndr(int l,int m,double x);
 __device__ double dev_radlaw( struct photo_t *photo, int ilaw, double cosinc, int c, int f);
-__device__ double dev_radlaw_f( struct photo_t *photo, int ilaw, float cosinc, int c, int f);
 __device__ void dev_realize_impulse(struct spin_t spin, double t,double t_integrate[], double impulse[][3], int *n_integrate, int s, int f, int k);
 __device__ void dev_rzextr( int iest, double xest, double *yest, double *yz, double *dy);
 

@@ -156,7 +156,6 @@ __device__ float rm_area=0.0, rm_ifarea=0.0, rm_vol=0.0, rm_ifvol=0.0,
 static int nv, nf, ns;
 static dim3 nvBLK,nvTHD,nfBLK,nfTHD,nsBLK,nsTHD;
 __host__ void realize_coordinates_gpu(struct par_t *dpar, struct mod_t *dmod, unsigned char type, int gpuid);
-__host__ void realize_coordinates_gpu_f( struct par_t *dpar, struct mod_t *dmod, unsigned char type, int gpuid);
 __host__ void check_surface_gpu(struct mod_t *dmod, cudaStream_t *rm_streams);
 __host__ void compute_moments_gpu(struct mod_t *dmod, int nf, cudaStream_t *cm_streams);
 void *realize_mod_pthread_sub(void *ptr);
@@ -218,42 +217,6 @@ __global__ void ellipse_diameter_krnl(struct par_t *dpar, struct mod_t *dmod) {
 		d_a[0] *= d_a[0];
 		d_a[1] *= d_a[1];
 		d_a[2] *= d_a[2];
-	}
-}
-__global__ void ellipse_diameter_f_krnl(struct par_t *dpar, struct mod_t *dmod) {
-	/* This is a single-thread kernel */
-	float diam, diamratio;
-
-	if (threadIdx.x == 0) {
-		diam = dmod->shape.comp[0].desc.ell.two_a.val;
-		if (diam > HAIRWIDTH) {
-			d_af.x = 2.0/diam; /* 1/radii */
-		} else {
-			d_af.x = (2.0/HAIRWIDTH) * (1 + HAIRWIDTH - diam);
-			dpar->baddiam = 1;
-			dpar->baddiam_logfactor += log(1 + HAIRWIDTH - diam);
-		}
-		diam = (2.0/d_af.x);
-		diamratio = (float)dmod->shape.comp[0].desc.ell.a_over_b.val;
-		if (diamratio > SMALLRATIO) {
-			d_af.y = 2.0/(diam/diamratio);
-		} else {
-			d_af.y = (2.0/(diam/SMALLRATIO)) / (1 + SMALLRATIO - diamratio);
-			dpar->baddiam = 1;
-			dpar->baddiam_logfactor += log(1 + SMALLRATIO - diamratio);
-		}
-		diam = (2.0/d_af.y);
-		diamratio = (float)dmod->shape.comp[0].desc.ell.b_over_c.val;
-		if (diamratio > SMALLRATIO) {
-			d_af.z = 2.0/(diam/diamratio);
-		} else {
-			d_af.z = (2.0/(diam/SMALLRATIO)) / (1 + SMALLRATIO - diamratio);
-			dpar->baddiam = 1;
-			dpar->baddiam_logfactor += log(1 + SMALLRATIO - diamratio);
-		}
-		d_af.x *= d_af.x;
-		d_af.y *= d_af.y;
-		d_af.z *= d_af.z;
 	}
 }
 __global__ void ellipse_distance_krnl(struct par_t *dpar, struct mod_t *dmod)
@@ -346,55 +309,6 @@ __global__ void set_ovoid_parameters_krnl(struct par_t *dpar, struct mod_t *dmod
 		}
 	}
 }
-__global__ void set_ovoid_parameters_f_krnl(struct par_t *dpar, struct mod_t *dmod) {
-	//, double a_radius, double a_over_b, double b_over_c, double
-	//  k_asym, double x0term, double numer, double denom, double x0) {
-
-	/* Single-threaded kernel */
-	if (threadIdx.x == 0) {
-		/*  Determine all shape parameters, making sure that none are out of bounds  */
-		af_radius = (float)(dmod->shape.comp[0].desc.ovoid.two_a.val / 2);
-		if (af_radius <= HAIRWIDTH/2) {
-			dpar->baddiam = 1;
-			dpar->baddiam_logfactor += log(1 + HAIRWIDTH - 2*af_radius);
-			af_radius = (HAIRWIDTH/2) / (1 + HAIRWIDTH - 2*af_radius);
-		}
-		a_over_b_f = (float)dmod->shape.comp[0].desc.ovoid.a_over_b.val;
-		if (a_over_b_f <= SMALLRATIO) {
-			dpar->baddiam = 1;
-			dpar->baddiam_logfactor += log(1 + SMALLRATIO - a_over_b_f);
-			a_over_b_f = SMALLRATIO / (1 + SMALLRATIO - a_over_b_f);
-		}
-		b_over_c_f = (float)dmod->shape.comp[0].desc.ovoid.b_over_c.val;
-		if (b_over_c_f <= SMALLRATIO) {
-			dpar->baddiam = 1;
-			dpar->baddiam_logfactor += log(1 + SMALLRATIO - b_over_c_f);
-			b_over_c_f = SMALLRATIO / (1 + SMALLRATIO - b_over_c_f);
-		}
-		k_asym_f = (float)dmod->shape.comp[0].desc.ovoid.k.val;
-		if (fabs(k_asym_f) > 1 - SMALLVAL) {
-			dpar->baddiam = 1;
-			dpar->baddiam_logfactor += log(fabs(k_asym_f) + SMALLVAL);
-			if (k_asym_f > 0.0)
-				k_asym_f = 1 - SMALLVAL*(1 - SMALLVAL)/k_asym_f;
-			else
-				k_asym_f = -1 - SMALLVAL*(1 - SMALLVAL)/k_asym_f;
-		}
-
-		/* Compute x0, the x-offset that places the ovoid's center of mass at the
-		 * origin; for small |k|, use an analytical approximation to avoid
-		 * roundoff problems       */
-
-		if (fabs(k_asym_f) > SMALLOVOIDK1) {
-			x0term_f = 3*(1 - k_asym_f*k_asym_f)*log((1 + k_asym_f)/(1 - k_asym_f));
-			numer_f = 2.0*k_asym_f * (3 - 2*k_asym_f*k_asym_f) - x0term_f;
-			denom_f = 2.0*k_asym_f * (3 - k_asym_f*k_asym_f) - x0term_f;
-			x0_f = (af_radius/k_asym_f) * (numer_f/denom_f);
-		} else {
-			x0_f = 0.4 * k_asym_f * af_radius;
-		}
-	}
-}
 __global__ void ovoid_distance_krnl(struct par_t *dpar, struct mod_t *dmod)
 //double d_a[3], double a_radius, double a_over_b, double b_over_c, double
 //k_asym, double x0term, double numer, double denom, double x0)
@@ -449,73 +363,6 @@ __global__ void ovoid_distance_krnl(struct par_t *dpar, struct mod_t *dmod)
 			dmod->shape.comp[0].real.scalefactor[j].val = 1.0;
 	}
 }
-__global__ void ovoid_distance_f_krnl(struct par_t *dpar, struct mod_t *dmod)
-//double d_a[3], double a_radius, double a_over_b, double b_over_c, double
-//k_asym, double x0term, double numer, double denom, double x0)
-{
-	int i = blockIdx.x * blockDim.x + threadIdx.x;
-	int j, nrealroots;
-	float a_over_c, h, alpha0, u_x, goodroot, x_over_a;
-	float4 coeff;
-	float3 realroot;
-
-	if (i < dnv) {
-
-		a_over_c = a_over_b_f * b_over_c_f;
-		h = a_over_b_f * a_over_b_f * dmod->shape.comp[0].real.v[i].u[1]
-		                                                              *dmod->shape.comp[0].real.v[i].u[1] + a_over_c *a_over_c
-		                                                              *dmod->shape.comp[0].real.v[i].u[2] * dmod->shape.comp[0].real.v[i].u[2];
-
-		alpha0 = x0_f/af_radius;
-		u_x = (float)dmod->shape.comp[0].real.v[i].u[0];
-
-		coeff.z = (h - u_x*u_x)*k_asym_f*u_x;
-		coeff.y = (1 + 3*k_asym_f * alpha0) * u_x*u_x + h*(1 - k_asym_f*alpha0);
-		coeff.x = (k_asym_f - (2 + 3*k_asym_f * alpha0) * alpha0) * u_x;
-		coeff.w = -(1 - alpha0*alpha0)*(1 + k_asym_f*alpha0);
-		if (fabs(k_asym_f) <= SMALLOVOIDK2) {
-
-			/* |k| is very small, so guard against roundoff error by
-			 * computing the vertex position for an ellipsoid (k = 0) and then
-			 * applying a first-order correction for nonzero k  */
-			goodroot = 1/sqrt(u_x*u_x + h);
-			goodroot -= (coeff.z*goodroot*goodroot*goodroot + coeff.x*goodroot)
-    			   			/ (3*coeff.z*goodroot*goodroot + 2*coeff.y*goodroot + coeff.x);
-		} else {
-
-			/* |k| isn't very small, so solve the cubic equation  */
-			nrealroots = cubic_realroots_f_cuda( coeff, &realroot);
-			goodroot = -HUGENUMBER;
-
-			if (realroot.x >= 0.0) {
-				x_over_a = realroot.x * u_x;
-				if (fabs(x_over_a - alpha0) - 1 < OVOIDTOL)
-					goodroot = MAX(goodroot, realroot.x);
-			}
-			if (nrealroots > 1 && realroot.y >= 0.0) {
-				x_over_a = realroot.y * u_x;
-				if (fabs(x_over_a - alpha0) - 1 < OVOIDTOL)
-					goodroot = MAX(goodroot, realroot.y);
-			}
-			if (nrealroots == 3 && realroot.z >= 0.0) {
-				x_over_a = realroot.z * u_x;
-				if (fabs(x_over_a - alpha0) - 1 < OVOIDTOL)
-					goodroot = MAX(goodroot, realroot.z);
-			}
-		}
-		if (goodroot < 0.0)
-			printf("Can't compute vertex displacement for ovoid vertex %d\n", i);
-
-		dmod->shape.comp[0].real.v[i].r.val = (double)goodroot*af_radius;
-
-		/* Assign scalefactor values  */
-		dmod->shape.comp[0].real.scalefactor[0].state = dmod->shape.comp[0].desc.ovoid.two_a.state;
-		dmod->shape.comp[0].real.scalefactor[1].state = dmod->shape.comp[0].desc.ovoid.a_over_b.state;
-		dmod->shape.comp[0].real.scalefactor[2].state = dmod->shape.comp[0].desc.ovoid.b_over_c.state;
-		for (j=0; j<=2; j++)
-			dmod->shape.comp[0].real.scalefactor[j].val = 1.0;
-	}
-}
 __global__ void harmonic_krnl(struct par_t *dpar, struct mod_t *dmod)
 {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -530,35 +377,6 @@ __global__ void harmonic_krnl(struct par_t *dpar, struct mod_t *dmod)
 		for (l=0; l<=L; l++) {
 			r += dmod->shape.comp[0].desc.har.a[l][0].val
 					* dmod->shape.comp[0].real.v[i].afactor[l][0];
-			for (m=1; m<=l; m++)
-				r += dmod->shape.comp[0].desc.har.a[l][m].val
-				* dmod->shape.comp[0].real.v[i].afactor[l][m]
-				                                           + dmod->shape.comp[0].desc.har.b[l][m].val
-				                                           * dmod->shape.comp[0].real.v[i].bfactor[l][m];
-		}
-		if (r > HAIRWIDTH/2) {
-			dmod->shape.comp[0].real.v[i].r.val = r;
-		} else {
-			dpar->baddiam = 1;
-			dpar->baddiam_logfactor += log(1 + HAIRWIDTH - 2*r) / ((L+1)*(L+1));
-			dmod->shape.comp[0].real.v[i].r.val = (HAIRWIDTH/2) / (1 + HAIRWIDTH - 2*r);
-		}
-	}
-}
-__global__ void harmonic_f_krnl(struct par_t *dpar, struct mod_t *dmod)
-{
-	int i = blockIdx.x * blockDim.x + threadIdx.x;
-	int L, l, m;
-	float r;
-
-	if (i < dnv) {
-
-		L = dmod->shape.comp[0].desc.har.nhar;
-		r = 0.0;
-
-		for (l=0; l<=L; l++) {
-			r += __double2float_rn(dmod->shape.comp[0].desc.har.a[l][0].val)
-							* __double2float_rn(dmod->shape.comp[0].real.v[i].afactor[l][0]);
 			for (m=1; m<=l; m++)
 				r += dmod->shape.comp[0].desc.har.a[l][m].val
 				* dmod->shape.comp[0].real.v[i].afactor[l][m]
@@ -639,31 +457,6 @@ __global__ void calc_vertex_co_krnl(struct par_t *dpar, struct mod_t *dmod)
 					+ dmod->shape.comp[0].real.v[i].a[j]);
 	}
 }
-__global__ void perform_rotation_krnl_old(struct par_t *dpar, struct mod_t *dmod)
-{
-	/* Single-threaded kernel */
-	int i = blockIdx.x * blockDim.x + threadIdx.x;
-	double x[3];
-	int j, k;
-
-	if (threadIdx.x == 0) {
-
-		if (!(dmod->shape.comp[0].rot[0].val == 0 &&
-				dmod->shape.comp[0].rot[1].val == 0 &&
-				dmod->shape.comp[0].rot[2].val == 0    )) {
-			if (i <dmod->shape.comp[0].real.nv){
-
-				for (j=0; j<=2; j++) {
-					x[j] = 0.0;
-					for (k=0; k<=2; k++)
-						x[j] += dmod->shape.comp[0].m[j][k] * dmod->shape.comp[0].real.v[i].x[k];
-				}
-				for (j=0; j<=2; j++)
-					dmod->shape.comp[0].real.v[i].x[j] = x[j];
-			}
-		}
-	}
-}
 __global__ void perform_rotation_krnl(struct par_t *dpar, struct mod_t *dmod)
 {
 	/* nv-threaded kernel */
@@ -689,59 +482,6 @@ __global__ void perform_rotation_krnl(struct par_t *dpar, struct mod_t *dmod)
 		}
 		for (j=0; j<=2; j++)
 			dmod->shape.comp[0].real.v[i].x[j] = x[j];
-	}
-}
-__global__ void perform_rotation_f_krnl(struct par_t *dpar, struct mod_t *dmod)
-{
-	/* nv-threaded kernel */
-	int test, i = blockIdx.x * blockDim.x + threadIdx.x;
-	float3 x, vx;
-
-	__shared__ float m[3][3];
-
-	if (i == 0) {
-		if (!(dmod->shape.comp[0].rot[0].val == 0 &&
-				dmod->shape.comp[0].rot[1].val == 0 &&
-				dmod->shape.comp[0].rot[2].val == 0    ))
-			test = 1;
-	}
-	__syncthreads();
-
-	/* Now assign the shared m array for each warp */
-	if (threadIdx.x == 0 && test == 1) {
-		m[0][0] = __double2float_rn(dmod->shape.comp[0].m[0][0]);
-		m[0][1] = __double2float_rn(dmod->shape.comp[0].m[0][1]);
-		m[0][2] = __double2float_rn(dmod->shape.comp[0].m[0][2]);
-		m[1][0] = __double2float_rn(dmod->shape.comp[0].m[1][0]);
-		m[1][1] = __double2float_rn(dmod->shape.comp[0].m[1][1]);
-		m[1][2] = __double2float_rn(dmod->shape.comp[0].m[1][2]);
-		m[2][0] = __double2float_rn(dmod->shape.comp[0].m[2][0]);
-		m[2][1] = __double2float_rn(dmod->shape.comp[0].m[2][1]);
-		m[2][2] = __double2float_rn(dmod->shape.comp[0].m[2][2]);
-	}
-	__syncthreads();
-
-	if (i < dnv && test == 1) {
-		vx.x = (float)dmod->shape.comp[0].real.v[i].x[0];
-		vx.y = (float)dmod->shape.comp[0].real.v[i].x[1];
-		vx.z = (float)dmod->shape.comp[0].real.v[i].x[2];
-
-		x.x = 0;
-		x.x += m[0][0] * vx.x;
-		x.x += m[0][1] * vx.y;
-		x.x += m[0][2] * vx.z;
-		x.y = 0;
-		x.y += m[1][0] * vx.x;
-		x.y += m[1][1] * vx.y;
-		x.y += m[1][2] * vx.z;
-		x.z = 0;
-		x.z += m[2][0] * vx.x;
-		x.z += m[2][1] * vx.y;
-		x.z += m[2][2] * vx.z;
-
-		dmod->shape.comp[0].real.v[i].x[0] = x.x;
-		dmod->shape.comp[0].real.v[i].x[1] = x.y;
-		dmod->shape.comp[0].real.v[i].x[2] = x.z;
 	}
 }
 __global__ void perform_translation_krnl(struct par_t *dpar, struct mod_t *dmod)
@@ -799,56 +539,7 @@ __global__ void calc_vertex_nrmls_krnl(struct mod_t *dmod)
 			dmod->shape.comp[0].real.v[i].n[k] = n[k];
 	}
 }
-__global__ void calc_vertex_nrmls_f_krnl(struct mod_t *dmod)
-{
-	/* nv-threaded kernel */
-	int i = blockIdx.x * blockDim.x + threadIdx.x;
-	float3 n;
-	int j, naf, f;
-
-	if (i < dnv){
-		n.x = n.y = n.z = 0.0;
-		naf = dmod->shape.comp[0].real.v[i].naf;
-		for (j=0; j<naf; j++) {
-			f = dmod->shape.comp[0].real.v[i].af[j];
-			n.x += __double2float_rn(dmod->shape.comp[0].real.f[f].n[0]);
-			n.y += __double2float_rn(dmod->shape.comp[0].real.f[f].n[1]);
-			n.z += __double2float_rn(dmod->shape.comp[0].real.f[f].n[2]);
-		}
-		dev_normalize2( n);
-		dmod->shape.comp[0].real.v[i].n[0] = n.x;
-		dmod->shape.comp[0].real.v[i].n[1] = n.y;
-		dmod->shape.comp[0].real.v[i].n[2] = n.z;
-	}
-}
 __global__ void facet_krnl(struct par_t *dpar, struct mod_t *dmod)
-{
-	/* For each facet of this component, compute the outward unit normal,
-	 * the area, the mean coordinates of the three corner vertices, and
-	 * the corresponding angular coordinates (for some scattering laws)    */
-	/* nf-threaded kernel */
-
-	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	int j;
-
-	if (f < dnf) {
-
-		dmod->shape.comp[0].real.f[f].area = dev_facnrm(dmod->shape.comp[0].real, f);
-
-		for (j=0; j<=2; j++)
-			dmod->shape.comp[0].real.f[f].x[j] = (dmod->shape.comp[0].real.v[ dmod->shape.comp[0].real.f[f].v[0] ].x[j] +
-					dmod->shape.comp[0].real.v[ dmod->shape.comp[0].real.f[f].v[1] ].x[j] +
-					dmod->shape.comp[0].real.v[ dmod->shape.comp[0].real.f[f].v[2] ].x[j]   )/3;
-
-		if (harmonic_scatlaw) {
-			dmod->shape.comp[0].real.f[f].theta = atan2( sqrt(dmod->shape.comp[0].real.f[f].x[0]*dmod->shape.comp[0].real.f[f].x[0] +
-					dmod->shape.comp[0].real.f[f].x[1]*dmod->shape.comp[0].real.f[f].x[1]   ),
-					dmod->shape.comp[0].real.f[f].x[2]);
-			dmod->shape.comp[0].real.f[f].phi = atan2( dmod->shape.comp[0].real.f[f].x[1], dmod->shape.comp[0].real.f[f].x[0]);
-		}
-	}
-}
-__global__ void facet_f_krnl(struct par_t *dpar, struct mod_t *dmod)
 {
 	/* For each facet of this component, compute the outward unit normal,
 	 * the area, the mean coordinates of the three corner vertices, and
@@ -984,6 +675,7 @@ void *realize_mod_pthread_sub(void *ptr) {
 	/*  Compute the area and moments (volume, center of mass, and
       inertia tensor) of each component and of the overall model  */
 	compute_moments_gpu(data->model, data->nf, data->gpu_stream);
+	return(0);
 }
 
 /*  Compute the vertex coordinates and (if necessary) facet angular coordinates
@@ -1106,126 +798,6 @@ __host__ void realize_coordinates_gpu( struct par_t *dpar, struct mod_t *dmod, u
 	calc_vertex_nrmls_krnl<<<nvBLK,nvTHD>>>(dmod);
 	checkErrorAfterKernelLaunch("calc_vertex_nrmls, line 667");
 }
-__host__ void realize_coordinates_gpu_f( struct par_t *dpar, struct mod_t *dmod, unsigned char type, int gpuid)
-{
-	dim3 BLK, THD;
-	THD.x = maxThreadsPerBlock;
-	/* Loop over all model components, realizing each one as a polyhedral solid
-	 * with triangular facets. Compute displacement of each vertex in this
-	 * realization, represented as a base displacement plus a vertex deviation
-	 * (positive or negative) along a specified set of direction cosines*/
-
-	/*  Call Kernel to initialize flag for tiny/negative ellipsoid diameters  */
-	set_diam_krnl<<<1,1>>>(dpar, dmod, gpuid, GPU0);//, dnv, dnf);
-	checkErrorAfterKernelLaunch("set_diam_krnl");
-
-	/* Note:  The CUDA-code assumes a single-component model for now.  */
-	/* Loop over all model components, realizing each one as a polyhedral solid
-	 * with triangular facets. Compute the displacement of each vertex in this
-	 * realization, represented as a base displacement plus a vertex deviation
-	 * (positive or negative) along a specified set of direction cosines.  */
-
-	/* Copy nf and nv back from device copies dnf and dnv; used as launch
-	 * parameters below */
-	gpuErrchk(cudaMemcpyFromSymbol(&nv, dnv, sizeof(nv), 0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&nf, dnf, sizeof(nv), 0, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpyFromSymbol(&ns, dns, sizeof(nv), 0, cudaMemcpyDeviceToHost));
-	/* Calculate launch parameters for kernels going over vertices (nvBLK) and
-	 * facets (nfBLK) */
-	nvTHD.x = nfTHD.x = THD.x = maxThreadsPerBlock;
-	nvBLK.x = floor((THD.x - 1 + nv) / THD.x);
-	nfBLK.x = floor((THD.x - 1 + nf) / THD.x);
-
-	/* Check component type & create corresponding vertex realization.  */
-	switch (type) {
-	case ELLIPSE:
-		/* To avoid negative diameters/very small positive diameters,
-		 * adjust the function a[i] = 1/radius[i]^2 so it monotonically
-		 * increases as diameter[i] decreases through zero and beyond,
-		 * rather than being symmetric about zero diameter. Also set flag
-		 * "baddiam" when any diameter is very small or negative, so that
-		 * extra penalties can later be applied to this model. */
-
-		/* Launch ellipse diameter kernel */
-		ellipse_diameter_krnl<<<1,1>>>(dpar, dmod);
-		checkErrorAfterKernelLaunch("ellipse_diameter_krnl");
-
-		/* Kernel finds distance of each vertex to ellipsoid's center     */
-		ellipse_distance_krnl<<<nvBLK,nvTHD>>>(dpar, dmod);
-		checkErrorAfterKernelLaunch("ellipse_distance_krnl");
-
-		/* Launch kernel to set real->scalefactor */
-		ellipse_scalefactor_krnl<<<1,1>>>(dmod);
-		checkErrorAfterKernelLaunch("ellipse_scalefactor_krnl");
-		break;
-	case OVOID:
-		/*  Determine all shape parameters, making sure that none are out of bounds  */
-		set_ovoid_parameters_krnl<<<1,1>>>(dpar, dmod);
-		checkErrorAfterKernelLaunch("set_ovoid_parameters_krnl");
-
-		/* Kernel finds distance of each vertex to ovoid's center     */
-		ovoid_distance_krnl<<<nvBLK,nvTHD>>>(dpar, dmod);
-		checkErrorAfterKernelLaunch("ovoid_distance_krnl");
-		break;
-	case HARMONIC:
-		/* Kernel sets parameters associated with harmonic model     */
-		harmonic_krnl<<<nvBLK,nvTHD>>>(dpar, dmod);
-		checkErrorAfterKernelLaunch("harmonic_krnl");
-
-		THD.x = 3;
-		harmonic_scalefactor_krnl<<<1,THD>>>(dpar, dmod);
-		checkErrorAfterKernelLaunch("harmonic_scalefactor_krnl");
-		break;
-	case VERTEX:
-		/* The vertex type is its own realization, but we still need to update
-		 * the values of the "scale factor" parameters and update any vertex
-		 * deviations that have the '=' state    */
-		vertex_update_dev_krnl<<<nvBLK,nvTHD>>>(dpar, dmod);
-		checkErrorAfterKernelLaunch("vertex_update_dev_kernel");
-
-		BLK.x = 1;	THD.x = 3;
-		vertex_scalefactor_krnl<<<1,1>>>(dpar, dmod);
-		checkErrorAfterKernelLaunch("vertex_scalefactor_krnl");
-		break;
-	default:
-		printf("realize_mod.c: don't know that component type\n");
-	}      /* end of switch statement for component type */
-
-	/*  Calculate vertex coordinates for this component  */
-	calc_vertex_co_krnl<<<nvBLK,nvTHD>>>(dpar, dmod);
-	checkErrorAfterKernelLaunch("calc_vertex_co_krnl");
-
-	/* Use this component's rotational offset angles to create comp[c].m, the
-	 * rotation matrix that will be applied to the vertex coordinates  */
-	euler2mat_realize_mod_krnl<<<1,1>>>(dmod);
-	checkErrorAfterKernelLaunch("dev_euler2mat");
-
-	/* If needed, perform rotation on this component  */
-	/* NOTE:  Still needs to be debugged, doesn't run as is */
-	perform_rotation_f_krnl<<<nvBLK,nvTHD>>>(dpar, dmod);
-	checkErrorAfterKernelLaunch("perform_rotation_krnl");
-
-	/*  If needed, perform translation on this component  */
-	perform_translation_krnl<<<nvBLK,nvTHD>>>(dpar, dmod);
-	checkErrorAfterKernelLaunch("perform_translation_krnl, line 651");
-
-	/* 	Figure out if optical/radar harmonic scattering laws are in use     *
-	 *  and set the flag harmonic_scatlaw accordingly				        */
-	set_optical_params_krnl<<<1,1>>>(dpar, dmod);
-	checkErrorAfterKernelLaunch("set_optical_params_krnl, line 656");
-
-	/* For each facet of this component, compute outward unit normal, area,
-	 * mean coordinates of the three corner vertices, and corresponding angular
-	 * coordinates (for some scattering laws)    */
-	facet_krnl<<<nfBLK,nfTHD>>>(dpar, dmod);
-	checkErrorAfterKernelLaunch("facet_krnl, line 662");
-
-	/* Calculate vertex normals for this component as normalized sums of the
-	 * facet normals for all facets attached to each vertex     */
-	calc_vertex_nrmls_f_krnl<<<nvBLK,nvTHD>>>(dmod);
-	checkErrorAfterKernelLaunch("calc_vertex_nrmls, line 667");
-}
-/*.....................................................................................*/
 
 /*  Determine which vertices, facets, and sides of a multiple-component
     model lie interior to the model rather than on the model's surface,
@@ -1312,51 +884,6 @@ __global__ void comp_moments_facet_krnl(struct mod_t *dmod, int c, float *dvarr,
 
 	}
 }
-__global__ void comp_moments_facet_f_krnl(struct mod_t *dmod, int c, float *dvarr,
-		float *dcom0, float *dcom1, float *dcom2, float *dI00, float *dI01,
-		float *dI02, float *dI10, float *dI11, float *dI12, float *dI20,
-		float *dI21, float *dI22)
-{
-	/* nf-threaded kernel */
-	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	float3 dI[3], dcom, fv0, fv1, fv2, fn;
-	float dv;
-	if (f < dnf)
-	{
-		fv0.x = dmod->shape.comp[c].real.v[dmod->shape.comp[c].real.f[f].v[0]].x[0];
-		fv0.y = dmod->shape.comp[c].real.v[dmod->shape.comp[c].real.f[f].v[0]].x[1];
-		fv0.z = dmod->shape.comp[c].real.v[dmod->shape.comp[c].real.f[f].v[0]].x[2];
-
-		fv1.x = dmod->shape.comp[c].real.v[dmod->shape.comp[c].real.f[f].v[1]].x[0];
-		fv1.y = dmod->shape.comp[c].real.v[dmod->shape.comp[c].real.f[f].v[1]].x[1];
-		fv1.z = dmod->shape.comp[c].real.v[dmod->shape.comp[c].real.f[f].v[1]].x[2];
-
-		fv2.x = dmod->shape.comp[c].real.v[dmod->shape.comp[c].real.f[f].v[2]].x[0];
-		fv2.y = dmod->shape.comp[c].real.v[dmod->shape.comp[c].real.f[f].v[2]].x[1];
-		fv2.z = dmod->shape.comp[c].real.v[dmod->shape.comp[c].real.f[f].v[2]].x[2];
-
-		fn.x = dmod->shape.comp[c].real.f[f].n[0];
-		fn.y = dmod->shape.comp[c].real.f[f].n[1];
-		fn.z = dmod->shape.comp[c].real.f[f].n[2];
-
-		dev_facmom_f(fv0, fv1, fv2, fn, &dv, &dcom, dI);
-
-		/* Assign calculated dv, dcom, dI to each facet for later parallel reduction */
-		dvarr[f]  	= dv;
-		dcom0[f]	= dcom.x;
-		dcom1[f]	= dcom.y;
-		dcom2[f]	= dcom.z;
-		dI00[f] 	= dI[0].x;
-		dI01[f] 	= dI[0].y;
-		dI02[f] 	= dI[0].z;
-		dI10[f] 	= dI[1].x;
-		dI11[f] 	= dI[1].y;
-		dI12[f] 	= dI[1].z;
-		dI20[f] 	= dI[2].x;
-		dI21[f] 	= dI[2].y;
-		dI22[f] 	= dI[2].z;
-	}
-}
 __global__ void comp_moments_com_krnl(struct mod_t *dmod)
 {
 	/* Single-thread kernel */
@@ -1377,7 +904,6 @@ __host__ void compute_moments_gpu(struct mod_t *dmod, int nf, cudaStream_t *cm_s
 			*dI10, *dI11, *dI12, *dI20, *dI21, *dI22;
 	size_t arrsz = sizeof(float)*nf;
 	int c=0;
-//	gpuErrchk(cudaSetDevice(GPU0));
 
 	/*  Initialize the model's surface area, volume, center-of-mass (COM)
 	 * displacement, and inertia tensor  */

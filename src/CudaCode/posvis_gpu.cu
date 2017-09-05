@@ -349,7 +349,7 @@ __global__ void posvis_facet_krnl(
 										else
 											atomicExch(&pos[frm]->cose_s[pxa], n.z);
 										if ((!src) && (pos[frm]->bistatic)) {
-											float temp = dev_dot4(n,usrc[frm]);
+											float temp = dev_dot_f3(n,usrc[frm]);
 											atomicExch(&pos[frm]->cosi_s[pxa], temp);
 											if (pos[frm]->cosi_s[pxa] <= 0.0)
 												pos[frm]->cose_s[pxa] = 0.0;

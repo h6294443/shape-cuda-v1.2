@@ -135,8 +135,6 @@ void vary_params( struct par_t *par, struct mod_t *mod, struct dat_t *dat,
 								(int) par->pos_smooth, 0, 0, c);
 					}
 
-//					if (f==1)
-//					dbg_print_pos_arrays_full_host(pos);
 					/* Zero out the fit delay-Doppler image and call pos2deldop
 					 * to create the fit image by mapping power from the plane
 					 * of sky to delay-Doppler space.                             */
@@ -144,9 +142,8 @@ void vary_params( struct par_t *par, struct mod_t *mod, struct dat_t *dat,
 					clrmat( deldop->frame[f].fit, 1, deldop->frame[f].ndel,
 							1, deldop->frame[f].ndop);
 
+//					dbg_print_pos_z_host(pos, "CPU_host_z.csv");
 					pos2deldop(par, &mod->photo, 0.0, 0.0, 0.0, deldop, 0, s, f, 0);
-
-//					dbg_print_deldop_fit_host(dat, s, f, "GPU_deldop_fit.csv");
 
 					/*  Compute distance toward Earth of the subradar point  */
 

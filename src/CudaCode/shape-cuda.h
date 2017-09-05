@@ -7,9 +7,9 @@
 // includes, cuda
 #include <cuda.h>
 #include <cuda_runtime_api.h>
-#include "cuda_runtime.h"
-#include "device_launch_parameters.h"
-#include <math.h>
+//#include "cuda_runtime.h"
+//#include "device_launch_parameters.h"
+//#include <math.h>
 
 /*  Define macros */
 #define gpuErrchk(ans) do{ gpuAssert((ans), __FILE__, __LINE__); }while(0)
@@ -262,12 +262,6 @@ __global__ void posclr_mgpu_krnl(struct pos_t **pos, int *posn, int f, int hf,
 __global__ void cf_mark_pixels_seen_krnl(struct par_t *dpar, struct mod_t *dmod,
 		struct pos_t **pos, int4 *xylim, int npixels, int xspan, int f);
 
-//__global__ void posmask_init_krnl(struct pos_t **pos, double3 *so,
-//		float *pixels_per_km, int f);
-
-__global__ void posmask_init_mgpu_krnl(struct pos_t **pos, double3 *so,
-		float *pixels_per_km, int size, int oddflg);
-
 __global__ void posmask_krnl(struct par_t *dpar,struct pos_t **pos,double3 *so,
 		float *pixels_per_km, int *posn, int nThreads, int xspan, int f);
 
@@ -280,9 +274,6 @@ __global__ void update_spin_angle_krnl(struct mod_t *dmod, double3 *angle_omega_
 __global__ void posmask_init_krnl(struct pos_t **pos, double3 *so,
 		float *pixels_per_km, int size);
 
-__device__ void dev_POSrect2(struct pos_t *pos, int src, float imin_dbl,
-		float imax_dbl, float jmin_dbl, float jmax_dbl);
-
 __device__ void dev_POSrect_gpu(struct pos_t **pos, int src, float imin_dbl,
 		float imax_dbl,	float jmin_dbl,	float jmax_dbl,	float4
 		*ijminmax_overall, int frm);
@@ -291,8 +282,6 @@ __device__ void dev_realize_impulse(struct spin_t spin, double t,
 		double t_integrate[], double impulse[][3], int *n_integrate, int s, int f, int k);
 
 __device__ void dev_splint_cfs(double *xa,double *ya,double *y2a,int n,double x,double *y);
-
-
 
 void set_up_pos_pinned(struct par_t *par, struct dat_t *dat);
 void set_up_pos_mgpu(struct par_t *par, struct dat_t *dat, int gpuid);

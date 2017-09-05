@@ -835,13 +835,13 @@ __host__ void vary_params_gpu(
 				/* First make a pointer for u and cudaMalloc device memory for it */
 				gpuErrchk(cudaMemset(u, 0, nfrm_alloc_max*sizeof(double)));
 
-				lghtcrv_spline_streams_test_krnl<<<BLKncalc,THD>>>(ddat, s, 2.0e30,
+				lghtcrv_spline_krnl<<<BLKncalc,THD>>>(ddat, s, 2.0e30,
 						2.0e30, u, hnframes[s]);
-				checkErrorAfterKernelLaunch("lghtcrv_spline_streams_krnl");
+				checkErrorAfterKernelLaunch("lghtcrv_spline_krnl");
 
 				/* Change launch parameters from ncalc threads to n threads */
 				//BLKncalc.x = floor((THD.x - 1 + hlc_n[s]) / THD.x);
-				lghtcrv_splint_streams3_test_krnl<<<1,1>>>(ddat, s, hlc_n[s], hnframes[s]);
+				lghtcrv_splint_krnl<<<1,1>>>(ddat, s, hlc_n[s], hnframes[s]);
 				checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
 
 				/* Finalize the optical brightness calculation */
@@ -1372,13 +1372,13 @@ void *vary_params_pthread_sub(void *ptr) {
 				/* First make a pointer for u and cudaMalloc device memory for it */
 				gpuErrchk(cudaMemset(u, 0, nfrm_alloc_max*sizeof(double)));
 
-				lghtcrv_spline_streams_test_krnl<<<BLKncalc,THD>>>(data->data,
+				lghtcrv_spline_krnl<<<BLKncalc,THD>>>(data->data,
 						s, 2.0e30, 2.0e30, u, data->nframes[s]);
-				checkErrorAfterKernelLaunch("lghtcrv_spline_streams_krnl");
+				checkErrorAfterKernelLaunch("lghtcrv_spline_krnl");
 
 				/* Change launch parameters from ncalc threads to n threads */
 				//BLKncalc.x = floor((THD.x - 1 + hlc_n[s]) / THD.x);
-				lghtcrv_splint_streams3_test_krnl<<<1,1>>>(data->data, s,
+				lghtcrv_splint_krnl<<<1,1>>>(data->data, s,
 						data->hlc_n[s], data->nframes[s]);
 				checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
 

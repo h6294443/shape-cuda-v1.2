@@ -891,9 +891,6 @@ __global__ void rad_cosinelaw_krnl(struct par_t *dpar, struct mod_t *dmod,
 	int ilaw = 0;
 	if (threadIdx.x == 0) {
 
-//		if (dmod->photo.radar[ilaw].RC.R.val == 0.0)	rp_dbg_Rval=1;
-//		if (radalb_factor == 0.0)	rp_dbg_AF=1;
-
 		if (dmod->photo.radar[ilaw].RC.R.state == 'f') {
 			if (albedo_mode != 0)
 				dmod->photo.radar[ilaw].RC.R.val = dmod->photo.radar[ilaw].RC.R_save * radalb_factor;

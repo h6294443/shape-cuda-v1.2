@@ -9,7 +9,7 @@
  */
 #include "../shape/head.h"
 
-int CUDA   = 1;		/* Use CUDA code or run CPU code 	*/
+int CUDA   = 0;		/* Use CUDA code or run CPU code 	*/
 int TIMING = 0;		/* Time certain kernel executions	*/
 int GPU0   = 1;		/* Which GPU will run code 			*/
 int GPU1   = 0;
@@ -17,14 +17,11 @@ int FLOAT  = 0;
 int MGPU   = 0;		/* Switch for dual-gpu mode (interweave) 		*/
 int PIN    = 0;
 int maxThreadsPerBlock = 0;
+int HMT	= 0;
+int HMT_threads = 4;
 
 int main(int argc, char *argv[])
 {
-//	printf("Shape-CUDA-v1.2 running\n");
-//	printf("Now with even more face-melting concurrency.\n");
-//	/* Check available CUDA devices, if any, before proceeding */
-//	CUDACount();
-//	maxThreadsPerBlock = 256;
 	long x;	/* For gpuid read-in */
 
 	/* Declare variables */
@@ -48,8 +45,6 @@ int main(int argc, char *argv[])
 	/*  initialize  */
 	init( argc, argv, progname);
 
-
-
 	if (argc == 6) {
 		if (strcmp(argv[4], "-GPU")==0) {
 			CUDA = 1;
@@ -64,6 +59,13 @@ int main(int argc, char *argv[])
 			GPU0 = (int)x;
 			if (GPU0==0)	GPU1 = 1;
 			else GPU1 = 0;
+		}
+		else if (strcmp(argv[4], "-HMT")==0) {
+			CUDA = 0;
+			MGPU = 0;
+			HMT = 1;
+			x = strtol(argv[5], NULL, 10);
+			HMT_threads = (int) x;
 		}
 		else
 			CUDA = 0;
@@ -135,57 +137,6 @@ int main(int argc, char *argv[])
 	printf("\nmod.name: %s", mod.name);
 	printf("\ndat.name: %s", dat.name);
 
-//	if (par.action == FIT) {
-//		if (argc == 4) {
-//			CUDA = 0;
-//			MGPU = 0;
-//		}
-//		else if (argc == 6) {
-//			printf("\n%s\n", argv[4]);
-//			int test = strcmp(argv[4], "-GPU");
-//			if (strcmp(argv[4], "-GPU")==0) {
-//				CUDA = 1;
-//				MGPU = 0;
-//				x = strtol(argv[5], NULL, 10);
-//				GPU0 = (int)x;
-//			}
-//			else if (strcmp(argv[4],"-MGPU")==0) {
-//				CUDA = 1;
-//				MGPU = 1;
-//				x = strtol(argv[5], NULL, 10);
-//				GPU0 = (int)x;
-//				if (GPU0==0)	GPU1 = 1;
-//				else GPU1 = 0;
-//			}
-//			else
-//				CUDA = 0;
-//		}
-//		else if (argc == 7){
-//			if (strcmp(argv[4],"MGPU")==0) {
-//				CUDA = 1;
-//				MGPU = 1;
-//				x = strtol(argv[5], NULL, 10);
-//				GPU0 = (int)x;
-//				x = strtol(argv[6], NULL, 10);
-//				GPU1 = (int)x;
-//			}
-//			else {
-//				CUDA = 0;
-//				MGPU = 0;
-//			}
-//		}
-//	}
-//	if (CUDA) {
-//		printf("Shape-CUDA-v1.2 running\n");
-//		printf("Now with even more face-melting concurrency.\n");
-//		/* Check available CUDA devices, if any, before proceeding */
-//		CUDACount();
-//		maxThreadsPerBlock = 256;
-//		gpuErrchk(cudaSetDevice(GPU0));
-//		if (MGPU)
-//			read_par( argv[1], &par1);
-//	}
-
 	/*  Carry out the desired action - 'fit' only for now */
 	switch (par.action) {
 	case FORMAT:
@@ -255,14 +206,11 @@ int main(int argc, char *argv[])
 
 		par.nfpar = 0;
 		if (CUDA && MGPU) {
-			//			par.nfpar += read_mod_pthread(&par, &mod, &mod1, thread1, thread2);
 			gpuErrchk(cudaSetDevice(GPU0));
 			par.nfpar += read_mod(&par, &mod);
 			gpuErrchk(cudaSetDevice(GPU1));
 			read_mod(&par1, &mod1);
-			//gpuErrchk(cudaSetDevice(GPU0));
 			par.nfpar += read_dat_mgpu( &par, &mod, &dat, GPU0);
-			//gpuErrchk(cudaSetDevice(GPU1));
 			read_dat_mgpu( &par1, &mod1, &dat1, GPU1);
 			gpuErrchk(cudaSetDevice(GPU0));
 		}
@@ -310,7 +258,10 @@ int main(int argc, char *argv[])
 			}
 			else
 				bestfit_gpu(dev_par,dev_mod,dev_dat, &par,&mod,&dat);
-		} else
+		}
+		else if (HMT)
+			bestfit_hmt(&par, &mod, &dat);
+		else
 			bestfit( &par, &mod, &dat);
 		break;
 	case FACETS:

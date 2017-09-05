@@ -56,15 +56,3 @@ __device__ void dev_mtrnsps3(float3 *a, double b[3][3], int frm)
   a[f+2].y = t[2][1];
   a[f+2].z = t[2][2];
 }
-__device__ void dev_mtrnsps4( float a[3][3], double b[3][3])
-{
-	float t[3][3];
-	int i, j;
-
-  for (i=0;i<=2;i++)
-	for (j=0;j<=2;j++)
-	  t[i][j] = __double2float_rn(b[j][i]);
-  for (i=0;i<=2;i++)
-	for (j=0;j<=2;j++)
-	  a[i][j] = t[i][j];
-}

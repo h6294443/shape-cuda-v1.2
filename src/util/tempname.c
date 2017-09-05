@@ -18,7 +18,7 @@ Written 2007 August 23 by CM
 #include "basic.h"
 #include <time.h>
 
-void tempname(char *outname, int maxSize, char *prefix, char *suffix)
+void tempname(const char *outname, int maxSize, char *prefix, char *suffix)
 {
   struct tm *ptr;
   time_t lt;

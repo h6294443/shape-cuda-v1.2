@@ -1031,7 +1031,7 @@ __global__ void cf_finish_fit_krnl2(struct dat_t *ddat,
 	}
 }
 __global__ void cf_gamma_trans_krnl(struct par_t *dpar, struct dat_t *ddat,
-		int s, int f, int nThreads, unsigned char type, int flt) {
+		int s, int f, int nThreads, unsigned char type) {
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
 	if (offset < nThreads) {
@@ -1039,11 +1039,7 @@ __global__ void cf_gamma_trans_krnl(struct par_t *dpar, struct dat_t *ddat,
 		if (dpar->dd_gamma != 1.0) {
 			switch (type) {
 			case DELAY:
-				if (flt)
-					dev_gamma_trans_f(&ddat->set[s].desc.deldop.frame[f].fit_s[offset],
-							__double2float_rn(dpar->dd_gamma));
-				else
-					dev_gamma_trans(&ddat->set[s].desc.deldop.frame[f].fit_s[offset],
+				dev_gamma_trans(&ddat->set[s].desc.deldop.frame[f].fit_s[offset],
 						dpar->dd_gamma);
 				break;
 			case DOPPLER:
@@ -1203,7 +1199,7 @@ __host__ void calc_deldop_gpu(struct par_t *dpar, struct mod_t *dmod,
 
 			cf_finish_fit_krnl2<<<1,1,0,cf_stream[f]>>>(ddat, overflow, s, f, type);
 
-			cf_gamma_trans_krnl<<<BLKdd[f],THD,0,cf_stream[f]>>>(dpar, ddat, s, f, nThreadsdd[f], type, FLOAT);
+			cf_gamma_trans_krnl<<<BLKdd[f],THD,0,cf_stream[f]>>>(dpar, ddat, s, f, nThreadsdd[f], type);
 		} checkErrorAfterKernelLaunch("cf_finish_fit_store_streams kernels and "
 				"cf_gamma_trans_krnl");
 		cudaFree(fit_store);
@@ -1368,7 +1364,7 @@ __host__ void calc_doppler_gpu(struct par_t *dpar, struct mod_t *dmod,
 			cf_finish_fit_krnl2<<<1,1,0,cf_stream[f]>>>(ddat, overflow, s, f, type);
 
 			cf_gamma_trans_krnl<<<BLKd[f],THD,0,cf_stream[f]>>>(dpar,
-					ddat, s, f, ndop[f], type, FLOAT);
+					ddat, s, f, ndop[f], type);
 		} checkErrorAfterKernelLaunch("cf_finish_fit_store_streams kernels and "
 				"cf_gamma_trans_krnl (calc_doppler_cuda_streams");
 		cudaFree(fit_store);
@@ -1731,11 +1727,11 @@ __host__ void calc_lghtcrv_gpu(
 	THD.x = maxThreadsPerBlock;
 	gpuErrchk(cudaMemset(u, 0, sizeof(double)*nfplus));
 	BLKpx[0].x = floor((THD.x - 1 + nThreads)/THD.x);
-	lghtcrv_spline_streams_test_krnl<<<1,1>>>(ddat, s, 2.0e30, 2.0e30, u, nframes);
-	checkErrorAfterKernelLaunch("lghtcrv_spline_streams_krnl");
+	lghtcrv_spline_krnl<<<1,1>>>(ddat, s, 2.0e30, 2.0e30, u, nframes);
+	checkErrorAfterKernelLaunch("lghtcrv_spline_krnl");
 
 	/* Change launch parameters from ncalc threads to n threads */
 	BLKpx[0].x = floor((THD.x - 1 + n) / THD.x);
-	lghtcrv_splint_streams3_test_krnl<<<1,1>>>(ddat, s, n, nframes);
+	lghtcrv_splint_krnl<<<1,1>>>(ddat, s, n, nframes);
 	checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
 }

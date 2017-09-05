@@ -22,3 +22,4 @@ __host__ void dbg_print_facet_normals(struct mod_t *dmod, int nf, char *fn);
 __host__ void dbg_print_pos_bd(struct pos_t **pos, int f, int npixels, int n);
 __host__ void dbg_print_lc_fit(struct dat_t *ddat, int s, char *filename_fit, int n);
 __host__ void dbg_print_lc_fit_host(struct lghtcrv_t *lghtcrv, char *filename_fit, int n);
+__host__ void dbg_print_pos_z_host(struct pos_t *pos, const char *fn);

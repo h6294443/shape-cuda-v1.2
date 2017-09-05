@@ -299,6 +299,10 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
    *  Only compute contributions from POS pixels that project onto the right body, in case this
    *  is the "orbit" action (for which this routine is called twice, once for each of the two
    *  orbiting bodies). */
+
+//  dbg_print_pos_z_host(pos, "CPU_host_z.csv");
+
+//  dbg_print_pos_arrays2_host(pos);
   for (x=pos->xlim[0]; x<=pos->xlim[1]; x++)
     for (y=pos->ylim[0]; y<=pos->ylim[1]; y++) {
       if (pos->cose[x][y] > 0.0 && pos->body[x][y] == body) {
@@ -313,6 +317,10 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
             than fewer.       */
 
         delPOS = pos->z[x][y]*delfact + delshift;
+        if (pos->z[x][y]==-1e20)
+        	printf("pos->z[%i][%i]=%g\n", x, y, pos->z[x][y]);
+        if (delPOS > 200e3)
+        	printf("test\n");
         idel_min = (int) floor(delPOS - const1) + 1;
         idel_max = (int) ceil(delPOS + const1) - 1;
         dopPOS = ax*(x - orbit_xoff) + ay*(y - orbit_yoff) + dopshift;

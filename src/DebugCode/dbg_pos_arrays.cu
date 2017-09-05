@@ -69,7 +69,7 @@ __host__ void dbg_print_pos_arrays2_host(struct pos_t *pos) {
 	fclose(fp_cosi);
 	fclose(fp_cose);
 }
-__host__ void dbg_print_pos_z_host(struct pos_t *pos, char *fn) {
+__host__ void dbg_print_pos_z_host(struct pos_t *pos, const char *fn) {
 	/* This debug function prints the CPU arrays:
 	 *	 - pos->z
 	 *

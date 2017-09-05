@@ -96,7 +96,7 @@ void swapbuf_double(double *buf, int nvals);
 void swapbuf_ldouble(long double *buf, int nvals);
 int nomoredata( FILE *fp);
 int countdata( FILE *fp);
-void tempname(char *outname, int maxSize, char *prefix, char *suffix);
+void tempname(const char *outname, int maxSize, char *prefix, char *suffix);
 void timestring(char *outstring, int maxSize, char *formatstring);
 int checkposet( double **im, int x1, int x2, int y1, int y2,
                 double x0, double xwidth, double y0, double ywidth,
