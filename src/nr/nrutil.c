@@ -18,6 +18,17 @@ double *vector(int nl,int nh)
 	return v-nl;
 }
 
+double *vector_zero(int nl,int nh)
+{
+	double *v;
+
+	v=(double *) malloc((size_t) (nh-nl+1)*sizeof(double));
+	if (!v) nrerror("allocation failure in vector()");
+	for (int i=nl; i<nh; i++)
+		v[i]=0.0;
+	return v-nl;
+}
+
 int *ivector(int nl,int nh)
 {
 	int *v;
@@ -61,6 +72,28 @@ double **matrix(int nrl,int nrh,int ncl,int nch)
 	}
 	return m;
 }
+
+double **matrix_zero(int nrl,int nrh,int ncl,int nch)
+{
+	int i;
+	double **m;
+
+	m=(double **) malloc((unsigned) (nrh-nrl+1)*sizeof(double*));
+	if (!m) nrerror("allocation failure 1 in matrix()");
+	m -= nrl;
+
+	for(i=nrl;i<=nrh;i++) {
+		m[i]=(double *) malloc((unsigned) (nch-ncl+1)*sizeof(double));
+		if (!m[i]) nrerror("allocation failure 2 in matrix()");
+		m[i] -= ncl;
+	}
+
+	for (i=nrl; i<nrh; i++)
+		for (int j=ncl; j<nch; j++)
+			m[i][j]=0.0;
+	return m;
+}
+
 
 double **dmatrix(int nrl,int nrh,int ncl,int nch)
 {

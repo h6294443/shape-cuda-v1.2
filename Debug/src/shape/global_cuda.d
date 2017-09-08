@@ -46,23 +46,4 @@ src/shape/global_cuda.o : ../src/shape/global_cuda.c \
     /usr/include/x86_64-linux-gnu/bits/posix2_lim.h \
     /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/surface_types.h \
     /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/texture_types.h \
-    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/cuda_device_runtime_api.h \
-    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/cuda_runtime.h \
-    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/host_config.h \
-    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/crt/host_config.h \
-    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/library_types.h \
-    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/channel_descriptor.h \
-    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/driver_functions.h \
-    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/vector_functions.h \
-    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/vector_functions.hpp \
-    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/device_launch_parameters.h \
-    /usr/include/math.h \
-    /usr/include/x86_64-linux-gnu/bits/math-vector.h \
-    /usr/include/x86_64-linux-gnu/bits/libm-simd-decl-stubs.h \
-    /usr/include/x86_64-linux-gnu/bits/huge_val.h \
-    /usr/include/x86_64-linux-gnu/bits/huge_valf.h \
-    /usr/include/x86_64-linux-gnu/bits/huge_vall.h \
-    /usr/include/x86_64-linux-gnu/bits/inf.h \
-    /usr/include/x86_64-linux-gnu/bits/nan.h \
-    /usr/include/x86_64-linux-gnu/bits/mathdef.h \
-    /usr/include/x86_64-linux-gnu/bits/mathcalls.h
+    /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/cuda_device_runtime_api.h

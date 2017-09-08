@@ -56,7 +56,7 @@ __global__ void posmask_krnl(
 	int j = offset / xspan - n;
 	float tol = dpar->mask_tol;
 	float kmpxl = (float)pos[f]->km_per_pixel;
-	int im, jm, i1, j1, i2, j2, i_sign, j_sign, pxa, pxa1, pxa2;
+	int im, jm, i1, j1, i2, j2, i_sign, j_sign, pxa, pxa1;// pxa2;
 	float3 xk;
 	float i0_f, j0_f, zill, t, u, bignum;
 	bignum = 0.99*HUGENUMBER;  /* z = -HUGENUMBER for blank-sky pixels */

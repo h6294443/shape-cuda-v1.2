@@ -121,17 +121,22 @@ void vary_params_hmt(struct par_t *par, struct mod_t *mod, struct dat_t *dat,
 	/* Now launch (HMT_threads-1) pthreads, then use the current thread to
 	 * launch a vary_params_hmt_sub function on its own, then return to waiting
 	 * on the other threads to complete	 */
-//	for (int i=0; i<HMT_threads-1; i++)
-		pthread_create(&hmt_thread[0], NULL, vary_params_hmt_sub,(void*)&data[0]);
-		pthread_create(&hmt_thread[1], NULL, vary_params_hmt_sub,(void*)&data[1]);
+	for (int i=0; i<HMT_threads; i++)
+		pthread_create(&hmt_thread[i], NULL, vary_params_hmt_sub,(void*)&data[i]);
 
 //	vary_params_hmt_sub(&data[HMT_threads-1]);
 //	vary_params_hmt_sub(&data[1]);
 
-//	for (int i=0; i<HMT_threads-1; i++)
-//		pthread_join(hmt_thread[i], NULL);
-		pthread_join(hmt_thread[0], NULL);
-		pthread_join(hmt_thread[1], NULL);
+	for (int i=0; i<HMT_threads; i++)
+		pthread_join(hmt_thread[i], NULL);
+
+//	pthread_create(&hmt_thread[0], NULL, vary_params_hmt_sub,(void*)&data[0]);
+//	pthread_join(hmt_thread[0], NULL);
+//
+//	pthread_create(&hmt_thread[1], NULL, vary_params_hmt_sub,(void*)&data[1]);
+//	pthread_join(hmt_thread[1], NULL);
+
+
 
 	/* Finish the zmax, xsec, brightness, subradarlat calculations */
 	for (int i=0; i<HMT_threads; i++) {
@@ -380,5 +385,6 @@ void *vary_params_hmt_sub(void *ptr) {
 			}
 		}
 	}
+	return(0);
 }
 

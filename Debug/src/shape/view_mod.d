@@ -92,6 +92,9 @@ src/shape/view_mod.o : ../src/shape/view_mod.c \
     /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/surface_types.h \
     /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/texture_types.h \
     /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/cuda_device_runtime_api.h \
+    ../src/shape/../CudaUtils/cuda_utils.h \
+    ../src/shape/../DebugCode/debug_routines.h \
+    ../src/shape/../CudaPR/parallel_reductions.h \
     /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/cuda_runtime.h \
     /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/host_config.h \
     /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/crt/host_config.h \
@@ -101,6 +104,4 @@ src/shape/view_mod.o : ../src/shape/view_mod.c \
     /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/vector_functions.h \
     /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/vector_functions.hpp \
     /usr/local/cuda-9.0/bin/../targets/x86_64-linux/include/device_launch_parameters.h \
-    ../src/shape/../CudaUtils/cuda_utils.h \
-    ../src/shape/../DebugCode/debug_routines.h \
-    ../src/shape/../CudaPR/parallel_reductions.h
+    ../src/shape/../HostMultiThreading/hmt.h

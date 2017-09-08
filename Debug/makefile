@@ -14,6 +14,7 @@ RM := rm -rf
 -include src/pgm/subdir.mk
 -include src/nr/subdir.mk
 -include src/astro/subdir.mk
+-include src/HostMultiThreading/subdir.mk
 -include src/DebugCode/subdir.mk
 -include src/CudaUtils/subdir.mk
 -include src/CudaPR/subdir.mk

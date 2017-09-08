@@ -890,7 +890,10 @@ void read_par( char *name, struct par_t *par)
         par->view_sunlat *= D2R;
     }
     else if (!strcmp( str, "sun_appmag")) {
-        read_doublepar( fp, &par->sun_appmag, str, par_was_specified, 129);
+    	n_read = read_doublevecpar( fp, (*par).sun_appmag, str, MAXSUNMAGS,
+    			par_was_specified, 129);
+    	for (i=n_read; i<MAXSUNMAGS; i++)
+    		(*par).sun_appmag[i] = (*par).sun_appmag[0];
     }
     else if (!strcmp( str, "rad_R_min")) {
         read_minmaxpar( fp, &par->rad_R_min, str, 0, par_was_specified, 130);
@@ -1460,7 +1463,8 @@ void initialize_par( struct par_t *par)
   par->opt_B0_nharm = 0;
   par->opt_g_nharm = 0;
   par->opt_theta_nharm = 0;
-  par->sun_appmag = SOLAR_VMAG;
+  for (i=0; i<MAXSUNMAGS; i++)
+      (*par).sun_appmag[i] = SOLAR_VMAG;
   par->rad_R_min = 0.0;
   par->rad_R_max = HUGENUMBER;
   par->rad_C_min = 0.0;

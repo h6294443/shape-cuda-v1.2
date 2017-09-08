@@ -1817,4 +1817,5 @@ void *realize_photo_pthread_sub(void *ptr) {
 	default:
 		bailout("realize_photo: can't handle this radar law yet\n");
 	}
+	return(0);
 }

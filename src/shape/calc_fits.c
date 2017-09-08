@@ -337,24 +337,6 @@ Modified 2003 April 23 by CM:
 
 #include "head.h"
 
-void calc_deldop( struct par_t *par, struct mod_t *mod, struct deldop_t *deldop,
-		int s);
-void calc_doppler( struct par_t *par, struct mod_t *mod, struct doppler_t *doppler,
-		int s);
-void calc_poset( struct par_t *par, struct mod_t *mod, struct poset_t *poset,
-		int s);
-void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtcrv,
-		int s);
-void write_pos_deldop( struct par_t *par, struct mod_t *mod,
-		struct deldop_t *deldop, int s, int f);
-void write_pos_doppler( struct par_t *par, struct mod_t *mod,
-		struct doppler_t *doppler, int s, int f);
-void write_pos_poset( struct par_t *par, struct mod_t *mod,
-		struct poset_t *poset, int s, int f);
-void write_pos_lghtcrv( struct par_t *par, struct mod_t *mod,
-		struct lghtcrv_t *lghtcrv, int s, int i);
-
-
 void calc_fits( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 {
 	int c, f, s, frm, i;

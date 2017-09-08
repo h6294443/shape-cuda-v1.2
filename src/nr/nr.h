@@ -10,7 +10,9 @@ static double dminarg1,dminarg2;
         (dminarg1) : (dminarg2))
 
 double *vector(int, int);
+double *vector_zero(int nl,int nh);
 double **matrix(int, int, int, int);
+double **matrix_zero(int nrl,int nrh,int ncl,int nch);
 double **convert_matrix();
 double *dvector(int, int);
 double **dmatrix(int, int, int, int);

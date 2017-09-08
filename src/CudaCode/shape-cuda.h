@@ -159,6 +159,8 @@ __host__ int posvis_gpu(struct par_t *dpar, struct mod_t *dmod, struct dat_t
 		src, int nf, int body, int comp, unsigned char type,
 		cudaStream_t *pv_stream);
 
+__host__ int read_dat_gpu( struct par_t *par, struct mod_t *mod, struct dat_t *dat);
+
 __host__ int read_dat_mgpu( struct par_t *par, struct mod_t *mod,
 		struct dat_t *dat, int gpuid);
 
@@ -283,6 +285,6 @@ __device__ void dev_realize_impulse(struct spin_t spin, double t,
 
 __device__ void dev_splint_cfs(double *xa,double *ya,double *y2a,int n,double x,double *y);
 
-void set_up_pos_pinned(struct par_t *par, struct dat_t *dat);
-void set_up_pos_mgpu(struct par_t *par, struct dat_t *dat, int gpuid);
-void set_up_pos_gpu( struct par_t *par, struct dat_t *dat);
+__host__ void set_up_pos_pinned(struct par_t *par, struct dat_t *dat);
+__host__ void set_up_pos_mgpu(struct par_t *par, struct dat_t *dat, int gpuid);
+__host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat);

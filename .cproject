@@ -50,6 +50,9 @@
 							</tool>
 							<tool id="nvcc.archiver.base.1871114232" name="NVCC Archiver" superClass="nvcc.archiver.base"/>
 							<tool id="com.nvidia.host.assembler.53377581" name="Host Assembler" superClass="com.nvidia.host.assembler">
+								<option id="gnu.both.asm.option.include.paths.1345886204" superClass="gnu.both.asm.option.include.paths" valueType="includePath">
+									<listOptionValue builtIn="false" value="/usr/include/"/>
+								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.2010918507" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
 							</tool>
 						</toolChain>
@@ -94,7 +97,7 @@
 								<option id="nvcc.compiler.option.level.1775852754" name="Generate host debug information (-g)" superClass="nvcc.compiler.option.level"/>
 								<option defaultValue="nvcc.compiler.optimization.level.most" id="nvcc.compiler.optimization.level.1825966710" name="Optimization Level" superClass="nvcc.compiler.optimization.level" valueType="enumerated"/>
 								<option id="nvcc.compiler.pic.584814069" name="Position Independent Code (-fPIC)" superClass="nvcc.compiler.pic"/>
-								<option id="nvcc.compiler.usefastmath.869688444" superClass="nvcc.compiler.usefastmath" value="true" valueType="boolean"/>
+								<option id="nvcc.compiler.usefastmath.869688444" name="Make use of fast math library (-use_fast_math)" superClass="nvcc.compiler.usefastmath" value="true" valueType="boolean"/>
 								<inputType id="nvcc.compiler.input.cu.225709564" superClass="nvcc.compiler.input.cu"/>
 								<inputType id="nvcc.compiler.input.cpp.1583113646" superClass="nvcc.compiler.input.cpp"/>
 								<inputType id="nvcc.compiler.input.c.1071179034" superClass="nvcc.compiler.input.c"/>
@@ -113,6 +116,9 @@
 							</tool>
 							<tool id="nvcc.archiver.base.803976991" name="NVCC Archiver" superClass="nvcc.archiver.base"/>
 							<tool id="com.nvidia.host.assembler.1504375381" name="Host Assembler" superClass="com.nvidia.host.assembler">
+								<option id="gnu.both.asm.option.include.paths.1378984044" superClass="gnu.both.asm.option.include.paths" valueType="includePath">
+									<listOptionValue builtIn="false" value="/usr/include/"/>
+								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.1028547851" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
 							</tool>
 						</toolChain>
@@ -149,19 +155,28 @@
 	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets"/>
 	<storageModule moduleId="scannerConfiguration">
 		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
-		<scannerConfigBuildInfo instanceId="com.nvidia.cuda.ide.eight_zero.configuration.release.700962125;com.nvidia.cuda.ide.eight_zero.configuration.release.700962125.;nvcc.compiler.base.246389921;nvcc.compiler.input.c.1071179034">
-			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="com.nvidia.cuda.ide.build.NVCCPerProjectProfile"/>
-		</scannerConfigBuildInfo>
-		<scannerConfigBuildInfo instanceId="com.nvidia.cuda.ide.eight_zero.configuration.release.700962125;com.nvidia.cuda.ide.eight_zero.configuration.release.700962125.;nvcc.compiler.base.1325973595;nvcc.compiler.input.c.1751012593">
-			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="com.nvidia.cuda.ide.build.NVCCPerProjectProfile"/>
-		</scannerConfigBuildInfo>
 		<scannerConfigBuildInfo instanceId="com.nvidia.cuda.ide.eight_zero.configuration.release.700962125;com.nvidia.cuda.ide.eight_zero.configuration.release.700962125.;nvcc.compiler.base.1325973595;nvcc.compiler.input.cpp.238458563">
 			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="com.nvidia.cuda.ide.build.NVCCPerProjectProfile"/>
 		</scannerConfigBuildInfo>
 		<scannerConfigBuildInfo instanceId="com.nvidia.cuda.ide.eight_zero.configuration.debug.1362592750;com.nvidia.cuda.ide.eight_zero.configuration.debug.1362592750.;nvcc.compiler.base.2132824994;nvcc.compiler.input.c.1083285283">
 			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="com.nvidia.cuda.ide.build.NVCCPerProjectProfile"/>
 		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="com.nvidia.cuda.ide.eight_zero.configuration.debug.1362592750;com.nvidia.cuda.ide.eight_zero.configuration.debug.1362592750.;nvcc.compiler.base.1941303319;nvcc.compiler.input.c.1499556521">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="com.nvidia.cuda.ide.build.NVCCPerProjectProfile"/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="com.nvidia.cuda.ide.eight_zero.configuration.debug.1362592750;com.nvidia.cuda.ide.eight_zero.configuration.debug.1362592750.;nvcc.compiler.base.1941303319;nvcc.compiler.input.cu.1405009591">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="com.nvidia.cuda.ide.build.NVCCPerProjectProfile"/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="com.nvidia.cuda.ide.eight_zero.configuration.release.700962125;com.nvidia.cuda.ide.eight_zero.configuration.release.700962125.;nvcc.compiler.base.246389921;nvcc.compiler.input.c.1071179034">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="com.nvidia.cuda.ide.build.NVCCPerProjectProfile"/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="com.nvidia.cuda.ide.eight_zero.configuration.release.700962125;com.nvidia.cuda.ide.eight_zero.configuration.release.700962125.;nvcc.compiler.base.1325973595;nvcc.compiler.input.c.1751012593">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="com.nvidia.cuda.ide.build.NVCCPerProjectProfile"/>
+		</scannerConfigBuildInfo>
 		<scannerConfigBuildInfo instanceId="com.nvidia.cuda.ide.eight_zero.configuration.release.700962125;com.nvidia.cuda.ide.eight_zero.configuration.release.700962125.;nvcc.compiler.base.246389921;nvcc.compiler.input.cpp.1583113646">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="com.nvidia.cuda.ide.build.NVCCPerProjectProfile"/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="com.nvidia.cuda.ide.eight_zero.configuration.debug.1362592750;com.nvidia.cuda.ide.eight_zero.configuration.debug.1362592750.;nvcc.compiler.base.1941303319;nvcc.compiler.input.cpp.1434277222">
 			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="com.nvidia.cuda.ide.build.NVCCPerProjectProfile"/>
 		</scannerConfigBuildInfo>
 		<scannerConfigBuildInfo instanceId="com.nvidia.cuda.ide.eight_zero.configuration.release.700962125;com.nvidia.cuda.ide.eight_zero.configuration.release.700962125.;nvcc.compiler.base.1325973595;nvcc.compiler.input.cu.530241174">

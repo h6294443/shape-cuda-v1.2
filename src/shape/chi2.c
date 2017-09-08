@@ -1138,7 +1138,7 @@ double chi2_lghtcrv( struct par_t *par, struct lghtcrv_t *lghtcrv, int list_brea
 	FILE *fp;
 	char name[MAXLEN], weightstring[MAXLEN], dofstring[MAXLEN];
 	int i, n, ncalc;
-	double chi2_set, err, o2, m2, om, calval, weight, dof, obsmag, fitmag, obsmagerr;
+	double chi2_set, err, o2, m2, om, calval, weight, dof, obsmag, sunmag, fitmag, obsmagerr;
 
 	n = lghtcrv->n;
 	ncalc = lghtcrv->ncalc;
@@ -1181,45 +1181,47 @@ double chi2_lghtcrv( struct par_t *par, struct lghtcrv_t *lghtcrv, int list_brea
       written in this routine because they rely on updated
       values for the calibration factors.                      */
 
-	if (par->action == WRITE || par->action == ORBIT) {
+	if ((*par).action == WRITE || (*par).action == ORBIT) {
 
-		/*  Display weight and degrees of freedom as integers if possible  */
+	    /*  Display weight and degrees of freedom as integers if possible  */
 
-		intifpossible( weightstring, MAXLEN, weight, SMALLVAL, "%f");
-		intifpossible( dofstring, MAXLEN, dof, SMALLVAL, "%f");
-		printf("chi2 of set %2d          is %f    for %s x (%d points) = %s dof",
-				s, err, weightstring, n, dofstring);
-		printf("    (red. chi2 = %.2f)\n", err/dof);
-		fflush(stdout);
+	    intifpossible( weightstring, MAXLEN, weight, SMALLVAL, "%f");
+	    intifpossible( dofstring, MAXLEN, dof, SMALLVAL, "%f");
+	    printf("chi2 of set %2d          is %f    for %s x (%d points) = %s dof",
+	           s, err, weightstring, n, dofstring);
+	    printf("    (red. chi2 = %.2f)\n", err/dof);
+	    fflush(stdout);
 
-		/*  Output the calculated model lightcurve magnitudes  */
+	    /*  Output the calculated model lightcurve magnitudes  */
 
-		sprintf( name, "calc_%02d.dat", s);
-		FOPEN( fp, name, "w");
-		for (i=1; i<=ncalc; i++) {
-			fitmag = par->sun_appmag - 2.5*log10( calval * lghtcrv->y[i]);
-			fprintf( fp, "%f %f %10.6f\n", lghtcrv->x[i] - par->jdoffset,
-					fitmag, lghtcrv->rotphase_calc[i]);
-		}
-		fclose( fp);
+	    sunmag = (*par).sun_appmag[ (*lghtcrv).ioptlaw ];
 
-		/*  Output the model lightcurve magnitudes at the observation epochs;
-        the corresponding model intensities were obtained (in routine
-        calc_fits) from the calculated model intensities via cubic
-        spline interpolation (and similarly for rotation phases)           */
+	    sprintf( name, "calc_%02d.dat", s);
+	    FOPEN( fp, name, "w");
+	    for (i=1; i<=ncalc; i++) {
+	      fitmag = sunmag - 2.5*log10( calval * (*lghtcrv).y[i]);
+	      fprintf( fp, "%f %f %10.6f\n", (*lghtcrv).x[i] - (*par).jdoffset,
+	               fitmag, (*lghtcrv).rotphase_calc[i]);
+	    }
+	    fclose( fp);
 
-		sprintf( name, "fit_%02d.dat", s);
-		FOPEN( fp, name, "w");
-		for (i=1; i<=n; i++) {
-			obsmag = par->sun_appmag - 2.5*log10( lghtcrv->obs[i]);
-			fitmag = par->sun_appmag - 2.5*log10( calval * lghtcrv->fit[i]);
-			obsmagerr = 1/(0.4 * LN10 * sqrt(lghtcrv->oneovervar[i]) * lghtcrv->obs[i]);
-			fprintf( fp, "%f %f %f %10.6f %6.4f\n",
-					lghtcrv->t[i][lghtcrv->v0] - par->jdoffset, obsmag, fitmag,
-					lghtcrv->rotphase_obs[i], obsmagerr);
-		}
-		fclose( fp);
+	    /*  Output the model lightcurve magnitudes at the observation epochs;
+	        the corresponding model intensities were obtained (in routine
+	        calc_fits) from the calculated model intensities via cubic
+	        spline interpolation (and similarly for rotation phases)           */
+
+	    sprintf( name, "fit_%02d.dat", s);
+	    FOPEN( fp, name, "w");
+	    for (i=1; i<=n; i++) {
+	      obsmag = sunmag - 2.5*log10( (*lghtcrv).obs[i]);
+	      fitmag = sunmag - 2.5*log10( calval * (*lghtcrv).fit[i]);
+	      obsmagerr = 1/(0.4 * LN10 * sqrt((*lghtcrv).oneovervar[i]) * (*lghtcrv).obs[i]);
+	      fprintf( fp, "%f %f %f %10.6f %6.4f\n",
+	               (*lghtcrv).t[i][(*lghtcrv).v0] - (*par).jdoffset, obsmag, fitmag,
+	               (*lghtcrv).rotphase_obs[i], obsmagerr);
+	    }
+	    fclose( fp);
+	  }
+
+	  return chi2_set;
 	}
-
-	return chi2_set;
-}

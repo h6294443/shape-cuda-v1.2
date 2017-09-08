@@ -1037,8 +1037,7 @@ __host__ void mkparlist_gpu(struct par_t *dpar, struct mod_t *dmod,
 {
 	dim3 BLK,THD;
 	THD.x = maxThreadsPerBlock;
-	if (MGPU)
-		gpuErrchk(cudaSetDevice(GPU0));
+	gpuErrchk(cudaSetDevice(GPU0));
 	/* Shape parameters - single component only */
 	//for (i=0; i<dmod->shape.ncomp; i++) { /* read each component */
 	/* Launch first parameter kernel */

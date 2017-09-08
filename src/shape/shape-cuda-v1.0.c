@@ -22,6 +22,10 @@ int HMT_threads = 4;
 
 int main(int argc, char *argv[])
 {
+	/* The following 3 lines are for accurately timing multi-threaded code */
+	struct timespec start, finish;
+	double elapsed;
+	clock_gettime(CLOCK_MONOTONIC, &start);
 	long x;	/* For gpuid read-in */
 
 	/* Declare variables */
@@ -95,8 +99,6 @@ int main(int argc, char *argv[])
 	}
 
 
-
-
 	/* Read the par file, get the action, and make sure actions other than
 	 * "fit" do NOT use parallel processing. If in CUDA dual-GPU mode, read
 	 * the par file again into par1 for the other card.  */
@@ -105,9 +107,6 @@ int main(int argc, char *argv[])
 		gpuErrchk(cudaSetDevice(GPU1));
 		read_par( argv[1], &par1);
 	}
-
-	printf("%s\n", argv[2]);
-	printf("%s\n", argv[3]);
 
 	/*  Record the names of the mod and obs files  */
 	if (par.action == ORBIT) {
@@ -134,8 +133,6 @@ int main(int argc, char *argv[])
 			sprintf(dat1.name, "%s", argv[3]);
 		}
 	}
-	printf("\nmod.name: %s", mod.name);
-	printf("\ndat.name: %s", dat.name);
 
 	/*  Carry out the desired action - 'fit' only for now */
 	switch (par.action) {
@@ -214,6 +211,10 @@ int main(int argc, char *argv[])
 			read_dat_mgpu( &par1, &mod1, &dat1, GPU1);
 			gpuErrchk(cudaSetDevice(GPU0));
 		}
+		else if (CUDA && !MGPU) {
+			par.nfpar += read_mod( &par, &mod);
+			par.nfpar += read_dat_gpu( &par, &mod, &dat);
+		}
 		else {
 			par.nfpar += read_mod( &par, &mod);
 			par.nfpar += read_dat( &par, &mod, &dat);
@@ -256,13 +257,14 @@ int main(int argc, char *argv[])
 						dev_dat, dev_dat1, &par, &par1, &mod, &mod1, &dat,
 						&dat1, thread1, thread2);
 			}
-			else
+			else if (!MGPU)
 				bestfit_gpu(dev_par,dev_mod,dev_dat, &par,&mod,&dat);
 		}
 		else if (HMT)
 			bestfit_hmt(&par, &mod, &dat);
 		else
 			bestfit( &par, &mod, &dat);
+
 		break;
 	case FACETS:
 		if (argc != 3) {
@@ -569,9 +571,12 @@ int main(int argc, char *argv[])
 	}
 
 
+	clock_gettime(CLOCK_MONOTONIC, &finish);
 
+	elapsed = (finish.tv_sec - start.tv_sec);
+	elapsed += (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
 
-
+	printf("\n\n###   Elapsed time from start to finish: %g    ###\n\n", elapsed);
 
 	return 0;
 }

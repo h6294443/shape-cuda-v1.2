@@ -55,7 +55,7 @@ __host__ void dbg_print_fit(struct dat_t *ddat, int s, int f, const char
 		*filename_fit, int gpuid) {
 	/* Debug function that prints all Doppler frame fit values to csv */
 
-	int idop, nThreads, ndop, xlim[2], ylim[2];
+	int idop, /*nThreads*/ndop, xlim[2], ylim[2];
 	FILE *fp_fit;
 	float *fit, *host_fit;
 	dim3 BLK,THD;
@@ -79,7 +79,7 @@ __host__ void dbg_print_fit(struct dat_t *ddat, int s, int f, const char
 	gpuErrchk(cudaMemcpyFromSymbol(&ndop, dbg_ndop1, sizeof(int),
 			0, cudaMemcpyDeviceToHost));
 
-	nThreads = (xlim[1] - xlim[0] + 1) * (ylim[1] - ylim[0] + 1);
+	//nThreads = (xlim[1] - xlim[0] + 1) * (ylim[1] - ylim[0] + 1);
 	cudaCalloc((void**)&fit, sizeof(float), ndop);
 //	host_fit = (float *)malloc(sizeof(float) * ndop);
 	int maxThreads = 128;

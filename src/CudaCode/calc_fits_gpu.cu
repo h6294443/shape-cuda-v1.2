@@ -1057,9 +1057,8 @@ __host__ void calc_deldop_gpu(struct par_t *dpar, struct mod_t *dmod,
 		int *ndel, int *ndop, int *posn, int4 *xylim, float
 		*overflow, int *outbndarr, cudaStream_t *cf_stream)
 {
-	float3 orbit_off3, orb_xydopoff;
+	float3 orbit_off3;
 	orbit_off3.x = orbit_off3.y = orbit_off3.z = 0.0;
-	orb_xydopoff.x = orb_xydopoff.y = orb_xydopoff.z = 0.0;
 	int v0_index, exclude_seen, f, v2, c=0, yspan;
 	dim3 BLKdd[nframes], BLKpx[nframes], THD, THD9, BLKfrm,THD64;
 	THD.x = maxThreadsPerBlock; THD9.x = 9;	THD64.x = 64;
@@ -1580,7 +1579,7 @@ __host__ void calc_lghtcrv_gpu(
 		double *u,
 		cudaStream_t *cf_stream)
 {
-	int ncalc, c=0, n, nThreads, exclude_seen, f, bistatic_all=0;
+	int ncalc, c=0, n, nThreads, exclude_seen, f;//, bistatic_all=0;
 	int nfplus = nframes+1; /* This is to accomodate the +1 start in lghtcrv */
 	float3 orbit_off3;
 	orbit_off3.x = orbit_off3.y = orbit_off3.z = 0.0;
@@ -1589,7 +1588,7 @@ __host__ void calc_lghtcrv_gpu(
 	BLKfrm = floor((THD64.x - 1 + nframes)/THD64.x);
 	ncalc = nframes;
 	n = lc_n;
-	int hbistatic[nfplus], houtbndarr[nfplus],
+	int /*hbistatic[nfplus], */houtbndarr[nfplus],
 		nThreadspx[nfplus], nThreadspx1[nfplus], hposn[nfplus];
 	int4 hxylim[nfplus];
 	int2 span[nfplus];

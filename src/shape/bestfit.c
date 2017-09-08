@@ -354,7 +354,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	 * tive function at each step. Stop when fractional decrease in the objec-
 	 * tive function from one iteration to the next is less than term_prec.   */
 
-//	do {
+	do {
 		showvals = 1;        /* show reduced chi-square and penalties at beginning */
 		beginerr = enderr;
 		printf("# iteration %d %f", ++iter, beginerr);
@@ -377,6 +377,8 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % par->npar_update;
+//		p = first_fitpar;
+//		p = 1;
 		for (p=first_fitpar; p<par->nfpar; p++) {
 
 			/*  Adjust only parameter p on this try  */
@@ -615,8 +617,6 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			keep_iterating = 0;
 
 		}
-//		else if (iter == 4)
-//			keep_iterating = 0;
 		else {
 			/* Just completed a full iteration and the model has no fatal flaws
 			 * (or else the "term_badmodel" parameter is turned off): keep
@@ -625,7 +625,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			keep_iterating = ((beginerr - enderr)/enderr >= par->term_prec);
 		}
 
-//	} while (keep_iterating);
+	} while (keep_iterating);
 
 	/* Show final values of reduced chi-square, individual penalty functions,
 	 * and the objective function  */
@@ -762,10 +762,10 @@ double objective( double x)
 
 	calc_fits( spar, smod, sdat);
 	err = chi2( spar, sdat, 0);
-//	printf("(CPU MODE) chi2 error: %g with DOF = %g\n", err, sdat->dof);
+
 	/* Divide chi-square by DOF to get reduced chi-square.    */
 	err /= sdat->dof;
-//	printf("(CPU MODE) chi2 err/dof = %g\n", err);
+
 	/* If bestfit has set showvals = 1, display reduced chi-square. Then set
 	 * spar->showstate = 1, so that when function penalties is called later,
 	 * it "knows" that it should display the individual penalty values.
@@ -780,16 +780,15 @@ double objective( double x)
 	/* Compute penalties and add to reduced chi-square. Individual penalty values
 	 * will be displayed if we set spar->showstate = 1 a few lines back.        */
 	pens = penalties( spar, smod, sdat);
-//	printf("(CPU MODE) penalties: %g\n", pens);
 	err += pens;
-//	printf("(CPU MODE) err + pens = %g\n", err);
-	showvals = 1;
+
 	/* Double the objective function if there's an ellipsoid component with tiny
 	 * or negative diameter, if any optical photometric parameters have invalid
 	 * values, if any portion of the model lies outside specified POS window or
 	 * outside any plane-of-sky fit image, or if model is too wide in delay-Dopp-
 	 * ler space for any (delay-)Doppler fit image to be correctly constructed.
 	 * This effectively rules out any models with any of these flaws.         */
+
 	if (spar->baddiam) {
 		baddiam_factor = spar->bad_objfactor * exp(spar->baddiam_logfactor);
 		err *= baddiam_factor;
@@ -801,14 +800,13 @@ double objective( double x)
 		badphoto_factor = spar->bad_objfactor * exp(spar->badphoto_logfactor);
 		err *= badphoto_factor;
 		if (showvals)
-			printf("# objective func multiplied by %.1f: illegal photometric parameters\n",
+			printf("# objective func multiplied by %.1f: illegal photometric parameters in objective\n",
 					badphoto_factor);
 	}
 	if (spar->posbnd) {
 		check_posbnd = 1;     /* tells bestfit about this problem */
 		posbnd_factor = spar->bad_objfactor * exp(spar->posbnd_logfactor);
-//		printf("# spar->bad_objfactor = %g and spar->posbnd_logfactor = %g\n",
-//				spar->bad_objfactor, spar->posbnd_logfactor);
+
 		err *= posbnd_factor;
 		if (showvals)
 			printf("# objective func multiplied by %.1f: model extends beyond POS frame\n",

@@ -896,7 +896,7 @@ __global__ void p_inertiadev_uni_krnl(struct mod_t *dmod) {
 __global__ void p_pa3tilt_krnl(struct mod_t *dmod) {
 	/* Single-threaded kernel */
 	//double pmoment[3];
-	float temp;
+	//float temp;
 
 	if (threadIdx.x == 0) {
 		if (!p_got_pa) {
@@ -1004,7 +1004,7 @@ __global__ void p_bifur_1st_vertex_krnl(struct mod_t *dmod, double *varr) {
 	 * a parallel reduction is run to find min and max */
 	int v = blockIdx.x * blockDim.x + threadIdx.x;
 	int c=0;
-	double temp;
+	//double temp;
 
 	if (v < p_nv) {
 		varr[v] = dmod->shape.comp[c].real.v[v].x[p_jmax];

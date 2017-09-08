@@ -425,6 +425,7 @@ struct pen_t {
 };
 
 #define MAXDELCORPAR 10
+#define MAXSUNMAGS 10
 #define MAXCHOSENFACETS 20
 struct par_t {
   unsigned char action;
@@ -623,7 +624,7 @@ struct par_t {
   double opt_g_max;
   double opt_theta_min;         /* (default = 0 - pi/2) */
   double opt_theta_max;
-  double sun_appmag;            /* Sun's apparent magnitude (default = -26.75 [V band]) */
+  double sun_appmag[MAXSUNMAGS];            /* Sun's apparent magnitude (default = -26.75 [V band]) */
   unsigned char vary_delcor0;   /* varies delcor0 jointly with size/shape/spin params        */
                                 /*     if set to VARY_ALL or VARY_SIZE (default = VARY_NONE) */
   unsigned char vary_radalb;    /* varies radar R jointly with size/shape/spin params        */
@@ -1025,6 +1026,7 @@ struct delcor_t {
   int n;
   struct param_t *a;
   double delcor0_save;
+  int *equals_set;
 };
 
 /* An ephemeris point */
@@ -1318,6 +1320,8 @@ struct lghtcrv_t {
   int ioptlaw;                  /* # of the optical scattering law used with this set (0-based) */
   struct ephem_t astephem;      /* ephemeris of asteroid */
   struct ephem_t solephem;      /* ephemeris of sun */
+  struct ephem_t astephem_sun;	/* ephemeris of asteroid as viewed from sun */
+  struct ephem_t obsephem_sun;	/* ephemeris of observer as viewed from sun */
   int nviews;                   /* # of views per point */
   double view_interval;         /* time interval between views (secs, convert internally to days) */
   unsigned char smearing_mode;  /* =0 point epoch is center view, =1 point epoch is first view */
@@ -1397,14 +1401,14 @@ struct dat_t {
                                 SHAPE 2.0 LIBRARY ROUTINES
 *****************************************************************************************/
 
-//void annotate_plot( struct par_t *par, struct mod_t *mod, double spin_ecl[3],
-//                    double maxbrightness, double posmax, struct pos_t *pos,
-//                    int **color, double **brightness, double **z);
+void annotate_plot( struct par_t *par, struct mod_t *mod, double spin_ecl[3],
+                    double maxbrightness, double posmax, struct pos_t *pos,
+                    int **color, double **brightness, double **z);
 double apply_photo( struct mod_t *mod, int ilaw, double phase, double intensityfactor,
                     struct pos_t *pos, int body);
 void bailout(const char *message);
 double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat);
-//void branch( struct par_t *par, struct mod_t *mod, struct dat_t *dat);
+void branch( struct par_t *par, struct mod_t *mod, struct dat_t *dat);
 void calc_fits( struct par_t *par, struct mod_t *mod, struct dat_t *dat);
 void calc_orbit( struct par_t *par,
                  struct mod_t *mod1, struct mod_t *mod2, struct mod_t *mod3,
@@ -1424,7 +1428,7 @@ void facmom( double fv0[3], double fv1[3], double fv2[3], double fn[3],
              double *dv, double dvr[3], double dI[3][3]);
 double facnrm( struct vertices_t verts, int fi);
 int gamma_trans( double *datum, double gamma);
-//void get_calfact( struct dat_t *dat);
+void get_calfact( struct dat_t *dat);
 void init( int argc, char *argv[], char *progname);
 void inteuler( struct spin_t spin, double t[], double impulse[][3], int n,
                double w[3], double m[3][3], unsigned char pa, unsigned char method,
@@ -1437,18 +1441,18 @@ void mkparlist( struct par_t *par, struct mod_t *mod, struct dat_t *dat);
 double penalties( struct par_t *par, struct mod_t *mod, struct dat_t *dat);
 void photofacets( struct par_t *par, struct mod_t *mod);
 void photoharm( struct par_t *par, struct mod_t *mod);
-//void plot_arrow( int colortype, double com_obs[3], double arrowvec[3], int has_head,
-//                 int pierce_model, double sizefactor, double maxbrightness, double posmax,
-//                 struct pos_t *pos, int **color, double **brightness, double **zval);
-//void plot_com( int colortype, int body, double com_obs[3], double sizefactor,
-//               double maxbrightness, struct pos_t *pos, int **color,
-//               double **brightness, double **z);
-//void plot_subradar( int colortype, int body, double sizefactor, double maxbrightness,
-//                    double posmax, struct pos_t *pos, int **color, double **brightness,
-//                    double **z);
-//void plot_surface( struct par_t *par, struct mod_t *mod, unsigned char scatlaw,
-//                   int iradlaw, char *name, double *maxbrightness, double *posmax,
-//                   struct pos_t *pos, int **color, double **brightness, double **z);
+void plot_arrow( int colortype, double com_obs[3], double arrowvec[3], int has_head,
+                 int pierce_model, double sizefactor, double maxbrightness, double posmax,
+                 struct pos_t *pos, int **color, double **brightness, double **zval);
+void plot_com( int colortype, int body, double com_obs[3], double sizefactor,
+               double maxbrightness, struct pos_t *pos, int **color,
+               double **brightness, double **z);
+void plot_subradar( int colortype, int body, double sizefactor, double maxbrightness,
+                    double posmax, struct pos_t *pos, int **color, double **brightness,
+                    double **z);
+void plot_surface( struct par_t *par, struct mod_t *mod, unsigned char scatlaw,
+                   int iradlaw, char *name, double *maxbrightness, double *posmax,
+                   struct pos_t *pos, int **color, double **brightness, double **z);
 int pos2deldop( struct par_t *par, struct photo_t *photo,
                 double orbit_xoff, double orbit_yoff, double orbit_dopoff,
                 struct deldop_t *deldop, int body, int set, int frm, int v);
@@ -1480,10 +1484,10 @@ void realize_photo( struct par_t *par, struct mod_t *mod,
 void realize_spin( struct par_t *par, struct mod_t *mod, struct dat_t *dat);
 void realize_xyoff( struct dat_t *dat);
 void ref_mod( struct mod_t *mod);
-//void rescale( struct par_t *par, struct mod_t *mod);
+void rescale( struct par_t *par, struct mod_t *mod);
 void sample_mod( struct par_t *par, struct mod_t *mod);
-//void setupsides( struct vertices_t *vt);
-//void setupvertices( struct vertices_t *vt);
+void setupsides( struct vertices_t *vt);
+void setupvertices( struct vertices_t *vt);
 void slice( struct par_t *par, struct mod_t *mod);
 void show_deldoplim( struct dat_t *dat);
 void show_moments( struct par_t *par, struct mod_t *mod);
@@ -1491,11 +1495,11 @@ void split_mod( struct par_t *par, struct mod_t *mod);
 void vary_params( struct par_t *par, struct mod_t *mod, struct dat_t *dat,
                   int action, double *deldop_zmax, double *rad_xsec,
                   double *opt_brightness, double *cos_subradarlat);
-//void view_mod( struct par_t *par, struct mod_t *mod);
+void view_mod( struct par_t *par, struct mod_t *mod);
 void write_dat( struct par_t *par, struct dat_t *dat);
 void write_mod( struct par_t *par, struct mod_t *mod);
-//void write_pnm( double posmax, int n, int **color, double **brightness,
-//                int color_output, char *name);
+void write_pnm( double posmax, int n, int **color, double **brightness,
+                int color_output, char *name);
 void write_pos( struct par_t *par, struct mod_t *mod, struct pos_t *pos,
                 double spin_ecl[3], int iradlaw, int color_output, char *name);
 void write_wf( struct mod_t *mod);
@@ -1503,7 +1507,15 @@ void write_wf( struct mod_t *mod);
 
 
 
-
+//int read_deldop( FILE *fp, struct par_t *par, struct deldop_t *deldop,
+//		int nradlaws, int s, double *chi2_variance);
+//int read_doppler( FILE *fp, struct par_t *par, struct doppler_t *doppler,
+//		int nradlaws, int s, double *chi2_variance);
+void set_up_pos( struct par_t *par, struct dat_t *dat);
+//int read_poset( FILE *fp, struct par_t *par, struct poset_t *poset,
+//		int noptlaws, int s, double *chi2_variance);
+//int read_lghtcrv( struct dat_t *dat, FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
+//		int noptlaws, int s, double *chi2_variance);
 void read_deldop_ascii(FILE *fin, struct deldop_t *deldop, int iframe,
 		int idel_use[2], int idop_use[2]);
 void read_deldop_binary(FILE *fin, struct deldop_t *deldop, int iframe,
@@ -1523,3 +1535,19 @@ void read_doppler_fits(char *filename, struct doppler_t *doppler, int iframe,
 void read_poset_fits(char *filename, struct poset_t *poset, int iframe,
 		int irow_use[2], int icol_use[2], int read_data);
 
+void calc_deldop( struct par_t *par, struct mod_t *mod, struct deldop_t *deldop,
+		int s);
+void calc_doppler( struct par_t *par, struct mod_t *mod, struct doppler_t *doppler,
+		int s);
+void calc_poset( struct par_t *par, struct mod_t *mod, struct poset_t *poset,
+		int s);
+void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtcrv,
+		int s);
+void write_pos_deldop( struct par_t *par, struct mod_t *mod,
+		struct deldop_t *deldop, int s, int f);
+void write_pos_doppler( struct par_t *par, struct mod_t *mod,
+		struct doppler_t *doppler, int s, int f);
+void write_pos_poset( struct par_t *par, struct mod_t *mod,
+		struct poset_t *poset, int s, int f);
+void write_pos_lghtcrv( struct par_t *par, struct mod_t *mod,
+		struct lghtcrv_t *lghtcrv, int s, int i);
