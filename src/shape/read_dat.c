@@ -1682,8 +1682,8 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
 
   /*  Read which optical scattering law to use for this dataset  */
 
-  (*lghtcrv).ioptlaw = getint( fp);
-  if ((*lghtcrv).ioptlaw < 0 || (*lghtcrv).ioptlaw >= noptlaws) {
+  lghtcrv->ioptlaw = getint( fp);
+  if (lghtcrv->ioptlaw < 0 || lghtcrv->ioptlaw >= noptlaws) {
     printf("ERROR in set %d: must have 0 <= optical scattering law <= %d\n",
            s, noptlaws-1);
     bailout("read_lghtcrv in read_dat.c\n");
@@ -1698,102 +1698,102 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
 
       /*  Deal with ephemeris types that won't be used  */
 
-      (*lghtcrv).astephem_sun.n = (*lghtcrv).obsephem_sun.n = -1;
-      (*lghtcrv).astephem_sun.pnt = (*lghtcrv).obsephem_sun.pnt = NULL;
+      lghtcrv->astephem_sun.n = lghtcrv->obsephem_sun.n = -1;
+      lghtcrv->astephem_sun.pnt = lghtcrv->obsephem_sun.pnt = NULL;
 
       /*  Read the asteroid ephemeris  */
 
-      (*lghtcrv).astephem.n = getint( fp); /* # of points in ephemeris */
-      (*lghtcrv).astephem.pnt = (struct ephpnt_t *) calloc( (*lghtcrv).astephem.n,
+      lghtcrv->astephem.n = getint( fp); /* # of points in ephemeris */
+      lghtcrv->astephem.pnt = (struct ephpnt_t *) calloc( lghtcrv->astephem.n,
                                                             sizeof( struct ephpnt_t));
-      for (i=0; i<(*lghtcrv).astephem.n; i++) {
-        rdcal2jd( fp, &(*lghtcrv).astephem.pnt[i].t);
-        (*lghtcrv).astephem.pnt[i].ra = getdouble( fp)*D2R;
-        (*lghtcrv).astephem.pnt[i].dec = getdouble( fp)*D2R;
-        (*lghtcrv).astephem.pnt[i].dist = getdouble( fp);
+      for (i=0; i<lghtcrv->astephem.n; i++) {
+        rdcal2jd( fp, &lghtcrv->astephem.pnt[i].t);
+        lghtcrv->astephem.pnt[i].ra = getdouble( fp)*D2R;
+        lghtcrv->astephem.pnt[i].dec = getdouble( fp)*D2R;
+        lghtcrv->astephem.pnt[i].dist = getdouble( fp);
       }
 
       /*  Read the solar ephemeris  */
 
-      (*lghtcrv).solephem.n = getint( fp); /* # of points in ephemeris */
-      (*lghtcrv).solephem.pnt = (struct ephpnt_t *) calloc( (*lghtcrv).solephem.n,
+      lghtcrv->solephem.n = getint( fp); /* # of points in ephemeris */
+      lghtcrv->solephem.pnt = (struct ephpnt_t *) calloc( lghtcrv->solephem.n,
                                                             sizeof( struct ephpnt_t));
-      for (i=0; i<(*lghtcrv).solephem.n; i++) {
-        rdcal2jd( fp, &(*lghtcrv).solephem.pnt[i].t);
-        (*lghtcrv).solephem.pnt[i].ra = getdouble( fp)*D2R;
-        (*lghtcrv).solephem.pnt[i].dec = getdouble( fp)*D2R;
-        (*lghtcrv).solephem.pnt[i].dist = getdouble( fp);
+      for (i=0; i<lghtcrv->solephem.n; i++) {
+        rdcal2jd( fp, &lghtcrv->solephem.pnt[i].t);
+        lghtcrv->solephem.pnt[i].ra = getdouble( fp)*D2R;
+        lghtcrv->solephem.pnt[i].dec = getdouble( fp)*D2R;
+        lghtcrv->solephem.pnt[i].dist = getdouble( fp);
       }
   } else {
 
       /*  Read the asteroid ephemeris as viewed from the Sun  */
 
-      (*lghtcrv).astephem_sun.n = getint( fp); /* # of points in ephemeris */
-      (*lghtcrv).astephem_sun.pnt = (struct ephpnt_t *) calloc( (*lghtcrv).astephem_sun.n,
+      lghtcrv->astephem_sun.n = getint( fp); /* # of points in ephemeris */
+      lghtcrv->astephem_sun.pnt = (struct ephpnt_t *) calloc( lghtcrv->astephem_sun.n,
                                                                 sizeof( struct ephpnt_t));
-      for (i=0; i<(*lghtcrv).astephem_sun.n; i++) {
-        rdcal2jd( fp, &(*lghtcrv).astephem_sun.pnt[i].t);
-        (*lghtcrv).astephem_sun.pnt[i].ra = getdouble( fp)*D2R;
-        (*lghtcrv).astephem_sun.pnt[i].dec = getdouble( fp)*D2R;
-        (*lghtcrv).astephem_sun.pnt[i].dist = getdouble( fp);
+      for (i=0; i<lghtcrv->astephem_sun.n; i++) {
+        rdcal2jd( fp, &lghtcrv->astephem_sun.pnt[i].t);
+        lghtcrv->astephem_sun.pnt[i].ra = getdouble( fp)*D2R;
+        lghtcrv->astephem_sun.pnt[i].dec = getdouble( fp)*D2R;
+        lghtcrv->astephem_sun.pnt[i].dist = getdouble( fp);
       }
 
       /*  Read the observer ephemeris as viewed from the Sun  */
 
-      (*lghtcrv).obsephem_sun.n = getint( fp); /* # of points in ephemeris */
-      if ((*lghtcrv).obsephem_sun.n != (*lghtcrv).astephem_sun.n) {
+      lghtcrv->obsephem_sun.n = getint( fp); /* # of points in ephemeris */
+      if (lghtcrv->obsephem_sun.n != lghtcrv->astephem_sun.n) {
         printf("ERROR for dataset %d: must have the same number of ephemeris entries\n", s);
         printf("                         for the asteroid and the observer\n");
         bailout("read_dat.c\n");
       }
-      (*lghtcrv).obsephem_sun.pnt = (struct ephpnt_t *) calloc( (*lghtcrv).obsephem_sun.n,
+      lghtcrv->obsephem_sun.pnt = (struct ephpnt_t *) calloc( lghtcrv->obsephem_sun.n,
                                                                 sizeof( struct ephpnt_t));
-      for (i=0; i<(*lghtcrv).obsephem_sun.n; i++) {
-        rdcal2jd( fp, &(*lghtcrv).obsephem_sun.pnt[i].t);
-        if ((*lghtcrv).obsephem_sun.pnt[i].t != (*lghtcrv).astephem_sun.pnt[i].t) {
+      for (i=0; i<lghtcrv->obsephem_sun.n; i++) {
+        rdcal2jd( fp, &lghtcrv->obsephem_sun.pnt[i].t);
+        if (lghtcrv->obsephem_sun.pnt[i].t != lghtcrv->astephem_sun.pnt[i].t) {
           printf("ERROR for dataset %d: must have the same set of ephemeris epochs\n", s);
           printf("                         for the asteroid and the observer\n");
           bailout("read_dat.c\n");
         }
-        (*lghtcrv).obsephem_sun.pnt[i].ra = getdouble( fp)*D2R;
-        (*lghtcrv).obsephem_sun.pnt[i].dec = getdouble( fp)*D2R;
-        (*lghtcrv).obsephem_sun.pnt[i].dist = getdouble( fp);
+        lghtcrv->obsephem_sun.pnt[i].ra = getdouble( fp)*D2R;
+        lghtcrv->obsephem_sun.pnt[i].dec = getdouble( fp)*D2R;
+        lghtcrv->obsephem_sun.pnt[i].dist = getdouble( fp);
       }
 
       /*  Construct the asteroid ephemeris as viewed by the observer  */
 
-      (*lghtcrv).astephem.n = (*lghtcrv).astephem_sun.n;
-      (*lghtcrv).astephem.pnt = (struct ephpnt_t *) calloc( (*lghtcrv).astephem.n,
+      lghtcrv->astephem.n = lghtcrv->astephem_sun.n;
+      lghtcrv->astephem.pnt = (struct ephpnt_t *) calloc( lghtcrv->astephem.n,
                                                              sizeof( struct ephpnt_t));
-      for (i=0; i<(*lghtcrv).astephem.n; i++) {
-        (*lghtcrv).astephem.pnt[i].t = (*lghtcrv).astephem_sun.pnt[i].t;
-        x =   (*lghtcrv).astephem_sun.pnt[i].dist * cos( (*lghtcrv).astephem_sun.pnt[i].dec)
-                                                  * cos( (*lghtcrv).astephem_sun.pnt[i].ra)
-            - (*lghtcrv).obsephem_sun.pnt[i].dist * cos( (*lghtcrv).obsephem_sun.pnt[i].dec)
-                                                  * cos( (*lghtcrv).obsephem_sun.pnt[i].ra);
-        y =   (*lghtcrv).astephem_sun.pnt[i].dist * cos( (*lghtcrv).astephem_sun.pnt[i].dec)
-                                                  * sin( (*lghtcrv).astephem_sun.pnt[i].ra)
-            - (*lghtcrv).obsephem_sun.pnt[i].dist * cos( (*lghtcrv).obsephem_sun.pnt[i].dec)
-                                                  * sin( (*lghtcrv).obsephem_sun.pnt[i].ra);
-        z =   (*lghtcrv).astephem_sun.pnt[i].dist * sin( (*lghtcrv).astephem_sun.pnt[i].dec)
-            - (*lghtcrv).obsephem_sun.pnt[i].dist * sin( (*lghtcrv).obsephem_sun.pnt[i].dec);
-        (*lghtcrv).astephem.pnt[i].dist = sqrt(x*x + y*y + z*z);
-        (*lghtcrv).astephem.pnt[i].ra = atan2( y, x);
-        (*lghtcrv).astephem.pnt[i].dec = asin( z / (*lghtcrv).astephem.pnt[i].dist);
+      for (i=0; i<lghtcrv->astephem.n; i++) {
+        lghtcrv->astephem.pnt[i].t = lghtcrv->astephem_sun.pnt[i].t;
+        x =   lghtcrv->astephem_sun.pnt[i].dist * cos( lghtcrv->astephem_sun.pnt[i].dec)
+                                                  * cos( lghtcrv->astephem_sun.pnt[i].ra)
+            - lghtcrv->obsephem_sun.pnt[i].dist * cos( lghtcrv->obsephem_sun.pnt[i].dec)
+                                                  * cos( lghtcrv->obsephem_sun.pnt[i].ra);
+        y =   lghtcrv->astephem_sun.pnt[i].dist * cos( lghtcrv->astephem_sun.pnt[i].dec)
+                                                  * sin( lghtcrv->astephem_sun.pnt[i].ra)
+            - lghtcrv->obsephem_sun.pnt[i].dist * cos( lghtcrv->obsephem_sun.pnt[i].dec)
+                                                  * sin( lghtcrv->obsephem_sun.pnt[i].ra);
+        z =   lghtcrv->astephem_sun.pnt[i].dist * sin( lghtcrv->astephem_sun.pnt[i].dec)
+            - lghtcrv->obsephem_sun.pnt[i].dist * sin( lghtcrv->obsephem_sun.pnt[i].dec);
+        lghtcrv->astephem.pnt[i].dist = sqrt(x*x + y*y + z*z);
+        lghtcrv->astephem.pnt[i].ra = atan2( y, x);
+        lghtcrv->astephem.pnt[i].dec = asin( z / lghtcrv->astephem.pnt[i].dist);
       }
 
       /*  Construct the solar ephemeris as viewed by the observer  */
 
-      (*lghtcrv).solephem.n = (*lghtcrv).obsephem_sun.n;
-      (*lghtcrv).solephem.pnt = (struct ephpnt_t *) calloc( (*lghtcrv).solephem.n,
+      lghtcrv->solephem.n = lghtcrv->obsephem_sun.n;
+      lghtcrv->solephem.pnt = (struct ephpnt_t *) calloc( lghtcrv->solephem.n,
                                                              sizeof( struct ephpnt_t));
-      for (i=0; i<(*lghtcrv).solephem.n; i++) {
-        (*lghtcrv).solephem.pnt[i].t = (*lghtcrv).obsephem_sun.pnt[i].t;
-        (*lghtcrv).solephem.pnt[i].ra = (*lghtcrv).obsephem_sun.pnt[i].ra - PIE;
-        if ((*lghtcrv).solephem.pnt[i].ra < 0.0)
-          (*lghtcrv).solephem.pnt[i].ra += 2*PIE;
-        (*lghtcrv).solephem.pnt[i].dec = -(*lghtcrv).obsephem_sun.pnt[i].dec;
-        (*lghtcrv).solephem.pnt[i].dist = (*lghtcrv).obsephem_sun.pnt[i].dist;
+      for (i=0; i<lghtcrv->solephem.n; i++) {
+        lghtcrv->solephem.pnt[i].t = lghtcrv->obsephem_sun.pnt[i].t;
+        lghtcrv->solephem.pnt[i].ra = lghtcrv->obsephem_sun.pnt[i].ra - PIE;
+        if (lghtcrv->solephem.pnt[i].ra < 0.0)
+          lghtcrv->solephem.pnt[i].ra += 2*PIE;
+        lghtcrv->solephem.pnt[i].dec = -lghtcrv->obsephem_sun.pnt[i].dec;
+        lghtcrv->solephem.pnt[i].dist = lghtcrv->obsephem_sun.pnt[i].dist;
       }
   }
 
@@ -1802,9 +1802,9 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
           zero     --> specification of evenly spaced epochs follows
           negative --> use the same epochs as for the observations         */
 
-  np = (*lghtcrv).ncalc_obsfile = getint( fp);
+  np = lghtcrv->ncalc_obsfile = getint( fp);
   if (np != 0)
-    (*lghtcrv).jdstart = (*lghtcrv).jdstop = (*lghtcrv).jdinterval = -HUGENUMBER;
+    lghtcrv->jdstart = lghtcrv->jdstop = lghtcrv->jdinterval = -HUGENUMBER;
 
   /*  If the next lines explicitly or implicitly specify the calculation epochs,
       read them now and then generate the relevant quantities for each epoch
@@ -1816,72 +1816,72 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
 
         /*  We have an explicit list of calculated points  */
 
-        (*lghtcrv).ncalc = np;
+        lghtcrv->ncalc = np;
     } else {
 
         /*  Generate the list of calculated points from JD start/stop/interval  */
 
-        t1 = (*lghtcrv).jdstart    = getdouble( fp);  /* start time */
-        t2 = (*lghtcrv).jdstop     = getdouble( fp);  /* stop time  */
-        dt = (*lghtcrv).jdinterval = getdouble( fp);  /* time step  */
+        t1 = lghtcrv->jdstart    = getdouble( fp);  /* start time */
+        t2 = lghtcrv->jdstop     = getdouble( fp);  /* stop time  */
+        dt = lghtcrv->jdinterval = getdouble( fp);  /* time step  */
         if (t2 < t1 || dt <= 0) {
           printf("ERROR in set %d calculation epochs: need t2 >= t1 and dt > 0\n", s);
           bailout("read_lghtcrv in read_dat.c\n");
         }
-        (*lghtcrv).ncalc = ((int)floor((t2 - t1)/dt)) + 1;  /* # points */
+        lghtcrv->ncalc = ((int)floor((t2 - t1)/dt)) + 1;  /* # points */
     }
-    (*lghtcrv).x0 = vector( 1, (*lghtcrv).ncalc);
-    (*lghtcrv).x = vector( 1, (*lghtcrv).ncalc);
-    (*lghtcrv).y = vector( 1, (*lghtcrv).ncalc);
-    (*lghtcrv).y2 = vector( 1, (*lghtcrv).ncalc);
-    (*lghtcrv).rotphase_calc = vector( 1, (*lghtcrv).ncalc);
-    (*lghtcrv).solar_phase = vector( 1, (*lghtcrv).ncalc);
-    (*lghtcrv).solar_azimuth = vector( 1, (*lghtcrv).ncalc);
-    (*lghtcrv).rend = (struct crvrend_t *) calloc( (*lghtcrv).ncalc+1,
+    lghtcrv->x0 = vector( 1, lghtcrv->ncalc);
+    lghtcrv->x = vector( 1, lghtcrv->ncalc);
+    lghtcrv->y = vector( 1, lghtcrv->ncalc);
+    lghtcrv->y2 = vector( 1, lghtcrv->ncalc);
+    lghtcrv->rotphase_calc = vector( 1, lghtcrv->ncalc);
+    lghtcrv->solar_phase = vector( 1, lghtcrv->ncalc);
+    lghtcrv->solar_azimuth = vector( 1, lghtcrv->ncalc);
+    lghtcrv->rend = (struct crvrend_t *) calloc( lghtcrv->ncalc+1,
                                                    sizeof( struct crvrend_t));
     if (np > 0) {
-        for (i=1; i<=(*lghtcrv).ncalc; i++)
-          (*lghtcrv).x[i] = (*lghtcrv).x0[i] = getdouble( fp);
-        for (i=2; i<=(*lghtcrv).ncalc; i++) {
-          if ((*lghtcrv).x0[i] <= (*lghtcrv).x0[i-1]) {
+        for (i=1; i<=lghtcrv->ncalc; i++)
+          lghtcrv->x[i] = lghtcrv->x0[i] = getdouble( fp);
+        for (i=2; i<=lghtcrv->ncalc; i++) {
+          if (lghtcrv->x0[i] <= lghtcrv->x0[i-1]) {
             printf("ERROR in set %d: calculation epoch %d <= epoch %d\n", s, i, i-1);
             bailout("read_lghtcrv in read_dat.c\n");
           }
         }
     } else {
-        for (i=1; i<=(*lghtcrv).ncalc; i++)
-          (*lghtcrv).x[i] = (*lghtcrv).x0[i] = t1 + (i - 1)*dt;
+        for (i=1; i<=lghtcrv->ncalc; i++)
+          lghtcrv->x[i] = lghtcrv->x0[i] = t1 + (i - 1)*dt;
     }
 
-    for (i=1; i<=(*lghtcrv).ncalc; i++) {
-      dist = ephem2mat( (*lghtcrv).astephem, (*lghtcrv).solephem,
-                        (*lghtcrv).x0[i],
-                        (*lghtcrv).rend[i].oe, (*lghtcrv).rend[i].se,
-                        (*lghtcrv).rend[i].orbspin,
-                        &(*lghtcrv).solar_phase[i], &(*lghtcrv).solar_azimuth[i], 1);
+    for (i=1; i<=lghtcrv->ncalc; i++) {
+      dist = ephem2mat( lghtcrv->astephem, lghtcrv->solephem,
+                        lghtcrv->x0[i],
+                        lghtcrv->rend[i].oe, lghtcrv->rend[i].se,
+                        lghtcrv->rend[i].orbspin,
+                        &lghtcrv->solar_phase[i], &lghtcrv->solar_azimuth[i], 1);
       if ((*par).perform_ltc) {                         /* apply light-time correction */
-        (*lghtcrv).x[i] = (*lghtcrv).x0[i] - DAYSPERAU*dist;
-        ephem2mat( (*lghtcrv).astephem, (*lghtcrv).solephem,
-                   (*lghtcrv).x[i],
-                   (*lghtcrv).rend[i].oe, (*lghtcrv).rend[i].se,
-                   (*lghtcrv).rend[i].orbspin,
-                   &(*lghtcrv).solar_phase[i], &(*lghtcrv).solar_azimuth[i], 1);
+        lghtcrv->x[i] = lghtcrv->x0[i] - DAYSPERAU*dist;
+        ephem2mat( lghtcrv->astephem, lghtcrv->solephem,
+                   lghtcrv->x[i],
+                   lghtcrv->rend[i].oe, lghtcrv->rend[i].se,
+                   lghtcrv->rend[i].orbspin,
+                   &lghtcrv->solar_phase[i], &lghtcrv->solar_azimuth[i], 1);
       }
     }
   }
 
   /*  Read smearing information  */
 
-  (*lghtcrv).nviews = getint( fp); /* # views per point */
-  (*lghtcrv).view_interval = getdouble( fp); /* view interval (s) */
-  (*lghtcrv).view_interval /= 86400; /* convert to days */
+  lghtcrv->nviews = getint( fp); /* # views per point */
+  lghtcrv->view_interval = getdouble( fp); /* view interval (s) */
+  lghtcrv->view_interval /= 86400; /* convert to days */
   gettstr( fp, smearingstring);   /* smearing mode */
   if (!strcmp(smearingstring, "center")) {
-      (*lghtcrv).smearing_mode = SMEAR_CENTER;
-      (*lghtcrv).v0 = (*lghtcrv).nviews / 2;
+      lghtcrv->smearing_mode = SMEAR_CENTER;
+      lghtcrv->v0 = lghtcrv->nviews / 2;
   } else if (!strcmp(smearingstring, "first")) {
-      (*lghtcrv).smearing_mode = SMEAR_FIRST;
-      (*lghtcrv).v0 = 0;
+      lghtcrv->smearing_mode = SMEAR_FIRST;
+      lghtcrv->v0 = 0;
   } else {
       bailout("read_lghtcrv in read_dat.c: can't do that smearing mode yet\n");
   }
@@ -1889,30 +1889,30 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
   /*  Read the number of observed lightcurve points, the datafile name,
       and the calibration factor for this lightcurve                     */
 
-  (*lghtcrv).n = getint( fp);
-  gettstr( fp, (*lghtcrv).name);
-  readparam( fp, &(*lghtcrv).cal);
+  lghtcrv->n = getint( fp);
+  gettstr( fp, lghtcrv->name);
+  readparam( fp, &lghtcrv->cal);
 
   /*  Read the relative weight for this lightcurve, compute degrees
       of freedom contributed to this dataset, and compute weight sum  */
 
-  (*lghtcrv).weight = getdouble( fp);
-  (*lghtcrv).dof = (*lghtcrv).weight * (*lghtcrv).n;
-  *chi2_variance = 2 * (*lghtcrv).weight * (*lghtcrv).weight * (*lghtcrv).n;
-  if ((*lghtcrv).cal.state == 'c')
-    (*lghtcrv).sum_opt_brightness_weights = (*lghtcrv).weight * (*lghtcrv).n;
+  lghtcrv->weight = getdouble( fp);
+  lghtcrv->dof = lghtcrv->weight * lghtcrv->n;
+  *chi2_variance = 2 * lghtcrv->weight * lghtcrv->weight * lghtcrv->n;
+  if (lghtcrv->cal.state == 'c')
+    lghtcrv->sum_opt_brightness_weights = lghtcrv->weight * lghtcrv->n;
   else
-	  (*lghtcrv).sum_opt_brightness_weights = 0.0;
+	  lghtcrv->sum_opt_brightness_weights = 0.0;
 
   /*  If this node handles this dataset, allocate
       memory for quantities related to observation epochs  */
 
-  (*lghtcrv).t0 = vector( 1, (*lghtcrv).n);
-  (*lghtcrv).t = matrix( 1, (*lghtcrv).n, 0, (*lghtcrv).nviews-1);
-  (*lghtcrv).obs = vector( 1, (*lghtcrv).n);
-  (*lghtcrv).fit = vector( 1, (*lghtcrv).n);
-  (*lghtcrv).oneovervar = vector( 1, (*lghtcrv).n);
-  (*lghtcrv).rotphase_obs = vector( 1, (*lghtcrv).n);
+  lghtcrv->t0 = vector( 1, lghtcrv->n);
+  lghtcrv->t = matrix( 1, lghtcrv->n, 0, lghtcrv->nviews-1);
+  lghtcrv->obs = vector( 1, lghtcrv->n);
+  lghtcrv->fit = vector( 1, lghtcrv->n);
+  lghtcrv->oneovervar = vector( 1, lghtcrv->n);
+  lghtcrv->rotphase_obs = vector( 1, lghtcrv->n);
 
 
   /*  If we are setting calculation epochs equal to the unique observation
@@ -1920,17 +1920,16 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
       to be sorted so that repeated values can be skipped over.             */
 
   if (np < 0)
-    obsepoch_raw = vector( 1, (*lghtcrv).n);
+    obsepoch_raw = vector( 1, lghtcrv->n);
 
   /*  If this node handles this dataset, OR if we are setting the
       calculation epochs equal to the unique observation epochs,
       read the datafile for this lightcurve                         */
 
-  //sunmag = (*par).sun_appmag[ (*lghtcrv).ioptlaw ];
-  sunmag = par->sun_appmag[1];
-  FOPEN( fin, (*lghtcrv).name, "r");
+  sunmag = (*par).sun_appmag[ lghtcrv->ioptlaw ];
+  FOPEN( fin, lghtcrv->name, "r");
   i = 0;
-  while (!feof(fin) && i < (*lghtcrv).n) {
+  while (!feof(fin) && i < lghtcrv->n) {
 	  i++;
 
 	  /*  Read a single lightcurve point: epoch (JD), magnitude, rms error  */
@@ -1951,37 +1950,37 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
 
 	  /*  If this is the node which handles this dataset, get the
           necessary observation-related quantities for this point  */
-	  (*lghtcrv).t0[i] = obsepoch;
-	  (*lghtcrv).obs[i] = obsintens;
-	  (*lghtcrv).oneovervar[i] = 1.0/(obsintenserr*obsintenserr);   /* 1/variance */
+	  lghtcrv->t0[i] = obsepoch;
+	  lghtcrv->obs[i] = obsintens;
+	  lghtcrv->oneovervar[i] = 1.0/(obsintenserr*obsintenserr);   /* 1/variance */
 
 	  /*  Loop through all views contributing to this (smeared) observed point  */
 
-	  for (k=0; k<(*lghtcrv).nviews; k++) {
+	  for (k=0; k<lghtcrv->nviews; k++) {
 
 		  /*  Compute the epoch of this view, uncorrected for light-travel time  */
 
-		  (*lghtcrv).t[i][k] = (*lghtcrv).t0[i]
-		                                     + (k - (*lghtcrv).v0)*(*lghtcrv).view_interval;
+		  lghtcrv->t[i][k] = lghtcrv->t0[i]
+		                                     + (k - lghtcrv->v0)*lghtcrv->view_interval;
 
 		  /*  Correct for one-way light-travel time if desired  */
 
 		  if ((*par).perform_ltc) {
-			  dist = ephem2mat( (*lghtcrv).astephem, (*lghtcrv).solephem,
-					  (*lghtcrv).t[i][k],
+			  dist = ephem2mat( lghtcrv->astephem, lghtcrv->solephem,
+					  lghtcrv->t[i][k],
 					  oe, se, orbspin, &solar_phase, &solar_azimuth, 1);
-			  (*lghtcrv).t[i][k] -= DAYSPERAU*dist;
+			  lghtcrv->t[i][k] -= DAYSPERAU*dist;
 		  }
 	  }
 
   }
-  if (i != (*lghtcrv).n) {
+  if (i != lghtcrv->n) {
 	  printf("ERROR: fix obs file: %d lightcurve pts, not %d, were read for dataset %d\n",
-			  i, (*lghtcrv).n, s);
+			  i, lghtcrv->n, s);
 	  bailout("read_lghtcrv in read_dat.c\n");
   } else if (!nomoredata( fin)) {
 	  printf("ERROR: fix obs file: > %d lightcurve pts were read for dataset %d\n",
-			  (*lghtcrv).n, s);
+			  lghtcrv->n, s);
 	  bailout("read_lghtcrv in read_dat.c\n");
   }
   fclose( fin);
@@ -1991,62 +1990,62 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
       there are, and create a vector containing only these sorted, unique epochs  */
 
   if (np < 0) {
-    hpsort( (*lghtcrv).n, obsepoch_raw);
+    hpsort( lghtcrv->n, obsepoch_raw);
     nunique = 1;
-    for (i=2; i<=(*lghtcrv).n; i++)
+    for (i=2; i<=lghtcrv->n; i++)
       if (obsepoch_raw[i] > obsepoch_raw[i-1])
         nunique++;
     obsepoch_unique = vector( 1, nunique);
     obsepoch_unique[1] = obsepoch_raw[1];
     k = 1;
-    for (i=2; i<=(*lghtcrv).n; i++)
+    for (i=2; i<=lghtcrv->n; i++)
       if (obsepoch_raw[i] > obsepoch_raw[i-1])
         obsepoch_unique[++k] = obsepoch_raw[i];
-    free_vector( obsepoch_raw, 1, (*lghtcrv).n);
+    free_vector( obsepoch_raw, 1, lghtcrv->n);
 
     /*  We now know how many unique observation epochs there are, so we can
         allocate memory for the various calculation-related arrays/vectors,
         assign epochs, and (if specified) correct them for light-travel time.  */
 
-    (*lghtcrv).ncalc = nunique;
-    (*lghtcrv).x0 = vector( 1, (*lghtcrv).ncalc);
-    (*lghtcrv).x = vector( 1, (*lghtcrv).ncalc);
-    (*lghtcrv).y = vector( 1, (*lghtcrv).ncalc);
-    (*lghtcrv).y2 = vector( 1, (*lghtcrv).ncalc);
-    (*lghtcrv).rotphase_calc = vector( 1, (*lghtcrv).ncalc);
-    (*lghtcrv).solar_phase = vector( 1, (*lghtcrv).ncalc);
-    (*lghtcrv).solar_azimuth = vector( 1, (*lghtcrv).ncalc);
-    (*lghtcrv).rend = (struct crvrend_t *) calloc( (*lghtcrv).ncalc+1,
+    lghtcrv->ncalc = nunique;
+    lghtcrv->x0 = vector( 1, lghtcrv->ncalc);
+    lghtcrv->x = vector( 1, lghtcrv->ncalc);
+    lghtcrv->y = vector( 1, lghtcrv->ncalc);
+    lghtcrv->y2 = vector( 1, lghtcrv->ncalc);
+    lghtcrv->rotphase_calc = vector( 1, lghtcrv->ncalc);
+    lghtcrv->solar_phase = vector( 1, lghtcrv->ncalc);
+    lghtcrv->solar_azimuth = vector( 1, lghtcrv->ncalc);
+    lghtcrv->rend = (struct crvrend_t *) calloc( lghtcrv->ncalc+1,
                                                    sizeof( struct crvrend_t));
-    for (i=1; i<=(*lghtcrv).ncalc; i++) {
-      (*lghtcrv).x[i] = (*lghtcrv).x0[i] = obsepoch_unique[i];
-      dist = ephem2mat( (*lghtcrv).astephem, (*lghtcrv).solephem,
-                        (*lghtcrv).x0[i],
-                        (*lghtcrv).rend[i].oe, (*lghtcrv).rend[i].se,
-                        (*lghtcrv).rend[i].orbspin,
-                        &(*lghtcrv).solar_phase[i], &(*lghtcrv).solar_azimuth[i], 1);
+    for (i=1; i<=lghtcrv->ncalc; i++) {
+      lghtcrv->x[i] = lghtcrv->x0[i] = obsepoch_unique[i];
+      dist = ephem2mat( lghtcrv->astephem, lghtcrv->solephem,
+                        lghtcrv->x0[i],
+                        lghtcrv->rend[i].oe, lghtcrv->rend[i].se,
+                        lghtcrv->rend[i].orbspin,
+                        &lghtcrv->solar_phase[i], &lghtcrv->solar_azimuth[i], 1);
       if ((*par).perform_ltc) {                        /* apply light-time correction */
-        (*lghtcrv).x[i] = (*lghtcrv).x0[i] - DAYSPERAU*dist;
-        ephem2mat( (*lghtcrv).astephem, (*lghtcrv).solephem,
-                   (*lghtcrv).x[i],
-                   (*lghtcrv).rend[i].oe, (*lghtcrv).rend[i].se,
-                   (*lghtcrv).rend[i].orbspin,
-                   &(*lghtcrv).solar_phase[i], &(*lghtcrv).solar_azimuth[i], 1);
+        lghtcrv->x[i] = lghtcrv->x0[i] - DAYSPERAU*dist;
+        ephem2mat( lghtcrv->astephem, lghtcrv->solephem,
+                   lghtcrv->x[i],
+                   lghtcrv->rend[i].oe, lghtcrv->rend[i].se,
+                   lghtcrv->rend[i].orbspin,
+                   &lghtcrv->solar_phase[i], &lghtcrv->solar_azimuth[i], 1);
       }
     }
-    free_vector( obsepoch_unique, 1, (*lghtcrv).n);
+    free_vector( obsepoch_unique, 1, lghtcrv->n);
   }
-  printf("#     %s\n", (*lghtcrv).name);
+  printf("#     %s\n", lghtcrv->name);
   fflush(stdout);
 
   /*  Initialize quantities related to spin impulses  */
 
-  for (i=1; i<=(*lghtcrv).ncalc; i++) {
-    (*lghtcrv).rend[i].n_integrate = -999;
+  for (i=1; i<=lghtcrv->ncalc; i++) {
+    lghtcrv->rend[i].n_integrate = -999;
     for (n=0; n<MAXIMP+2; n++) {
-      (*lghtcrv).rend[i].t_integrate[n] = -HUGENUMBER;
+      lghtcrv->rend[i].t_integrate[n] = -HUGENUMBER;
       for (j=0; j<=2; j++)
-        (*lghtcrv).rend[i].impulse[n][j] = 0.0;
+        lghtcrv->rend[i].impulse[n][j] = 0.0;
     }
   }
 
@@ -2056,10 +2055,10 @@ int read_lghtcrv( FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
       so, give a warning.  This problem is most likely to arise when modeling smearing.   */
 
   extrapolate_flag = 0;
-  for (i=1; i<=(*lghtcrv).n; i++)
-	  for (k=0; k<(*lghtcrv).nviews; k++)
-		  if ((*lghtcrv).t[i][k] < (*lghtcrv).x[1]
-		                                        || (*lghtcrv).t[i][k] > (*lghtcrv).x[(*lghtcrv).ncalc])
+  for (i=1; i<=lghtcrv->n; i++)
+	  for (k=0; k<lghtcrv->nviews; k++)
+		  if (lghtcrv->t[i][k] < lghtcrv->x[1]
+		                                        || lghtcrv->t[i][k] > lghtcrv->x[lghtcrv->ncalc])
 			  extrapolate_flag = 1;
   if (extrapolate_flag) {
 	  fprintf(stderr,"\n");

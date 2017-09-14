@@ -1,9 +1,7 @@
 /*****************************************************************************************
                                                                             realize_mod.c
-
 Takes a struct mod_t model and "realizes" its components as polyhedral solids made up of
 triangular facets.
-
 Modified 2016 July 9 by Matthias Engels:
 	Adapted for use with shape-cuda.
 ------------------------------------------------------------------------------------------
@@ -11,32 +9,24 @@ Modified 2014 April 26 by CM:
     Increase the minimum permitted value of the highest-order coefficient in the cubic
         equation that locates an ovoid vertex: if the coefficient is smaller than this
         minimum, treat it as if it's zero and solve a quadratic equation instead
-
 Modified 2014 March 22 by CM:
     Relax the tolerance for finding a valid ovoid vertex position
-
 Modified 2014 March 10 by CM:
     Guard against roundoff problems when computing vertex positions for ovoid components
         with very small |k|
-
 Modified 2014 February 10 by CM:
     Implement multiple radar and optical scattering laws
-
 Modified 2013 August 28 by CM:
     Set the bad diameter flag for harmonic components with tiny or negative vertex
         displacements, and for harmonic and vertex components with tiny or negative
         "scale factor" values
-
 Modified 2013 June 2 by CM:
     In the cubic_realroot routine, initialize nrealroots to avoid compilation warning
     Fix a comment
-
 Modified 2013 May 20 by CM:
     Implement ovoid shape components
-
 Modified 2012 July 4 by CM:
     Add test in "realize_coordinates" routine to avoid compilation warning
-
 Modified 2011 September 2 by CM:
     Bug fix: the "check_surface" routine makes use of facet normals when identifying
         active vs. inactive vertices and facets, but facet normals weren't being computed
@@ -46,20 +36,15 @@ Modified 2011 September 2 by CM:
         realize_mod in the SHERMAN package
     Store the area and the centroid coordinates of each facet
     Add "harmlambert" optical scattering law (compute facet angular coordinates)
-
 Modified 2010 September 1 by CM:
     Add "facetnorm" argument to the rayfacint routine
-
 Modified 2010 June 1 by CM:
     Change "scalefactor" parameter from a scalar to a 3-component vector
-
 Modified 2010 March 19 by CM:
     Implement '=' state for vertex deviations
-
 Modified 2009 November 15 by CM:
     In the "check_surface" routine, eliminate an unused variable and fix
         a couple of ambiguous nested if-then-else statements
-
 Modified 2009 August 3 by CM:
     For the "harmlommel" "harmhapke" "harmkaas" and "harmcosine_diff"
         inhomogeneous scattering laws, compute the spherical coordinates
@@ -75,54 +60,43 @@ Modified 2009 August 3 by CM:
         for each model side
     For multiple-component models, fix a bug in computing the center of mass
         for individual components
-
 Modified 2009 July 5 by CM:
     Turn each component's rotational offsets into a rotation matrix here
         rather than in the "read_mod" routine, in case the offsets are
         being allowed to float
-
 Modified 2009 July 1 by CM:
     Add "check_surface" routine that determines which facets of a
         multiple-component model lie on the model's surface rather than
         interior to the model
     For multiple-component models, when computing the area and the moments
         of the overall model, ignore facets that lie interior to the model
-
 Modified 2009 April 3 by CM:
     Fix slight bug in defining function a[i] = 1/radius^2 when a/b or b/c
         is tiny or negative for ellipsoid components
     Initialize the "baddiam_logfactor" parameter and set its value when
         2a, a/b, or b/c is tiny or negative for ellipsoid components
-
 Modified 2007 August 10 by CM:
     Eliminate unused variable
-
 Modified 2007 January 8 by CM:
     Define "scalefactor" state for vertex realizations of ellipsoid and
         harmonic components, not just its value
-
 Modified 2006 October 1 by CM:
     Add "scalefactor" to harmonic and vertex shape structures
     Replace ellipsoid diameters D with two_a, a_over_b, b_over_c
-
 Modified 2005 September 6 by CM:
     Add computation of facet angular coordinates for use with harmonic
         scattering laws
-
 Modified 2005 August 17 by CM:
     Move computation of spherical harmonic functions afactor and bfactor
         from here to read_mod.c, so that it can be done just once per fit
-
 Modified 2005 February 28 by CM:
     Initialize the "baddiam" parameter (flag indicating tiny or negative
         ellipsoid diameters) to 0 here rather than in bestfit.c so that
         it can be used for actions other than "fit"
-
 Modified 2004 August 23 by CM:
     Eliminated newtheta and oldcostheta variables and THETATOL constant,
         since they weren't actually being used (i.e., the test in which
         they were included was always true)
-
 Modified 2003 April 17 by CM:
     Added computation of component and model moments; this used to
         be done in function penalties (but wasn't always being done)
@@ -973,5 +947,3 @@ __host__ void compute_moments_gpu(struct mod_t *dmod, int nf, cudaStream_t *cm_s
 #undef EDGETOL
 #undef RTOL
 #undef SMALLCOEFF3
-
-

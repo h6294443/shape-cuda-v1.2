@@ -261,27 +261,27 @@ __host__ double objective_pthreads(double x, struct vertices_t **verts0, struct
 __device__ double bf_hotparamval, bf_dummyval=0.0, *hotparam;
 __device__ int bf_partype;
 
-__global__ void bf_get_flags_krnl(struct par_t *dpar, unsigned char *flags) {
+__global__ void bf_get_flags_krnl(struct par_t *dpar, int *flags) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
-		flags[0] = dpar->baddiam;
-		flags[1] = dpar->badphoto;
-		flags[2] = dpar->posbnd;
-		flags[3] = dpar->badposet;
-		flags[4] = dpar->badradar;
-		flags[5] = dpar->baddopscale;
+		flags[0] = (int)dpar->baddiam;
+		flags[1] = (int)dpar->badphoto;
+		flags[2] = (int)dpar->posbnd;
+		flags[3] = (int)dpar->badposet;
+		flags[4] = (int)dpar->badradar;
+		flags[5] = (int)dpar->baddopscale;
 	}
 }
-__global__ void ocs_get_flags_krnl(struct par_t *dpar, unsigned char *flags,
+__global__ void ocs_get_flags_krnl(struct par_t *dpar, int *flags,
 		double *dlogfactors) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
-		flags[0] = dpar->baddiam;
-		flags[1] = dpar->badphoto;
-		flags[2] = dpar->posbnd;
-		flags[3] = dpar->badposet;
-		flags[4] = dpar->badradar;
-		flags[5] = dpar->baddopscale;
+		flags[0] = (int)dpar->baddiam;
+		flags[1] = (int)dpar->badphoto;
+		flags[2] = (int)dpar->posbnd;
+		flags[3] = (int)dpar->badposet;
+		flags[4] = (int)dpar->badradar;
+		flags[5] = (int)dpar->baddopscale;
 
 		dlogfactors[0] = dpar->bad_objfactor;
 		dlogfactors[1] = dpar->baddiam_logfactor;
@@ -336,16 +336,17 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *dat)
 {
 	char hostname[MAXLEN], dofstring[MAXLEN];
-	int i, iter=0, p, cntr, first_fitpar, partype, keep_iterating=1, ilaw, nf, term_maxiter;
+	int i, iter=0, p, cntr, first_fitpar, partype, keep_iterating=1, ilaw,
+			nf, term_maxiter;
 	long pid_long;
 	pid_t pid;
 	double beginerr, enderr, ax, bx, cx, obja, objb, objc, xmin, final_chi2,
 		final_redchi2, dummyval2, dummyval3, dummyval4, delta_delcor0,
 		dopscale_factor, radalb_factor, optalb_factor, *hfparstep, *hfpartol,
 		*hfparabstol, objfunc_start, term_prec;
-	unsigned char *flags, *hflags, *htype, *dtype, action, avoid_badpos, term_badmodel;
+	unsigned char *htype, *dtype, action, avoid_badpos, term_badmodel;
 	int nsets, *nframes, *lc_n, *nviews, nfpar, *hfpartype, npar_update, max_frames=0,
-			max_streams=0;
+			max_streams=0, *flags, *hflags;
 	struct vertices_t **verts;
 	dim3 THD, BLK;
 
@@ -428,7 +429,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	gpuErrchk(cudaMemcpy(sdev_mod, &mod, sizeof(struct mod_t), cudaMemcpyHostToDevice));
 	gpuErrchk(cudaMalloc((void**)&sdev_dat, sizeof(struct dat_t)));
 	gpuErrchk(cudaMemcpy(sdev_dat, &dat, sizeof(struct dat_t), cudaMemcpyHostToDevice));
-	gpuErrchk(cudaMalloc((void**)&flags, sizeof(unsigned char) * 7));
+	gpuErrchk(cudaMalloc((void**)&flags, sizeof(int) * 7));
 	gpuErrchk(cudaMalloc((void**)&fparstep,   sizeof(double)  * nfpar));
 	gpuErrchk(cudaMalloc((void**)&fpartol,    sizeof(double)  * nfpar));
 	gpuErrchk(cudaMalloc((void**)&fparabstol, sizeof(double)  * nfpar));
@@ -438,7 +439,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	hfpartol	 = (double *) malloc(nfpar*sizeof(double));
 	hfparabstol  = (double *) malloc(nfpar*sizeof(double));
 	hfpartype 	 = (int *) 	  malloc(nfpar*sizeof(int));
-	hflags 		 = (unsigned char *) malloc(7*sizeof(unsigned char));
+	hflags 		 = (int *) malloc(7*sizeof(int));
 
 	for (i=0; i<nfpar; i++)
 		gpuErrchk(cudaMalloc((void**)&fpntr[i], sizeof(double) * 1));
@@ -534,16 +535,16 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 
 	bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 	checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-	gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+	gpuErrchk(cudaMemcpy(hflags, flags, sizeof(int)*7,
 			cudaMemcpyDeviceToHost));
 
 	/* Now act on the flags just retrieved from dev_par */
-	if (hflags[0])		printf("  (BAD DIAMS)");
-	if (hflags[1])		printf("  (BAD PHOTO)");
-	if (hflags[2])		printf("  (BAD POS)");
-	if (hflags[3])		printf("  (BAD POSET)");
-	if (hflags[4])		printf("  (BAD RADAR)");
-	if (hflags[5])		printf("  (BAD DOPSCALE)");		printf("\n");
+	if (hflags[0]==1)		printf("  (BAD DIAMS)");
+	if (hflags[1]==1)		printf("  (BAD PHOTO)");
+	if (hflags[2]==1)		printf("  (BAD POS)");
+	if (hflags[3]==1)		printf("  (BAD POSET)");
+	if (hflags[4]==1)		printf("  (BAD RADAR)");
+	if (hflags[5]==1)		printf("  (BAD DOPSCALE)");		printf("\n");
 	fflush(stdout);
 
 	/* Display the region within each delay-Doppler or Doppler frame that, ac-
@@ -574,16 +575,16 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 		/* Launch single-thread kernel to retrieve flags in dev_par */
 		bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 		checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-		gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+		gpuErrchk(cudaMemcpy(hflags, flags, sizeof(int)*7,
 				cudaMemcpyDeviceToHost));
 
 		/* Now act on the flags just retrieved from dev_par */
-		if (hflags[0])		printf("  (BAD DIAMS)");
-		if (hflags[1])		printf("  (BAD PHOTO)");
-		if (hflags[2])		printf("  (BAD POS)");
-		if (hflags[3])		printf("  (BAD POSET)");
-		if (hflags[4])		printf("  (BAD RADAR)");
-		if (hflags[5])		printf("  (BAD DOPSCALE)");		printf("\n");
+		if (hflags[0]==1)		printf("  (BAD DIAMS)");
+		if (hflags[1]==1)		printf("  (BAD PHOTO)");
+		if (hflags[2]==1)		printf("  (BAD POS)");
+		if (hflags[3]==1)		printf("  (BAD POSET)");
+		if (hflags[4]==1)		printf("  (BAD RADAR)");
+		if (hflags[5]==1)		printf("  (BAD DOPSCALE)");		printf("\n");
 		fflush(stdout);
 
 		/* Show breakdown of chi-square by data type    */
@@ -595,7 +596,6 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 		//p = first_fitpar = 1;
 		for (p=first_fitpar; p<nfpar; p++) {
 
-//		p = first_fitpar;
 			/*  Adjust only parameter p on this try  */
 			bf_set_hotparam_pntr_krnl<<<1,1>>>(fpntr, fpartype, p);
 			checkErrorAfterKernelLaunch("bf_set_hotparam_pntr_krnl");
@@ -621,7 +621,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			if (avoid_badpos && partype == SIZEPAR) {
 				bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 				checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-				gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+				gpuErrchk(cudaMemcpy(hflags, flags, sizeof(int)*7,
 						cudaMemcpyDeviceToHost));
 
 				/* Get value of (*hotparam) */
@@ -630,16 +630,16 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 				gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
 						sizeof(double),	0, cudaMemcpyDeviceToHost));
 
-				while (hflags[2]) {
+				while (hflags[2]==1) {
 					objective_gpu(hotparamval, verts, htype, dtype,
 							nframes, nviews, lc_n, nsets, nf, bf_stream);
 
 					bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 					checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-					gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+					gpuErrchk(cudaMemcpy(hflags, flags, sizeof(int)*7,
 							cudaMemcpyDeviceToHost));
 
-					if (hflags[2]) {
+					if (hflags[2]==1) {
 						/* Set the value pointed to by hotparam to 0.95 of its
 						 * previous value */
 						bf_mult_hotparam_val_krnl<<<1,1>>>(0.95);
@@ -804,16 +804,16 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			/* Launch single-thread kernel to retrieve flags in dev_par */
 			bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 			checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-			gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+			gpuErrchk(cudaMemcpy(hflags, flags, sizeof(int)*7,
 					cudaMemcpyDeviceToHost));
 			/* Display the objective function after each parameter adjustment.  */
 			printf("%4d %8.6f %d", p, enderr, iround(par->fpartype[p]));
-			if (hflags[0])		printf("  (BAD DIAMS)");
-			if (hflags[1])		printf("  (BAD PHOTO)");
-			if (hflags[2])		printf("  (BAD POS)");
-			if (hflags[3])		printf("  (BAD POSET)");
-			if (hflags[4])		printf("  (BAD RADAR)");
-			if (hflags[5])		printf("  (BAD DOPSCALE)");
+			if (hflags[0]==1)		printf("  (BAD DIAMS)");
+			if (hflags[1]==1)		printf("  (BAD PHOTO)");
+			if (hflags[2]==1)		printf("  (BAD POS)");
+			if (hflags[3]==1)		printf("  (BAD POSET)");
+			if (hflags[4]==1)		printf("  (BAD RADAR)");
+			if (hflags[5]==1)		printf("  (BAD DOPSCALE)");
 			printf("\n");
 			fflush(stdout);
 
@@ -910,7 +910,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 		/* Launch single-thread kernel to retrieve flags in dev_par */
 		bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 		checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-		gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*7,
+		gpuErrchk(cudaMemcpy(hflags, flags, sizeof(int)*7,
 				cudaMemcpyDeviceToHost));
 
 		if (par->pen.n > 0 || hflags[0] || hflags[1] || hflags[2]	|| hflags[3] ||
@@ -922,24 +922,24 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			penalties_gpu(dpar, dmod, ddat);
 			par->showstate = 0;
 		}
-		if (hflags[0])
+		if (hflags[0]==1)
 			printf("# objective func multiplied by %.1f: illegal ellipsoid diameters\n",
 					baddiam_factor);
-		if (hflags[1])
+		if (hflags[1]==1)
 			printf("# objective func multiplied by %.1f: illegal photometric parameters\n",
 					badphoto_factor);
-		if (hflags[2])
+		if (hflags[2]==1)
 			printf("# objective func multiplied by %.1f: model extends beyond POS frame\n",
 					posbnd_factor);
-		if (hflags[3])
+		if (hflags[3]==1)
 			printf("# objective func multiplied by %.1f: "
 					"model extends beyond plane-of-sky fit image\n",
 					badposet_factor);
-		if (hflags[4])
+		if (hflags[4]==1)
 			printf("# objective func multiplied by %.1f: "
 					"model is too wide in delay-Doppler space to construct fit image\n",
 					badradar_factor);
-		if (hflags[5])
+		if (hflags[5]==1)
 			printf("# objective func multiplied by %.1f: illegal Doppler scaling factors\n",
 					baddopscale_factor);
 		printf("# ----------------------------\n");
@@ -1000,9 +1000,9 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct par_t *dpar1,
 	final_redchi2, dummyval2, dummyval3, dummyval4, delta_delcor0,
 	dopscale_factor, radalb_factor, optalb_factor, *hfparstep, *hfpartol,
 	*hfparabstol, objfunc_start, term_prec;
-	unsigned char *flags, *hflags, *htype, *dtype0, *dtype1, action, avoid_badpos, term_badmodel;
+	unsigned char *htype, *dtype0, *dtype1, action, avoid_badpos, term_badmodel;
 	int nsets, *nframes, *lc_n, *nviews, nfpar, *hfpartype, npar_update,
-	max_frames=0, max_streams=0, *GPUID;
+	max_frames=0, max_streams=0, *GPUID, *flags, *hflags;
 	struct vertices_t **verts0, **verts1;	/* One for each GPU */
 	dim3 THD, BLK;
 
@@ -1111,7 +1111,7 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct par_t *dpar1,
 	gpuErrchk(cudaMemcpy(sdev_dat1, &dat1, sizeof(struct dat_t), cudaMemcpyHostToDevice));
 	gpuErrchk(cudaSetDevice(GPU0));
 
-	gpuErrchk(cudaMalloc((void**)&flags, sizeof(unsigned char) * 6));
+	gpuErrchk(cudaMalloc((void**)&flags, sizeof(int) * 6));
 	gpuErrchk(cudaMalloc((void**)&fparstep,   sizeof(double)  * nfpar));
 	gpuErrchk(cudaMalloc((void**)&fpartol,    sizeof(double)  * nfpar));
 	gpuErrchk(cudaMalloc((void**)&fparabstol, sizeof(double)  * nfpar));
@@ -1121,7 +1121,7 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct par_t *dpar1,
 	hfpartol	 = (double *) malloc(nfpar*sizeof(double));
 	hfparabstol  = (double *) malloc(nfpar*sizeof(double));
 	hfpartype 	 = (int *) 	  malloc(nfpar*sizeof(int));
-	hflags 		 = (unsigned char *) malloc(6*sizeof(unsigned char));
+	hflags 		 = (int *) malloc(6*sizeof(int));
 
 	for (i=0; i<nfpar; i++)
 		gpuErrchk(cudaMalloc((void**)&fpntr[i], sizeof(double) * 1));
@@ -1226,16 +1226,16 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct par_t *dpar1,
 
 	bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 	checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-	gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*6,
+	gpuErrchk(cudaMemcpy(hflags, flags, sizeof(int)*6,
 			cudaMemcpyDeviceToHost));
 
 	/* Now act on the flags just retrieved from dev_par */
-	if (hflags[0])		printf("  (BAD DIAMS)");
-	if (hflags[1])		printf("  (BAD PHOTO)");
-	if (hflags[2])		printf("  (BAD POS)");
-	if (hflags[3])		printf("  (BAD POSET)");
-	if (hflags[4])		printf("  (BAD RADAR)");
-	if (hflags[5])		printf("  (BAD DOPSCALE)");		printf("\n");
+	if (hflags[0]==1)		printf("  (BAD DIAMS)");
+	if (hflags[1]==1)		printf("  (BAD PHOTO)");
+	if (hflags[2]==1)		printf("  (BAD POS)");
+	if (hflags[3]==1)		printf("  (BAD POSET)");
+	if (hflags[4]==1)		printf("  (BAD RADAR)");
+	if (hflags[5]==1)		printf("  (BAD DOPSCALE)");		printf("\n");
 	fflush(stdout);
 
 	/* Display the region within each delay-Doppler or Doppler frame that, ac-
@@ -1266,16 +1266,16 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct par_t *dpar1,
 		/* Launch single-thread kernel to retrieve flags in dev_par */
 		bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 		checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-		gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*6,
+		gpuErrchk(cudaMemcpy(hflags, flags, sizeof(int)*6,
 				cudaMemcpyDeviceToHost));
 
 		/* Now act on the flags just retrieved from dev_par */
-		if (hflags[0])		printf("  (BAD DIAMS)");
-		if (hflags[1])		printf("  (BAD PHOTO)");
-		if (hflags[2])		printf("  (BAD POS)");
-		if (hflags[3])		printf("  (BAD POSET)");
-		if (hflags[4])		printf("  (BAD RADAR)");
-		if (hflags[5])		printf("  (BAD DOPSCALE)");		printf("\n");
+		if (hflags[0]==1)		printf("  (BAD DIAMS)");
+		if (hflags[1]==1)		printf("  (BAD PHOTO)");
+		if (hflags[2]==1)		printf("  (BAD POS)");
+		if (hflags[3]==1)		printf("  (BAD POSET)");
+		if (hflags[4]==1)		printf("  (BAD RADAR)");
+		if (hflags[5]==1)		printf("  (BAD DOPSCALE)");		printf("\n");
 		fflush(stdout);
 
 		/* Show breakdown of chi-square by data type    */
@@ -1312,7 +1312,7 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct par_t *dpar1,
 			if (avoid_badpos && partype == SIZEPAR) {
 				bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 				checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-				gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*6,
+				gpuErrchk(cudaMemcpy(hflags, flags, sizeof(int)*6,
 						cudaMemcpyDeviceToHost));
 
 				/* Get value of (*hotparam) */
@@ -1321,7 +1321,7 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct par_t *dpar1,
 				gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
 						sizeof(double),	0, cudaMemcpyDeviceToHost));
 
-				while (hflags[2]) {
+				while (hflags[2]==1) {
 					objective_pthreads(hotparamval, verts0, verts1, htype,
 							dtype0, dtype1, nframes, nviews, lc_n, GPUID, nsets,
 							nf,	max_frames, thread1, thread2, gpu0_stream,
@@ -1329,10 +1329,10 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct par_t *dpar1,
 
 					bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 					checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-					gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*6,
+					gpuErrchk(cudaMemcpy(hflags, flags, sizeof(int)*6,
 							cudaMemcpyDeviceToHost));
 
-					if (hflags[2]) {
+					if (hflags[2]==1) {
 						/* Set the value pointed to by hotparam to 0.95 of its
 						 * previous value */
 						bf_mult_hotparam_val_krnl<<<1,1>>>(0.95);
@@ -1520,16 +1520,16 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct par_t *dpar1,
 			/* Launch single-thread kernel to retrieve flags in dev_par */
 			bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 			checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-			gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*6,
+			gpuErrchk(cudaMemcpy(hflags, flags, sizeof(int)*6,
 					cudaMemcpyDeviceToHost));
 			/* Display the objective function after each parameter adjustment.  */
 			printf("%4d %8.6f %d", p, enderr, iround(par->fpartype[p]));
-			if (hflags[0])		printf("  (BAD DIAMS)");
-			if (hflags[1])		printf("  (BAD PHOTO)");
-			if (hflags[2])		printf("  (BAD POS)");
-			if (hflags[3])		printf("  (BAD POSET)");
-			if (hflags[4])		printf("  (BAD RADAR)");
-			if (hflags[5])		printf("  (BAD DOPSCALE)");
+			if (hflags[0]==1)		printf("  (BAD DIAMS)");
+			if (hflags[1]==1)		printf("  (BAD PHOTO)");
+			if (hflags[2]==1)		printf("  (BAD POS)");
+			if (hflags[3]==1)		printf("  (BAD POSET)");
+			if (hflags[4]==1)		printf("  (BAD RADAR)");
+			if (hflags[5]==1)		printf("  (BAD DOPSCALE)");
 			printf("\n");
 			fflush(stdout);
 
@@ -1555,8 +1555,8 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct par_t *dpar1,
 						nframes, lc_n, GPUID, 0, nsets, max_frames, thread1,
 						thread2, gpu0_stream, gpu1_stream);
 
-//				write_mod( dpar, dmod);
-//				write_dat( dpar, ddat);
+				write_mod( dpar, dmod);
+				write_dat( dpar, ddat);
 			}
 		}  // End fitpar loop
 
@@ -1572,8 +1572,8 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct par_t *dpar1,
 					nframes, lc_n, GPUID, 0, nsets, max_frames, thread1,
 					thread2, gpu0_stream, gpu1_stream);
 
-//			write_mod( dpar, dmod);
-//			write_dat( dpar, ddat);
+			write_mod( dpar, dmod);
+			write_dat( dpar, ddat);
 		}
 		show_deldoplim_pthread(ddat, ddat1, htype, nsets, nframes, max_frames, GPUID);
 
@@ -1634,7 +1634,7 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct par_t *dpar1,
 	/* Launch single-thread kernel to retrieve flags in dev_par */
 	bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 	checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-	gpuErrchk(cudaMemcpy(hflags, flags, sizeof(unsigned char)*6,
+	gpuErrchk(cudaMemcpy(hflags, flags, sizeof(int)*6,
 			cudaMemcpyDeviceToHost));
 
 	if (par->pen.n > 0 || hflags[0] || hflags[1] || hflags[2]	|| hflags[3] ||
@@ -1646,24 +1646,24 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct par_t *dpar1,
 			penalties_gpu(dpar, dmod, ddat);
 			par->showstate = 0;
 		}
-		if (hflags[0])
+		if (hflags[0]==1)
 			printf("# objective func multiplied by %.1f: illegal ellipsoid diameters\n",
 					baddiam_factor);
-		if (hflags[1])
+		if (hflags[1]==1)
 			printf("# objective func multiplied by %.1f: illegal photometric parameters\n",
 					badphoto_factor);
-		if (hflags[2])
+		if (hflags[2]==1)
 			printf("# objective func multiplied by %.1f: model extends beyond POS frame\n",
 					posbnd_factor);
-		if (hflags[3])
+		if (hflags[3]==1)
 			printf("# objective func multiplied by %.1f: "
 					"model extends beyond plane-of-sky fit image\n",
 					badposet_factor);
-		if (hflags[4])
+		if (hflags[4]==1)
 			printf("# objective func multiplied by %.1f: "
 					"model is too wide in delay-Doppler space to construct fit image\n",
 					badradar_factor);
-		if (hflags[5])
+		if (hflags[5]==1)
 			printf("# objective func multiplied by %.1f: illegal Doppler scaling factors\n",
 					baddopscale_factor);
 		printf("# ----------------------------\n");
@@ -1733,13 +1733,15 @@ __host__ double objective_gpu(
 {
 	double err, pens, delta_delcor0, dopscale_factor, radalb_factor,
 		optalb_factor, *dlogfactors, *hlogfactors;
-	unsigned char *dflags, *hflags;
+//	unsigned char *dflags, *hflags;
+	int *dflags, *hflags;
 	int max_frames;
 
 //	gpuErrchk(cudaSetDevice(GPU0));
-	gpuErrchk(cudaMalloc((void**)&dflags, sizeof(unsigned char)*7));
+	gpuErrchk(cudaMalloc((void**)&dflags, sizeof(int)*7));
 	gpuErrchk(cudaMalloc((void**)&dlogfactors, sizeof(double)*7));
-	hflags 	 	= (unsigned char *) malloc(7*sizeof(unsigned char));
+//	hflags 	 	= (unsigned char *) malloc(7*sizeof(unsigned char));
+	hflags 	 	= (int *) malloc(7*sizeof(int));
 	hlogfactors	= (double *) malloc(7*sizeof(double));
 
 	/* Initialize local parameters  */
@@ -1820,10 +1822,8 @@ __host__ double objective_gpu(
 	err = chi2_gpu(sdev_par, sdev_dat, htype, dtype, nframes, lc_n, 0, nsets,
 			bf_stream, max_frames);
 
-
 	/* Divide chi-square by DOF to get reduced chi-square.    */
 	err /= sdat->dof;
-//	printf("(GPU MODE) chi2_gpu error: %g with DOF = %g\n", err, sdat->dof);
 	/* If bestfit has set showvals = 1, display reduced chi-square. Then set
 	 * spar->showstate = 1, so that when function penalties is called later,
 	 * it "knows" that it should display the individual penalty values.
@@ -1838,10 +1838,7 @@ __host__ double objective_gpu(
 	/* Compute penalties and add to reduced chi-square. Individual penalty values
 	 * will be displayed if we set spar->showstate = 1 a few lines back.        */
 	pens = penalties_gpu(sdev_par, sdev_mod, sdev_dat);
-//	printf("(GPU MODE) penalties: %g\n", pens);
 	err += pens;
-//	printf("(GPU MODE) err + pens = %g\n", err);
-//	showvals = 1;
 	/* Double the objective function if there's an ellipsoid component with tiny
 	 * or negative diameter, if any optical photometric parameters have invalid
 	 * values, if any portion of the model lies outside specified POS window or
@@ -1868,26 +1865,26 @@ __host__ double objective_gpu(
 	 */
 	ocs_get_flags_krnl<<<1,1>>>(sdev_par, dflags, dlogfactors);
 	checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-	gpuErrchk(cudaMemcpy(hflags, dflags, sizeof(unsigned char)*7,
+	gpuErrchk(cudaMemcpy(hflags, dflags, sizeof(int)*7,
 			cudaMemcpyDeviceToHost));
 	gpuErrchk(cudaMemcpy(hlogfactors, dlogfactors, sizeof(double)*6,
 			cudaMemcpyDeviceToHost));
 
-	if (hflags[0]) {
+	if (hflags[0]==1) {
 		baddiam_factor = hlogfactors[0] * exp(hlogfactors[1]);
 		err *= baddiam_factor;
 		if (showvals)
 			printf("# objective func multiplied by %.1f: illegal ellipsoid diameters\n",
 					baddiam_factor);
 	}
-	if (hflags[1]) {
+	if (hflags[1]==1) {
 		badphoto_factor = hlogfactors[0] * exp(hlogfactors[2]);
 		err *= badphoto_factor;
 		if (showvals)
 			printf("# objective func multiplied by %.1f: illegal photometric parameters\n",
 					badphoto_factor);
 	}
-	if (hflags[2]) {
+	if (hflags[2]==1) {
 		check_posbnd = 1;     /* tells bestfit about this problem */
 		posbnd_factor = hlogfactors[0] * exp(hlogfactors[3]);
 //		printf("# hlogfactors[0] = %g and hlogfactors[3] = %g\n", hlogfactors[0], hlogfactors[3]);
@@ -1896,7 +1893,7 @@ __host__ double objective_gpu(
 			printf("# objective func multiplied by %.1f: model extends beyond POS frame\n",
 					posbnd_factor);
 	}
-	if (hflags[3]) {
+	if (hflags[3]==1) {
 		check_badposet = 1;     /* tells bestfit about this problem */
 		badposet_factor = hlogfactors[0] * exp(hlogfactors[4]);
 		err *= badposet_factor;
@@ -1904,7 +1901,7 @@ __host__ double objective_gpu(
 			printf("# objective func multiplied by %.1f: plane-of-sky fit frame too small\n",
 					badposet_factor);
 	}
-	if (hflags[4]) {
+	if (hflags[4]==1) {
 		check_badradar = 1;     /* tells bestfit about this problem */
 		badradar_factor = hlogfactors[0] * exp(hlogfactors[5]);
 		err *= badradar_factor;
@@ -1912,7 +1909,7 @@ __host__ double objective_gpu(
 			printf("# objective func multiplied by %.1f: model too wide in delay-Doppler space\n",
 					badradar_factor);
 	}
-	if (hflags[5]) {
+	if (hflags[5]==1) {
 		baddopscale_factor = hlogfactors[0] * exp(hlogfactors[6]);
 		err *= baddopscale_factor;
 		if (showvals)
@@ -1960,12 +1957,12 @@ __host__ double objective_pthreads(
 {
 	double err, pens, delta_delcor0, dopscale_factor, radalb_factor,
 		optalb_factor, *dlogfactors, *hlogfactors;
-	unsigned char *dflags, *hflags;
+	int *dflags, *hflags;
 
 	gpuErrchk(cudaSetDevice(GPU0));
-	gpuErrchk(cudaMalloc((void**)&dflags, sizeof(unsigned char)*6));
+	gpuErrchk(cudaMalloc((void**)&dflags, sizeof(int)*6));
 	gpuErrchk(cudaMalloc((void**)&dlogfactors, sizeof(double)*7));
-	hflags 	 	= (unsigned char *) malloc(6*sizeof(unsigned char));
+	hflags 	 	= (int *) malloc(6*sizeof(int));
 	hlogfactors	= (double *) malloc(7*sizeof(double));
 
 	/* Initialize local parameters  */
@@ -2108,26 +2105,26 @@ __host__ double objective_pthreads(
 	 */
 	ocs_get_flags_krnl<<<1,1>>>(sdev_par, dflags, dlogfactors);
 	checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-	gpuErrchk(cudaMemcpy(hflags, dflags, sizeof(unsigned char)*6,
+	gpuErrchk(cudaMemcpy(hflags, dflags, sizeof(int)*6,
 			cudaMemcpyDeviceToHost));
 	gpuErrchk(cudaMemcpy(hlogfactors, dlogfactors, sizeof(double)*7,
 			cudaMemcpyDeviceToHost));
 
-	if (hflags[0]) {
+	if (hflags[0]==1) {
 		baddiam_factor = hlogfactors[0] * exp(hlogfactors[1]);
 		err *= baddiam_factor;
 		if (showvals)
 			printf("# objective func multiplied by %.1f: illegal ellipsoid diameters\n",
 					baddiam_factor);
 	}
-	if (hflags[1]) {
+	if (hflags[1]==1) {
 		badphoto_factor = hlogfactors[0] * exp(hlogfactors[2]);
 		err *= badphoto_factor;
 		if (showvals)
 			printf("# objective func multiplied by %.1f: illegal photometric parameters\n",
 					badphoto_factor);
 	}
-	if (hflags[2]) {
+	if (hflags[2]==1) {
 		check_posbnd = 1;     /* tells bestfit about this problem */
 		posbnd_factor = hlogfactors[0] * exp(hlogfactors[3]);
 		err *= posbnd_factor;
@@ -2135,7 +2132,7 @@ __host__ double objective_pthreads(
 			printf("# objective func multiplied by %.1f: model extends beyond POS frame\n",
 					posbnd_factor);
 	}
-	if (hflags[3]) {
+	if (hflags[3]==1) {
 		check_badposet = 1;     /* tells bestfit about this problem */
 		badposet_factor = hlogfactors[0] * exp(hlogfactors[4]);
 		err *= badposet_factor;
@@ -2143,7 +2140,7 @@ __host__ double objective_pthreads(
 			printf("# objective func multiplied by %.1f: plane-of-sky fit frame too small\n",
 					badposet_factor);
 	}
-	if (hflags[4]) {
+	if (hflags[4]==1) {
 		check_badradar = 1;     /* tells bestfit about this problem */
 		badradar_factor = hlogfactors[0] * exp(hlogfactors[5]);
 		err *= badradar_factor;
@@ -2151,7 +2148,7 @@ __host__ double objective_pthreads(
 			printf("# objective func multiplied by %.1f: model too wide in delay-Doppler space\n",
 					badradar_factor);
 	}
-	if (hflags[5]) {
+	if (hflags[5]==1) {
 		baddopscale_factor = hlogfactors[0] * exp(hlogfactors[6]);
 		err *= baddopscale_factor;
 		if (showvals)

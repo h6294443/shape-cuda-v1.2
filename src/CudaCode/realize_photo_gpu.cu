@@ -117,7 +117,7 @@ extern "C" {
 #include "../shape/head.h"
 }
 
-__device__ int dL, dLmax, dn;
+__device__ int dL, dLmax, dn, dnoptlaws, dnradlaws;
 __device__ unsigned char dradtype, dopttype;
 __device__ void dev_checkphotopar( double parval, double parmin, double parmax, int mode,
 		unsigned char *badphoto, double *badphoto_logfactor);
@@ -181,13 +181,14 @@ __global__ void get_photo_types_krnl(struct par_t *dpar, struct mod_t *dmod)
 		dpar->badphoto_logfactor = 0.0;
 		dopttype = dmod->photo.opttype[0];
 		dradtype = dmod->photo.radtype[0];
+		dnoptlaws = dmod->photo.noptlaws;
+		dnradlaws = dmod->photo.nradlaws;
 	}
 }
 __global__ void opt_lommel_krnl(struct par_t *dpar, struct mod_t *dmod,
-		double optalb_factor, int albedo_mode)
+		double optalb_factor, int albedo_mode, int ilaw)
 {
 	/* Single-threaded kernel */
-	int ilaw = 0;	// Fixed for cuda v1.0
 	if (threadIdx.x == 0) {
 		if (dmod->photo.optical[ilaw].R.R.state == 'f') {
 			if (albedo_mode != 0)
@@ -200,21 +201,17 @@ __global__ void opt_lommel_krnl(struct par_t *dpar, struct mod_t *dmod,
 				&dpar->badphoto, &dpar->badphoto_logfactor);
 	}
 }
-__global__ void opt_harmlommel_getL_krnl(struct mod_t *dmod)
+__global__ void opt_harmlommel_getL_krnl(struct mod_t *dmod, int ilaw)
 {
 	/* Single-treaded kernel */
-	int ilaw = 0;
 	if (threadIdx.x == 0)
-	{
 		dL = dmod->photo.optical[ilaw].harmR.R.nhar;
-	}
 }
 __global__ void opt_harmlommel_set_ab_krnl(struct mod_t *dmod, double optalb_factor,
-		int albedo_mode)
+		int albedo_mode, int ilaw)
 {
 	/* L-threaded kernel */
-	int m, ilaw = 0;
-	int l = threadIdx.x;
+	int m, l = threadIdx.x;
 	if (threadIdx.x < dmod->photo.optical[ilaw].harmR.R.nhar)
 	{
 		if (dmod->photo.optical[ilaw].harmR.R.a[l][0].state == 'f') {
@@ -257,10 +254,10 @@ __global__ void opt_harmlommel_set_nlm_krnl(struct mod_t *dmod, double **nlm, in
 	}
 }
 __global__ void opt_harmlommel_facet_krnl(struct par_t *dpar, struct mod_t *dmod,
-		double **afactor, double **bfactor, double **nlm)
+		double **afactor, double **bfactor, double **nlm, int ilaw)
 {
 	/* Multi-threaded kernel (nf) */
-	int m, l, c = 0, ilaw = 0;
+	int m, l, c = 0;
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
 	int L = dmod->photo.optical[ilaw].harmR.R.nhar;
 	double costheta, phi, plm;
@@ -297,10 +294,9 @@ __global__ void opt_harmlommel_facet_krnl(struct par_t *dpar, struct mod_t *dmod
 	}
 }
 __global__ void opt_inholommel_A_krnl(struct par_t *dpar, struct mod_t *dmod,
-		int albedo_mode, double optalb_factor)
+		int albedo_mode, double optalb_factor, int ilaw)
 {
 	/* Single-threaded kernel */
-	int ilaw = 0;
 	if(threadIdx.x == 0) {
 		if (dmod->photo.optical[ilaw].inhoR.global.R.state == 'f') {
 			if (albedo_mode != 0)
@@ -316,10 +312,10 @@ __global__ void opt_inholommel_A_krnl(struct par_t *dpar, struct mod_t *dmod,
 	}
 }
 __global__ void opt_inholommel_facet_krnl(struct par_t *dpar, struct mod_t
-		*dmod, int albedo_mode, double optalb_factor)
+		*dmod, int albedo_mode, double optalb_factor, int ilaw)
 {
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	int c = 0, ilaw = 0;
+	int c = 0;
 
 	if (f < dmod->shape.comp[c].real.nf)
 		if (dmod->photo.optical[ilaw].inhoR.local[c][f].R.state == '=') {
@@ -339,10 +335,9 @@ __global__ void opt_inholommel_facet_krnl(struct par_t *dpar, struct mod_t
 			&dpar->badphoto, &dpar->badphoto_logfactor);
 }
 __global__ void opt_hapke_krnl(struct par_t *dpar, struct mod_t *dmod,
-		int albedo_mode, double optalb_factor)
+		int albedo_mode, double optalb_factor, int ilaw)
 {
 	/* Single-threaded kernel */
-	int ilaw = 0;
 	if (threadIdx.x == 0) {
 		if (dmod->photo.optical[ilaw].hapke.w.state == 'f') {
 			if (albedo_mode != 0)
@@ -369,10 +364,10 @@ __global__ void opt_hapke_krnl(struct par_t *dpar, struct mod_t *dmod,
 	}
 }
 __global__ void opt_harmhapke_A_krnl(struct mod_t *dmod, int albedo_mode,
-		double optalb_factor)
+		double optalb_factor, int ilaw)
 {
 	/* Single-threaded kernel */
-	int l, m, L, ilaw = 0;
+	int l, m, L;
 
 	if(threadIdx.x == 0) {
 		L = dmod->photo.optical[ilaw].harmhapke.w.nhar;
@@ -406,10 +401,9 @@ __global__ void opt_harmhapke_A_krnl(struct mod_t *dmod, int albedo_mode,
 		}
 	}
 }
-__global__ void opt_harmhapke_Lmax_krnl(struct mod_t *dmod)
+__global__ void opt_harmhapke_Lmax_krnl(struct mod_t *dmod, int ilaw)
 {
 	/* Single-threaded kernel */
-	int ilaw = 0;
 	if (threadIdx.x == 0) {
 		dLmax = MAX( dmod->photo.optical[ilaw].harmhapke.w.nhar,
 				dmod->photo.optical[ilaw].harmhapke.h.nhar);
@@ -430,11 +424,11 @@ __global__ void opt_harmhapke_kaas_nlm_krnl(struct mod_t *dmod, double **nlm, in
 }
 __global__ void opt_harmhapke_facet_krnl(struct par_t *dpar, struct mod_t
 		*dmod, double **nlm,	double **afactor, double **bfactor, int nf,
-		int Lmax)
+		int Lmax, int ilaw)
 {
 	/* nf-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	int c = 0, ilaw = 0, L, l, m;
+	int c = 0, L, l, m;
 	double costheta, phi, plm;
 
 	if (f < nf) {
@@ -536,9 +530,8 @@ __global__ void opt_harmhapke_facet_krnl(struct par_t *dpar, struct mod_t
 	}
 }
 __global__ void opt_inhohapke_A_krnl(struct par_t *dpar, struct mod_t *dmod,
-		int albedo_mode, double optalb_factor) {
+		int albedo_mode, double optalb_factor, int ilaw) {
 	/* Single-threaded kernel */
-	int ilaw = 0;
 	if (threadIdx.x == 0) {
 		if (dmod->photo.optical[ilaw].inhohapke.global.w.state == 'f') {
 			if (albedo_mode != 0)
@@ -566,11 +559,11 @@ __global__ void opt_inhohapke_A_krnl(struct par_t *dpar, struct mod_t *dmod,
 	}
 }
 __global__ void opt_inhohapke_facet_krnl(struct par_t *dpar, struct mod_t
-		*dmod, int nf, int albedo_mode, double optalb_factor)
+		*dmod, int nf, int albedo_mode, double optalb_factor, int ilaw)
 {
 	/* nf-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	int c = 0, ilaw = 0;
+	int c = 0;
 
 	if (f < nf) {
 		if (dmod->photo.optical[ilaw].inhohapke.local[c][f].w.state == '=') {
@@ -616,10 +609,9 @@ __global__ void opt_inhohapke_facet_krnl(struct par_t *dpar, struct mod_t
 	}
 }
 __global__ void opt_kaas_krnl(struct par_t *dpar, struct mod_t *dmod,
-		int albedo_mode, double optalb_factor)
+		int albedo_mode, double optalb_factor, int ilaw)
 {
 	/* Single-treaded kernel */
-	int ilaw = 0;
 	if (threadIdx.x ==0) {
 		if (dmod->photo.optical[ilaw].kaas.R.state == 'f') {
 			if (albedo_mode != 0)
@@ -645,18 +637,16 @@ __global__ void opt_kaas_krnl(struct par_t *dpar, struct mod_t *dmod,
 				&dpar->badphoto, &dpar->badphoto_logfactor);
 	}
 }
-__global__ void opt_harmkaas_getL_krnl(struct mod_t *dmod) {
+__global__ void opt_harmkaas_getL_krnl(struct mod_t *dmod, int ilaw) {
 	/* Single-threaded kernel */
-	int ilaw = 0;
 	if (threadIdx.x == 0) {
 		dL = dmod->photo.optical[ilaw].harmkaas.R.nhar;
 	}
 }
 __global__ void opt_harmkaas_set_ab_and_absave_krnl(struct mod_t *dmod,
-		int albedo_mode, double optalb_factor, int L) {
+		int albedo_mode, double optalb_factor, int L, int ilaw) {
 	/* L-threaded kernel */
-	int l = blockIdx.x * blockDim.x + threadIdx.x;
-	int m, ilaw = 0;
+	int m, l = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (l < L) {
 		for (l=0; l<=L; l++) {
@@ -689,9 +679,8 @@ __global__ void opt_harmkaas_set_ab_and_absave_krnl(struct mod_t *dmod,
 		}
 	}
 }
-__global__ void opt_harmkaas_Lmax_krnl(struct mod_t *dmod) {
+__global__ void opt_harmkaas_Lmax_krnl(struct mod_t *dmod, int ilaw) {
 	/* Single-threaded kernel */
-	int ilaw = 0;
 	if (threadIdx.x == 0) {
 		dLmax = MAX( dmod->photo.optical[ilaw].harmkaas.R.nhar,
 				dmod->photo.optical[ilaw].harmkaas.wt.nhar);
@@ -702,10 +691,10 @@ __global__ void opt_harmkaas_Lmax_krnl(struct mod_t *dmod) {
 }
 __global__ void opt_harmkaas_facet_krnl(struct par_t *dpar, struct mod_t
 		*dmod, double **nlm, double **afactor, double **bfactor, int nf,
-		int Lmax) {
+		int Lmax, int ilaw) {
 	/* nf-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	int c = 0, ilaw = 0, L, l, m;
+	int c = 0, L, l, m;
 	double costheta, phi, plm;
 
 	if (f > nf) {
@@ -807,10 +796,8 @@ __global__ void opt_harmkaas_facet_krnl(struct par_t *dpar, struct mod_t
 	}
 }
 __global__ void opt_inhokaas_A_krnl(struct par_t *dpar, struct mod_t *dmod,
-		int albedo_mode, double optalb_factor) {
+		int albedo_mode, double optalb_factor, int ilaw) {
 	/* Single-threaded kernel */
-	int ilaw = 0;
-
 	if(threadIdx.x == 0) {
 		if (dmod->photo.optical[ilaw].inhokaas.global.R.state == 'f') {
 			if (albedo_mode != 0)
@@ -838,10 +825,10 @@ __global__ void opt_inhokaas_A_krnl(struct par_t *dpar, struct mod_t *dmod,
 	}
 }
 __global__ void opt_inhokaas_facet_krnl(struct par_t *dpar, struct mod_t
-		*dmod, int nf, int albedo_mode, double optalb_factor) {
+		*dmod, int nf, int albedo_mode, double optalb_factor, int ilaw) {
 	/* nf-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	int c = 0, ilaw = 0;
+	int c = 0;
 
 	if (f < nf) {
 		if (dmod->photo.optical[ilaw].inhokaas.local[c][f].R.state == '=') {
@@ -886,9 +873,8 @@ __global__ void opt_inhokaas_facet_krnl(struct par_t *dpar, struct mod_t
 	}
 }
 __global__ void rad_cosinelaw_krnl(struct par_t *dpar, struct mod_t *dmod,
-		int albedo_mode, float radalb_factor) {
+		int albedo_mode, float radalb_factor, int ilaw) {
 	/* Single-threaded kernel */
-	int ilaw = 0;
 	if (threadIdx.x == 0) {
 
 		if (dmod->photo.radar[ilaw].RC.R.state == 'f') {
@@ -905,18 +891,15 @@ __global__ void rad_cosinelaw_krnl(struct par_t *dpar, struct mod_t *dmod,
 
 	}
 }
-__global__ void rad_tabularlaw_get_n_krnl(struct mod_t *dmod) {
+__global__ void rad_tabularlaw_get_n_krnl(struct mod_t *dmod, int ilaw) {
 	/* Single-threaded kernel just to get n */
-	int ilaw = 0;
-	if (threadIdx.x ==0) {
+	if (threadIdx.x ==0)
 		dn = dmod->photo.radar[ilaw].tabular.n;
-	}
 }
 __global__ void rad_tabularlaw_val_krnl(struct par_t *dpar, struct mod_t
-		*dmod, int albedo_mode, double radalb_factor) {
+		*dmod, int albedo_mode, double radalb_factor, int ilaw) {
 	/* n-threaded kernel */
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
-	int ilaw = 0;
 	if (i < dn) {
 		if (dmod->photo.radar[ilaw].tabular.rho[i].state == '=') {
 			dmod->photo.radar[ilaw].tabular.rho[i].val = dmod->photo.radar[ilaw].tabular.rho[i-1].val;
@@ -933,9 +916,8 @@ __global__ void rad_tabularlaw_val_krnl(struct par_t *dpar, struct mod_t
 	}
 }
 __global__ void rad_cosinelaw_qs_krnl(struct par_t *dpar, struct mod_t
-		*dmod, int albedo_mode, double radalb_factor) {
+		*dmod, int albedo_mode, double radalb_factor, int ilaw) {
 	/* Single-threaded wrapper kernel */
-	int ilaw = 0;
 	if (threadIdx.x ==0) {
 		if (dmod->photo.radar[ilaw].quasispec.R.state == 'f') {
 			if (albedo_mode != 0)
@@ -953,9 +935,8 @@ __global__ void rad_cosinelaw_qs_krnl(struct par_t *dpar, struct mod_t
 	}
 }
 __global__ void rad_cosine_cosine_krnl(struct par_t *dpar, struct mod_t
-		*dmod, int albedo_mode, double radalb_factor) {
+		*dmod, int albedo_mode, double radalb_factor, int ilaw) {
 	/* Single-threaded wrapper kernel */
-	int ilaw = 0;
 	if (threadIdx.x == 0) {
 		if (dmod->photo.radar[ilaw].hybrid.qs.R.state == 'f') {
 			if (albedo_mode != 0)
@@ -985,9 +966,8 @@ __global__ void rad_cosine_cosine_krnl(struct par_t *dpar, struct mod_t
 				&dpar->badphoto, &dpar->badphoto_logfactor);
 	}
 }
-__global__ void rad_harmcosine_diff_getL_krnl(struct mod_t *dmod) {
+__global__ void rad_harmcosine_diff_getL_krnl(struct mod_t *dmod, int ilaw) {
 	/* Single-threaded kernel to get L */
-	int ilaw = 0;
 	if (threadIdx.x == 0) {
 		dL = dmod->photo.radar[ilaw].harmcosine.R.nhar;
 		dLmax = MAX( dmod->photo.radar[ilaw].harmcosine.R.nhar,
@@ -995,10 +975,10 @@ __global__ void rad_harmcosine_diff_getL_krnl(struct mod_t *dmod) {
 	}
 }
 __global__ void rad_harmcosine_diff_set_ab_krnl(struct mod_t *dmod,
-		int albedo_mode, double radalb_factor, int L) {
+		int albedo_mode, double radalb_factor, int L, int ilaw) {
 	/* L-threaded kernel */
 	int l = blockIdx.x * blockDim.x + threadIdx.x;
-	int m, ilaw = 0;
+	int m;
 	if (l < L) {
 		if (dmod->photo.radar[ilaw].harmcosine.R.a[l][0].state == 'f') {
 			if (albedo_mode != 0)
@@ -1030,10 +1010,10 @@ __global__ void rad_harmcosine_diff_set_ab_krnl(struct mod_t *dmod,
 }
 __global__ void rad_harmcosine_facet_krnl(struct par_t *dpar, struct
 		mod_t *dmod, double **nlm, double **afactor, double **bfactor,
-		int nf, int Lmax) {
+		int nf, int Lmax, int ilaw) {
 	/* nf-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	int l, L, m, c = 0, ilaw = 0;
+	int l, L, m, c = 0;
 	double costheta, phi, plm;
 
 	if (f < nf) {
@@ -1084,9 +1064,8 @@ __global__ void rad_harmcosine_facet_krnl(struct par_t *dpar, struct
 	}
 }
 __global__ void rad_inhocosine_set_ab_krnl(struct par_t *dpar, struct mod_t
-		*dmod, int albedo_mode, double radalb_factor) {
+		*dmod, int albedo_mode, double radalb_factor, int ilaw) {
 	/* Single-threaded kernel */
-	int c = 0, ilaw = 0;
 	if (threadIdx.x == 0) {
 
 		if (dmod->photo.radar[ilaw].inhocosine.global.R.state == 'f') {
@@ -1106,10 +1085,10 @@ __global__ void rad_inhocosine_set_ab_krnl(struct par_t *dpar, struct mod_t
 	}
 }
 __global__ void rad_inhocosine_facet_krnl(struct par_t *dpar, struct mod_t
-		*dmod, int nf, int albedo_mode, double radalb_factor) {
+		*dmod, int nf, int albedo_mode, double radalb_factor, int ilaw) {
 	/* nf-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	int ilaw = 0, c = 0;
+	int c = 0;
 
 	if (f < nf) {
 		if (dmod->photo.radar[ilaw].inhocosine.local[c][f].R.state == '=') {
@@ -1141,241 +1120,225 @@ __global__ void rad_inhocosine_facet_krnl(struct par_t *dpar, struct mod_t
 __host__ void realize_photo_gpu( struct par_t *dpar, struct mod_t *dmod,
 		double radalb_factor, double optalb_factor, int albedo_mode, int nf)
 {
-	int Lmax, L, i, n, Bx;
+	int Lmax, L, i, n, noptlaws, nradlaws, ilaw;
  	double **nlm, **afactor, **bfactor=NULL;
 	unsigned char opttype, radtype;
-	dim3 BLK, THD;
+	dim3 BLK, THD, THD1;
+	THD.x = maxThreadsPerBlock;
+	BLK.x = floor((THD.x + nf - 1)/THD.x);
 
 	/* Initialize illegal photometric parameters flag & get opttype and radtype */
 	get_photo_types_krnl<<<1,1>>>(dpar, dmod);//, dopttype, radtype);
 	checkErrorAfterKernelLaunch("get_photo_types_krnl, line ");
 	gpuErrchk(cudaMemcpyFromSymbol(&opttype, dopttype, sizeof(dopttype), 0, cudaMemcpyDeviceToHost));
 	gpuErrchk(cudaMemcpyFromSymbol(&radtype, dradtype, sizeof(dopttype), 0, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpyFromSymbol(&noptlaws, dnoptlaws, sizeof(int), 0, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpyFromSymbol(&nradlaws, dnradlaws, sizeof(int), 0, cudaMemcpyDeviceToHost));
 
 	/* Check that all optical scattering law parameters have legal values  */
-	// for (ilaw=0; ilaw<dmod->photo.noptlaws; ilaw++) {
-	switch (opttype) {
-	case NOLAW:
-		break;
-	case GEOMETRICAL:
-	case LAMBERTLAW:
-	case LOMMEL:
-		/* Call single-threaded kernel for Lommel */
-		opt_lommel_krnl<<<1,1>>>(dpar, dmod, optalb_factor, albedo_mode);
-		checkErrorAfterKernelLaunch("opt_lommel_krnl, line ");
-		break;
-	case HARMLAMBERT:
-	case HARMLOMMEL:
-		int L;
-		/* Call single-threaded kernel for Lommel */
-		opt_harmlommel_getL_krnl<<<1,1>>>(dmod);
-		checkErrorAfterKernelLaunch("opt_harmlommel_getL_krnl, line ");
-		gpuErrchk(cudaMemcpyFromSymbol(&L, dL, sizeof(dL), 0, cudaMemcpyDeviceToHost));
+	for (ilaw=0; ilaw<noptlaws; ilaw++) {
+		THD.x = maxThreadsPerBlock;
+		switch (opttype) {
+		case NOLAW:
+			break;
+		case GEOMETRICAL:
+		case LAMBERTLAW:
+		case LOMMEL:
+			/* Call single-threaded kernel for Lommel */
+			opt_lommel_krnl<<<1,1>>>(dpar, dmod, optalb_factor, albedo_mode, ilaw);
+			checkErrorAfterKernelLaunch("opt_lommel_krnl");
+			break;
+		case HARMLAMBERT:
+		case HARMLOMMEL:
+			int L;
+			/* Call single-threaded kernel for Lommel */
+			opt_harmlommel_getL_krnl<<<1,1>>>(dmod, ilaw);
+			checkErrorAfterKernelLaunch("opt_harmlommel_getL_krnl");
+			gpuErrchk(cudaMemcpyFromSymbol(&L, dL, sizeof(dL), 0,
+					cudaMemcpyDeviceToHost));
 
-		/* Launch an L-threaded kernel (# of harmonics) */
-		THD.x = L;
-		opt_harmlommel_set_ab_krnl<<<BLK,THD>>>(dmod, optalb_factor, albedo_mode);
-		gpuErrchk(cudaMemcpyFromSymbol(&L, dL, sizeof(dL), 0, cudaMemcpyDeviceToHost));
+			/* Launch an L-threaded kernel (# of harmonics) */
+			THD1.x = L;
+			opt_harmlommel_set_ab_krnl<<<1,THD>>>(dmod, optalb_factor, albedo_mode, ilaw);
+			gpuErrchk(cudaMemcpyFromSymbol(&L, dL, sizeof(dL), 0,
+					cudaMemcpyDeviceToHost));
 
-		/* Set up matrices first */
-		gpuErrchk(cudaMalloc((void**)&nlm, 	   sizeof(double*)*(L+1)));
-		gpuErrchk(cudaMalloc((void**)&afactor, sizeof(double*)*(L+1)));
-		gpuErrchk(cudaMalloc((void**)&bfactor, sizeof(double*)* L));
+			/* Set up matrices first */
+			gpuErrchk(cudaMalloc((void**)&nlm, 	   sizeof(double*)*(L+1)));
+			gpuErrchk(cudaMalloc((void**)&afactor, sizeof(double*)*(L+1)));
+			gpuErrchk(cudaMalloc((void**)&bfactor, sizeof(double*)* L));
 
-		for (i=0; i<=L; i++) {
-			gpuErrchk(cudaMalloc((void**)&nlm[i], sizeof(double)*(L+1)));
-			gpuErrchk(cudaMalloc((void**)&afactor[i], sizeof(double)*(L+1)));
-			if (i<L)
-				gpuErrchk(cudaMalloc((void**)&bfactor[i], sizeof(double)*L));
+			for (i=0; i<=L; i++) {
+				gpuErrchk(cudaMalloc((void**)&nlm[i], sizeof(double)*(L+1)));
+				gpuErrchk(cudaMalloc((void**)&afactor[i], sizeof(double)*(L+1)));
+				if (i<L)
+					gpuErrchk(cudaMalloc((void**)&bfactor[i], sizeof(double)*L));
+			}
+			/* End setup of matrices */
+
+			/* Launch the kernel to set up nlm[L+1][L+1] */
+			THD1.x = (L+1)*(L+1);
+			opt_harmlommel_set_nlm_krnl<<<1,THD>>>(dmod, nlm, L);
+			checkErrorAfterKernelLaunch("opt_harmlommel_set_nlm_krnl");
+
+			/* Host-side check whether to execute kernel */
+			if (L > 0) {
+				opt_harmlommel_facet_krnl<<<BLK,THD>>>(dpar, dmod, afactor, bfactor, nlm, ilaw);
+				checkErrorAfterKernelLaunch("opt_harmlommel_vertex_krnl");
+			}
+			/* Free up the previously allocated double-pointers nlm, afactor, and bfactor */
+			cudaFree(nlm);
+			cudaFree(afactor);
+			if (L > 0)	cudaFree(bfactor);
+			break;
+		case INHOLAMBERT:
+		case INHOLOMMEL:
+			/* Call single-threaded kernel for inho-Lommel */
+			opt_inholommel_A_krnl<<<1,1>>>(dpar, dmod, albedo_mode, optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_inholommel_A_krnl");
+
+			opt_inholommel_facet_krnl<<<BLK,THD>>>(dpar, dmod,
+					albedo_mode, optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_inholommel_vertex_krnl");
+			break;
+		case HAPKE:
+			/* Call single-threaded wrapper kernel for the Hapke case */
+			opt_hapke_krnl<<<1,1>>>(dpar, dmod, albedo_mode, optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_hapke_krnl");
+			break;
+		case HARMHAPKE:
+			/* Call single-threaded kernel for Harmhapke part A */
+			opt_harmhapke_A_krnl<<<1,1>>>(dmod, albedo_mode, optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_harmhapke_A_krnl");
+
+			/* Find out what Lmax is */
+			opt_harmhapke_Lmax_krnl<<<1,1>>>(dmod, ilaw);
+			checkErrorAfterKernelLaunch("opt_harmhapke_Lmax_krnl");
+
+			/* Copy Lmax (for sizing arrays) from device to host  then allocate double pntrs */
+			gpuErrchk(cudaMemcpyFromSymbol(&Lmax, dLmax, sizeof(dLmax), 0,
+					cudaMemcpyDeviceToHost));
+			gpuErrchk(cudaMalloc((void**)&nlm, 	   sizeof(double*)*(Lmax+1)));
+			gpuErrchk(cudaMalloc((void**)&afactor, sizeof(double*)*(Lmax+1)));
+			gpuErrchk(cudaMalloc((void**)&bfactor, sizeof(double*)* Lmax));
+
+			for (i=0; i<=Lmax; i++) {
+				gpuErrchk(cudaMalloc((void**)&nlm[i], sizeof(double)*(Lmax+1)));
+				gpuErrchk(cudaMalloc((void**)&afactor[i], sizeof(double)*(Lmax+1)));
+				if (i<Lmax && Lmax >0)
+					gpuErrchk(cudaMalloc((void**)&bfactor[i], sizeof(double)*Lmax));
+			}
+			/* End setup of matrices */
+
+			/* Launch nlm population kernel */
+			THD1.x = Lmax;
+			opt_harmhapke_kaas_nlm_krnl<<<1,THD>>>(dmod, nlm, Lmax);
+			checkErrorAfterKernelLaunch("opt_harmhapke_nlm_krnl");
+
+			opt_harmhapke_facet_krnl<<<BLK,THD>>>(dpar, dmod, nlm, afactor,
+					bfactor, nf, Lmax, ilaw);
+			checkErrorAfterKernelLaunch("opt_harmhapke_facet_krnl");
+
+			/* Free the previously allocated double pointers */
+			cudaFree(nlm);
+			cudaFree(afactor);
+			if (Lmax > 0)	cudaFree(bfactor);
+			break;
+		case INHOHAPKE:
+			/* Call single-threaded kernel for Harmhapke part A */
+			opt_inhohapke_A_krnl<<<1,1>>>(dpar, dmod, albedo_mode,
+					optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_inhohapke_A_krnl");
+
+			opt_inhohapke_facet_krnl<<<BLK,THD>>>(dpar, dmod, nf, albedo_mode,
+					optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_inhohapke_facet_krnl");
+			break;
+		case KAASALAINEN:
+			/* Call single-threaded kernel for Harmhapke part A */
+			opt_kaas_krnl<<<1,1>>>(dpar, dmod, albedo_mode, optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_kaas_krnl");
+			break;
+		case HARMKAAS:
+			/* Call a single-threaded kernel to fetch L */
+			opt_harmkaas_getL_krnl<<<1,1>>>(dmod, ilaw);
+			checkErrorAfterKernelLaunch("opt_harmkaas_getL_krnl");
+			gpuErrchk(cudaMemcpyFromSymbol(&L, dL, sizeof(dL), 0, cudaMemcpyDeviceToHost));
+
+			/* Configure and launch L-threaded kernel to set a, b, a_save, b_save */
+			THD1.x = L;
+			opt_harmkaas_set_ab_and_absave_krnl<<<1,THD>>>(dmod, albedo_mode,
+					optalb_factor, L, ilaw);
+
+			/* Launch single-threaded kernel to find Lmax */
+			opt_harmkaas_Lmax_krnl<<<1,1>>>(dmod, ilaw);
+			checkErrorAfterKernelLaunch("opt_harmkaas_get_Lmax_krnl");
+
+			/* Copy Lmax (for sizing arrays) from device to host  then allocate double pntrs */
+			gpuErrchk(cudaMemcpyFromSymbol(&Lmax, dLmax, sizeof(dLmax), 0,
+					cudaMemcpyDeviceToHost));
+			gpuErrchk(cudaMalloc((void**)&nlm, 	   sizeof(double*)*(Lmax+1)));
+			gpuErrchk(cudaMalloc((void**)&afactor, sizeof(double*)*(Lmax+1)));
+			gpuErrchk(cudaMalloc((void**)&bfactor, sizeof(double*)* Lmax));
+
+			for (i=0; i<=Lmax; i++) {
+				gpuErrchk(cudaMalloc((void**)&nlm[i], sizeof(double)*(Lmax+1)));
+				gpuErrchk(cudaMalloc((void**)&afactor[i], sizeof(double)*(Lmax+1)));
+				if (i<Lmax && Lmax >0)
+					gpuErrchk(cudaMalloc((void**)&bfactor[i], sizeof(double)*Lmax));
+			}
+			/* End setup of matrices */
+
+			/* Launch nlm population kernel */
+			THD1.x = Lmax;
+			opt_harmhapke_kaas_nlm_krnl<<<BLK,THD>>>(dmod, nlm, Lmax);
+			checkErrorAfterKernelLaunch("opt_harmhapke_kaas_nlm_krnl");
+
+			opt_harmkaas_facet_krnl<<<BLK,THD>>>(dpar, dmod, nlm, afactor,
+					bfactor, nf, Lmax, ilaw);
+			checkErrorAfterKernelLaunch("opt_harmkaas_facet_krnl");
+
+			cudaFree(nlm);
+			cudaFree(afactor);
+			if (Lmax > 0)	cudaFree(bfactor);
+			break;
+		case INHOKAAS:
+			/* Call single-threaded kernel to start off inhokaas */
+			opt_inhokaas_A_krnl<<<1,1>>>(dpar, dmod, albedo_mode,
+					optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_inhokaas_A_krnl, line ");
+
+			opt_inhokaas_facet_krnl<<<BLK,THD>>>(dpar, dmod, nf, albedo_mode,
+					optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_harmkaas_facet_krnl");
+			break;
+		default:
+			bailout("realize_photo_gpu: can't handle this optical law yet\n");
 		}
-		/* End setup of matrices */
-
-		/* Launch the kernel to set up nlm[L+1][L+1] */
-		THD.x = (L+1)*(L+1);
-		opt_harmlommel_set_nlm_krnl<<<BLK,THD>>>(dmod, nlm, L);
-		checkErrorAfterKernelLaunch("opt_harmlommel_set_nlm_krnl, line ");
-
-		/* Calculate launch parameters */
-		Bx = floor((maxThreadsPerBlock - 1 + nf ) / maxThreadsPerBlock);
-		BLK.x = Bx; BLK.y = 1; BLK.y = 1;					// Grid-block dimension for the 1-D case
-		THD.x = maxThreadsPerBlock; THD.y = 1; THD.z = 1;	// Thread block dimensions
-
-		/* Host-side check whether to execute kernel */
-		if (L > 0) {
-			opt_harmlommel_facet_krnl<<<BLK,THD>>>(dpar, dmod, afactor, bfactor, nlm);
-			checkErrorAfterKernelLaunch("opt_harmlommel_vertex_krnl, line ");
-		}
-
-		/* Free up the previously allocated double-pointers nlm, afactor, and bfactor */
-		cudaFree(nlm);
-		cudaFree(afactor);
-		if (L > 0)	cudaFree(bfactor);
-		break;
-	case INHOLAMBERT:
-	case INHOLOMMEL:
-		/* Call single-threaded kernel for inho-Lommel */
-		opt_inholommel_A_krnl<<<1,1>>>(dpar, dmod, albedo_mode, optalb_factor);
-		checkErrorAfterKernelLaunch("opt_inholommel_A_krnl, line ");
-
-		/* Calculate launch parameters */
-		Bx = floor((maxThreadsPerBlock - 1 + nf ) / maxThreadsPerBlock);
-		BLK.x = Bx; BLK.y = 1; BLK.y = 1;					// Grid-block dimension for the 1-D case
-		THD.x = maxThreadsPerBlock; THD.y = 1; THD.z = 1;	// Thread block dimensions
-		opt_inholommel_facet_krnl<<<BLK,THD>>>(dpar, dmod, albedo_mode, optalb_factor);
-		checkErrorAfterKernelLaunch("opt_inholommel_vertex_krnl, line ");
-		break;
-	case HAPKE:
-		/* Call single-threaded wrapper kernel for the Hapke case */
-		opt_hapke_krnl<<<1,1>>>(dpar, dmod, albedo_mode, optalb_factor);
-		checkErrorAfterKernelLaunch("opt_hapke_krnl, line ");
-		break;
-	case HARMHAPKE:
-		/* Call single-threaded kernel for Harmhapke part A */
-		opt_harmhapke_A_krnl<<<1,1>>>(dmod, albedo_mode, optalb_factor);
-		checkErrorAfterKernelLaunch("opt_harmhapke_A_krnl, line ");
-
-		/* Find out what Lmax is */
-		opt_harmhapke_Lmax_krnl<<<1,1>>>(dmod);
-		checkErrorAfterKernelLaunch("opt_harmhapke_Lmax_krnl, line ");
-
-		/* Copy Lmax (for sizing arrays) from device to host  then allocate double pntrs */
-		gpuErrchk(cudaMemcpyFromSymbol(&Lmax, dLmax, sizeof(dLmax), 0, cudaMemcpyDeviceToHost));
-		gpuErrchk(cudaMalloc((void**)&nlm, 	   sizeof(double*)*(Lmax+1)));
-		gpuErrchk(cudaMalloc((void**)&afactor, sizeof(double*)*(Lmax+1)));
-		gpuErrchk(cudaMalloc((void**)&bfactor, sizeof(double*)* Lmax));
-
-		for (i=0; i<=Lmax; i++) {
-			gpuErrchk(cudaMalloc((void**)&nlm[i], sizeof(double)*(Lmax+1)));
-			gpuErrchk(cudaMalloc((void**)&afactor[i], sizeof(double)*(Lmax+1)));
-			if (i<Lmax && Lmax >0)
-				gpuErrchk(cudaMalloc((void**)&bfactor[i], sizeof(double)*Lmax));
-		}
-		/* End setup of matrices */
-
-		/* Launch nlm population kernel */
-		THD.x = Lmax;
-		opt_harmhapke_kaas_nlm_krnl<<<BLK,THD>>>(dmod, nlm, Lmax);
-		checkErrorAfterKernelLaunch("opt_harmhapke_nlm_krnl, line ");
-
-		/* Need to calculate number of threads & blocks necessary */
-		Bx = floor((maxThreadsPerBlock - 1 + nf ) / maxThreadsPerBlock);
-		BLK.x = Bx; BLK.y = 1; BLK.y = 1;					// Grid-block dimension for the 1-D case
-		THD.x = maxThreadsPerBlock; THD.y = 1; THD.z = 1;	// Thread block dimensions
-
-		opt_harmhapke_facet_krnl<<<BLK,THD>>>(dpar, dmod, nlm, afactor, bfactor, nf, Lmax);
-		checkErrorAfterKernelLaunch("opt_harmhapke_facet_krnl, line ");
-
-		/* Free the previously allocated double pointers */
-		cudaFree(nlm);
-		cudaFree(afactor);
-		if (Lmax > 0)	cudaFree(bfactor);
-		break;
-	case INHOHAPKE:
-		/* Call single-threaded kernel for Harmhapke part A */
-		opt_inhohapke_A_krnl<<<1,1>>>(dpar, dmod, albedo_mode, optalb_factor);
-		checkErrorAfterKernelLaunch("opt_inhohapke_A_krnl, line ");
-
-		/* Need to calculate number of threads & blocks necessary */
-		Bx = floor((maxThreadsPerBlock - 1 + nf ) / maxThreadsPerBlock);
-		BLK.x = Bx; BLK.y = 1; BLK.y = 1;					// Grid-block dimension for the 1-D case
-		THD.x = maxThreadsPerBlock; THD.y = 1; THD.z = 1;	// Thread block dimensions
-
-		opt_inhohapke_facet_krnl<<<BLK,THD>>>(dpar, dmod, nf, albedo_mode, optalb_factor);
-		checkErrorAfterKernelLaunch("opt_inhohapke_facet_krnl, line ");
-		break;
-	case KAASALAINEN:
-		/* Call single-threaded kernel for Harmhapke part A */
-		opt_kaas_krnl<<<1,1>>>(dpar, dmod, albedo_mode, optalb_factor);
-		checkErrorAfterKernelLaunch("opt_kaas_krnl, line ");
-		break;
-	case HARMKAAS:
-		/* Call a single-threaded kernel to fetch L */
-		opt_harmkaas_getL_krnl<<<1,1>>>(dmod);
-		checkErrorAfterKernelLaunch("opt_harmkaas_getL_krnl");
-		gpuErrchk(cudaMemcpyFromSymbol(&L, dL, sizeof(dL), 0, cudaMemcpyDeviceToHost));
-
-		/* Configure and launch L-threaded kernel to set a, b, a_save, b_save */
-		THD.x = L;
-		BLK.x = 1;
-		opt_harmkaas_set_ab_and_absave_krnl<<<BLK,THD>>>(dmod, albedo_mode,
-				optalb_factor, L);
-
-		/* Launch single-threaded kernel to find Lmax */
-		opt_harmkaas_Lmax_krnl<<<1,1>>>(dmod);
-		checkErrorAfterKernelLaunch("opt_harmkaas_get_Lmax_krnl, line ");
-
-		/* Copy Lmax (for sizing arrays) from device to host  then allocate double pntrs */
-		gpuErrchk(cudaMemcpyFromSymbol(&Lmax, dLmax, sizeof(dLmax), 0, cudaMemcpyDeviceToHost));
-		gpuErrchk(cudaMalloc((void**)&nlm, 	   sizeof(double*)*(Lmax+1)));
-		gpuErrchk(cudaMalloc((void**)&afactor, sizeof(double*)*(Lmax+1)));
-		gpuErrchk(cudaMalloc((void**)&bfactor, sizeof(double*)* Lmax));
-
-		for (i=0; i<=Lmax; i++) {
-			gpuErrchk(cudaMalloc((void**)&nlm[i], sizeof(double)*(Lmax+1)));
-			gpuErrchk(cudaMalloc((void**)&afactor[i], sizeof(double)*(Lmax+1)));
-			if (i<Lmax && Lmax >0)
-				gpuErrchk(cudaMalloc((void**)&bfactor[i], sizeof(double)*Lmax));
-		}
-		/* End setup of matrices */
-
-		/* Launch nlm population kernel */
-		THD.x = Lmax;
-		opt_harmhapke_kaas_nlm_krnl<<<BLK,THD>>>(dmod, nlm, Lmax);
-		checkErrorAfterKernelLaunch("opt_harmhapke_kaas_nlm_krnl, line ");
-
-		/* Need to calculate number of threads & blocks necessary */
-		Bx = floor((maxThreadsPerBlock - 1 + nf ) / maxThreadsPerBlock);
-		BLK.x = Bx; BLK.y = 1; BLK.y = 1;					// Grid-block dimension for the 1-D case
-		THD.x = maxThreadsPerBlock; THD.y = 1; THD.z = 1;	// Thread block dimensions
-
-		opt_harmkaas_facet_krnl<<<BLK,THD>>>(dpar, dmod, nlm, afactor, bfactor, nf, Lmax);
-		checkErrorAfterKernelLaunch("opt_harmkaas_facet_krnl, line ");
-
-		cudaFree(nlm);
-		cudaFree(afactor);
-		if (Lmax > 0)	cudaFree(bfactor);
-		break;
-	case INHOKAAS:
-		/* Call single-threaded kernel to start off inhokaas */
-		opt_inhokaas_A_krnl<<<1,1>>>(dpar, dmod, albedo_mode, optalb_factor);
-		checkErrorAfterKernelLaunch("opt_inhokaas_A_krnl, line ");
-
-		/* Need to calculate number of threads & blocks necessary */
-		Bx = floor((maxThreadsPerBlock - 1 + nf ) / maxThreadsPerBlock);
-		BLK.x = Bx; BLK.y = 1; BLK.y = 1;					// Grid-block dimension for the 1-D case
-		THD.x = maxThreadsPerBlock; THD.y = 1; THD.z = 1;	// Thread block dimensions
-		gpuErrchk(cudaMemcpyFromSymbol(&n, dn, sizeof(dn), 0, cudaMemcpyDeviceToHost));
-		/* Launch the nf-threaded kernel to process each facet in parallel */
-		opt_inhokaas_facet_krnl<<<BLK,THD>>>(dpar, dmod, nf, albedo_mode,
-				optalb_factor);
-		checkErrorAfterKernelLaunch("opt_harmkaas_facet_krnl, line ");
-		break;
-	default:
-		bailout("realize_photo_cuda: can't handle this optical law yet\n");
 	}
 
 	/*  Check that all radar scattering law parameters have legal values  */
- 	 // for (ilaw=0; ilaw<dmod->photo.nradlaws; ilaw++) {
+ 	 for (ilaw=0; ilaw<nradlaws; ilaw++) {
 	switch (radtype) {
 	case NOLAW:
 		break;
 	case COSINELAW_DIFF:
 		/* Launch single-threaded wrapper kernel for Cosine law radar */
-		rad_cosinelaw_krnl<<<1,1>>>(dpar, dmod, albedo_mode, radalb_factor);
-		checkErrorAfterKernelLaunch("rad_cosinelaw_krnl, line ");
+		rad_cosinelaw_krnl<<<1,1>>>(dpar, dmod, albedo_mode, radalb_factor, ilaw);
+		checkErrorAfterKernelLaunch("rad_cosinelaw_krnl");
 		break;
 	case TABULARLAW:
 		/* Not sure if this works as written due to pointer memory managment (dynamic) */
 		/* Call single-threaded kernel to get n */
-		rad_tabularlaw_get_n_krnl<<<1,1>>>(dmod);
-		checkErrorAfterKernelLaunch("rad_tabularlaw_get_n_krnl, line ");
+		rad_tabularlaw_get_n_krnl<<<1,1>>>(dmod, ilaw);
+		checkErrorAfterKernelLaunch("rad_tabularlaw_get_n_krnl,");
 		gpuErrchk(cudaMemcpyFromSymbol(&n, dn, sizeof(dn), 0, cudaMemcpyDeviceToHost));
 
 		/* Launch n-threaded kernel to finish tabular law realization */
 		BLK.x = 1; THD.x = n;
 		rad_tabularlaw_val_krnl<<<BLK,THD>>>(dpar, dmod, albedo_mode,
-				radalb_factor);
-		checkErrorAfterKernelLaunch("rad_tabularlaw_val_krnl, line ");
+				radalb_factor, ilaw);
+		checkErrorAfterKernelLaunch("rad_tabularlaw_val_krnl");
 
 		break;
 	case GAUSSIANLAW :
@@ -1383,28 +1346,31 @@ __host__ void realize_photo_gpu( struct par_t *dpar, struct mod_t *dmod,
 	case COSINELAW_QS:
 		/* Launch single-threaded wrapper kernel for cosinelaw_qs */
 		rad_cosinelaw_qs_krnl<<<1,1>>>(dpar, dmod, albedo_mode,
-				radalb_factor);
-		checkErrorAfterKernelLaunch("rad_cosinelaw_qs_krnl, line ");
+				radalb_factor, ilaw);
+		checkErrorAfterKernelLaunch("rad_cosinelaw_qs_krnl");
 		break;
 	case GAUSSIAN_COSINE:
 	case HAGFORS_COSINE :
 	case COSINE_COSINE  :
 		/* Launch single-threaded wrapper kernel for cosinelaw_qs */
 		rad_cosine_cosine_krnl<<<1,1>>>(dpar, dmod, albedo_mode,
-				radalb_factor);
-		checkErrorAfterKernelLaunch("rad_cosinelaw_qs_krnl, line ");
+				radalb_factor, ilaw);
+		checkErrorAfterKernelLaunch("rad_cosinelaw_qs_krnl");
 		break;
 	case HARMCOSINE_DIFF:
 		/* Launch single-threaded kernel to get L and Lmax */
-		rad_harmcosine_diff_getL_krnl<<<1,1>>>(dmod);
-		checkErrorAfterKernelLaunch("rad_harmcosine_diff_getL_krnl, line ");
-		gpuErrchk(cudaMemcpyFromSymbol(&L, dL, sizeof(dL), 0, cudaMemcpyDeviceToHost));
-		gpuErrchk(cudaMemcpyFromSymbol(&Lmax, dLmax, sizeof(dLmax), 0, cudaMemcpyDeviceToHost));
+		rad_harmcosine_diff_getL_krnl<<<1,1>>>(dmod, ilaw);
+		checkErrorAfterKernelLaunch("rad_harmcosine_diff_getL_krnl");
+		gpuErrchk(cudaMemcpyFromSymbol(&L, dL, sizeof(dL), 0,
+				cudaMemcpyDeviceToHost));
+		gpuErrchk(cudaMemcpyFromSymbol(&Lmax, dLmax, sizeof(dLmax), 0,
+				cudaMemcpyDeviceToHost));
 
 		/* Launch L-threaded kernel to set R a,b, a_save, b_save */
-		THD.x = L;
-		rad_harmcosine_diff_set_ab_krnl<<<BLK,THD>>>(dmod, albedo_mode, radalb_factor, L);
-		checkErrorAfterKernelLaunch("rad_harmcosine_diff_set_ab_krnl, line ");
+		THD1.x = L;
+		rad_harmcosine_diff_set_ab_krnl<<<1,THD>>>(dmod, albedo_mode,
+				radalb_factor, L, ilaw);
+		checkErrorAfterKernelLaunch("rad_harmcosine_diff_set_ab_krnl");
 
 		/* Copy Lmax (for sizing arrays) from device to host  then allocate double pntrs */
 		gpuErrchk(cudaMalloc((void**)&nlm, 	   sizeof(double*)*(Lmax+1)));
@@ -1420,17 +1386,13 @@ __host__ void realize_photo_gpu( struct par_t *dpar, struct mod_t *dmod,
 		/* End setup of matrices */
 
 		/* Launch nlm population kernel */
-		THD.x = Lmax;
-		opt_harmhapke_kaas_nlm_krnl<<<BLK,THD>>>(dmod, nlm, Lmax);
-		checkErrorAfterKernelLaunch("opt_harmhapke_kaas_nlm_krnl, line ");
+		THD1.x = Lmax;
+		opt_harmhapke_kaas_nlm_krnl<<<1,THD>>>(dmod, nlm, Lmax);
+		checkErrorAfterKernelLaunch("opt_harmhapke_kaas_nlm_krnl");
 
-		/* Need to calculate number of threads & blocks necessary */
-		Bx = floor((maxThreadsPerBlock - 1 + nf ) / maxThreadsPerBlock);
-		BLK.x = Bx; BLK.y = 1; BLK.y = 1;					// Grid-block dimension for the 1-D case
-		THD.x = maxThreadsPerBlock; THD.y = 1; THD.z = 1;	// Thread block dimensions
-
-		rad_harmcosine_facet_krnl<<<BLK,THD>>>(dpar, dmod, nlm, afactor, bfactor, nf, Lmax);
-		checkErrorAfterKernelLaunch("rad_harmcosine_facet_krnl, line ");
+		rad_harmcosine_facet_krnl<<<BLK,THD>>>(dpar, dmod, nlm, afactor,
+				bfactor, nf, Lmax, ilaw);
+		checkErrorAfterKernelLaunch("rad_harmcosine_facet_krnl");
 
 		cudaFree(nlm);
 		cudaFree(afactor);
@@ -1440,21 +1402,18 @@ __host__ void realize_photo_gpu( struct par_t *dpar, struct mod_t *dmod,
 		/* Launch single-threaded kernel to set R.a, R.b, R.a_save, R.b_save
 		 * and also nf */
 		rad_inhocosine_set_ab_krnl<<<1,1>>>(dpar, dmod, albedo_mode,
-				radalb_factor);
-		checkErrorAfterKernelLaunch("rad_inhocosine_set_ab_krnl, line ");
-
-		/* Need to calculate number of threads & blocks necessary */
-		Bx = floor((maxThreadsPerBlock - 1 + nf ) / maxThreadsPerBlock);
-		BLK.x = Bx; BLK.y = 1; BLK.y = 1;					// Grid-block dimension for the 1-D case
-		THD.x = maxThreadsPerBlock; THD.y = 1; THD.z = 1;	// Thread block dimensions
+				radalb_factor, ilaw);
+		checkErrorAfterKernelLaunch("rad_inhocosine_set_ab_krnl");
 
 		rad_inhocosine_facet_krnl<<<BLK,THD>>>(dpar, dmod, nf,
-				albedo_mode, radalb_factor);
-		checkErrorAfterKernelLaunch("rad_inhocosine_facet_krnl, line ");
+				albedo_mode, radalb_factor, ilaw);
+		checkErrorAfterKernelLaunch("rad_inhocosine_facet_krnl");
 		break;
 	default:
 		bailout("realize_photo: can't handle this radar law yet\n");
 	}
+ 	 }
+//	printf("realize_photo_gpu end of function");
 }
 
 __host__ void realize_photo_pthread(struct par_t *dpar0, struct par_t *dpar1,
@@ -1492,13 +1451,15 @@ __host__ void realize_photo_pthread(struct par_t *dpar0, struct par_t *dpar1,
 
 void *realize_photo_pthread_sub(void *ptr) {
 
-	int Lmax, L, i, n, Bx;
+	int Lmax, L, i, n, ilaw, noptlaws, nradlaws;
 	double **nlm, **afactor, **bfactor=NULL;
 	unsigned char opttype, radtype;
-	dim3 BLK, THD;
+	dim3 BLK, THD, THD1;
 	realize_photo_data *data;
 	data = (realize_photo_data *) ptr;  /* type cast to a pointer to thdata */
 	gpuErrchk(cudaSetDevice(data->gpuid));
+	THD.x = maxThreadsPerBlock;
+	BLK.x = floor((THD.x + data->nf -1 ) / THD.x);
 
 	/* Initialize illegal photometric parameters flag & get opttype and radtype */
 	get_photo_types_krnl<<<1,1>>>(data->parameter, data->model);//, dopttype, radtype);
@@ -1507,315 +1468,298 @@ void *realize_photo_pthread_sub(void *ptr) {
 			cudaMemcpyDeviceToHost));
 	gpuErrchk(cudaMemcpyFromSymbol(&radtype, dradtype, sizeof(dopttype), 0,
 			cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpyFromSymbol(&noptlaws, dnoptlaws, sizeof(int), 0,
+			cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpyFromSymbol(&nradlaws, dnradlaws, sizeof(int), 0,
+				cudaMemcpyDeviceToHost));
 
 	/* Check that all optical scattering law parameters have legal values  */
-	// for (ilaw=0; ilaw<dmod->photo.noptlaws; ilaw++) {
-	switch (opttype) {
-	case NOLAW:
-		break;
-	case GEOMETRICAL:
-	case LAMBERTLAW:
-	case LOMMEL:
-		/* Call single-threaded kernel for Lommel */
-		opt_lommel_krnl<<<1,1>>>(data->parameter, data->model,
-				data->optalb_factor, data->albedo_mode);
-		checkErrorAfterKernelLaunch("opt_lommel_krnl");
-		break;
-	case HARMLAMBERT:
-	case HARMLOMMEL:
-		int L;
-		/* Call single-threaded kernel for Lommel */
-		opt_harmlommel_getL_krnl<<<1,1>>>(data->model);
-		checkErrorAfterKernelLaunch("opt_harmlommel_getL_krnl");
-		gpuErrchk(cudaMemcpyFromSymbol(&L, dL, sizeof(dL), 0,
-				cudaMemcpyDeviceToHost));
+	for (ilaw=0; ilaw<noptlaws; ilaw++) {
+		switch (opttype) {
+		case NOLAW:
+			break;
+		case GEOMETRICAL:
+		case LAMBERTLAW:
+		case LOMMEL:
+			/* Call single-threaded kernel for Lommel */
+			opt_lommel_krnl<<<1,1>>>(data->parameter, data->model,
+					data->optalb_factor, data->albedo_mode, ilaw);
+			checkErrorAfterKernelLaunch("opt_lommel_krnl");
+			break;
+		case HARMLAMBERT:
+		case HARMLOMMEL:
+			int L;
+			/* Call single-threaded kernel for Lommel */
+			opt_harmlommel_getL_krnl<<<1,1>>>(data->model, ilaw);
+			checkErrorAfterKernelLaunch("opt_harmlommel_getL_krnl");
+			gpuErrchk(cudaMemcpyFromSymbol(&L, dL, sizeof(dL), 0,
+					cudaMemcpyDeviceToHost));
 
-		/* Launch an L-threaded kernel (# of harmonics) */
-		THD.x = L;
-		opt_harmlommel_set_ab_krnl<<<BLK,THD>>>(data->model,
-				data->optalb_factor, data->albedo_mode);
-		gpuErrchk(cudaMemcpyFromSymbol(&L, dL, sizeof(dL), 0,
-				cudaMemcpyDeviceToHost));
+			/* Launch an L-threaded kernel (# of harmonics) */
+			THD1.x = L;
+			opt_harmlommel_set_ab_krnl<<<1,THD>>>(data->model,
+					data->optalb_factor, data->albedo_mode, ilaw);
+			gpuErrchk(cudaMemcpyFromSymbol(&L, dL, sizeof(dL), 0,
+					cudaMemcpyDeviceToHost));
 
-		/* Set up matrices first */
-		gpuErrchk(cudaMalloc((void**)&nlm, 	   sizeof(double*)*(L+1)));
-		gpuErrchk(cudaMalloc((void**)&afactor, sizeof(double*)*(L+1)));
-		gpuErrchk(cudaMalloc((void**)&bfactor, sizeof(double*)* L));
+			/* Set up matrices first */
+			gpuErrchk(cudaMalloc((void**)&nlm, 	   sizeof(double*)*(L+1)));
+			gpuErrchk(cudaMalloc((void**)&afactor, sizeof(double*)*(L+1)));
+			gpuErrchk(cudaMalloc((void**)&bfactor, sizeof(double*)* L));
 
-		for (i=0; i<=L; i++) {
-			gpuErrchk(cudaMalloc((void**)&nlm[i], sizeof(double)*(L+1)));
-			gpuErrchk(cudaMalloc((void**)&afactor[i], sizeof(double)*(L+1)));
-			if (i<L)
-				gpuErrchk(cudaMalloc((void**)&bfactor[i], sizeof(double)*L));
+			for (i=0; i<=L; i++) {
+				gpuErrchk(cudaMalloc((void**)&nlm[i], sizeof(double)*(L+1)));
+				gpuErrchk(cudaMalloc((void**)&afactor[i], sizeof(double)*(L+1)));
+				if (i<L)
+					gpuErrchk(cudaMalloc((void**)&bfactor[i], sizeof(double)*L));
+			}
+			/* End setup of matrices */
+
+			/* Launch the kernel to set up nlm[L+1][L+1] */
+			THD1.x = (L+1)*(L+1);
+			opt_harmlommel_set_nlm_krnl<<<1,THD>>>(data->model, nlm, L);
+			checkErrorAfterKernelLaunch("opt_harmlommel_set_nlm_krnl");
+
+			/* Host-side check whether to execute kernel */
+			if (L > 0) {
+				opt_harmlommel_facet_krnl<<<BLK,THD>>>(data->parameter,
+						data->model, afactor, bfactor, nlm, ilaw);
+				checkErrorAfterKernelLaunch("opt_harmlommel_vertex_krnl");
+			}
+
+			/* Free up the previously allocated double-pointers nlm, afactor, and bfactor */
+			cudaFree(nlm);
+			cudaFree(afactor);
+			if (L > 0)	cudaFree(bfactor);
+			break;
+		case INHOLAMBERT:
+		case INHOLOMMEL:
+			/* Call single-threaded kernel for inho-Lommel */
+			opt_inholommel_A_krnl<<<1,1>>>(data->parameter, data->model,
+					data->albedo_mode, data->optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_inholommel_A_krnl");
+
+			opt_inholommel_facet_krnl<<<BLK,THD>>>(data->parameter,
+					data->model, data->albedo_mode, data->optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_inholommel_vertex_krnl");
+			break;
+		case HAPKE:
+			/* Call single-threaded wrapper kernel for the Hapke case */
+			opt_hapke_krnl<<<1,1>>>(data->parameter, data->model,
+					data->albedo_mode, data->optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_hapke_krnl");
+			break;
+		case HARMHAPKE:
+			/* Call single-threaded kernel for Harmhapke part A */
+			opt_harmhapke_A_krnl<<<1,1>>>(data->model, data->albedo_mode,
+					data->optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_harmhapke_A_krnl");
+
+			/* Find out what Lmax is */
+			opt_harmhapke_Lmax_krnl<<<1,1>>>(data->model, ilaw);
+			checkErrorAfterKernelLaunch("opt_harmhapke_Lmax_krnl");
+
+			/* Copy Lmax (for sizing arrays) from device to host  then allocate double pntrs */
+			gpuErrchk(cudaMemcpyFromSymbol(&Lmax, dLmax, sizeof(dLmax), 0, cudaMemcpyDeviceToHost));
+			gpuErrchk(cudaMalloc((void**)&nlm, 	   sizeof(double*)*(Lmax+1)));
+			gpuErrchk(cudaMalloc((void**)&afactor, sizeof(double*)*(Lmax+1)));
+			gpuErrchk(cudaMalloc((void**)&bfactor, sizeof(double*)* Lmax));
+
+			for (i=0; i<=Lmax; i++) {
+				gpuErrchk(cudaMalloc((void**)&nlm[i], sizeof(double)*(Lmax+1)));
+				gpuErrchk(cudaMalloc((void**)&afactor[i], sizeof(double)*(Lmax+1)));
+				if (i<Lmax && Lmax >0)
+					gpuErrchk(cudaMalloc((void**)&bfactor[i], sizeof(double)*Lmax));
+			}
+			/* End setup of matrices */
+
+			/* Launch nlm population kernel */
+			THD1.x = Lmax;
+			opt_harmhapke_kaas_nlm_krnl<<<1,THD>>>(data->model, nlm, Lmax);
+			checkErrorAfterKernelLaunch("opt_harmhapke_nlm_krnl");
+
+			opt_harmhapke_facet_krnl<<<BLK,THD>>>(data->parameter, data->model,
+					nlm, afactor, bfactor, data->nf, Lmax, ilaw);
+			checkErrorAfterKernelLaunch("opt_harmhapke_facet_krnl");
+
+			/* Free the previously allocated double pointers */
+			cudaFree(nlm);
+			cudaFree(afactor);
+			if (Lmax > 0)	cudaFree(bfactor);
+			break;
+		case INHOHAPKE:
+			/* Call single-threaded kernel for Harmhapke part A */
+			opt_inhohapke_A_krnl<<<1,1>>>(data->parameter, data->model,
+					data->albedo_mode, data->optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_inhohapke_A_krnl");
+
+			opt_inhohapke_facet_krnl<<<BLK,THD>>>(data->parameter, data->model,
+					data->nf, data->albedo_mode, data->optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_inhohapke_facet_krnl");
+			break;
+		case KAASALAINEN:
+			/* Call single-threaded kernel for Harmhapke part A */
+			opt_kaas_krnl<<<1,1>>>(data->parameter, data->model,
+					data->albedo_mode, data->optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_kaas_krnl");
+			break;
+		case HARMKAAS:
+			/* Call a single-threaded kernel to fetch L */
+			opt_harmkaas_getL_krnl<<<1,1>>>(data->model, ilaw);
+			checkErrorAfterKernelLaunch("opt_harmkaas_getL_krnl");
+			gpuErrchk(cudaMemcpyFromSymbol(&L, dL, sizeof(dL), 0,
+					cudaMemcpyDeviceToHost));
+
+			/* Configure and launch L-threaded kernel to set a, b, a_save, b_save */
+			THD1.x = L;
+			opt_harmkaas_set_ab_and_absave_krnl<<<BLK,THD>>>(data->model,
+					data->albedo_mode, data->optalb_factor, L, ilaw);
+
+			/* Launch single-threaded kernel to find Lmax */
+			opt_harmkaas_Lmax_krnl<<<1,1>>>(data->model, ilaw);
+			checkErrorAfterKernelLaunch("opt_harmkaas_get_Lmax_krnl");
+
+			/* Copy Lmax (for sizing arrays) from device to host  then allocate double pntrs */
+			gpuErrchk(cudaMemcpyFromSymbol(&Lmax, dLmax, sizeof(dLmax), 0,
+					cudaMemcpyDeviceToHost));
+			gpuErrchk(cudaMalloc((void**)&nlm, 	   sizeof(double*)*(Lmax+1)));
+			gpuErrchk(cudaMalloc((void**)&afactor, sizeof(double*)*(Lmax+1)));
+			gpuErrchk(cudaMalloc((void**)&bfactor, sizeof(double*)* Lmax));
+
+			for (i=0; i<=Lmax; i++) {
+				gpuErrchk(cudaMalloc((void**)&nlm[i], sizeof(double)*(Lmax+1)));
+				gpuErrchk(cudaMalloc((void**)&afactor[i], sizeof(double)*(Lmax+1)));
+				if (i<Lmax && Lmax >0)
+					gpuErrchk(cudaMalloc((void**)&bfactor[i], sizeof(double)*Lmax));
+			}
+			/* End setup of matrices */
+
+			/* Launch nlm population kernel */
+			THD1.x = Lmax;
+			opt_harmhapke_kaas_nlm_krnl<<<BLK,THD>>>(data->model, nlm, Lmax);
+			checkErrorAfterKernelLaunch("opt_harmhapke_kaas_nlm_krnl");
+
+			opt_harmkaas_facet_krnl<<<BLK,THD>>>(data->parameter, data->model, nlm,
+					afactor, bfactor, data->nf, Lmax, ilaw);
+			checkErrorAfterKernelLaunch("opt_harmkaas_facet_krnl");
+
+			cudaFree(nlm);
+			cudaFree(afactor);
+			if (Lmax > 0)	cudaFree(bfactor);
+			break;
+		case INHOKAAS:
+			/* Call single-threaded kernel to start off inhokaas */
+			opt_inhokaas_A_krnl<<<1,1>>>(data->parameter, data->model,
+					data->albedo_mode, data->optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_inhokaas_A_krnl");
+
+			/* Launch the nf-threaded kernel to process each facet in parallel */
+			opt_inhokaas_facet_krnl<<<BLK,THD>>>(data->parameter, data->model,
+					data->nf, data->albedo_mode, data->optalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("opt_harmkaas_facet_krnl");
+			break;
+		default:
+			bailout("realize_photo_cuda: can't handle this optical law yet\n");
 		}
-		/* End setup of matrices */
 
-		/* Launch the kernel to set up nlm[L+1][L+1] */
-		THD.x = (L+1)*(L+1);
-		opt_harmlommel_set_nlm_krnl<<<BLK,THD>>>(data->model, nlm, L);
-		checkErrorAfterKernelLaunch("opt_harmlommel_set_nlm_krnl");
+		/*  Check that all radar scattering law parameters have legal values  */
+		 for (ilaw=0; ilaw<nradlaws; ilaw++) {
+		switch (radtype) {
+		case NOLAW:
+			break;
+		case COSINELAW_DIFF:
+			/* Launch single-threaded wrapper kernel for Cosine law radar */
+			rad_cosinelaw_krnl<<<1,1>>>(data->parameter, data->model,
+					data->albedo_mode, data->radalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("rad_cosinelaw_krnl");
+			break;
+		case TABULARLAW:
+			/* Not sure if this works as written due to pointer memory managment (dynamic) */
+			/* Call single-threaded kernel to get n */
+			rad_tabularlaw_get_n_krnl<<<1,1>>>(data->model, ilaw);
+			checkErrorAfterKernelLaunch("rad_tabularlaw_get_n_krnl");
+			gpuErrchk(cudaMemcpyFromSymbol(&n, dn, sizeof(dn), 0,
+					cudaMemcpyDeviceToHost));
 
-		/* Calculate launch parameters */
-		THD.x = maxThreadsPerBlock;
-		BLK.x = floor((THD.x - 1 + data->nf ) / THD.x);
+			/* Launch n-threaded kernel to finish tabular law realization */
+			THD1.x = n;
+			rad_tabularlaw_val_krnl<<<1,THD>>>(data->parameter, data->model,
+					data->albedo_mode, data->radalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("rad_tabularlaw_val_krnl");
 
-		/* Host-side check whether to execute kernel */
-		if (L > 0) {
-			opt_harmlommel_facet_krnl<<<BLK,THD>>>(data->parameter, data->model, afactor, bfactor, nlm);
-			checkErrorAfterKernelLaunch("opt_harmlommel_vertex_krnl");
+			break;
+		case GAUSSIANLAW :
+		case HAGFORSLAW  :
+		case COSINELAW_QS:
+			/* Launch single-threaded wrapper kernel for cosinelaw_qs */
+			rad_cosinelaw_qs_krnl<<<1,1>>>(data->parameter, data->model,
+					data->albedo_mode, data->radalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("rad_cosinelaw_qs_krnl");
+			break;
+		case GAUSSIAN_COSINE:
+		case HAGFORS_COSINE :
+		case COSINE_COSINE  :
+			/* Launch single-threaded wrapper kernel for cosinelaw_qs */
+			rad_cosine_cosine_krnl<<<1,1>>>(data->parameter, data->model,
+					data->albedo_mode, data->radalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("rad_cosinelaw_qs_krnl");
+			break;
+		case HARMCOSINE_DIFF:
+			/* Launch single-threaded kernel to get L and Lmax */
+			rad_harmcosine_diff_getL_krnl<<<1,1>>>(data->model, ilaw);
+			checkErrorAfterKernelLaunch("rad_harmcosine_diff_getL_krnl");
+			gpuErrchk(cudaMemcpyFromSymbol(&L, dL, sizeof(dL), 0,
+					cudaMemcpyDeviceToHost));
+			gpuErrchk(cudaMemcpyFromSymbol(&Lmax, dLmax, sizeof(dLmax), 0,
+					cudaMemcpyDeviceToHost));
+
+			/* Launch L-threaded kernel to set R a,b, a_save, b_save */
+			THD1.x = L;
+			rad_harmcosine_diff_set_ab_krnl<<<BLK,THD>>>(data->model,
+					data->albedo_mode, data->radalb_factor, L, ilaw);
+			checkErrorAfterKernelLaunch("rad_harmcosine_diff_set_ab_krnl");
+
+			/* Copy Lmax (for sizing arrays) from device to host  then allocate double pntrs */
+			gpuErrchk(cudaMalloc((void**)&nlm, 	   sizeof(double*)*(Lmax+1)));
+			gpuErrchk(cudaMalloc((void**)&afactor, sizeof(double*)*(Lmax+1)));
+			gpuErrchk(cudaMalloc((void**)&bfactor, sizeof(double*)* Lmax));
+
+			for (i=0; i<=Lmax; i++) {
+				gpuErrchk(cudaMalloc((void**)&nlm[i], sizeof(double)*(Lmax+1)));
+				gpuErrchk(cudaMalloc((void**)&afactor[i], sizeof(double)*(Lmax+1)));
+				if (i<Lmax && Lmax >0)
+					gpuErrchk(cudaMalloc((void**)&bfactor[i], sizeof(double)*Lmax));
+			}
+			/* End setup of matrices */
+
+			/* Launch nlm population kernel */
+			THD1.x = Lmax;
+			opt_harmhapke_kaas_nlm_krnl<<<BLK,THD>>>(data->model, nlm, Lmax);
+			checkErrorAfterKernelLaunch("opt_harmhapke_kaas_nlm_krnl");
+
+			rad_harmcosine_facet_krnl<<<BLK,THD>>>(data->parameter, data->model,
+					nlm, afactor, bfactor, data->nf, Lmax, ilaw);
+			checkErrorAfterKernelLaunch("rad_harmcosine_facet_krnl");
+
+			cudaFree(nlm);
+			cudaFree(afactor);
+			if (Lmax > 0)	cudaFree(bfactor);
+			break;
+		case INHOCOSINE_DIFF:
+			/* Launch single-threaded kernel to set R.a, R.b, R.a_save, R.b_save
+			 * and also nf */
+			rad_inhocosine_set_ab_krnl<<<1,1>>>(data->parameter, data->model,
+					data->albedo_mode, data->radalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("rad_inhocosine_set_ab_krnl");
+
+			rad_inhocosine_facet_krnl<<<BLK,THD>>>(data->parameter, data->model,
+					data->nf, data->albedo_mode, data->radalb_factor, ilaw);
+			checkErrorAfterKernelLaunch("rad_inhocosine_facet_krnl");
+			break;
+		default:
+			bailout("realize_photo: can't handle this radar law yet\n");
 		}
-
-		/* Free up the previously allocated double-pointers nlm, afactor, and bfactor */
-		cudaFree(nlm);
-		cudaFree(afactor);
-		if (L > 0)	cudaFree(bfactor);
-		break;
-	case INHOLAMBERT:
-	case INHOLOMMEL:
-		/* Call single-threaded kernel for inho-Lommel */
-		opt_inholommel_A_krnl<<<1,1>>>(data->parameter, data->model, data->albedo_mode, data->optalb_factor);
-		checkErrorAfterKernelLaunch("opt_inholommel_A_krnl");
-
-		/* Calculate launch parameters */
-		THD.x = maxThreadsPerBlock;
-		BLK.x = floor((THD.x - 1 + data->nf ) / THD.x);
-		opt_inholommel_facet_krnl<<<BLK,THD>>>(data->parameter, data->model, data->albedo_mode, data->optalb_factor);
-		checkErrorAfterKernelLaunch("opt_inholommel_vertex_krnl");
-		break;
-	case HAPKE:
-		/* Call single-threaded wrapper kernel for the Hapke case */
-		opt_hapke_krnl<<<1,1>>>(data->parameter, data->model, data->albedo_mode, data->optalb_factor);
-		checkErrorAfterKernelLaunch("opt_hapke_krnl");
-		break;
-	case HARMHAPKE:
-		/* Call single-threaded kernel for Harmhapke part A */
-		opt_harmhapke_A_krnl<<<1,1>>>(data->model, data->albedo_mode, data->optalb_factor);
-		checkErrorAfterKernelLaunch("opt_harmhapke_A_krnl");
-
-		/* Find out what Lmax is */
-		opt_harmhapke_Lmax_krnl<<<1,1>>>(data->model);
-		checkErrorAfterKernelLaunch("opt_harmhapke_Lmax_krnl");
-
-		/* Copy Lmax (for sizing arrays) from device to host  then allocate double pntrs */
-		gpuErrchk(cudaMemcpyFromSymbol(&Lmax, dLmax, sizeof(dLmax), 0, cudaMemcpyDeviceToHost));
-		gpuErrchk(cudaMalloc((void**)&nlm, 	   sizeof(double*)*(Lmax+1)));
-		gpuErrchk(cudaMalloc((void**)&afactor, sizeof(double*)*(Lmax+1)));
-		gpuErrchk(cudaMalloc((void**)&bfactor, sizeof(double*)* Lmax));
-
-		for (i=0; i<=Lmax; i++) {
-			gpuErrchk(cudaMalloc((void**)&nlm[i], sizeof(double)*(Lmax+1)));
-			gpuErrchk(cudaMalloc((void**)&afactor[i], sizeof(double)*(Lmax+1)));
-			if (i<Lmax && Lmax >0)
-				gpuErrchk(cudaMalloc((void**)&bfactor[i], sizeof(double)*Lmax));
-		}
-		/* End setup of matrices */
-
-		/* Launch nlm population kernel */
-		THD.x = Lmax;
-		opt_harmhapke_kaas_nlm_krnl<<<BLK,THD>>>(data->model, nlm, Lmax);
-		checkErrorAfterKernelLaunch("opt_harmhapke_nlm_krnl");
-
-		/* Need to calculate number of threads & blocks necessary */
-		THD.x = maxThreadsPerBlock;
-		BLK.x = floor((THD.x - 1 + data->nf ) / THD.x);
-		opt_harmhapke_facet_krnl<<<BLK,THD>>>(data->parameter, data->model,
-				nlm, afactor, bfactor, data->nf, Lmax);
-		checkErrorAfterKernelLaunch("opt_harmhapke_facet_krnl");
-
-		/* Free the previously allocated double pointers */
-		cudaFree(nlm);
-		cudaFree(afactor);
-		if (Lmax > 0)	cudaFree(bfactor);
-		break;
-	case INHOHAPKE:
-		/* Call single-threaded kernel for Harmhapke part A */
-		opt_inhohapke_A_krnl<<<1,1>>>(data->parameter, data->model,
-				data->albedo_mode, data->optalb_factor);
-		checkErrorAfterKernelLaunch("opt_inhohapke_A_krnl");
-
-		/* Need to calculate number of threads & blocks necessary */
-		THD.x = maxThreadsPerBlock;
-		BLK.x = floor((THD.x - 1 + data->nf ) / THD.x);
-		opt_inhohapke_facet_krnl<<<BLK,THD>>>(data->parameter, data->model,
-				data->nf, data->albedo_mode, data->optalb_factor);
-		checkErrorAfterKernelLaunch("opt_inhohapke_facet_krnl");
-		break;
-	case KAASALAINEN:
-		/* Call single-threaded kernel for Harmhapke part A */
-		opt_kaas_krnl<<<1,1>>>(data->parameter, data->model, data->albedo_mode,
-				data->optalb_factor);
-		checkErrorAfterKernelLaunch("opt_kaas_krnl");
-		break;
-	case HARMKAAS:
-		/* Call a single-threaded kernel to fetch L */
-		opt_harmkaas_getL_krnl<<<1,1>>>(data->model);
-		checkErrorAfterKernelLaunch("opt_harmkaas_getL_krnl");
-		gpuErrchk(cudaMemcpyFromSymbol(&L, dL, sizeof(dL), 0,
-				cudaMemcpyDeviceToHost));
-
-		/* Configure and launch L-threaded kernel to set a, b, a_save, b_save */
-		THD.x = L;		BLK.x = 1;
-		opt_harmkaas_set_ab_and_absave_krnl<<<BLK,THD>>>(data->model,
-				data->albedo_mode, data->optalb_factor, L);
-
-		/* Launch single-threaded kernel to find Lmax */
-		opt_harmkaas_Lmax_krnl<<<1,1>>>(data->model);
-		checkErrorAfterKernelLaunch("opt_harmkaas_get_Lmax_krnl");
-
-		/* Copy Lmax (for sizing arrays) from device to host  then allocate double pntrs */
-		gpuErrchk(cudaMemcpyFromSymbol(&Lmax, dLmax, sizeof(dLmax), 0, cudaMemcpyDeviceToHost));
-		gpuErrchk(cudaMalloc((void**)&nlm, 	   sizeof(double*)*(Lmax+1)));
-		gpuErrchk(cudaMalloc((void**)&afactor, sizeof(double*)*(Lmax+1)));
-		gpuErrchk(cudaMalloc((void**)&bfactor, sizeof(double*)* Lmax));
-
-		for (i=0; i<=Lmax; i++) {
-			gpuErrchk(cudaMalloc((void**)&nlm[i], sizeof(double)*(Lmax+1)));
-			gpuErrchk(cudaMalloc((void**)&afactor[i], sizeof(double)*(Lmax+1)));
-			if (i<Lmax && Lmax >0)
-				gpuErrchk(cudaMalloc((void**)&bfactor[i], sizeof(double)*Lmax));
-		}
-		/* End setup of matrices */
-
-		/* Launch nlm population kernel */
-		THD.x = Lmax;
-		opt_harmhapke_kaas_nlm_krnl<<<BLK,THD>>>(data->model, nlm, Lmax);
-		checkErrorAfterKernelLaunch("opt_harmhapke_kaas_nlm_krnl");
-
-		/* Need to calculate number of threads & blocks necessary */
-		THD.x = maxThreadsPerBlock;
-		BLK.x = floor((THD.x - 1 + data->nf ) / THD.x);
-		opt_harmkaas_facet_krnl<<<BLK,THD>>>(data->parameter, data->model, nlm,
-				afactor, bfactor, data->nf, Lmax);
-		checkErrorAfterKernelLaunch("opt_harmkaas_facet_krnl");
-
-		cudaFree(nlm);
-		cudaFree(afactor);
-		if (Lmax > 0)	cudaFree(bfactor);
-		break;
-	case INHOKAAS:
-		/* Call single-threaded kernel to start off inhokaas */
-		opt_inhokaas_A_krnl<<<1,1>>>(data->parameter, data->model,
-				data->albedo_mode, data->optalb_factor);
-		checkErrorAfterKernelLaunch("opt_inhokaas_A_krnl");
-
-		/* Need to calculate number of threads & blocks necessary */
-		THD.x = maxThreadsPerBlock;
-		BLK.x = floor((THD.x - 1 + data->nf ) / THD.x);
-		gpuErrchk(cudaMemcpyFromSymbol(&n, dn, sizeof(dn), 0,
-				cudaMemcpyDeviceToHost));
-		/* Launch the nf-threaded kernel to process each facet in parallel */
-		opt_inhokaas_facet_krnl<<<BLK,THD>>>(data->parameter, data->model,
-				data->nf, data->albedo_mode, data->optalb_factor);
-		checkErrorAfterKernelLaunch("opt_harmkaas_facet_krnl");
-		break;
-	default:
-		bailout("realize_photo_cuda: can't handle this optical law yet\n");
 	}
-
-	/*  Check that all radar scattering law parameters have legal values  */
-	// for (ilaw=0; ilaw<dmod->photo.nradlaws; ilaw++) {
-	switch (radtype) {
-	case NOLAW:
-		break;
-	case COSINELAW_DIFF:
-		/* Launch single-threaded wrapper kernel for Cosine law radar */
-		rad_cosinelaw_krnl<<<1,1>>>(data->parameter, data->model,
-				data->albedo_mode, data->radalb_factor);
-		checkErrorAfterKernelLaunch("rad_cosinelaw_krnl");
-		break;
-	case TABULARLAW:
-		/* Not sure if this works as written due to pointer memory managment (dynamic) */
-		/* Call single-threaded kernel to get n */
-		rad_tabularlaw_get_n_krnl<<<1,1>>>(data->model);
-		checkErrorAfterKernelLaunch("rad_tabularlaw_get_n_krnl");
-		gpuErrchk(cudaMemcpyFromSymbol(&n, dn, sizeof(dn), 0,
-				cudaMemcpyDeviceToHost));
-
-		/* Launch n-threaded kernel to finish tabular law realization */
-		THD.x = n;
-		rad_tabularlaw_val_krnl<<<BLK,THD>>>(data->parameter, data->model,
-				data->albedo_mode, data->radalb_factor);
-		checkErrorAfterKernelLaunch("rad_tabularlaw_val_krnl");
-
-		break;
-	case GAUSSIANLAW :
-	case HAGFORSLAW  :
-	case COSINELAW_QS:
-		/* Launch single-threaded wrapper kernel for cosinelaw_qs */
-		rad_cosinelaw_qs_krnl<<<1,1>>>(data->parameter, data->model,
-				data->albedo_mode, data->radalb_factor);
-		checkErrorAfterKernelLaunch("rad_cosinelaw_qs_krnl");
-		break;
-	case GAUSSIAN_COSINE:
-	case HAGFORS_COSINE :
-	case COSINE_COSINE  :
-		/* Launch single-threaded wrapper kernel for cosinelaw_qs */
-		rad_cosine_cosine_krnl<<<1,1>>>(data->parameter, data->model,
-				data->albedo_mode, data->radalb_factor);
-		checkErrorAfterKernelLaunch("rad_cosinelaw_qs_krnl");
-		break;
-	case HARMCOSINE_DIFF:
-		/* Launch single-threaded kernel to get L and Lmax */
-		rad_harmcosine_diff_getL_krnl<<<1,1>>>(data->model);
-		checkErrorAfterKernelLaunch("rad_harmcosine_diff_getL_krnl");
-		gpuErrchk(cudaMemcpyFromSymbol(&L, dL, sizeof(dL), 0,
-				cudaMemcpyDeviceToHost));
-		gpuErrchk(cudaMemcpyFromSymbol(&Lmax, dLmax, sizeof(dLmax), 0,
-				cudaMemcpyDeviceToHost));
-
-		/* Launch L-threaded kernel to set R a,b, a_save, b_save */
-		THD.x = L;
-		rad_harmcosine_diff_set_ab_krnl<<<BLK,THD>>>(data->model,
-				data->albedo_mode, data->radalb_factor, L);
-		checkErrorAfterKernelLaunch("rad_harmcosine_diff_set_ab_krnl");
-
-		/* Copy Lmax (for sizing arrays) from device to host  then allocate double pntrs */
-		gpuErrchk(cudaMalloc((void**)&nlm, 	   sizeof(double*)*(Lmax+1)));
-		gpuErrchk(cudaMalloc((void**)&afactor, sizeof(double*)*(Lmax+1)));
-		gpuErrchk(cudaMalloc((void**)&bfactor, sizeof(double*)* Lmax));
-
-		for (i=0; i<=Lmax; i++) {
-			gpuErrchk(cudaMalloc((void**)&nlm[i], sizeof(double)*(Lmax+1)));
-			gpuErrchk(cudaMalloc((void**)&afactor[i], sizeof(double)*(Lmax+1)));
-			if (i<Lmax && Lmax >0)
-				gpuErrchk(cudaMalloc((void**)&bfactor[i], sizeof(double)*Lmax));
-		}
-		/* End setup of matrices */
-
-		/* Launch nlm population kernel */
-		THD.x = Lmax;
-		opt_harmhapke_kaas_nlm_krnl<<<BLK,THD>>>(data->model, nlm, Lmax);
-		checkErrorAfterKernelLaunch("opt_harmhapke_kaas_nlm_krnl");
-
-		/* Need to calculate number of threads & blocks necessary */
-		THD.x = maxThreadsPerBlock;
-		BLK.x = floor((THD.x - 1 + data->nf ) / THD.x);
-
-		rad_harmcosine_facet_krnl<<<BLK,THD>>>(data->parameter, data->model,
-				nlm, afactor, bfactor, data->nf, Lmax);
-		checkErrorAfterKernelLaunch("rad_harmcosine_facet_krnl");
-
-		cudaFree(nlm);
-		cudaFree(afactor);
-		if (Lmax > 0)	cudaFree(bfactor);
-		break;
-	case INHOCOSINE_DIFF:
-		/* Launch single-threaded kernel to set R.a, R.b, R.a_save, R.b_save
-		 * and also nf */
-		rad_inhocosine_set_ab_krnl<<<1,1>>>(data->parameter, data->model,
-				data->albedo_mode, data->radalb_factor);
-		checkErrorAfterKernelLaunch("rad_inhocosine_set_ab_krnl");
-
-		/* Need to calculate number of threads & blocks necessary */
-		THD.x = maxThreadsPerBlock;
-		BLK.x = floor((THD.x - 1 + data->nf ) / THD.x);
-
-		rad_inhocosine_facet_krnl<<<BLK,THD>>>(data->parameter, data->model,
-				data->nf, data->albedo_mode, data->radalb_factor);
-		checkErrorAfterKernelLaunch("rad_inhocosine_facet_krnl");
-		break;
-	default:
-		bailout("realize_photo: can't handle this radar law yet\n");
 	}
 	return(0);
 }

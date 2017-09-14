@@ -1581,7 +1581,6 @@ __host__ int read_lghtcrv_gpu( struct dat_t *dat, FILE *fp, struct par_t *par, s
 		int ncalc = lghtcrv->ncalc;
 
 		/* Allocate memory for CUDA and standard CPU code */
-
 		cudaCalloc1((void**)&lghtcrv->x0, 			sizeof(double), ncalc);
 		cudaCalloc1((void**)&lghtcrv->x,  			sizeof(double), ncalc);
 		cudaCalloc1((void**)&lghtcrv->y,  			sizeof(double), ncalc);
@@ -1589,9 +1588,6 @@ __host__ int read_lghtcrv_gpu( struct dat_t *dat, FILE *fp, struct par_t *par, s
 		cudaCalloc1((void**)&lghtcrv->rotphase_calc, sizeof(double), ncalc);
 		cudaCalloc1((void**)&lghtcrv->solar_phase,   sizeof(double), ncalc);
 		cudaCalloc1((void**)&lghtcrv->solar_azimuth, sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->x_s, sizeof(float), ncalc);
-		cudaCalloc1((void**)&lghtcrv->y_s, sizeof(float), ncalc);
-		cudaCalloc1((void**)&lghtcrv->y2_s, sizeof(float), ncalc);
 
 		lghtcrv->x0 		   -= 1;
 		lghtcrv->x  		   -= 1;
@@ -1600,9 +1596,6 @@ __host__ int read_lghtcrv_gpu( struct dat_t *dat, FILE *fp, struct par_t *par, s
 		lghtcrv->rotphase_calc -= 1;
 		lghtcrv->solar_phase   -= 1;
 		lghtcrv->solar_azimuth -= 1;
-		lghtcrv->x_s 		   -= 1;
-		lghtcrv->y_s		   -= 1;
-		lghtcrv->y2_s		   -= 1;
 
 		cudaMallocManaged((void**)&lghtcrv->rend, sizeof(struct crvrend_t)*
 				(lghtcrv->ncalc+1), cudaMemAttachGlobal);
@@ -1691,56 +1684,55 @@ __host__ int read_lghtcrv_gpu( struct dat_t *dat, FILE *fp, struct par_t *par, s
 	if (np < 0)
 		obsepoch_raw = vector( 1, lghtcrv->n);
 
-	if (np < 0) {
-		sunmag = (*par).sun_appmag[ (*lghtcrv).ioptlaw ];
-		FOPEN( fin, lghtcrv->name, "r");
-		i = 0;
-		while (!feof(fin) && i < lghtcrv->n) {
-			i++;
 
-			/* Read a single lightcurve point: epoch (JD), magnitude, rms error*/
-			obsepoch = getdouble( fin);
-			obsmag = getdouble( fin);
-			obsmagerr = getdouble( fin);
+	sunmag = (*par).sun_appmag[ (*lghtcrv).ioptlaw ];
+	FOPEN( fin, lghtcrv->name, "r");
+	i = 0;
+	while (!feof(fin) && i < lghtcrv->n) {
+		i++;
 
-			/* Convert from magnitude to intensity (relative to solar intensity)*/
-			obsintens = exp( -0.4 * LN10 * (obsmag - sunmag) );
-			obsintenserr = (0.4 * LN10 * obsmagerr) * obsintens;
+		/* Read a single lightcurve point: epoch (JD), magnitude, rms error*/
+		obsepoch = getdouble( fin);
+		obsmag = getdouble( fin);
+		obsmagerr = getdouble( fin);
 
-			/* Build up the vector containing the epochs (later to be sorted)*/
-			if (np < 0)
-				obsepoch_raw[i] = obsepoch;
+		/* Convert from magnitude to intensity (relative to solar intensity)*/
+		obsintens = exp( -0.4 * LN10 * (obsmag - sunmag) );
+		obsintenserr = (0.4 * LN10 * obsmagerr) * obsintens;
 
-			lghtcrv->t0[i] = obsepoch;
-			lghtcrv->obs[i] = obsintens;
-			lghtcrv->oneovervar[i] = 1.0/(obsintenserr*obsintenserr);   /* 1/variance*/
+		/* Build up the vector containing the epochs (later to be sorted)*/
+		if (np < 0)
+			obsepoch_raw[i] = obsepoch;
 
-			/* Loop through all views contributing to this (smeared) observed point*/
-			for (k=0; k<lghtcrv->nviews; k++) {
-				/* Compute the epoch of this view, uncorrected for light-travel time*/
-				lghtcrv->t[i][k] = lghtcrv->t0[i] + (k - lghtcrv->v0) *
-						lghtcrv->view_interval;
+		lghtcrv->t0[i] = obsepoch;
+		lghtcrv->obs[i] = obsintens;
+		lghtcrv->oneovervar[i] = 1.0/(obsintenserr*obsintenserr);   /* 1/variance*/
 
-				/*  Correct for one-way light-travel time if desired*/
-				if (par->perform_ltc) {
-					dist = ephem2mat( lghtcrv->astephem, lghtcrv->solephem,
-							lghtcrv->t[i][k],
-							oe, se, orbspin, &solar_phase, &solar_azimuth, 1);
-					lghtcrv->t[i][k] -= DAYSPERAU*dist;
-				}
+		/* Loop through all views contributing to this (smeared) observed point*/
+		for (k=0; k<lghtcrv->nviews; k++) {
+			/* Compute the epoch of this view, uncorrected for light-travel time*/
+			lghtcrv->t[i][k] = lghtcrv->t0[i] + (k - lghtcrv->v0) *
+					lghtcrv->view_interval;
+
+			/*  Correct for one-way light-travel time if desired*/
+			if (par->perform_ltc) {
+				dist = ephem2mat( lghtcrv->astephem, lghtcrv->solephem,
+						lghtcrv->t[i][k],
+						oe, se, orbspin, &solar_phase, &solar_azimuth, 1);
+				lghtcrv->t[i][k] -= DAYSPERAU*dist;
 			}
 		}
-		if (i != lghtcrv->n) {
-			printf("ERROR: fix obs file: %d lightcurve pts, not %d, were read for dataset %d\n",
-					i, lghtcrv->n, s);
-			bailout("read_lghtcrv in read_dat.c\n");
-		} else if (!nomoredata( fin)) {
-			printf("ERROR: fix obs file: > %d lightcurve pts were read for dataset %d\n",
-					lghtcrv->n, s);
-			bailout("read_lghtcrv in read_dat.c\n");
-		}
-		fclose( fin);
 	}
+	if (i != lghtcrv->n) {
+		printf("ERROR: fix obs file: %d lightcurve pts, not %d, were read for dataset %d\n",
+				i, lghtcrv->n, s);
+		bailout("read_lghtcrv in read_dat.c\n");
+	} else if (!nomoredata( fin)) {
+		printf("ERROR: fix obs file: > %d lightcurve pts were read for dataset %d\n",
+				lghtcrv->n, s);
+		bailout("read_lghtcrv in read_dat.c\n");
+	}
+	fclose( fin);
 
 	/*  Sort the observation epochs, count how many unique observation epochs
       there are, and create a vector containing only these sorted, unique epochs*/
@@ -1771,9 +1763,6 @@ __host__ int read_lghtcrv_gpu( struct dat_t *dat, FILE *fp, struct par_t *par, s
 		cudaCalloc1((void**)&lghtcrv->rotphase_calc, sizeof(double), ncalc);
 		cudaCalloc1((void**)&lghtcrv->solar_phase,   sizeof(double), ncalc);
 		cudaCalloc1((void**)&lghtcrv->solar_azimuth, sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->x_s, sizeof(float), ncalc);
-		cudaCalloc1((void**)&lghtcrv->y_s, sizeof(float), ncalc);
-		cudaCalloc1((void**)&lghtcrv->y2_s, sizeof(float), ncalc);
 
 		lghtcrv->x0 		   -= 1;
 		lghtcrv->x  		   -= 1;
@@ -1782,9 +1771,7 @@ __host__ int read_lghtcrv_gpu( struct dat_t *dat, FILE *fp, struct par_t *par, s
 		lghtcrv->rotphase_calc -= 1;
 		lghtcrv->solar_phase   -= 1;
 		lghtcrv->solar_azimuth -= 1;
-		lghtcrv->x_s		   -= 1;
-		lghtcrv->y_s		   -= 1;
-		lghtcrv->y2_s		   -= 1;
+
 		cudaCalloc1((void**)&lghtcrv->rend, sizeof(struct crvrend_t),
 				lghtcrv->ncalc+1);
 
@@ -4038,9 +4025,9 @@ __host__ int read_lghtcrv_mgpu(struct dat_t *dat, FILE *fp, struct par_t *par,
 		cudaCalloc1((void**)&lghtcrv->rotphase_calc, sizeof(double), ncalc);
 		cudaCalloc1((void**)&lghtcrv->solar_phase,   sizeof(double), ncalc);
 		cudaCalloc1((void**)&lghtcrv->solar_azimuth, sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->x_s, sizeof(float), ncalc);
-		cudaCalloc1((void**)&lghtcrv->y_s, sizeof(float), ncalc);
-		cudaCalloc1((void**)&lghtcrv->y2_s, sizeof(float), ncalc);
+//		cudaCalloc1((void**)&lghtcrv->x_s, sizeof(float), ncalc);
+//		cudaCalloc1((void**)&lghtcrv->y_s, sizeof(float), ncalc);
+//		cudaCalloc1((void**)&lghtcrv->y2_s, sizeof(float), ncalc);
 
 		lghtcrv->x0 		   -= 1;
 		lghtcrv->x  		   -= 1;
@@ -4049,9 +4036,9 @@ __host__ int read_lghtcrv_mgpu(struct dat_t *dat, FILE *fp, struct par_t *par,
 		lghtcrv->rotphase_calc -= 1;
 		lghtcrv->solar_phase   -= 1;
 		lghtcrv->solar_azimuth -= 1;
-		lghtcrv->x_s 		   -= 1;
-		lghtcrv->y_s		   -= 1;
-		lghtcrv->y2_s		   -= 1;
+//		lghtcrv->x_s 		   -= 1;
+//		lghtcrv->y_s		   -= 1;
+//		lghtcrv->y2_s		   -= 1;
 
 		cudaMallocManaged((void**)&lghtcrv->rend, sizeof(struct crvrend_t)*
 				(lghtcrv->ncalc+1), cudaMemAttachGlobal);
@@ -4222,9 +4209,9 @@ __host__ int read_lghtcrv_mgpu(struct dat_t *dat, FILE *fp, struct par_t *par,
 		cudaCalloc1((void**)&lghtcrv->rotphase_calc, sizeof(double), ncalc);
 		cudaCalloc1((void**)&lghtcrv->solar_phase,   sizeof(double), ncalc);
 		cudaCalloc1((void**)&lghtcrv->solar_azimuth, sizeof(double), ncalc);
-		cudaCalloc1((void**)&lghtcrv->x_s, sizeof(float), ncalc);
-		cudaCalloc1((void**)&lghtcrv->y_s, sizeof(float), ncalc);
-		cudaCalloc1((void**)&lghtcrv->y2_s, sizeof(float), ncalc);
+//		cudaCalloc1((void**)&lghtcrv->x_s, sizeof(float), ncalc);
+//		cudaCalloc1((void**)&lghtcrv->y_s, sizeof(float), ncalc);
+//		cudaCalloc1((void**)&lghtcrv->y2_s, sizeof(float), ncalc);
 
 		lghtcrv->x0 		   -= 1;
 		lghtcrv->x  		   -= 1;
@@ -4233,9 +4220,9 @@ __host__ int read_lghtcrv_mgpu(struct dat_t *dat, FILE *fp, struct par_t *par,
 		lghtcrv->rotphase_calc -= 1;
 		lghtcrv->solar_phase   -= 1;
 		lghtcrv->solar_azimuth -= 1;
-		lghtcrv->x_s		   -= 1;
-		lghtcrv->y_s		   -= 1;
-		lghtcrv->y2_s		   -= 1;
+//		lghtcrv->x_s		   -= 1;
+//		lghtcrv->y_s		   -= 1;
+//		lghtcrv->y2_s		   -= 1;
 		cudaCalloc1((void**)&lghtcrv->rend, sizeof(struct crvrend_t),
 				lghtcrv->ncalc+1);
 

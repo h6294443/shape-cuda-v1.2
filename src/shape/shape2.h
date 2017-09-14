@@ -829,6 +829,7 @@ struct shape_t {
   double com[3];                /* center of mass */
   double volume;
   double area;
+  float area_s;					/* Used for GPU mode exclusively */
 };
 
 /* Radar scattering law types. */
@@ -1343,9 +1344,9 @@ struct lghtcrv_t {
   double *x;                    /* times, 1-way light-time corrected */
   double *y;                    /* calculated points for interpolation */
   double *y2;                   /* 2nd derivates of calc. pnts. */
-  float *x_s;
-  float *y_s;
-  float *y2_s;
+//  float *x_s;
+//  float *y_s;
+//  float *y2_s;
   double *solar_phase;          /* solar phase angles of calculated points */
   double *solar_azimuth;        /* ast-to-sun direc (N->E in POS) for calc points */
   struct crvrend_t *rend;       /* rendering */

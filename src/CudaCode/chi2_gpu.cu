@@ -637,18 +637,22 @@ __global__ void c2s_lghtcrv_serial_krnl(struct dat_t *ddat, int s, double *dof_c
 
 	/* single-threaded kernel */
 	o2m2om[0].x = o2m2om[0].y = o2m2om[0].z = 0.0;
+	double obs, fit, oneovervar, calval;
 
 	if (threadIdx.x == 0) {
 		for (int i=1; i<=ddat->set[s].desc.lghtcrv.n; i++) {
-			o2m2om[0].x += ddat->set[s].desc.lghtcrv.obs[i] *
-					ddat->set[s].desc.lghtcrv.obs[i] *
-					ddat->set[s].desc.lghtcrv.oneovervar[i];
-			o2m2om[0].y += ddat->set[s].desc.lghtcrv.fit[i] *
-					ddat->set[s].desc.lghtcrv.fit[i] *
-					ddat->set[s].desc.lghtcrv.oneovervar[i];
-			o2m2om[0].z += ddat->set[s].desc.lghtcrv.fit[i] *
-					ddat->set[s].desc.lghtcrv.obs[i] *
-					ddat->set[s].desc.lghtcrv.oneovervar[i];
+			obs = ddat->set[s].desc.lghtcrv.obs[i];
+			fit = ddat->set[s].desc.lghtcrv.fit[i];
+			oneovervar = ddat->set[s].desc.lghtcrv.oneovervar[i];
+
+//			printf("\lghtcrv->fit[%i]=%g\n", i, fit);
+//			printf("\lghtcrv->obs[%i]=%g\n", i, obs);
+//			printf("\lghtcrv->oneovervar[%i]=%g\n", i, oneovervar);
+
+
+			o2m2om[0].x += obs * obs * oneovervar;
+			o2m2om[0].y += fit * fit * oneovervar;
+			o2m2om[0].z += fit * obs * oneovervar;
 		}
 	}
 
@@ -660,13 +664,12 @@ __global__ void c2s_lghtcrv_serial_krnl(struct dat_t *ddat, int s, double *dof_c
 		else
 			ddat->set[s].desc.lghtcrv.cal.val = TINYCALFACT;
 	}
+	calval = ddat->set[s].desc.lghtcrv.cal.val;
 
 	/* Compute chi-square for dataset  */
 	dof_chi2set[0] = ddat->set[s].desc.lghtcrv.dof;
 	dof_chi2set[1] = ddat->set[s].desc.lghtcrv.weight * (o2m2om[0].x - 2 *
-			ddat->set[s].desc.lghtcrv.cal.val * o2m2om[0].z +
-			ddat->set[s].desc.lghtcrv.cal.val * ddat->set[s].desc.lghtcrv.cal.val *
-			o2m2om[0].y);
+			calval * o2m2om[0].z + calval * calval * o2m2om[0].y);
 
 
 }
@@ -1519,6 +1522,12 @@ __host__ double chi2_lghtcrv_gpu(
 	gpuErrchk(cudaMemcpy(&h_dof_chi2set, dof_chi2set, sizeof(double)*2,
 			cudaMemcpyDeviceToHost));
 	gpuErrchk(cudaMemcpy(h_o2m2om, o2m2om, sizeof(double3)*2, cudaMemcpyDeviceToHost));
+//	printf("\nh_dof_chi2set[0] = %g\n", h_dof_chi2set[0]);
+//	printf("\nh_dof_chi2set[1] = %g\n", h_dof_chi2set[1]);
+//	printf("\nh_o2m2om[0].x = o2 = %g\n", h_o2m2om[0].x);
+//	printf("\nh_o2m2om[0].y = m2 = %g\n", h_o2m2om[0].y);
+//	printf("\nh_o2m2om[0].z = om = %g\n", h_o2m2om[0].z);
+
 
 	if (list_breakdown)
 		*chi2_all_lghtcrv += h_dof_chi2set[1];

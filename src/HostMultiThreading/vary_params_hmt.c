@@ -1,84 +1,3 @@
-/*****************************************************************************************
-                                                                            vary_params.c
-
-This routine is called by every processing node for every trial value of every floating
-parameter during a fit, in order to implement the "vary_radalb" "vary_optalb"
-"vary_delcor0" and "vary_dopscale" parameters.  The code, which is essentially lifted from
-calc_fits.c, computes up to four means:
-
-a) mean distance towards Earth of the subradar point relative to the COM,
-   for delay-Doppler frames whose 0th-order delay correction polynomial coefficient is not
-   held constant; this is used to adjust the 0th-order delay correction polynomial
-   coefficient if the "vary_delcor0" parameter is turned on.
-
-b) mean "radar" projected area for (delay-)Doppler frames that are treated as absolute
-   photometry; this is used to adjust the radar albedo (R) if the "vary_radalb" parameter
-   is turned on.
-
-c) mean "optical" unshadowed projected area for calculated lightcurve points that are
-   treated as absolute photometry; this is used to adjust the optical albedo (R or w) if
-   the "vary_optalb" parameter is turned on.  Note that plane-of-sky datasets are not used
-   here, since these frames are always treated as relative photometry.
-
-d) mean cos(subradar latitude) for (delay-)Doppler frames in datasets whose Doppler
-   scaling parameter is allowed to float; this is used to adjust those parameters if the
-   "vary_dopscale" parameter is turned on.
-
-When a branch node calls this routine, it returns its datasets' summed contributions (NOT
-mean contributions) to the four output parameters, deldop_zmax, rad_xsec, opt_brightness,
-and cos_subradarlat.
-
-When the root node calls this routine, it first computes its datasets' summed
-contributions to these four parameters; then it receives and adds in the contributions
-from the branch nodes; and finally it returns the mean (NOT summed) parameters.
-
-Before calling vary_params, the model's size/shape and spin states must be realized
-(realize_mod and realize_spin); if albedos are being varied jointly with other parameters,
-the photometric state must also be realized (realize_photo); and in either case the
-0th-order delay correction polynomial coefficients and the Doppler scaling factors must be
-reset to their saved values via the appropriate calls to realize_delcor and
-realize_dopscale, respectively.
-
-Modified 2015 June 10 by CM:
-    Implement smearing
-
-Modified 2014 February 12 by CM:
-    Add "ilaw" argument to the apply_photo routine
-
-Modified 2012 March 23 by CM:
-    Implement Doppler scaling
-
-Modified 2011 September 10 by CM:
-    Two small aesthetic changes in the lightcurve section of the code
-
-Modified 2010 June 15 by CM:
-    Revise arguments to pos2deldop and pos2doppler routines
-
-Modified 2010 April 12 by CM:
-    Include overflow region when computing cross sections
-    Added comment about calling realize_delcor before calling vary_params
-
-Modified 2009 March 29 by CM:
-    For MPI_Recv calls, mpi_par[0] is no longer equal to the MPI action,
-        since the message tag argument already serves that purpose (as of
-        2008 April 10) -- so the other mpi_par elements are renumbered
-    Add "warn_badradar" argument to pos2deldop and pos2doppler routines
-
-Modified 2008 April 10 by CM:
-    Use message tag argument to MPI_Recv to identify the MPI action
-
-Modified 2007 August 18 by CM:
-    Rename MPI_TAG to MPI_TAG_1 to avoid name conflict with mpich headers
-
-Modified 2007 August 4 by CM:
-    Add orbit_offset and body arguments to posvis routine and remove
-        facet argument
-    Add orbit_xoff, orbit_yoff, orbit_dopoff, and body arguments to
-        pos2deldop and pos2doppler routines
-    Add body argument to apply_photo routine
-
-Written 2006 October 1 by CM
- *****************************************************************************************/
 
 #include "../shape/head.h"
 
@@ -121,20 +40,20 @@ void vary_params_hmt(struct par_t *par, struct mod_t *mod, struct dat_t *dat,
 	/* Now launch (HMT_threads-1) pthreads, then use the current thread to
 	 * launch a vary_params_hmt_sub function on its own, then return to waiting
 	 * on the other threads to complete	 */
-	for (int i=0; i<HMT_threads; i++)
+	for (int i=0; i<(HMT_threads-1); i++)
 		pthread_create(&hmt_thread[i], NULL, vary_params_hmt_sub,(void*)&data[i]);
 
-//	vary_params_hmt_sub(&data[HMT_threads-1]);
-//	vary_params_hmt_sub(&data[1]);
+	vary_params_hmt_sub(&data[HMT_threads-1]);
 
-	for (int i=0; i<HMT_threads; i++)
+	for (int i=0; i<(HMT_threads-1); i++)
 		pthread_join(hmt_thread[i], NULL);
 
-//	pthread_create(&hmt_thread[0], NULL, vary_params_hmt_sub,(void*)&data[0]);
-//	pthread_join(hmt_thread[0], NULL);
+
+//	for (int i=0; i<HMT_threads; i++)
+//		pthread_create(&hmt_thread[i], NULL, vary_params_hmt_sub,(void*)&data[i]);
 //
-//	pthread_create(&hmt_thread[1], NULL, vary_params_hmt_sub,(void*)&data[1]);
-//	pthread_join(hmt_thread[1], NULL);
+//	for (int i=0; i<HMT_threads; i++)
+//		pthread_join(hmt_thread[i], NULL);
 
 
 

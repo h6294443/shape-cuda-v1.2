@@ -41,7 +41,8 @@ double bestfit_hmt(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	/* Create the host threads - HMT_threads total but that includes the
 	 * currently running thread, so we create one less */
 	pthread_t *hmt_thread;
-	hmt_thread = malloc(sizeof(pthread_t)*HMT_threads);
+//	hmt_thread = malloc(sizeof(pthread_t)*HMT_threads);
+	hmt_thread = malloc(sizeof(pthread_t)*(HMT_threads-1));
 
 	/* Initialize static global pointers used by objective(x) below to be
 	 * compatible with "Numerical Recipes in C" routines       */
@@ -49,7 +50,7 @@ double bestfit_hmt(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	smod = mod;
 	sdat = dat;
 
-	printf("\n\n###      HOST-MULTI-THREADING MODE     ### \n\n\n");
+	printf("\n\n###   HOST MULTI-THREADING MODE (%i THREADS)   ### \n\n\n", HMT_threads);
 
 	/* Initialize static global parameters  */
 	newsize = newshape = newspin = newphoto = newdelcor = newdopscale = newxyoff = 1;

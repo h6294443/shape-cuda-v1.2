@@ -72,11 +72,21 @@ void calc_fits_hmt( struct par_t *par, struct mod_t *mod, struct dat_t *dat, pth
 	/* Now launch (HMT_threads-1) pthreads, then use the current thread to
 	 * launch a vary_params_hmt_sub function on its own, then return to waiting
 	 * on the other threads to complete	 */
-	for (int i=0; i<HMT_threads; i++)
+	for (int i=0; i<(HMT_threads-1); i++)
 		pthread_create(&hmt_thread[i], NULL, calc_fits_hmt_sub,(void*)&data[i]);
 
-	for (int i=0; i<HMT_threads; i++)
+	calc_fits_hmt_sub(&data[HMT_threads-1]);
+
+	for (int i=0; i<(HMT_threads-1); i++)
 		pthread_join(hmt_thread[i], NULL);
+
+
+
+//	for (int i=0; i<HMT_threads; i++)
+//		pthread_create(&hmt_thread[i], NULL, calc_fits_hmt_sub,(void*)&data[i]);
+//
+//	for (int i=0; i<HMT_threads; i++)
+//		pthread_join(hmt_thread[i], NULL);
 
 
 //	pthread_create(&hmt_thread[0], NULL, calc_fits_hmt_sub,(void*)&data[0]);
