@@ -32,6 +32,7 @@
 								<option id="nvcc.compiler.compileroptions.160154659" name="Preprocessor options (-Xcompiler)" superClass="nvcc.compiler.compileroptions" valueType="stringList">
 									<listOptionValue builtIn="false" value="-rdynamic"/>
 								</option>
+								<option id="nvcc.compiler.usefastmath.1613106708" superClass="nvcc.compiler.usefastmath" value="true" valueType="boolean"/>
 								<inputType id="nvcc.compiler.input.cu.1405009591" superClass="nvcc.compiler.input.cu"/>
 								<inputType id="nvcc.compiler.input.cpp.1434277222" superClass="nvcc.compiler.input.cpp"/>
 								<inputType id="nvcc.compiler.input.c.1499556521" superClass="nvcc.compiler.input.c"/>
@@ -50,7 +51,7 @@
 							</tool>
 							<tool id="nvcc.archiver.base.1871114232" name="NVCC Archiver" superClass="nvcc.archiver.base"/>
 							<tool id="com.nvidia.host.assembler.53377581" name="Host Assembler" superClass="com.nvidia.host.assembler">
-								<option id="gnu.both.asm.option.include.paths.1345886204" superClass="gnu.both.asm.option.include.paths" valueType="includePath">
+								<option id="gnu.both.asm.option.include.paths.1345886204" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths" valueType="includePath">
 									<listOptionValue builtIn="false" value="/usr/include/"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.2010918507" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
@@ -64,10 +65,10 @@
 			</storageModule>
 			<storageModule moduleId="com.nvidia.cuda.ide.build.project.ICudaProjectConfiguration">
 				<executable devicelink="true">
-					<ptx major="3" minor="5"/>
-					<sass major="3" minor="5"/>
+					<ptx major="6" minor="1"/>
+					<sass major="6" minor="1"/>
 				</executable>
-				<editor-arch major="3" minor="5"/>
+				<editor-arch major="6" minor="1"/>
 			</storageModule>
 			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
 		</cconfiguration>
@@ -116,7 +117,7 @@
 							</tool>
 							<tool id="nvcc.archiver.base.803976991" name="NVCC Archiver" superClass="nvcc.archiver.base"/>
 							<tool id="com.nvidia.host.assembler.1504375381" name="Host Assembler" superClass="com.nvidia.host.assembler">
-								<option id="gnu.both.asm.option.include.paths.1378984044" superClass="gnu.both.asm.option.include.paths" valueType="includePath">
+								<option id="gnu.both.asm.option.include.paths.1378984044" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths" valueType="includePath">
 									<listOptionValue builtIn="false" value="/usr/include/"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.1028547851" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>

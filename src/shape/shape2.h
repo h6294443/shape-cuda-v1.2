@@ -1504,7 +1504,7 @@ void write_pnm( double posmax, int n, int **color, double **brightness,
 void write_pos( struct par_t *par, struct mod_t *mod, struct pos_t *pos,
                 double spin_ecl[3], int iradlaw, int color_output, char *name);
 void write_wf( struct mod_t *mod);
-
+void initialize_delcor( struct dat_t *dat);
 
 
 

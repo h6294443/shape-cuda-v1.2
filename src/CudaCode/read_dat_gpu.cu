@@ -350,6 +350,7 @@ __host__ int read_dat_gpu( struct par_t *par, struct mod_t *mod, struct dat_t *d
 
 	/* Initialize the delay correction polynomials, the horizontal and vertical offsets
       for plane-of-sky datasets, and the plane-of-sky view(s)                           */
+	initialize_delcor( dat);
 	realize_delcor( dat, 0.0, 0);
 	realize_dopscale( par, dat, 1.0, 0);
 	realize_xyoff( dat);
@@ -511,7 +512,6 @@ __host__ int read_deldop_gpu( FILE *fp, struct par_t *par, struct deldop_t *deld
 		bailout("read_deldop in read_dat.c\n");	}
 
 	/* Read the asteroid ephemeris */
-
 	deldop->astephem.n = getint( fp);  //# of points in ephemeris
 	cudaCalloc1((void**)&deldop->astephem.pnt, sizeof(struct ephpnt_t),
 				deldop->astephem.n);
@@ -560,17 +560,19 @@ __host__ int read_deldop_gpu( FILE *fp, struct par_t *par, struct deldop_t *deld
 	/* Read the delay correction polynomial itself:
       coefficients have units of usec, usec/day, usec/day^2, etc.*/
 	deldop->delcor.n = getint( fp);
-	cudaCalloc1((void**)&deldop->delcor.a, sizeof(struct param_t),
-			deldop->delcor.n + 1);
+	cudaCalloc((void**)&deldop->delcor.a, sizeof(struct param_t),
+			(deldop->delcor.n + 1));
 
-	n_equals = 0;
+//	n_equals = 0;
+	cudaCalloc1((void**)&deldop->delcor.equals_set, sizeof(int), deldop->delcor.n);
 	for (i=0; i<=deldop->delcor.n; i++) {
 		npar += readparam( fp, &deldop->delcor.a[i]);
 		if (deldop->delcor.a[i].state == '=')
-			n_equals++;
+			deldop->delcor.equals_set[i] = -1;
+//			n_equals++;
 	}
-	if (n_equals > 0 && n_equals <= deldop->delcor.n)
-		bailout("can't use \"=\" state for just part of a delay polynomial\n");
+//	if (n_equals > 0 && n_equals <= deldop->delcor.n)
+//		bailout("can't use \"=\" state for just part of a delay polynomial\n");
 	deldop->delcor.delcor0_save = deldop->delcor.a[0].val;
 
 	/* Read the Doppler scaling factor*/
@@ -878,15 +880,13 @@ __host__ int read_doppler_gpu( FILE *fp, struct par_t *par, struct doppler_t *do
 	double lookfact, se[3][3], dist, solar_phase, solar_azimuth, dof,
 	*binweight=NULL;
 
-	/*  Initialize degrees of freedom, variance of chi2 estimate, and weight sum  */
-
+	/* Initialize degrees of freedom, variance of chi2 estimate, and weight sum  */
 	doppler->dof = 0.0;
 	*chi2_variance = 0.0;
 	doppler->sum_rad_xsec_weights = 0.0;
 	doppler->sum_cos_subradarlat_weights = 0.0;
 
-	/*  Read which radar scattering law to use for this dataset  */
-
+	/* Read which radar scattering law to use for this dataset  */
 	doppler->iradlaw = getint( fp);
 	if (doppler->iradlaw < 0 || doppler->iradlaw >= nradlaws) {
 		printf("ERROR in set %d: must have 0 <= radar scattering law <= %d\n",
@@ -894,21 +894,11 @@ __host__ int read_doppler_gpu( FILE *fp, struct par_t *par, struct doppler_t *do
 		bailout("read_doppler in read_dat.c\n");
 	}
 
-	/*  Read the asteroid ephemeris  */
-
+	/* Read the asteroid ephemeris  */
 	doppler->astephem.n = getint( fp); /* # of points in ephemeris */
 
-	/*=======================================================================*/
-	/* if gpu processing via CUDA is enabled, allocate via CUDA function.
-	 * If it is not enabled, allocate via the standard C call.				 */
-
-	if (CUDA)
-		cudaCalloc1((void**)&doppler->astephem.pnt, sizeof(struct ephpnt_t),
-				doppler->astephem.n);
-	else
-		doppler->astephem.pnt = (struct ephpnt_t *) calloc( doppler->astephem.n,
-				sizeof( struct ephpnt_t));
-	/*=======================================================================*/
+	cudaCalloc1((void**)&doppler->astephem.pnt, sizeof(struct ephpnt_t),
+			doppler->astephem.n);
 
 	for (i=0; i<doppler->astephem.n; i++) {
 		rdcal2jd( fp, &doppler->astephem.pnt[i].t);
@@ -917,43 +907,34 @@ __host__ int read_doppler_gpu( FILE *fp, struct par_t *par, struct doppler_t *do
 		doppler->astephem.pnt[i].dist = getdouble( fp);
 	}
 
-	/*  Read the transmitter frequency (MHz)  */
-
+	/* Read the transmitter frequency (MHz)  */
 	doppler->Ftx = getdouble( fp);
 
-	/*  Read Doppler information for the unvignetted spectra  */
-
+	/* Read Doppler information for the unvignetted spectra  */
 	doppler->ndop = getint( fp); /* # doppler bins */
 	doppler->dop_per_bin = getdouble( fp); /* bin width (Hz) */
 	doppler->dopcom = getdouble( fp); /* ephemeris COM doppler bin */
 
-	/*  Compute the reference epoch (JD) for the delay correction polynomial  */
-
+	/* Compute the reference epoch (JD) for the delay correction polynomial  */
 	rdcal2jd( fp, &doppler->delcor.t0);
 
-	/*  Read the delay correction polynomial itself:
+	/* Read the delay correction polynomial itself:
       coefficients have units of usec, usec/day, usec/day^2, etc.  */
-
 	doppler->delcor.n = getint( fp);
-	/*=======================================================================*/
-	if (CUDA)
-		cudaCalloc1((void**)&doppler->delcor.a, sizeof(struct param_t),
-				doppler->delcor.n+1);
-	else
-		doppler->delcor.a = (struct param_t *) calloc( doppler->delcor.n+1,
-				sizeof(struct param_t));
-	/*=======================================================================*/
-
-	n_equals = 0;
+	cudaCalloc1((void**)&doppler->delcor.a, sizeof(struct param_t),
+			doppler->delcor.n+1);
+	cudaCalloc1((void**)&doppler->delcor.equals_set, sizeof(int), doppler->delcor.n);
+//	n_equals = 0;
 	for (i=0; i<=doppler->delcor.n; i++) {
 		npar += readparam( fp, &doppler->delcor.a[i]);
 		if (doppler->delcor.a[i].state == '=')
-			n_equals++;
+			doppler->delcor.equals_set[i] = -1;
+//			n_equals++;
 	}
 	if (doppler->delcor.a[0].state == 'f')
 		bailout("can't use \"f\" state for a Doppler dataset's 0th-order delay polynomial coefficient\n");
-	if (n_equals > 0 && n_equals <= doppler->delcor.n)
-		bailout("can't use \"=\" state for just part of a delay polynomial\n");
+//	if (n_equals > 0 && n_equals <= doppler->delcor.n)
+//		bailout("can't use \"=\" state for just part of a delay polynomial\n");
 	doppler->delcor.delcor0_save = doppler->delcor.a[0].val;
 
 	/*  Read the Doppler scaling factor  */

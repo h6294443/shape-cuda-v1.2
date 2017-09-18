@@ -28,8 +28,11 @@ __global__ void deldopoffs_krnl(struct dat_t *ddat, int s, int nframes) {
 					ddat->set[s].desc.deldop.delcor.t0;
 
 			for (n=1; n<=ddat->set[s].desc.deldop.delcor.n; n++) {
+				//printf("delcor.a[%i].val=%g\n", n, ddat->set[s].desc.deldop.delcor.a[n].val);
 				dop += n*ddat->set[s].desc.deldop.delcor.a[n].val*x;
-				del +=   ddat->set[s].desc.deldop.delcor.a[n].val*(x*=arg);
+				del += ddat->set[s].desc.deldop.delcor.a[n].val*(x*=arg);
+//				printf("dop at n=%i: %g\n", n, dop);
+//				printf("del at n=%i: %g\n", n, del);
 			}
 
 			/* del has units of usec */

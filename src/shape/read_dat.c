@@ -404,7 +404,7 @@ void read_doppler_fits(char *filename, struct doppler_t *doppler, int iframe,
 void read_poset_fits(char *filename, struct poset_t *poset, int iframe,
                                      int irow_use[2], int icol_use[2], int read_data);
 
-void initialize_delcor( struct dat_t *dat);
+//void initialize_delcor( struct dat_t *dat);
 
 int read_dat( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 {
