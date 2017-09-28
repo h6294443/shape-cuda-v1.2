@@ -5,7 +5,7 @@ __global__ void cf_gamma_trans_streams_krnl(struct par_t *dpar, struct dat_t *dd
 __global__ void clrvect_krnl(struct dat_t *ddat, int size, int s, int f);
 __global__ void zero_fit_overflow_krnl(struct dat_t *ddat, int s, int f, int size);
 __device__ int cubic_realroots_cuda( double *coeff, double *realroot);
-__device__ void dev_bsstep(double *y, double *dydx, int nv, double *xx, double htry, double eps,
+__device__ void dev_bsstep(double *y, double *dydx, double *xx, double htry, double eps,
 		double *yscal, double *hdid, double *hnext, void (*derivs)(double,double *,double *));
 __device__ double dev_cel(double qqc, double pp, double aa, double bb);
 __device__ void dev_cotrans1( double y[3], double *a, double x[3], int dir);
@@ -39,7 +39,7 @@ __global__ void lghtcrv_spline_krnl(struct dat_t *ddat, int set, double
 		yp1, double ypn, double *u, int ncalc);
 __global__ void lghtcrv_splint_krnl(struct dat_t *ddat, int set, int n, int ncalc);
 __device__ void dev_mat2euler( double m[3][3], double *phi, double *theta, double *psi);
-__device__ void dev_mmid( double *y, double *dydx, int nvar1, double xs, double htot,
+__device__ void dev_mmid( double *y, double *dydx, double xs, double htot,
 		int nstep, double *yout, void (*dev_derivs)( double, double *, double *));
 __device__ void dev_mmmul(double x[3][3], double y[3][3], double z[3][3]);
 __device__ void dev_mmmul2(double3 *x, double y[3][3], double3 *z, int f);
@@ -50,9 +50,9 @@ __device__ void dev_mtrnsps2(double3 *a, double b[3][3], int f);
 __device__ void dev_mtrnsps3(float3 *a, double b[3][3], int frm);
 __device__ double dev_normalize(double *u);
 __device__ float dev_normalize2(float3 u);
-__device__ void dev_odeint( double *ystart, int nvar, double x1, double x2, double eps,
+__device__ void dev_odeint( double *ystart, double x1, double x2, double eps,
 	double h1, double hmin, int *nok, int *nbad, void (*derivs)(double,double *,double *),
-	void (*drkqc)(double *,double *,int,double *,double,double,double
+	void (*drkqc)(double *,double *,double *,double,double,double
 			*,double *,double *,void (*)(double,double *,double *)));
 __device__ double dev_plgndr(int l,int m,double x);
 __device__ double dev_radlaw( struct photo_t *photo, int ilaw, double cosinc, int c, int f);

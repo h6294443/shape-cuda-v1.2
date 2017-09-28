@@ -986,14 +986,20 @@ int read_photo( FILE *fp, struct par_t *par, struct mod_t *mod)
 
 	/*=======================================================================*/
 	if (CUDA) {
-		cudaCalloc((void**)&mod->photo.opttype, sizeof(unsigned char), mod->photo.noptlaws);
-		cudaCalloc((void**)&mod->photo.optical, sizeof(union optscat_t),
-			mod->photo.noptlaws);
+
+		if (mod->photo.noptlaws == 0) {
+			cudaCalloc((void**)&mod->photo.opttype, sizeof(unsigned char), 2);
+		}
+		else {
+			cudaCalloc((void**)&mod->photo.opttype, sizeof(unsigned char), mod->photo.noptlaws);
+			cudaCalloc((void**)&mod->photo.optical, sizeof(union optscat_t),
+					mod->photo.noptlaws);
+		}
 	}
 	else {
 		mod->photo.opttype = ucvector( 0, mod->photo.noptlaws-1);
 		mod->photo.optical = (union optscat_t*) calloc(mod->photo.noptlaws,
-			sizeof(union optscat_t));
+				sizeof(union optscat_t));
 	}
 	/*=======================================================================*/
 		

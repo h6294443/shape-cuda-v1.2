@@ -423,18 +423,18 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	/* Allocate memory for pointers, steps, and tolerances on bothhost and
 	 * device. fpntr remains a cudaMallocManaged allocation because it is a
 	 * double pointer.  */
-	gpuErrchk(cudaMalloc((void**)&sdev_par, sizeof(struct par_t)));
+	cudaCalloc1((void**)&sdev_par, sizeof(struct par_t), 1);
 	gpuErrchk(cudaMemcpy(sdev_par, &par, sizeof(struct par_t), cudaMemcpyHostToDevice));
-	gpuErrchk(cudaMalloc((void**)&sdev_mod, sizeof(struct mod_t)));
+	cudaCalloc1((void**)&sdev_mod, sizeof(struct mod_t), 1);
 	gpuErrchk(cudaMemcpy(sdev_mod, &mod, sizeof(struct mod_t), cudaMemcpyHostToDevice));
-	gpuErrchk(cudaMalloc((void**)&sdev_dat, sizeof(struct dat_t)));
+	cudaCalloc1((void**)&sdev_dat, sizeof(struct dat_t), 1);
 	gpuErrchk(cudaMemcpy(sdev_dat, &dat, sizeof(struct dat_t), cudaMemcpyHostToDevice));
-	gpuErrchk(cudaMalloc((void**)&flags, sizeof(int) * 7));
-	gpuErrchk(cudaMalloc((void**)&fparstep,   sizeof(double)  * nfpar));
-	gpuErrchk(cudaMalloc((void**)&fpartol,    sizeof(double)  * nfpar));
-	gpuErrchk(cudaMalloc((void**)&fparabstol, sizeof(double)  * nfpar));
-	gpuErrchk(cudaMalloc((void**)&fpartype,   sizeof(int) 	  * nfpar));
-	cudaCalloc1((void**)&fpntr,	  sizeof(double*), nfpar);
+	cudaCalloc1((void**)&flags, sizeof(int), 7);
+	cudaCalloc1((void**)&fparstep, sizeof(double), nfpar);
+	cudaCalloc1((void**)&fpartol, sizeof(double), nfpar);
+	cudaCalloc1((void**)&fparabstol, sizeof(double), nfpar);
+	cudaCalloc1((void**)&fpartype, sizeof(int), nfpar);
+	cudaCalloc1((void**)&fpntr, sizeof(double*), nfpar);
 	hfparstep 	 = (double *) malloc(nfpar*sizeof(double));
 	hfpartol	 = (double *) malloc(nfpar*sizeof(double));
 	hfparabstol  = (double *) malloc(nfpar*sizeof(double));
@@ -442,13 +442,11 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	hflags 		 = (int *) malloc(7*sizeof(int));
 
 	for (i=0; i<nfpar; i++)
-		gpuErrchk(cudaMalloc((void**)&fpntr[i], sizeof(double) * 1));
+		cudaCalloc1((void**)&fpntr[i], sizeof(double), 1);
 
 	/* Set vertices shortcut and also set max_frames (the maximum number of
 	 * frames for any one set) to device so that objective_gpu
 	 * can retrieve it later */
-	//gpuErrchk(cudaDeviceSynchronize());
-
 	set_verts_shortcut_krnl<<<1,1>>>(dmod, verts, max_frames);
 	checkErrorAfterKernelLaunch("set_verts_shortcut_krnl");
 

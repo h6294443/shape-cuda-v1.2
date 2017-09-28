@@ -45,7 +45,7 @@ fcomplex RCmul(double x, fcomplex a);
 
 double brent(double ax, double bx, double cx, double (*f)(double), double tol,
 	     double *xmin);
-void  bsstep(double *y, double *dydx, int nv, double *xx, double htry,
+void  bsstep(double *y, double *dydx, double *xx, double htry,
 	     double eps, double *yscal, double *hdid, double *hnext, 
 	     void (*derivs)(double,double *,double *));
 void  caldat(long julian, int *mm, int *id, int *iyyy);
@@ -62,7 +62,7 @@ void  mnbrak(double *ax, double *bx, double *cx, double *fa, double *fb,
 void  odeint(double *ystart, int nvar, double x1, double x2, double eps,
 		  double h1, double hmin, int *nok, int *nbad,
 		  void (*derivs)(double,double *,double *),
-		  void  (*rkqc)(double *,double *,int,double *,double,double,double
+		  void  (*rkqc)(double *,double *,double *,double,double,double
 				*,double *,double *,void (*)(double,double *,double *)));
 void  piksrt(int n, double *arr);
 double plgndr(int l, int m, double x);

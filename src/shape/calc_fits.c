@@ -513,6 +513,7 @@ void calc_deldop( struct par_t *par, struct mod_t *mod, struct deldop_t *deldop,
 //							frame->dof, pos->posbnd_logfactor);
 				}
 
+//			dbg_print_pos_arrays_full_host(pos);
 
 			/*  Go through all POS pixels which are visible with sufficiently low
           scattering angle, and mark the facets which project onto their

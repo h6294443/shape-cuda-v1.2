@@ -273,13 +273,13 @@ double chi2( struct par_t *par, struct dat_t *dat, int list_breakdown)
 			dat->set[s].chi2 = chi2_deldop( par, &dat->set[s].desc.deldop,
 					list_breakdown, s, &chi2_all_deldop,
 					&chi2_fit0_deldop, &dof_fit0_deldop);
-			printf("chi2 for set %i (Delay-Doppler) = %g\n", s, dat->set[s].chi2);
+//			printf("chi2 for set %i (Delay-Doppler) = %g\n", s, dat->set[s].chi2);
 			break;
 		case DOPPLER:
 			dat->set[s].chi2 = chi2_doppler( par, &dat->set[s].desc.doppler,
 					list_breakdown, s, &chi2_all_doppler,
 					&chi2_fit0_doppler, &dof_fit0_doppler);
-			printf("chi2 for set %i (Doppler) = %g\n", s, dat->set[s].chi2);
+//			printf("chi2 for set %i (Doppler) = %g\n", s, dat->set[s].chi2);
 			break;
 		case POS:
 			dat->set[s].chi2 = chi2_poset( par, &dat->set[s].desc.poset,
@@ -289,7 +289,7 @@ double chi2( struct par_t *par, struct dat_t *dat, int list_breakdown)
 		case LGHTCRV:
 			dat->set[s].chi2 = chi2_lghtcrv( par, &dat->set[s].desc.lghtcrv,
 					list_breakdown, s, &chi2_all_lghtcrv);
-			printf("chi2 for set %i (Lightcurve) = %g\n", s, dat->set[s].chi2);
+//			printf("chi2 for set %i (Lightcurve) = %g\n", s, dat->set[s].chi2);
 			break;
 		default:
 			bailout("chi2.c: can't handle this type yet\n");
@@ -1148,7 +1148,7 @@ double chi2_lghtcrv( struct par_t *par, struct lghtcrv_t *lghtcrv, int list_brea
 	o2 = m2 = om = 0.0;
 	for (i=1; i<=n; i++) {
 
-		printf("lghtcrv->obs[%i]=%g\n", i, lghtcrv->obs[i]);
+//		printf("lghtcrv->obs[%i]=%g\n", i, lghtcrv->obs[i]);
 		//printf("lghtcrv->obs[%i]=%g\n", i, lghtcrv->fit[i]);
 
 		o2 += lghtcrv->obs[i] * lghtcrv->obs[i] * lghtcrv->oneovervar[i];

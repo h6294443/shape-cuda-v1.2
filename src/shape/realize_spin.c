@@ -147,10 +147,15 @@ void realize_spin( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
             /*  Get the model's intrinsic spin vector (in body coordinates)
                 at the (light-time corrected) epoch of each view.            */
 
-            inteuler( (*mod).spin, (*deldop).frame[f].t_integrate,
-                      (*deldop).frame[f].impulse, (*deldop).frame[f].n_integrate,
-                      (*deldop).frame[f].view[k].intspin, (*deldop).frame[f].view[k].ae,
-                      (*mod).spin.pa, (*par).int_method, (*par).int_abstol);
+            inteuler( (*mod).spin,
+            		(*deldop).frame[f].t_integrate,
+            		(*deldop).frame[f].impulse,
+            		(*deldop).frame[f].n_integrate,
+            		(*deldop).frame[f].view[k].intspin,
+            		(*deldop).frame[f].view[k].ae,
+                    (*mod).spin.pa,
+                    (*par).int_method,
+                    (*par).int_abstol);
 
             /*  Apply this dataset's spin offsets (also in body coordinates)
                 to the intrinsic spin vector of this view.                    */

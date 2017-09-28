@@ -469,6 +469,10 @@ __host__ int posvis_gpu(
 		printf("%i facets in posvis_cuda_2 in %3.3f ms with %i frames.\n", nf, milliseconds, nfrm_alloc);
 	}
 
+//	int n = 200;
+//	int npixels = 401*401;
+//	f = 0;
+//	dbg_print_pos_arrays_full(pos, f, npixels, n);
 
 	/* Free temp arrays, destroy streams and timers, as applicable */
 

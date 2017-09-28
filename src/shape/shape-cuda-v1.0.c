@@ -225,31 +225,25 @@ int main(int argc, char *argv[])
 		 * in device memory and are inaccessible by the host (CPU) code */
 		if (CUDA) {
 
-			gpuErrchk(cudaMallocManaged((void**)&dev_par, sizeof(struct par_t),
-					cudaMemAttachGlobal));
+			cudaCalloc1((void**)&dev_par, sizeof(struct par_t), 1);
 			gpuErrchk(cudaMemcpy(dev_par, &par, sizeof(struct par_t),
 					cudaMemcpyHostToDevice));
-			gpuErrchk(cudaMallocManaged((void**)&dev_mod, sizeof(struct mod_t),
-					cudaMemAttachGlobal));
+			cudaCalloc1((void**)&dev_mod, sizeof(struct mod_t), 1);
 			gpuErrchk(cudaMemcpy(dev_mod, &mod, sizeof(struct mod_t),
 					cudaMemcpyHostToDevice));
-			gpuErrchk(cudaMallocManaged((void**)&dev_dat, sizeof(struct dat_t),
-					cudaMemAttachGlobal));
+			cudaCalloc1((void**)&dev_dat, sizeof(struct dat_t), 1);
 			gpuErrchk(cudaMemcpy(dev_dat, &dat, sizeof(struct dat_t),
 					cudaMemcpyHostToDevice));
 
 			if (MGPU) {
 				gpuErrchk(cudaSetDevice(GPU1));
-				gpuErrchk(cudaMallocManaged((void**)&dev_par1, sizeof(struct par_t),
-						cudaMemAttachGlobal));
+				cudaCalloc1((void**)&dev_par1, sizeof(struct par_t), 1);
 				gpuErrchk(cudaMemcpy(dev_par1, &par1, sizeof(struct par_t),
 						cudaMemcpyHostToDevice));
-				gpuErrchk(cudaMallocManaged((void**)&dev_mod1, sizeof(struct mod_t),
-						cudaMemAttachGlobal));
+				cudaCalloc1((void**)&dev_mod1, sizeof(struct mod_t), 1);
 				gpuErrchk(cudaMemcpy(dev_mod1, &mod1, sizeof(struct mod_t),
 						cudaMemcpyHostToDevice));
-				gpuErrchk(cudaMallocManaged((void**)&dev_dat1, sizeof(struct dat_t),
-						cudaMemAttachGlobal));
+				cudaCalloc1((void**)&dev_dat1, sizeof(struct dat_t), 1);
 				gpuErrchk(cudaMemcpy(dev_dat1, &dat1, sizeof(struct dat_t),
 						cudaMemcpyHostToDevice));
 				gpuErrchk(cudaSetDevice(GPU0));

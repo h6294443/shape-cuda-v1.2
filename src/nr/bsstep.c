@@ -4,56 +4,68 @@
 #define NUSE 7
 #define SHRINK 0.95
 #define GROW 1.2
+#define nv 12
 
 double **d=0,*x=0;	/* defining declaration */
 
-void  bsstep(double *y, double *dydx, int nv, double *xx, double htry,
-             double eps, double *yscal, double *hdid, double *hnext, 
-             void (*derivs)(double,double *,double *))
+void bsstep(
+		double *y,		/* Input - dependent variable vector */
+		double *dydx, 	/* Input - derivatives of dependent variable vector */
+		double *xx, 	/*  */
+		double htry,	/* Input - step size to be attempted */
+        double eps, 	/* Input - desirec accuracy */
+        double *yscal, 	/* Input - error scaling vector */
+        double *hdid, 	/* step size that was actually accomplished */
+        double *hnext, 	/* Estimated next step size */
+        void (*derivs)(double,double *,double *))
 {
 	int i,j;
-	double xsav,xest,h,errmax,temp;
-	double *ysav,*dysav,*yseq,*yerr;
+	double xsav, xest, h, errmax, temp;
+	double *ysav, *dysav, *yseq, *yerr;
 	static int nseq[IMAX+1]={0,2,4,6,8,12,16,24,32,48,64,96};
 
-	ysav=vector(1,nv);
-	dysav=vector(1,nv);
-	yseq=vector(1,nv);
-	yerr=vector(1,nv);
-	x=vector(1,IMAX);
-	d=matrix(1,nv,1,NUSE);
-	h=htry;
-	xsav=(*xx);
-	for (i=1;i<=nv;i++) {
-		ysav[i]=y[i];
-		dysav[i]=dydx[i];
+	ysav = vector(1, nv);
+	dysav = vector(1, nv);
+	yseq = vector(1, nv);
+	yerr = vector(1, nv);
+	x = vector(1, IMAX);
+	d = matrix(1, nv, 1, NUSE);
+	h = htry;
+	xsav = (*xx);
+
+	for (i=1; i<=nv; i++) {
+		ysav[i] = y[i];
+		dysav[i] = dydx[i];
 	}
 	for (;;) {
-		for (i=1;i<=IMAX;i++) {
-			mmid(ysav,dysav,nv,xsav,h,nseq[i],yseq,derivs);
-			xest=(temp=h/nseq[i],temp*temp);
-			rzextr(i,xest,yseq,y,yerr,nv,NUSE);
+		for (i=1; i<=IMAX; i++) {
+
+			mmid(ysav, dysav, nv, xsav, h, nseq[i], yseq, derivs);
+			xest = (temp= h/nseq[i], temp*temp);
+			rzextr(i, xest, yseq, y, yerr, nv, NUSE);
 			errmax=0.0;
+
 			for (j=1;j<=nv;j++)
 				if (errmax < fabs(yerr[j]/yscal[j]))
-					errmax=fabs(yerr[j]/yscal[j]);
+					errmax = fabs(yerr[j]/yscal[j]);
 			errmax /= eps;
 			if (errmax < 1.0) {
 				*xx += h;
-				*hdid=h;
+				*hdid = h;
 				*hnext = i==NUSE? h*SHRINK : i==NUSE-1?
 					h*GROW : (h*nseq[NUSE-1])/nseq[i];
-				free_matrix(d,1,nv,1,NUSE);
-				free_vector(x,1,IMAX);
-				free_vector(yerr,1,nv);
-				free_vector(yseq,1,nv);
-				free_vector(dysav,1,nv);
-				free_vector(ysav,1,nv);
+
+				free_matrix(d, 1, nv, 1, NUSE);
+				free_vector(x, 1, IMAX);
+				free_vector(yerr, 1, nv);
+				free_vector(yseq, 1, nv);
+				free_vector(dysav, 1, nv);
+				free_vector(ysav, 1, nv);
 				return;
 			}
 		}
 		h *= 0.25;
-		for (i=1;i<=(IMAX-NUSE)/2;i++) h /= 2.0;
+		for (i=1; i<=(IMAX-NUSE)/2; i++) h /= 2.0;
 		if ((*xx+h) == (*xx)) nrerror("Step size underflow in BSSTEP");
 	}
 }
