@@ -685,8 +685,9 @@ __global__ void p_nonsmooth_krnl(struct mod_t *dmod, double *a) {
 __global__ void p_nonsmooth_finish_krnl(double sum)
 {
 	/* Single-threaded task */
-	if (threadIdx.x == 0)
+	if (threadIdx.x == 0){
 		p_pen = sum/p_ntot;
+	}
 }
 __global__ void p_concavity_krnl(struct mod_t *dmod, double *a) {
 	/* ns-threaded kernel */
@@ -720,14 +721,17 @@ __global__ void p_concavity_krnl(struct mod_t *dmod, double *a) {
 __global__ void p_concavity_finish_krnl(double sum)
 {
 	/* Single-thread task */
-	if (threadIdx.x == 0)
+	if (threadIdx.x == 0) {
 		p_pen = sum/p_ntot;
+	}
 }
 __global__ void p_rdev_get_radius_krnl(struct mod_t *dmod) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
 		p_volume = dmod->shape.volume;
+//		printf("dmod->shape.volume=%3.6g\n", dmod->shape.volume);
 		p_r_eff = pow( 3*p_volume/(4*PIE), 1.0/3.0);
+//		printf("p_r_eff=%3.9g\n", p_r_eff);
 	}
 }
 __global__ void p_rdev_vertex_krnl(struct mod_t *dmod, double *varr) {
@@ -848,9 +852,12 @@ __global__ void p_comdev_krnl(struct mod_t *dmod) {
 	/* Single-threaded kernel */
 	int k;
 	if (threadIdx.x == 0) {
-		for (k=0; k<=2; k++)
+		for (k=0; k<=2; k++){
 			p_pen += dmod->shape.com[k]*dmod->shape.com[k];
+//			printf("dmod->shape.com[%i]=%3.6g\n", k, dmod->shape.com[k]);
+		}
 		p_pen /= (p_r_eff*p_r_eff);
+	//	printf("p_pen in comdev=%3.7g\n",p_pen);
 	}
 }
 __global__ void p_inertiadev_krnl(struct mod_t *dmod) {
@@ -868,6 +875,7 @@ __global__ void p_inertiadev_krnl(struct mod_t *dmod) {
 			}
 		}
 		p_pen = 1 - adotb/sqrt(a*b);
+	//	printf("p_pen in inertia_dev=%3.9g\n", p_pen);
 	}
 }
 __global__ void p_inertiadev_uni_krnl(struct mod_t *dmod) {
@@ -1108,6 +1116,7 @@ __global__ void p_impulse_krnl(struct mod_t *dmod) {
 __global__ void p_final_krnl(struct par_t *dpar, int i, char name[80]) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
+//		printf("p_pen at penalty #%i is %3.6g\n", i, p_pen);
 		if (dpar->pen.weight[i] >= 0.0)
 			dpar->pen.base[i] = p_pen;
 		else
@@ -1696,6 +1705,7 @@ __host__ double penalties_gpu(struct par_t *dpar, struct mod_t *dmod,
 		checkErrorAfterKernelLaunch("p_impulse_krnl (penalties_cuda)");
 		gpuErrchk(cudaMemcpyFromSymbol(&sum, p_sum, sizeof(double),
 				0, cudaMemcpyDeviceToHost));
+//		printf("Sum at penalty #%i: %3.6g\n", i, sum);
 	}
 	cudaFree(a);
 	cudaFree(b);
@@ -1703,6 +1713,7 @@ __host__ double penalties_gpu(struct par_t *dpar, struct mod_t *dmod,
 	cudaFree(av2);
 	cudaFree(varr);
 	free(absum);
+//	printf("penalties return: %3.6g\n", sum);
 	return sum;
 }
 

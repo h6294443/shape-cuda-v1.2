@@ -825,6 +825,7 @@ void compute_moments( struct mod_t *mod)
 				}
 			}
 		}
+
 		for (j=0; j<=2; j++)
 			mod->shape.comp[c].com[j] /= mod->shape.comp[c].volume;
 

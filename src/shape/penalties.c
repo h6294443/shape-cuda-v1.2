@@ -857,10 +857,15 @@ double penalties( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 
         volume = mod->shape.volume;
         r_eff = pow( 3*volume/(4*PIE), 1.0/3.0);
+//        printf("CPU volume in penalties = %3.6g\n", volume);
+//        printf("r_eff in penalties = %3.6g\n", r_eff);
+
 
         /*  Compute the squared magnitude of the model's COM displacement  */
-        for (k=0; k<=2; k++)
+        for (k=0; k<=2; k++) {
           pen += mod->shape.com[k]*mod->shape.com[k];
+          printf("mod->shape.com[%i]=%3.6g\n", k, mod->shape.com[k]);
+        }
 
         pen /= (r_eff*r_eff);
 

@@ -119,12 +119,21 @@ __global__ void deviceReduceWarpAtomicKernel(float *in, float* out, int N) {
   if (threadIdx.x & (warpSize - 1) == 0)
     atomicAdd(out, sum);
 }
-__global__ void device_reduce_block_atomic_kernel_f(float *in, float* out, int N) {
+__global__ void device_reduce_block_atomic_kernel32(float *in, float* out, int N) {
   float sum=float(0.0);
   for(int i=blockIdx.x*blockDim.x+threadIdx.x;i<N;i+=blockDim.x*gridDim.x) {
     sum+=in[i];
   }
   sum=blockReduceSum(sum);
+  if(threadIdx.x==0)
+    atomicAdd(out,sum);
+}
+__global__ void device_reduce_block_atomic_kernel64(double *in, double* out, int N) {
+  double sum=double(0.0);
+  for(int i=blockIdx.x*blockDim.x+threadIdx.x;i<N;i+=blockDim.x*gridDim.x) {
+    sum+=in[i];
+  }
+  sum=blockReduceSumD(sum);
   if(threadIdx.x==0)
     atomicAdd(out,sum);
 }
@@ -1028,14 +1037,21 @@ __global__ void set_single_double_array(double *d_idata, double *a, int size) {
 		d_idata[i] = a[i];
 	}
 }
-__global__ void set_idata_modarea_krnl(struct mod_t *dmod, float *d_idata,
+__global__ void set_idata_modarea_krnl32(struct mod_t *dmod, float *d_idata,
 		int c, int size) {
 	/* MULTI-threaded kernel */
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i < size)
 		d_idata[i] = dmod->shape.comp[c].real.f[i].area;
 }
-__global__ void set_dv_dcom_di_krnl(float *d_odata_dv, float *d_odata_dcom0,
+__global__ void set_idata_modarea_krnl64(struct mod_t *dmod, double *d_idata,
+		int c, int size) {
+	/* MULTI-threaded kernel */
+	int i = blockIdx.x * blockDim.x + threadIdx.x;
+	if (i < size)
+		d_idata[i] = dmod->shape.comp[c].real.f[i].area;
+}
+__global__ void set_dv_dcom_di_krnl32(float *d_odata_dv, float *d_odata_dcom0,
 		float *d_odata_dcom1, float *d_odata_dcom2, float *d_odata_dI00,
 		float *d_odata_dI01, float *d_odata_dI02, float *d_odata_dI10,
 		float *d_odata_dI11, float *d_odata_dI12, float *d_odata_dI20,
@@ -1043,10 +1059,41 @@ __global__ void set_dv_dcom_di_krnl(float *d_odata_dv, float *d_odata_dcom0,
 	/* Single threaded kernel to update the model with volume, COM, and inertia */
 	/* Note that this kernel ignores multi-threaded models for now */
 	if (threadIdx.x == 0) {
+//		printf("dbg: d_odata_dv[0]=volume=%3.6g\n", d_odata_dv[0]);
 		dmod->shape.comp[c].volume = dmod->shape.volume = d_odata_dv[0];
 		dmod->shape.comp[c].com[0] = dmod->shape.com[0] = d_odata_dcom0[0];
 		dmod->shape.comp[c].com[1] = dmod->shape.com[1] = d_odata_dcom1[0];
 		dmod->shape.comp[c].com[2] = dmod->shape.com[2] = d_odata_dcom2[0];
+//		printf("dbg: d_odata_dcom0[0]=%3.6g\n", d_odata_dcom0[0]);
+//		printf("dbg: d_odata_dcom1[0]=%3.6g\n", d_odata_dcom1[0]);
+//		printf("dbg: d_odata_dcom2[0]=%3.6g\n", d_odata_dcom2[0]);
+		dmod->shape.comp[c].inertia[0][0] = dmod->shape.inertia[0][0] = d_odata_dI00[0];
+		dmod->shape.comp[c].inertia[0][1] = dmod->shape.inertia[0][1] = d_odata_dI01[0];
+		dmod->shape.comp[c].inertia[0][2] = dmod->shape.inertia[0][2] = d_odata_dI02[0];
+		dmod->shape.comp[c].inertia[1][0] = dmod->shape.inertia[1][0] = d_odata_dI10[0];
+		dmod->shape.comp[c].inertia[1][1] = dmod->shape.inertia[1][1] = d_odata_dI11[0];
+		dmod->shape.comp[c].inertia[1][2] = dmod->shape.inertia[1][2] = d_odata_dI12[0];
+		dmod->shape.comp[c].inertia[2][0] = dmod->shape.inertia[2][0] = d_odata_dI20[0];
+		dmod->shape.comp[c].inertia[2][1] = dmod->shape.inertia[2][1] = d_odata_dI21[0];
+		dmod->shape.comp[c].inertia[2][2] = dmod->shape.inertia[2][2] = d_odata_dI22[0];
+	}
+}
+__global__ void set_dv_dcom_di_krnl64(double *d_odata_dv, double *d_odata_dcom0,
+		double *d_odata_dcom1, double *d_odata_dcom2, double *d_odata_dI00,
+		double *d_odata_dI01, double *d_odata_dI02, double *d_odata_dI10,
+		double *d_odata_dI11, double *d_odata_dI12, double *d_odata_dI20,
+		double *d_odata_dI21, double *d_odata_dI22, struct mod_t *dmod, int c) {
+	/* Single threaded kernel to update the model with volume, COM, and inertia */
+	/* Note that this kernel ignores multi-threaded models for now */
+	if (threadIdx.x == 0) {
+//		printf("dbg: d_odata_dv[0]=volume=%3.6g\n", d_odata_dv[0]);
+		dmod->shape.comp[c].volume = dmod->shape.volume = d_odata_dv[0];
+		dmod->shape.comp[c].com[0] = dmod->shape.com[0] = d_odata_dcom0[0];
+		dmod->shape.comp[c].com[1] = dmod->shape.com[1] = d_odata_dcom1[0];
+		dmod->shape.comp[c].com[2] = dmod->shape.com[2] = d_odata_dcom2[0];
+//		printf("dbg: d_odata_dcom0[0]=%3.6g\n", d_odata_dcom0[0]);
+//				printf("dbg: d_odata_dcom1[0]=%3.6g\n", d_odata_dcom1[0]);
+//				printf("dbg: d_odata_dcom2[0]=%3.6g\n", d_odata_dcom2[0]);
 		dmod->shape.comp[c].inertia[0][0] = dmod->shape.inertia[0][0] = d_odata_dI00[0];
 		dmod->shape.comp[c].inertia[0][1] = dmod->shape.inertia[0][1] = d_odata_dI01[0];
 		dmod->shape.comp[c].inertia[0][2] = dmod->shape.inertia[0][2] = d_odata_dI02[0];
@@ -1948,10 +1995,11 @@ __host__ float compute_doppler_xsec(struct dat_t *ddat, int ndop,
 	return xsec;
 }
 
-__host__ float compute_model_area(struct mod_t *dmod, int c, int size) {
-	/* Function calculates a delay-Doppler frame's radar cross section with
-	 * Nvidia's reduction sample code (simplified and adapted for use with
-	 * shape).  The function returns the cross section as a float 	 */
+__host__ float compute_model_area32(struct mod_t *dmod, int c, int size) {
+	/* Function calculates the model's surface area with Nvidia's reduction
+	 * sample code (simplified and adapted for use with shape).  The function
+	 * returns the cross section as a float. There is another similar function
+	 * which returns a double 	 */
 	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
 	int maxBlocks = 2048;		// max # of blocks per grid
 	int numBlocks = 0;			// initialize numBlocks
@@ -1979,12 +2027,12 @@ __host__ float compute_model_area(struct mod_t *dmod, int c, int size) {
 	h_data = (float *) malloc(numBlocks*sizeof(float));
 
 	/* Load the d_idata array */
-	set_idata_modarea_krnl<<<BLK,THD>>>(dmod, d_idata, c, size);
-	checkErrorAfterKernelLaunch("set_idata_modarea_krnl in compute_doppler_xsec");
+	set_idata_modarea_krnl32<<<BLK,THD>>>(dmod, d_idata, c, size);
+	checkErrorAfterKernelLaunch("set_idata_modarea_krnl32");
 
 	/* Call reduction and copy back to host */
-	device_reduce_block_atomic_kernel_f<<< dimGrid, dimBlock>>>(d_idata, d_odata, size);
-	checkErrorAfterKernelLaunch("device_reduce_block_atomic_kernel (compute_model_area)");
+	device_reduce_block_atomic_kernel32<<< dimGrid, dimBlock>>>(d_idata, d_odata, size);
+	checkErrorAfterKernelLaunch("device_reduce_block_atomic_kernel32");
 	gpuErrchk(cudaMemcpy(h_data, d_odata, sizeof(float)*numBlocks, cudaMemcpyDeviceToHost));
 
 	area = h_data[0];
@@ -1994,7 +2042,54 @@ __host__ float compute_model_area(struct mod_t *dmod, int c, int size) {
 	return area;
 }
 
-__host__ void dvdI_reduce_streams(struct mod_t *dmod, float *dv, float *dcom0,
+__host__ float compute_model_area64(struct mod_t *dmod, int c, int size) {
+	/* Function calculates the model's surface area with Nvidia's reduction
+	 * sample code (simplified and adapted for use with shape).  The function
+	 * returns the cross section as a double. There is another similar function
+	 * which returns a float 	 */
+	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
+	int maxBlocks = 2048;		// max # of blocks per grid
+	int numBlocks = 0;			// initialize numBlocks
+	int numThreads = 0;			// initialize numThreads
+	double area = 0.0;			// radar cross section; return value
+	double *d_odata, *d_idata, *h_data;
+
+	float2 xblock_ythread;		// used for return value of getNumBlocksAndThreads
+
+	dim3 BLK,THD;
+	THD.x = maxThreadsPerBlock; // Thread block dimensions
+	BLK.x = floor((THD.x - 1 + size)/THD.x);
+
+	/* Find number of blocks & threads needed for reduction call */
+	xblock_ythread = getNumBlocksAndThreads(size, maxBlocks, maxThreads);
+	numBlocks = xblock_ythread.x;
+	numThreads = xblock_ythread.y;
+	dim3 dimBlock(numThreads, 1, 1);
+	dim3 dimGrid(numBlocks, 1, 1);
+
+	/* Allocate memory for d_idata and d_odata */
+	gpuErrchk(cudaMalloc((void**)&d_idata, sizeof(double) * size));
+	gpuErrchk(cudaMalloc((void**)&d_odata,  sizeof(double)* numBlocks));
+	gpuErrchk(cudaMemset(d_odata, 0, sizeof(double)*numBlocks));
+	h_data = (double *) malloc(numBlocks*sizeof(double));
+
+	/* Load the d_idata array */
+	set_idata_modarea_krnl64<<<BLK,THD>>>(dmod, d_idata, c, size);
+	checkErrorAfterKernelLaunch("set_idata_modarea_krnl64");
+
+	/* Call reduction and copy back to host */
+	device_reduce_block_atomic_kernel64<<< dimGrid, dimBlock>>>(d_idata, d_odata, size);
+	checkErrorAfterKernelLaunch("device_reduce_block_atomic_kernel64");
+	gpuErrchk(cudaMemcpy(h_data, d_odata, sizeof(double)*numBlocks, cudaMemcpyDeviceToHost));
+
+	area = h_data[0];
+	cudaFree(d_odata);
+	cudaFree(d_idata);
+	free(h_data);
+	return area;
+}
+
+__host__ void dvdI_reduce_streams32(struct mod_t *dmod, float *dv, float *dcom0,
 		float *dcom1, float *dcom2, float *dI00, float *dI01, float *dI02,
 		float *dI10, float *dI11, float *dI12, float *dI20, float *dI21,
 		float *dI22, int size, int c, cudaStream_t *dv_streams)
@@ -2034,35 +2129,142 @@ __host__ void dvdI_reduce_streams(struct mod_t *dmod, float *dv, float *dcom0,
 	gpuErrchk(cudaMalloc((void**)&d_odata_dI22,  arrsz));
 
 	gpuErrchk(cudaMemsetAsync(d_odata_dv, 0, arrsz, dv_streams[0]));
-	device_reduce_block_atomic_kernel_f<<< dimGrid, dimBlock, 0, dv_streams[0] >>>(dv, d_odata_dv, size);
+	device_reduce_block_atomic_kernel32<<< dimGrid, dimBlock, 0, dv_streams[0] >>>(dv, d_odata_dv, size);
+
 	gpuErrchk(cudaMemsetAsync(d_odata_dcom0, 0, arrsz, dv_streams[1]));
-	device_reduce_block_atomic_kernel_f<<< dimGrid, dimBlock, 0, dv_streams[1] >>>(dcom0, d_odata_dcom0, size);
-	gpuErrchk(cudaMemsetAsync(d_odata_dcom1, 0, arrsz, dv_streams[0]));
-	device_reduce_block_atomic_kernel_f<<< dimGrid, dimBlock, 0, dv_streams[2] >>>(dcom1, d_odata_dcom1, size);
-	gpuErrchk(cudaMemsetAsync(d_odata_dcom2, 0, arrsz, dv_streams[0]));
-	device_reduce_block_atomic_kernel_f<<< dimGrid, dimBlock, 0, dv_streams[3] >>>(dcom2, d_odata_dcom2, size);
-	gpuErrchk(cudaMemsetAsync(d_odata_dI00, 0, arrsz, dv_streams[0]));
-	device_reduce_block_atomic_kernel_f<<< dimGrid, dimBlock, 0, dv_streams[4] >>>(dI00, d_odata_dI00, size);
-	gpuErrchk(cudaMemsetAsync(d_odata_dI01, 0, arrsz, dv_streams[0]));
-	device_reduce_block_atomic_kernel_f<<< dimGrid, dimBlock, 0, dv_streams[5] >>>(dI01, d_odata_dI01, size);
-	gpuErrchk(cudaMemsetAsync(d_odata_dI02, 0, arrsz, dv_streams[0]));
-	device_reduce_block_atomic_kernel_f<<< dimGrid, dimBlock, 0, dv_streams[6] >>>(dI02, d_odata_dI02, size);
-	gpuErrchk(cudaMemsetAsync(d_odata_dI10, 0, arrsz, dv_streams[0]));
-	device_reduce_block_atomic_kernel_f<<< dimGrid, dimBlock, 0, dv_streams[7] >>>(dI10, d_odata_dI10, size);
-	gpuErrchk(cudaMemsetAsync(d_odata_dI11, 0, arrsz, dv_streams[0]));
-	device_reduce_block_atomic_kernel_f<<< dimGrid, dimBlock, 0, dv_streams[8] >>>(dI11, d_odata_dI11, size);
-	gpuErrchk(cudaMemsetAsync(d_odata_dI12, 0, arrsz, dv_streams[0]));
-	device_reduce_block_atomic_kernel_f<<< dimGrid, dimBlock, 0, dv_streams[9] >>>(dI12, d_odata_dI12, size);
-	gpuErrchk(cudaMemsetAsync(d_odata_dI20, 0, arrsz, dv_streams[0]));
-	device_reduce_block_atomic_kernel_f<<< dimGrid, dimBlock, 0, dv_streams[10] >>>(dI20, d_odata_dI20, size);
-	gpuErrchk(cudaMemsetAsync(d_odata_dI21, 0, arrsz, dv_streams[0]));
-	device_reduce_block_atomic_kernel_f<<< dimGrid, dimBlock, 0, dv_streams[11] >>>(dI21, d_odata_dI21, size);
-	gpuErrchk(cudaMemsetAsync(d_odata_dI22, 0, arrsz, dv_streams[0]));
-	device_reduce_block_atomic_kernel_f<<< dimGrid, dimBlock, 0, dv_streams[12] >>>(dI22, d_odata_dI22, size);
+	device_reduce_block_atomic_kernel32<<< dimGrid, dimBlock, 0, dv_streams[1] >>>(dcom0, d_odata_dcom0, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dcom1, 0, arrsz, dv_streams[2]));
+	device_reduce_block_atomic_kernel32<<< dimGrid, dimBlock, 0, dv_streams[2] >>>(dcom1, d_odata_dcom1, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dcom2, 0, arrsz, dv_streams[3]));
+	device_reduce_block_atomic_kernel32<<< dimGrid, dimBlock, 0, dv_streams[3] >>>(dcom2, d_odata_dcom2, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI00, 0, arrsz, dv_streams[4]));
+	device_reduce_block_atomic_kernel32<<< dimGrid, dimBlock, 0, dv_streams[4] >>>(dI00, d_odata_dI00, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI01, 0, arrsz, dv_streams[5]));
+	device_reduce_block_atomic_kernel32<<< dimGrid, dimBlock, 0, dv_streams[5] >>>(dI01, d_odata_dI01, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI02, 0, arrsz, dv_streams[6]));
+	device_reduce_block_atomic_kernel32<<< dimGrid, dimBlock, 0, dv_streams[6] >>>(dI02, d_odata_dI02, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI10, 0, arrsz, dv_streams[7]));
+	device_reduce_block_atomic_kernel32<<< dimGrid, dimBlock, 0, dv_streams[7] >>>(dI10, d_odata_dI10, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI11, 0, arrsz, dv_streams[8]));
+	device_reduce_block_atomic_kernel32<<< dimGrid, dimBlock, 0, dv_streams[8] >>>(dI11, d_odata_dI11, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI12, 0, arrsz, dv_streams[9]));
+	device_reduce_block_atomic_kernel32<<< dimGrid, dimBlock, 0, dv_streams[9] >>>(dI12, d_odata_dI12, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI20, 0, arrsz, dv_streams[10]));
+	device_reduce_block_atomic_kernel32<<< dimGrid, dimBlock, 0, dv_streams[10] >>>(dI20, d_odata_dI20, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI21, 0, arrsz, dv_streams[11]));
+	device_reduce_block_atomic_kernel32<<< dimGrid, dimBlock, 0, dv_streams[11] >>>(dI21, d_odata_dI21, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI22, 0, arrsz, dv_streams[12]));
+	device_reduce_block_atomic_kernel32<<< dimGrid, dimBlock, 0, dv_streams[12] >>>(dI22, d_odata_dI22, size);
+
 	checkErrorAfterKernelLaunch("device_reduce_block_atomic_kernel");
 
 	/* Copy and assign */
-	set_dv_dcom_di_krnl<<<1,1>>>(d_odata_dv, d_odata_dcom0, d_odata_dcom1,
+	set_dv_dcom_di_krnl32<<<1,1>>>(d_odata_dv, d_odata_dcom0, d_odata_dcom1,
+			d_odata_dcom2, d_odata_dI00, d_odata_dI01, d_odata_dI02, d_odata_dI10,
+			d_odata_dI11, d_odata_dI12, d_odata_dI20, d_odata_dI21, d_odata_dI22,
+			dmod, c);
+
+	/* Free up the temporary arrays */
+	cudaFree(d_odata_dv);
+	cudaFree(d_odata_dcom0);	cudaFree(d_odata_dcom1);	cudaFree(d_odata_dcom2);
+	cudaFree(d_odata_dI00);		cudaFree(d_odata_dI01);		cudaFree(d_odata_dI02);
+	cudaFree(d_odata_dI10);		cudaFree(d_odata_dI11);		cudaFree(d_odata_dI12);
+	cudaFree(d_odata_dI20);		cudaFree(d_odata_dI21);		cudaFree(d_odata_dI22);
+
+}
+
+__host__ void dvdI_reduce_streams64(struct mod_t *dmod, double *dv, double *dcom0,
+		double *dcom1, double *dcom2, double *dI00, double *dI01, double *dI02,
+		double *dI10, double *dI11, double *dI12, double *dI20, double *dI21,
+		double *dI22, int size, int c, cudaStream_t *dv_streams)
+{
+	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
+	int maxBlocks = 2048;		// max # of blocks per grid
+	int numBlocks = 0;			// initialize numBlocks
+	int numThreads = 0;			// initialize numThreads
+	float2 xblock_ythread;		// used for return value of getNumBlocksAndThreads
+	/* Device output arrays */
+	double *d_odata_dcom0, *d_odata_dcom1, *d_odata_dcom2, *d_odata_dI00,
+	*d_odata_dI01, *d_odata_dI02, *d_odata_dI10, *d_odata_dI11,
+	*d_odata_dI12, *d_odata_dI20, *d_odata_dI21, *d_odata_dI22,
+	*d_odata_dv;
+
+	/* Find number of blocks & threads needed for reduction call */
+	xblock_ythread = getNumBlocksAndThreads(size, maxBlocks, maxThreads);
+	numBlocks = xblock_ythread.x;
+	numThreads = xblock_ythread.y;
+	dim3 dimBlock(numThreads, 1, 1);
+	dim3 dimGrid(numBlocks, 1, 1);
+	size_t arrsz = sizeof(double)*numBlocks;
+	//cudaSetDevice(GPU0);
+	/* Allocate memory for the device output arrays for first reduction */
+	gpuErrchk(cudaMalloc((void**)&d_odata_dv,    arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata_dcom0, arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata_dcom1, arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata_dcom2, arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata_dI00,	 arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata_dI01,  arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata_dI02,  arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata_dI10,  arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata_dI11,  arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata_dI12,  arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata_dI20,  arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata_dI21,  arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata_dI22,  arrsz));
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dv, 0, arrsz, dv_streams[0]));
+	device_reduce_block_atomic_kernel64<<< dimGrid, dimBlock, 0, dv_streams[0] >>>(dv, d_odata_dv, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dcom0, 0, arrsz, dv_streams[1]));
+	device_reduce_block_atomic_kernel64<<< dimGrid, dimBlock, 0, dv_streams[1] >>>(dcom0, d_odata_dcom0, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dcom1, 0, arrsz, dv_streams[2]));
+	device_reduce_block_atomic_kernel64<<< dimGrid, dimBlock, 0, dv_streams[2] >>>(dcom1, d_odata_dcom1, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dcom2, 0, arrsz, dv_streams[3]));
+	device_reduce_block_atomic_kernel64<<< dimGrid, dimBlock, 0, dv_streams[3] >>>(dcom2, d_odata_dcom2, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI00, 0, arrsz, dv_streams[4]));
+	device_reduce_block_atomic_kernel64<<< dimGrid, dimBlock, 0, dv_streams[4] >>>(dI00, d_odata_dI00, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI01, 0, arrsz, dv_streams[5]));
+	device_reduce_block_atomic_kernel64<<< dimGrid, dimBlock, 0, dv_streams[5] >>>(dI01, d_odata_dI01, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI02, 0, arrsz, dv_streams[6]));
+	device_reduce_block_atomic_kernel64<<< dimGrid, dimBlock, 0, dv_streams[6] >>>(dI02, d_odata_dI02, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI10, 0, arrsz, dv_streams[7]));
+	device_reduce_block_atomic_kernel64<<< dimGrid, dimBlock, 0, dv_streams[7] >>>(dI10, d_odata_dI10, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI11, 0, arrsz, dv_streams[8]));
+	device_reduce_block_atomic_kernel64<<< dimGrid, dimBlock, 0, dv_streams[8] >>>(dI11, d_odata_dI11, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI12, 0, arrsz, dv_streams[9]));
+	device_reduce_block_atomic_kernel64<<< dimGrid, dimBlock, 0, dv_streams[9] >>>(dI12, d_odata_dI12, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI20, 0, arrsz, dv_streams[10]));
+	device_reduce_block_atomic_kernel64<<< dimGrid, dimBlock, 0, dv_streams[10] >>>(dI20, d_odata_dI20, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI21, 0, arrsz, dv_streams[11]));
+	device_reduce_block_atomic_kernel64<<< dimGrid, dimBlock, 0, dv_streams[11] >>>(dI21, d_odata_dI21, size);
+
+	gpuErrchk(cudaMemsetAsync(d_odata_dI22, 0, arrsz, dv_streams[12]));
+	device_reduce_block_atomic_kernel64<<< dimGrid, dimBlock, 0, dv_streams[12] >>>(dI22, d_odata_dI22, size);
+	checkErrorAfterKernelLaunch("device_reduce_block_atomic_kernel64");
+
+	/* Copy and assign */
+	set_dv_dcom_di_krnl64<<<1,1>>>(d_odata_dv, d_odata_dcom0, d_odata_dcom1,
 			d_odata_dcom2, d_odata_dI00, d_odata_dI01, d_odata_dI02, d_odata_dI10,
 			d_odata_dI11, d_odata_dI12, d_odata_dI20, d_odata_dI21, d_odata_dI22,
 			dmod, c);

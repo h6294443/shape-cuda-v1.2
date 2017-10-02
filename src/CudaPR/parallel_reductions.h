@@ -30,15 +30,22 @@ __host__ float compute_deldop_xsec_gpu(struct dat_t *ddat, int nframes,
 __host__ float compute_doppler_xsec(struct dat_t *ddat, int ndop,
 		int set, int frm);
 
-__host__ float compute_model_area(struct mod_t *dmod, int c, int size);
+__host__ float compute_model_area32(struct mod_t *dmod, int c, int size);
+
+__host__ float compute_model_area64(struct mod_t *dmod, int c, int size);
 
 __host__ float compute_zmax_gpu(struct dat_t *ddat, struct pos_t **pos,
 		int nframes, int size, int set, cudaStream_t *sb_stream);
 
-__host__ void dvdI_reduce_streams(struct mod_t *dmod, float *dv, float *dcom0,
+__host__ void dvdI_reduce_streams32(struct mod_t *dmod, float *dv, float *dcom0,
 		float *dcom1, float *dcom2, float *dI00, float *dI01, float *dI02,
 		float *dI10, float *dI11, float *dI12, float *dI20, float *dI21,
 		float *dI22, int size, int c, cudaStream_t *dv_streams);
+
+__host__ void dvdI_reduce_streams64(struct mod_t *dmod, double *dv, double *dcom0,
+		double *dcom1, double *dcom2, double *dI00, double *dI01, double *dI02,
+		double *dI10, double *dI11, double *dI12, double *dI20, double *dI21,
+		double *dI22, int size, int c, cudaStream_t *dv_streams);
 
 __host__ double find_max_in_double_array(double *in, int size);
 

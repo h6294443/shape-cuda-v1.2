@@ -70,7 +70,7 @@ __global__ void dbg_copy_lghtcrv_pos_arrays_full_krnl(struct pos_t **pos, int f,
 }
 
 __host__ void dbg_print_lghtcrv_arrays(struct dat_t *ddat, int set, int n,
-		char *filename) {
+		const char *filename) {
 	/* Debug function that will print lghtcrv->fit, lghtcrv->obs, and
 	 * lghtcrv->oneovervar for any given lightcurve in a specified dataset and
 	 * frame	 */
@@ -130,7 +130,7 @@ __host__ void dbg_print_lghtcrv_arrays_host(struct lghtcrv_t *lghtcrv, int set, 
 	fclose(fp);
 }
 __host__ void dbg_print_lghtcrv_xyy2(struct dat_t *ddat, int set, int ncalc,
-		char *filename) {
+		const char *filename) {
 	/* This debug function prints to a csv file 'filename' these arrays:
 	 * lghtcrv->x[lghtcrv->ncalc]
 	 * lghtcrv->y[lghtcrv->ncalc]
@@ -165,7 +165,7 @@ __host__ void dbg_print_lghtcrv_xyy2(struct dat_t *ddat, int set, int ncalc,
 
 	fclose(fp);
 }
-__host__ void dbg_print_lghtcrv_xyy2_host(struct lghtcrv_t *lghtcrv, int set, int ncalc, char *filename) {
+__host__ void dbg_print_lghtcrv_xyy2_host(struct lghtcrv_t *lghtcrv, int set, int ncalc, const char *filename) {
 	/* This debug function prints to a csv file 'filename' these arrays:
 		 * lghtcrv->x[lghtcrv->ncalc]
 		 * lghtcrv->y[lghtcrv->ncalc]

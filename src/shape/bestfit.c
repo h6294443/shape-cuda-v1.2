@@ -780,6 +780,7 @@ double objective( double x)
 	/* Compute penalties and add to reduced chi-square. Individual penalty values
 	 * will be displayed if we set spar->showstate = 1 a few lines back.        */
 	pens = penalties( spar, smod, sdat);
+//	printf("pens: %3.9g\n", pens);
 	err += pens;
 
 	/* Double the objective function if there's an ellipsoid component with tiny

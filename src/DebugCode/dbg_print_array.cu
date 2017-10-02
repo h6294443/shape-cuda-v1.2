@@ -76,7 +76,7 @@ __host__ void dbg_print_array1D(float *data, int size) {
 	free(host);
 }
 __host__ void dbg_print_array1D_dbl(double *data, int size, int offset,
-		char *filename) {
+		const char *filename) {
 	/* Debug function that prints all elements in data to a csv */
 
 	int i;

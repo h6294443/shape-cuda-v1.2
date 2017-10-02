@@ -1111,7 +1111,7 @@ __host__ void calc_deldop_gpu(struct par_t *dpar, struct mod_t *dmod,
 	 * portion extends beyond POS frame limits.
 	 * NOTE: Limited to single component for now */
 	for (v2=v0_index+1; v2<=v0_index+nviews; v2++)
-		posvis_gpu(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
+		posvis_gpu32(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
 				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream);
 
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
@@ -1158,7 +1158,7 @@ __host__ void calc_deldop_gpu(struct par_t *dpar, struct mod_t *dmod,
 	}
 
 	for (v2=v0_index+1; v2<=v0_index+nviews; v2++)
-		pos2deldop_gpu(dpar, dmod, ddat, pos, frame, xylim, ndel, ndop,
+		pos2deldop_gpu32(dpar, dmod, ddat, pos, frame, xylim, ndel, ndop,
 				0.0,0.0,0.0,0, s, nframes, v[v2], outbndarr, cf_stream);
 
 	/* Copy the badradar flag returns for all frames to a host copy */
@@ -1197,12 +1197,14 @@ __host__ void calc_deldop_gpu(struct par_t *dpar, struct mod_t *dmod,
 					ddat, fit_store, s, f, nThreadsdd[f], type);
 
 			cf_finish_fit_krnl2<<<1,1,0,cf_stream[f]>>>(ddat, overflow, s, f, type);
-
-			cf_gamma_trans_krnl<<<BLKdd[f],THD,0,cf_stream[f]>>>(dpar, ddat, s, f, nThreadsdd[f], type);
-		} checkErrorAfterKernelLaunch("cf_finish_fit_store_streams kernels and "
-				"cf_gamma_trans_krnl");
+		} checkErrorAfterKernelLaunch("cf_finish_fit_store_streams kernels");
 		cudaFree(fit_store);
 	}
+
+	for (f=0; f<nframes; f++) {
+		cf_gamma_trans_krnl<<<BLKdd[f],THD,0,cf_stream[f]>>>(dpar, ddat, s, f, nThreadsdd[f], type);
+	} checkErrorAfterKernelLaunch("cf_gamma_trans_krnl");
+
 
 }
 
@@ -1267,7 +1269,7 @@ __host__ void calc_doppler_gpu(struct par_t *dpar, struct mod_t *dmod,
 	 * portion extends beyond POS frame limits.*/
 	/* NOTE: Limited to single component for now */
 	for (v2=v0_index+1; v2<=v0_index+nviews; v2++)
-		posvis_gpu(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
+		posvis_gpu32(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
 				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream);
 
 	/* Copy the posbnd flag returns for all frames to a host copy */
@@ -1319,7 +1321,7 @@ __host__ void calc_doppler_gpu(struct par_t *dpar, struct mod_t *dmod,
 
 	/* Call pos2deldop to calculate the Doppler radar fit image */
 	for (v2=v0_index+1; v2<=v0_index+nviews; v2++) {
-		pos2doppler_gpu(dpar, dmod, ddat, pos, frame, xylim,0.0,0.0,0.0, ndop,
+		pos2doppler_gpu32(dpar, dmod, ddat, pos, frame, xylim,0.0,0.0,0.0, ndop,
 				0, s, nframes, v[v2], outbndarr, cf_stream);
 	}
 	/* Copy the badradar flag returns for all frames to a host copy */
@@ -1619,7 +1621,7 @@ __host__ void calc_lghtcrv_gpu(
 	/* Call routine posvis to get  facet number, scattering & incidence
 	 * angle, distance toward Earth at center of each POS pixel; set posbnd
 	 * parameter = 1 if any model portion extends beyond POS frame limits*/
-	posvis_gpu(dpar, dmod, ddat, pos, verts, orbit_off3, hposn, outbndarr,
+	posvis_gpu32(dpar, dmod, ddat, pos, verts, orbit_off3, hposn, outbndarr,
 			s, (nframes+1), 0, nf, 0, c, type, cf_stream);
 
 	/* Copy the posbnd flag returns for all frames to a host copy */
@@ -1646,7 +1648,7 @@ __host__ void calc_lghtcrv_gpu(
 //			bistatic_all = 1;
 
 //	if (bistatic_all) {
-	posvis_gpu(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
+	posvis_gpu32(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
 			outbndarr, s, (nframes+1), 1, nf, 0, c, type, cf_stream);
 
 	/* Copy the posbnd flag returns for all frames to a host copy */

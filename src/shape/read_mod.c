@@ -2148,7 +2148,6 @@ int read_spin( FILE *fp, struct mod_t *mod)
 	return nfpar;
 }
 
-
 void setupreal( struct mod_t *mod)
 {
 	int c, nt, **iv, *np;
@@ -2176,7 +2175,6 @@ void setupreal( struct mod_t *mod)
 		}
 	}
 }
-
 
 void setuprealver( struct mod_t *mod, int c, int **iv, int nt, int *np)
 {
@@ -2291,7 +2289,6 @@ void setuprealver( struct mod_t *mod, int c, int **iv, int nt, int *np)
 	}
 }
 
-
 void setuprealfac( struct mod_t *mod, int c, int **iv, int nt, int *np)
 {
 	int t, done, vs[3], p0, p1, p0t, p1t, nf=0, f=0, k, off1, off0;
@@ -2385,7 +2382,6 @@ void setuprealfac( struct mod_t *mod, int c, int **iv, int nt, int *np)
 			c,mod->shape.comp[c].real.nf);
 	fflush(stdout);
 }
-
 
 void setupsides( struct vertices_t *vt)
 {
@@ -2504,7 +2500,6 @@ void setupsides( struct vertices_t *vt)
 	}
 }
 
-
 void setupvertices( struct vertices_t *vt)
 {
 	int f, s, v, *nas, *naf;
@@ -2593,6 +2588,8 @@ void setupvertices( struct vertices_t *vt)
 		maxnaf = MAX(maxnaf, vt->v[v].naf);
 	}
 
+//	printf("maxnas=%i\n", maxnas);
+//	printf("maxnaf=%i\n", maxnaf);
 	free_ivector( nas, 0, vt->nv);
 	free_ivector( naf, 0, vt->nv);
 }

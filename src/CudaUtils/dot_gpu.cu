@@ -11,3 +11,9 @@ __device__ float dev_dot_f3(float3 x, float3 y)
 	/* This version just uses two float3's and returns a float */
 	return x.x*y.x + x.y*y.y + x.z*y.z;
 }
+
+__device__ float dev_dot_d3(double3 x, double3 y)
+{
+	/* This version just uses two float3's and returns a float */
+	return x.x*y.x + x.y*y.y + x.z*y.z;
+}

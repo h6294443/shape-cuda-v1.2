@@ -173,6 +173,8 @@ void realize_spin( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
             for (j=0; j<=2; j++)
               (*deldop).frame[f].view[k].spin[j] = (*deldop).frame[f].view[k].orbspin[j] +
                                                    (*deldop).frame[f].view[k].intspin[j];
+
+//            printf("TEST");
           }
         break;
 

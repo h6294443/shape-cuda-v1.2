@@ -300,9 +300,6 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
    *  is the "orbit" action (for which this routine is called twice, once for each of the two
    *  orbiting bodies). */
 
-//  dbg_print_pos_z_host(pos, "CPU_host_z.csv");
-
-//  dbg_print_pos_arrays2_host(pos);
   for (x=pos->xlim[0]; x<=pos->xlim[1]; x++)
     for (y=pos->ylim[0]; y<=pos->ylim[1]; y++) {
       if (pos->cose[x][y] > 0.0 && pos->body[x][y] == body && pos->z[x][y]!= -1e20) {
@@ -588,7 +585,7 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
    *
    *  Also compute the summed cross section and the mean delay and Doppler
    *  bins for the overflow region, for use with the "delcorinit" action    */
-//int dbgf3=0;
+
   frame->overflow_o2 = 0.0;
   frame->overflow_m2 = 0.0;
   frame->overflow_xsec = 0.0;
@@ -605,7 +602,6 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
     for (i=i1; i<=i2; i++)
       for (j=j1; j<=j2; j++) {
         if (fit_overflow[i][j] != 0.0) {
-//        	if (frm==3) dbgf3++;
           if (par->speckle)
             variance = sdev_sq + lookfact*fit_overflow[i][j]*fit_overflow[i][j];
           frame->overflow_o2 += 1.0;
@@ -619,7 +615,6 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
       frame->overflow_delmean /= frame->overflow_xsec;
       frame->overflow_dopmean /= frame->overflow_xsec;
     }
-//    printf("occurences in frame 3: %i\n", dbgf3);
     /*  Print a warning if the model extends even beyond the overflow image  */
 
     if ( ((frame->idellim[0] + idel0) < 0)            ||
@@ -645,7 +640,6 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
       }
     }
   }
-//  if (badradar==1)
-//	  printf("badradar in set %i frame %i is......%i\n", set, frm, badradar);
+
   return badradar;
 }

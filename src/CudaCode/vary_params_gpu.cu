@@ -613,7 +613,7 @@ __host__ void vary_params_gpu(
 
 			/* Determine which POS pixels cover the target, and get distance
 			 * toward Earth of each POS pixel. Pass the frame streams, too. */
-			posvis_gpu(dpar, dmod, ddat, pos, verts, orbit_offset,
+			posvis_gpu32(dpar, dmod, ddat, pos, verts, orbit_offset,
 					hposn, outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s],
 					vp_stream);
 
@@ -628,7 +628,7 @@ __host__ void vary_params_gpu(
 			} checkErrorAfterKernelLaunch("clrvect_streams_krnl");
 
 			/* Call the CUDA pos2deldop function */
-			pos2deldop_gpu(dpar, dmod, ddat, pos, ddframe, xylim, ndel, ndop,
+			pos2deldop_gpu32(dpar, dmod, ddat, pos, ddframe, xylim, ndel, ndop,
 					0.0, 0.0, 0.0, 0, s, nfrm_alloc, 0, outbndarr, vp_stream);
 
 			/* Calculate zmax for all frames (assumption: all pos in this set
@@ -702,7 +702,7 @@ __host__ void vary_params_gpu(
 
 			/* Determine which POS pixels cover the target, and get distance
 			 * toward Earth of each POS pixel. Pass the frame streams, too. */
-			posvis_gpu(dpar, dmod, ddat, pos, verts, orbit_offset,
+			posvis_gpu32(dpar, dmod, ddat, pos, verts, orbit_offset,
 					hposn, outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s],
 					vp_stream);
 
@@ -717,7 +717,7 @@ __host__ void vary_params_gpu(
 				}
 			} checkErrorAfterKernelLaunch("clrvect_streams_krnl");
 
-			pos2doppler_gpu(dpar, dmod, ddat, pos, dframe, xylim, 0.0,
+			pos2doppler_gpu32(dpar, dmod, ddat, pos, dframe, xylim, 0.0,
 					0.0, 0.0, ndop, 0, s, hnframes[s], 0, outbndarr, vp_stream);
 
 			/* Calculate the Doppler cross-section if applicable */
@@ -774,7 +774,7 @@ __host__ void vary_params_gpu(
 				} checkErrorAfterKernelLaunch("posclr_krnl (Doppler in vary_params_gpu2)");
 
 				/* Determine which POS pixels cover the target */
-				posvis_gpu(dpar, dmod, ddat, pos, verts, orbit_offset,
+				posvis_gpu32(dpar, dmod, ddat, pos, verts, orbit_offset,
 						hposn, outbndarr, s, hnframes[s], 0, nf, 0, c, htype[s],
 						vp_stream);
 
@@ -786,7 +786,7 @@ __host__ void vary_params_gpu(
 					if (hbistatic[f])	bistatic_all = 1;
 
 				if (bistatic_all)
-					posvis_gpu(dpar, dmod, ddat, pos, verts,
+					posvis_gpu32(dpar, dmod, ddat, pos, verts,
 							orbit_offset, hposn, outbndarr, s, hnframes[s], 1,
 							nf, 0, c, htype[s],	vp_stream);
 
@@ -1149,7 +1149,7 @@ void *vary_params_pthread_sub(void *ptr) {
 
 				/* Determine which POS pixels cover the target, and get distance
 				 * toward Earth of each POS pixel. Pass the frame streams, too. */
-				posvis_gpu(data->parameter, data->model, data->data, pos,
+				posvis_gpu32(data->parameter, data->model, data->data, pos,
 						data->verts, orbit_offset, hposn, outbndarr, s, nfrm_alloc,
 						0, data->nf, 0, c, data->host_type[s], data->gpu_stream);
 
@@ -1164,7 +1164,7 @@ void *vary_params_pthread_sub(void *ptr) {
 				} checkErrorAfterKernelLaunch("clrvect_krnl");
 
 				/* Call the CUDA pos2deldop function */
-				pos2deldop_gpu(data->parameter, data->model, data->data, pos,
+				pos2deldop_gpu32(data->parameter, data->model, data->data, pos,
 						ddframe, xylim, ndel, ndop, 0.0, 0.0, 0.0, 0, s, nfrm_alloc,
 						0, outbndarr, data->gpu_stream);
 
@@ -1224,7 +1224,7 @@ void *vary_params_pthread_sub(void *ptr) {
 
 			/* Determine which POS pixels cover the target, and get distance
 			 * toward Earth of each POS pixel. Pass the frame streams, too. */
-			posvis_gpu(data->parameter, data->model, data->data, pos,
+			posvis_gpu32(data->parameter, data->model, data->data, pos,
 					data->verts, orbit_offset, hposn, outbndarr, s, nfrm_alloc,
 					0, data->nf, 0, c, data->host_type[s], data->gpu_stream);
 
@@ -1239,7 +1239,7 @@ void *vary_params_pthread_sub(void *ptr) {
 				}
 			} checkErrorAfterKernelLaunch("clrvect_krnl");
 
-			pos2doppler_gpu(data->parameter, data->model, data->data, pos,
+			pos2doppler_gpu32(data->parameter, data->model, data->data, pos,
 					dframe, xylim, 0.0,	0.0, 0.0, ndop, 0, s, data->nframes[s],
 					0, outbndarr, data->gpu_stream);
 
@@ -1307,7 +1307,7 @@ void *vary_params_pthread_sub(void *ptr) {
 				} checkErrorAfterKernelLaunch("posclr_krnl");
 
 				/* Determine which POS pixels cover the target */
-				posvis_gpu(data->parameter, data->model, data->data, pos,
+				posvis_gpu32(data->parameter, data->model, data->data, pos,
 						data->verts, orbit_offset, hposn, outbndarr, s,
 						data->nframes[s], 0, data->nf, 0, c, data->host_type[s],
 						data->gpu_stream);
@@ -1320,7 +1320,7 @@ void *vary_params_pthread_sub(void *ptr) {
 					if (hbistatic[f])	bistatic_all = 1;
 
 				if (bistatic_all)
-					posvis_gpu(data->parameter, data->model, data->data, pos,
+					posvis_gpu32(data->parameter, data->model, data->data, pos,
 							data->verts, orbit_offset, hposn, outbndarr, s,
 							data->nframes[s], 1, data->nf, 0, c,
 							data->host_type[s],	data->gpu_stream);

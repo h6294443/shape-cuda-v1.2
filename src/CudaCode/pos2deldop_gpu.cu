@@ -176,10 +176,7 @@ __device__ int /*p2ds_any_overflow, */p2ds_codemethod, p2ds_spb,
 p2ds_stride, p2ds_spb_sq, p2ds_dopfftlen, p2ds_spb_over_stride, p2ds_nsinc2_sq;
 __device__ double p2ds_const1, p2ds_const2, p2ds_one_over_spb, p2ds_delfact,
 p2ds_dopfact;
-__device__ float p2ds_const1f, p2ds_const2f, p2ds_one_over_spbf, p2ds_delfactf, p2ds_dopfactf;
-
-//__device__ int dbgf0=0, dbgf1=0, dbgf2=0, dbgf3=0;
-
+//__device__ float p2ds_const1f, p2ds_const2f, p2ds_one_over_spbf, p2ds_delfactf, p2ds_dopfactf;
 
 __device__ static float atomicMinf(float* address, float val)
 {
@@ -192,6 +189,17 @@ __device__ static float atomicMinf(float* address, float val)
 	} while (assumed != old);
 	return __int_as_float(old);
 }
+__device__ static float atomicMin64(double* address, double val)
+{
+	unsigned long long* address_as_i = (unsigned long long*) address;
+	unsigned long long old = *address_as_i, assumed;
+	do {
+		assumed = old;
+		old = ::atomicCAS(address_as_i, assumed,
+				__double_as_longlong(::fminf(val, __longlong_as_double(assumed))));
+	} while (assumed != old);
+	return __longlong_as_double(old);
+}
 __device__ static float atomicMaxf(float* address, float val)
 {
 	int* address_as_i = (int*) address;
@@ -202,6 +210,17 @@ __device__ static float atomicMaxf(float* address, float val)
 				__float_as_int(::fmaxf(val, __int_as_float(assumed))));
 	} while (assumed != old);
 	return __int_as_float(old);
+}
+__device__ static float atomicMax64(double* address, double val)
+{
+	unsigned long long* address_as_i = (unsigned long long*) address;
+	unsigned long long old = *address_as_i, assumed;
+	do {
+		assumed = old;
+		old = ::atomicCAS(address_as_i, assumed,
+				__double_as_longlong(::fmaxf(val, __longlong_as_double(assumed))));
+	} while (assumed != old);
+	return __longlong_as_double(old);
 }
 
 __global__ void pos2deldop_init_krnl(
@@ -237,7 +256,7 @@ __global__ void pos2deldop_init_krnl(
 	}
 }
 
-__global__ void pos2deldop_data_sampling_krnl(
+__global__ void pos2deldop_data_sampling_krnl32(
 		struct par_t *dpar,
 		struct dat_t *ddat,
 		struct deldopfrm_t **frame,
@@ -363,7 +382,133 @@ __global__ void pos2deldop_data_sampling_krnl(
 	}
 }
 
-__global__ void pos2deldop_pixel_krnl(
+__global__ void pos2deldop_data_sampling_krnl64(
+		struct par_t *dpar,
+		struct dat_t *ddat,
+		struct deldopfrm_t **frame,
+		struct pos_t **pos,
+		double2 *axay,
+		double2 *xyincr,
+		double2 *deldopshift,
+		double3 *w,
+		double4 *dop,
+		double4 *deldoplim,
+		int4 *xylim,
+		int set,
+		int size,
+		int v,
+		double orbit_dopoff,
+		int *badradararr) {
+	/* nfrm_alloc-threaded kernel */
+
+	/* Get parameters related to data sampling and data reduction; then
+	 * compute two more (both in units of delay bins = image rows):
+	 *  	const1: half of the base width of the delay response function
+	 *  	const2: half the delay difference between the first and last
+	 * 				image rows within each baud  */
+	int f = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (f == 0) {
+		p2ds_codemethod = ddat->set[set].desc.deldop.codemethod;
+		p2ds_spb = ddat->set[set].desc.deldop.spb;
+		p2ds_stride = ddat->set[set].desc.deldop.stride;
+		p2ds_dopfftlen = ddat->set[set].desc.deldop.dopfftlen;
+		p2ds_spb_over_stride = p2ds_spb/p2ds_stride;
+		p2ds_one_over_spb = 1.0/p2ds_spb;
+		p2ds_spb_sq = p2ds_spb*p2ds_spb;
+		if (p2ds_codemethod != LONG_ORIG) {
+			p2ds_const1 = (3*p2ds_spb - 1)/(2.0*p2ds_stride);
+			p2ds_const2 = (p2ds_spb - 1)/(2.0*p2ds_stride);
+		} else {
+			p2ds_const1 = (double) p2ds_spb_over_stride;
+			p2ds_const2 = 0.0;  /* not used with this code + reduction method */
+		}
+		/*  Converts from km towards radar to delay bins  */
+		p2ds_delfact = -KM2US/ddat->set[set].desc.deldop.del_per_pixel;
+
+		p2ds_dopfact = ddat->set[set].desc.deldop.dopscale.val * KM2HZFACT * pos[0]->km_per_pixel
+				* ddat->set[set].desc.deldop.Ftx / ddat->set[set].desc.deldop.dop_per_pixel;
+		p2ds_nsinc2_sq = dpar->nsinc2 * dpar->nsinc2;
+	}
+	__syncthreads();
+
+	if (f < size) {
+
+		dop[f].y = frame[f]->dopDC_vig;
+		/*  Get w, the apparent spin vector in observer coordinates  */
+		dev_cotrans5(w, frame[f]->view[v].oe, frame[f]->view[v].spin, 1, f);
+
+		/* Compute the Doppler bin increment per plane-of-sky pixel westward
+		 * (ax) and northward (ay); these values are scaled by the "dopscale"
+		 * parameter for this dataset. Then compute km2Hz, the Doppler
+		 * increment (Hz) per km perpendicular to the projected spin axis in
+		 * the plane of the sky.     */
+		axay[f].x = -w[f].y * p2ds_dopfact;
+		axay[f].y =  w[f].x * p2ds_dopfact;
+		frame[f]->view[v].km2Hz = sqrt(axay[f].x*axay[f].x+axay[f].y*axay[f].y) *
+				ddat->set[set].desc.deldop.dop_per_pixel / pos[f]->km_per_pixel;
+
+		/* Compute the absolute value of the difference between the maximum (or minimum)
+		 * Doppler on any given POS pixel's edge and the Doppler at its center             */
+		if (w[f].x != 0.0 || w[f].y != 0.0)
+			dop[f].z = frame[f]->view[v].km2Hz * 0.5 * pos[f]->km_per_pixel
+			* sqrt(w[f].x * w[f].x + w[f].y * w[f].y) /	MAX( fabs(w[f].x),
+					fabs(w[f].y));
+		else
+			dop[f].z = 0.0;
+
+		/* We may be evaluating the sinc^2 Doppler response function at more than one point
+		 * per POS pixel.  xincr and yincr are the Doppler bin increments between adjacent
+		 * evaluation points in the x and y directions.  dopdiff_bl is the Doppler bin difference
+		 * between the bottom-leftmost (southeasternmost) evaluation point and the pixel center.
+		 * dopdiff_max is the maximum positive Doppler bin difference between any evaluation point
+		 * and the pixel center.
+		 * 	dop.w - dopdiff_bl
+		 * 	dop.x - dopdiff_max
+		 *	dop.y - dopDC_vig
+		 * 	dop.z - dop_extra		 */
+		xyincr[f].x = axay[f].x / dpar->nsinc2;
+		xyincr[f].y = axay[f].y / dpar->nsinc2;
+		dop[f].w = -(dpar->nsinc2 - 1) * (xyincr[f].x + xyincr[f].y) / 2;
+		dop[f].x = (dpar->nsinc2 - 1) * (fabs(xyincr[f].x) + fabs(xyincr[f].y)) / 2;
+
+		if (2 * dop[f].x + dpar->sinc2width + 1 > MAXBINS) {
+			badradararr[f] = 1;
+			frame[f]->badradar_logfactor += log(
+					(2 * dop[f].x + dpar->sinc2width + 1) / MAXBINS);
+			if (dpar->warn_badradar) {
+				printf(
+						"\nWARNING in pos2deldop_cuda_af.c for set %2d frame %2d:\n",
+						set, f);
+				printf(
+						"        sinc^2 function evaluated at %d Doppler bins, must be <= %d\n",
+						(int) ceil(2 * dop[f].x + dpar->sinc2width + 1),
+						MAXBINS);
+			}
+		}
+		/* Get the COM delay and Doppler bins, corrected for ephemeris drift and adjusted for
+		 * orbital motion; the delay adjustment for orbital motion is done implicitly (the
+		 * posvis routine has already adjusted the "z" values for all POS pixels), whereas the
+		 * Doppler adjustment for orbital motion must be done here explicitly.                  */
+		deldopshift[f].x = frame[f]->delcom_vig + frame[f]->view[v].deloff;
+		deldopshift[f].y = frame[f]->dopcom_vig + frame[f]->view[v].dopoff
+				+ orbit_dopoff;
+
+		/* Now get pos->xlim[0], pos->xlim[1], pos->ylim[0], pos->ylim[1] */
+		xylim[f].w = pos[f]->xlim[0];
+		xylim[f].x = pos[f]->xlim[1];
+		xylim[f].y = pos[f]->ylim[0];
+		xylim[f].z = pos[f]->ylim[1];
+
+		/* Copy frame[frm]->dellim[2] and frame[frm]->doplim[2] to the device variables */
+		deldoplim[f].w = frame[f]->dellim[0];
+		deldoplim[f].x = frame[f]->dellim[1];
+		deldoplim[f].y = frame[f]->doplim[0];
+		deldoplim[f].z = frame[f]->doplim[1];
+	}
+}
+
+__global__ void pos2deldop_pixel_krnl32(
 		struct par_t *dpar,
 		struct mod_t *dmod,
 		struct dat_t *ddat,
@@ -600,46 +745,10 @@ __global__ void pos2deldop_pixel_krnl(
 
 						atomicAdd(&frame[f]->fit_s[(idop-1)*ndel[f]+(idel-1)],
 								(float)fit_contribution);
-						if (dpar->action == MAP) {
-							if (dpar->map_mode == MAPMODE_DELDOP) {
-								if (frame[f]->map_fit[idel][idop] > 0.0) {
-									frame[f]->map_pos[x][y] += fit_contribution;
-									c = pos[f]->comp[x][y];
-									fac = pos[f]->f[x][y];
-									frame[f]->map_facet_power[c][fac] += fit_contribution;
-									if (dpar->map_verbose)
-										printf("# POS (%3d, %3d) comp %d facet %4d contributes %e to d-D (%3d, %3d)\n",
-												x+pos[f]->n, y+pos[f]->n, c, fac, fit_contribution, idel-1, idop-1);
-								}
-							} else if (dpar->map_mode == MAPMODE_POS) {
-								if (frame[f]->map_pos[x][y] > 0.0) {
-									frame[f]->map_fit[idel][idop] += fit_contribution;
-									c = pos[f]->comp[x][y];
-									fac = pos[f]->f[x][y];
-									frame[f]->map_facet_power[c][fac] += fit_contribution;
-									if (dpar->map_verbose)
-										printf("# POS (%3d, %3d) comp %d facet %4d contributes %e to d-D (%3d, %3d)\n",
-												x+pos[f]->n, y+pos[f]->n, c, fac, fit_contribution, idel-1, idop-1);
-								}
-							} else {
-								if (frame[f]->map_pos[x][y] > 0.0) {
-									frame[f]->map_fit[idel][idop] += fit_contribution;
-									if (dpar->map_verbose) {
-										c = pos[f]->comp[x][y];
-										fac = pos[f]->f[x][y];
-										printf("# POS (%3d, %3d) comp %d facet %4d contributes %e to d-D (%3d, %3d)\n",
-												x+pos[f]->n, y+pos[f]->n, c, fac, fit_contribution, idel-1, idop-1);
-									}
-								}
-							}
-						}
 					}
 			} else {
 
 				/* Add the cross-section contributions to the "overflow" image */
-				if (dpar->action == MAP && dpar->map_mode != MAPMODE_DELDOP)
-					if (frame[f]->map_pos[x][y] > 0.0)
-						dpar->map_overflow = 1;
 				idel1 = MAX( idel_min, -idel0[f]);
 				idel2 = MIN( idel_max, -idel0[f] + MAXOVERFLOW - 1);
 				idop1 = MAX( idop_min, -idop0[f]);
@@ -650,24 +759,267 @@ __global__ void pos2deldop_pixel_krnl(
 						fit_contribution = amp * del_contribution[idel-idel_min]
 						                                          * dop_contribution[k];
 						frame[f]->fit_overflow[idel+idel0[f]][idop+idop0[f]] += fit_contribution;
-						if (dpar->action == MAP && dpar->map_mode == MAPMODE_DELDOP)
-							if (idel >= dpar->map_dellim[0] && idel <= dpar->map_dellim[1] &&
-									idop >= dpar->map_doplim[0] && idop <= dpar->map_doplim[1]    ) {
-								frame[f]->map_pos[x][y] += fit_contribution;
-								c = pos[f]->comp[x][y];
-								fac = pos[f]->f[x][y];
-								frame[f]->map_facet_power[c][fac] += fit_contribution;
-								if (dpar->map_verbose)
-									printf("# POS (%3d, %3d) comp %d facet %4d contributes %e to d-D (%3d, %3d)\n",
-											x+pos[f]->n, y+pos[f]->n, c, fac, fit_contribution, idel-1, idop-1);
-							}
 					}
 			}
 		}
 	}
 }
 
-__global__ void pos2deldop_deldoplim_krnl(
+__global__ void pos2deldop_pixel_krnl64(
+		struct par_t *dpar,
+		struct mod_t *dmod,
+		struct dat_t *ddat,
+		struct pos_t **pos,
+		struct deldopfrm_t **frame,
+		double4 *deldoplim,
+		double4 *dop,
+		double2 *deldopshift,
+		double2 *axay,
+		double2 *xyincr,
+		int *idel0,
+		int *idop0,
+		int *ndel,
+		int *ndop,
+		int xspan,
+		int nThreads,
+		int body,
+		double orbit_xoff,
+		double orbit_yoff,
+		int set,
+		int f,
+		int *any_overflow) {
+	/* nThreads-threaded kernel */
+
+	/*  Loop through all POS pixels within the rectangular plane-of-sky region spanned by the
+	 *  model; for each such pixel which isn't blank sky, compute the cross-section contributions
+	 *  to pixels in the model delay-Doppler frame. Note that functions posclr and posvis flag
+	 *  blank-sky pixels by assigning "cose" = cos(scattering angle) = 0.
+	 *  Only compute contributions from POS pixels that project onto the right body, in case this
+	 *  is the "orbit" action (for which this routine is called twice, once for each of the two
+	 *  orbiting bodies). */
+
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int x = offset % xspan + pos[f]->xlim[0];
+	int y = offset / xspan + pos[f]->ylim[0];
+	int n, fac, c, i, j, k, idel, idel_min, idel_max, idop_min, idop_max,
+	idop, m, m_min, m_max, idel1, idel2, idop1, idop2, zaddr, in_bounds;
+
+	double delPOS, dopPOS, codefactor, tmp, arg_sample, amp, arg_left,
+	sinc2arg, sinc2_mean, arg_bl, sumweights, fit_contribution;
+	double del_contribution[MAXBINS], dop_contribution[MAXBINS];
+	n = pos[f]->n;
+	if (offset < nThreads) {
+		/* zaddr is the unrolled 1D pos->z_s[] array address  */
+		zaddr = (y + n) * (2*n + 1) + (x + n);
+		if (pos[f]->cose[x][y] > 0.0 && pos[f]->body[x][y] == body) {
+
+			/* Get the (floating-point) delay and Doppler bin of the POS pixel
+			 * center: delPOS and dopPOS. Also get the minimum and maximum
+			 * (integer) delay and Doppler bins to which this pixel contributes
+			 * power: idel_min and idel_max, idop_min and idop_max. Each POS
+			 * pixel contributes power to *all* Doppler columns, but here we're
+			 * zeroing out the sinc^2 response function beyond the nearest
+			 * sinc2width columns. Actually, if nsinc2 > 1, we'll distribute
+			 * power to *at least* sinc2width Doppler bins: For pixels which
+			 * span multiple bins we'll err on the side of computing more
+			 * contributions rather          than fewer.       */
+
+			delPOS = pos[f]->z[x][y] * p2ds_delfact + deldopshift[f].x;
+			idel_min = (int) floor(delPOS - p2ds_const1) + 1;
+			idel_max = (int) ceil(delPOS + p2ds_const1) - 1;
+			dopPOS = axay[f].x*(x - orbit_xoff) + axay[f].y*
+					(y - orbit_yoff) + deldopshift[f].y;
+			idop_min = (int) floor(dopPOS - dop[f].x + 1 - dpar->sinc2width/2.0);
+			idop_max = (int) floor(dopPOS + dop[f].x + dpar->sinc2width/2.0);
+
+			/*  For the short code, sensitivity drops as we move away from DC. (This variation is slow,
+			 *  so we can just evaluate the response at the center of the POS pixel.)
+			 *  Note that the SINC2 macro multiplies its argument by pi.        */
+			codefactor = (p2ds_codemethod == SHORT) ? SINC2( (dopPOS-dop[f].y)/p2ds_dopfftlen ) : 1.0;
+
+			/*  Update rectangular delay-Doppler region (row/column numbers) with !0 power according to model  */
+			atomicMin(&frame[f]->idellim[0], idel_min);
+			atomicMax(&frame[f]->idellim[1], idel_max);
+			atomicMin(&frame[f]->idoplim[0], idop_min);
+			atomicMax(&frame[f]->idoplim[1], idop_max);
+
+			/*  Update the model's floating-point delay-Doppler limits, as determined prior to convolution
+			 *  with the delay and Doppler response functions. At this point in the code, dellim and doplim
+			 *  are pairs of floating-point row and column numbers which apply to POS pixel centers; when
+			 *  the loop over POS pixels is finished we will convert them to usec and Hz, and will widen
+			 *  the Doppler limits to account for nonzero POS pixel width.     */
+			atomicMin64(&deldoplim[f].w, delPOS);
+			atomicMax64(&deldoplim[f].x, delPOS);
+			atomicMin64(&deldoplim[f].y, dopPOS);
+			atomicMax64(&deldoplim[f].z, dopPOS);
+
+			/*  Check whether or not all delay-Doppler pixels which will receive power from this POS pixel
+			 *  fall within the data frame; if not, initialize the "overflow" image if necessary.         */
+			if ((idel_min>=1) && (idel_max<=ndel[f]) && (idop_min>=1) &&
+					(idop_max<=ndop[f]))
+				in_bounds = 1;
+			else {
+				in_bounds = 0;
+				if (!any_overflow[f]) {
+					atomicExch(&any_overflow[f], 1);
+
+					/* Center the COM in the overflow image:
+					 * pixel [idel][idop] in the fit frame corresponds to
+					 * pixel [idel+idel0][idop+idop0] in the fit_overflow frame*/
+					idel0[f] =MAXOVERFLOW/2-(int)floor(deldopshift[f].x+0.5);
+					idop0[f] =MAXOVERFLOW/2-(int)floor(deldopshift[f].y+0.5);
+				}
+			}
+
+			/* Loop thru all delay bins this POS pixel contributes power (cross
+			 * section), and compute delay response function for each bin       */
+			for (idel=idel_min; idel<=idel_max; idel++) {
+				if (p2ds_codemethod != LONG_ORIG) {
+					/* Get the delay response function for image row idel:
+					 * sum the triangle-function contributions from each
+					 * sample per baud, then divide the sum by spb and square.
+					 * The triangle function for sample m  (0 <= m <= spb-1)
+					 * has unit height and a half-width of spb/stride image
+					 * rows,and is centered [-const2 + m/stride] rows later
+					 * than the row center (idel).
+					 * In the code block below, the arguments to macros TRI
+					 * and TRI2 have been divided by half-width spb/stride,
+					 * since those two macros are defined to give nonzero
+					 * values for arguments between -1 and 1.  Each argument,
+					 * then, is just (delPOS - [triangle-function center]) /
+					 * half-width.
+					 * Do the two most common cases (spb = 1 or 2) without
+					 * loops in order to gain a bit of speed.  For the other
+					 * cases, set m_min and m_max so as not to waste time
+					 * computing contributions that are zero.             */
+
+					switch (p2ds_spb) {
+					case 1:
+						del_contribution[idel-idel_min] = TRI2( delPOS - idel );
+						break;
+					case 2:
+						arg_sample = (delPOS - (idel - p2ds_const2)) /
+						p2ds_spb_over_stride;
+						del_contribution[idel-idel_min] = TRI( arg_sample )
+					                      						+ TRI( arg_sample - 0.5 );
+						del_contribution[idel-idel_min] *= del_contribution[idel-idel_min]/4;
+						break;
+					default:
+						del_contribution[idel-idel_min] = 0.0;
+						m_min = MAX( (int) floor((delPOS - idel - p2ds_const2)
+								* p2ds_stride) , 0 );
+						m_max = MIN( (int) ceil((delPOS - idel + p2ds_const1)
+								* p2ds_stride) , p2ds_spb ) - 1;
+						arg_sample = (delPOS - (idel - p2ds_const2)) /
+								p2ds_spb_over_stride - m_min*p2ds_one_over_spb;
+						for (m=m_min; m<=m_max; m++) {
+							del_contribution[idel-idel_min] += TRI( arg_sample );
+							arg_sample -= p2ds_one_over_spb;
+						}
+						del_contribution[idel-idel_min] *=
+								del_contribution[idel-idel_min]/p2ds_spb_sq;
+						break;
+					}
+				} else {
+
+					/*  Long code with original (Harmon) reduction method: data for
+					 *  each sample per baud are reduced separately,as if datataking
+					 *  were just one sample per baud; then the image rows for spb/
+					 *  stride samples are interleaved.  */
+					del_contribution[idel-idel_min] = TRI2( (delPOS - idel) /
+							p2ds_spb_over_stride );
+				}
+			}
+
+			/*  Next include the sinc^2 factor for Doppler mismatching: Take the
+			 *  mean of nsinc2^2 points interior to the POS pixel. Do the two most
+			 *  common cases (nsinc2 = 1 or 2) without loops in order to gain a bit
+			 *  of speed. Note that the SINC2 macro multiplies its argument by pi*/
+
+			for (idop=idop_min; idop<=idop_max; idop++) {
+				switch (dpar->nsinc2) {
+				case 1:
+					sinc2_mean = SINC2( dopPOS - idop );
+					break;
+				case 2:
+					arg_bl = dopPOS + dop[f].w - idop;   /* bl = bottom left */
+					sinc2_mean = ( SINC2( arg_bl ) +
+							SINC2( arg_bl+xyincr[f].x ) +
+							SINC2( arg_bl+xyincr[f].y ) +
+							SINC2( arg_bl+xyincr[f].x+xyincr[f].y ) ) / 4;
+					break;
+				default:
+					arg_left = dopPOS + dop[f].w - idop;
+					sinc2_mean = 0.0;
+					for (i=0; i<dpar->nsinc2; i++) {
+						sinc2arg = arg_left;
+						for (j=0; j<dpar->nsinc2; j++) {
+							sinc2_mean += SINC2( sinc2arg );
+							sinc2arg += xyincr[f].x;
+						}
+						arg_left += xyincr[f].y;
+					}
+					sinc2_mean /= p2ds_nsinc2_sq;
+					break;
+				}
+				k = MIN( idop - idop_min, MAXBINS);
+				dop_contribution[k] = sinc2_mean;
+			}
+
+			/*  Compute the sum of delay-Doppler weighting factors  */
+			sumweights = 0.0;
+			for (idel=idel_min; idel<=idel_max; idel++)
+				for (idop=idop_min; idop<=idop_max; idop++) {
+					k = MIN( idop - idop_min, MAXBINS);
+					sumweights += del_contribution[idel-idel_min]*dop_contribution[k];
+				}
+
+			/* The radar cross section within this plane-of-sky pixel is
+			 * [differential radar scattering law]*[POS pixel area in km^2]
+			 * The differential radar scattering law (function radlaw
+			 * = d[cross section]/d[area] ) includes a sec(theta) factor to
+			 * account for the fact that the POS pixel area is projected area
+			 * rather than physical area on the target surface.      */
+			amp = dev_radlaw( &dmod->photo, ddat->set[set].desc.deldop.iradlaw,
+					pos[f]->cose[x][y], pos[f]->comp[x][y], pos[f]->f[x][y])
+			    		   * pos[f]->km_per_pixel * pos[f]->km_per_pixel
+			    		   * codefactor / sumweights;
+
+			/* Only add this POS pixel's power contributions to model delay-
+			 * Doppler frame if NONE of those contributions fall outside
+			 * the frame limits.                                   */
+
+			if (in_bounds) {
+
+				/*  Add the cross-section contributions to the model frame  */
+				for (idel=idel_min; idel<=idel_max; idel++)
+					for (idop=idop_min; idop<=idop_max; idop++) {
+						k = MIN( idop - idop_min, MAXBINS);
+						fit_contribution = amp * del_contribution[idel-idel_min]
+						                                          * dop_contribution[k];
+
+						atomicAdd(&frame[f]->fit[idel][idop], fit_contribution);
+					}
+			} else {
+
+				/* Add the cross-section contributions to the "overflow" image */
+				idel1 = MAX( idel_min, -idel0[f]);
+				idel2 = MIN( idel_max, -idel0[f] + MAXOVERFLOW - 1);
+				idop1 = MAX( idop_min, -idop0[f]);
+				idop2 = MIN( idop_max, -idop0[f] + MAXOVERFLOW - 1);
+				for (idel=idel1; idel<=idel2; idel++)
+					for (idop=idop1; idop<=idop2; idop++) {
+						k = MIN( idop - idop_min, MAXBINS);
+						fit_contribution = amp * del_contribution[idel-idel_min]
+						                                          * dop_contribution[k];
+						frame[f]->fit_overflow[idel+idel0[f]][idop+idop0[f]] += fit_contribution;\
+					}
+			}
+		}
+	}
+}
+
+__global__ void pos2deldop_deldoplim_krnl32(
 		struct dat_t *ddat,
 		struct deldopfrm_t **frame,
 		float4 *deldoplim,
@@ -681,6 +1033,40 @@ __global__ void pos2deldop_deldoplim_krnl(
 	float dlppxl, dpppxl;
 	dlppxl = __double2float_rn(ddat->set[set].desc.deldop.del_per_pixel);
 	dpppxl = __double2float_rn(ddat->set[set].desc.deldop.dop_per_pixel);
+
+	if (f<size) {
+		frame[f]->dellim[0] = deldoplim[f].w;
+		frame[f]->dellim[1] = deldoplim[f].x;
+		frame[f]->doplim[0] = deldoplim[f].y;
+		frame[f]->doplim[1] = deldoplim[f].z;
+
+		/*  Convert the model's floating-point delay-Doppler limits from floating-
+		 *  point row and column numbers to usec and Hz, and widen the Doppler limits
+		 *  to account for nonzero POS pixel width  */
+		frame[f]->dellim[0] = (frame[f]->dellim[0] - deldopshift[f].x)*dlppxl;
+		frame[f]->dellim[1] = (frame[f]->dellim[1] - deldopshift[f].x)*dlppxl;
+		frame[f]->doplim[0] = (frame[f]->doplim[0] - deldopshift[f].y)*dpppxl
+				- dop[f].z;
+		frame[f]->doplim[1] = (frame[f]->doplim[1] - deldopshift[f].y)*dpppxl
+				+ dop[f].z;
+
+	}
+}
+
+__global__ void pos2deldop_deldoplim_krnl64(
+		struct dat_t *ddat,
+		struct deldopfrm_t **frame,
+		double4 *deldoplim,
+		double4 *dop,
+		double2 *deldopshift,
+		int set,
+		int size) {
+
+	/* nfrm_malloc-threaded kernel */
+	int f = blockIdx.x * blockDim.x + threadIdx.x;
+	double dlppxl, dpppxl;
+	dlppxl = ddat->set[set].desc.deldop.del_per_pixel;
+	dpppxl = ddat->set[set].desc.deldop.dop_per_pixel;
 
 	if (f<size) {
 		frame[f]->dellim[0] = deldoplim[f].w;
@@ -809,26 +1195,7 @@ __global__ void pos2deldop_overflow_krnl(
 	}
 }
 
-__global__ void pos2deldop_finish_overflow_krnl(struct deldopfrm_t **frame,
-		float *overflow, int size) {
-
-	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	if (f < size) {
-		frame[f]->overflow_o2 = overflow[f];
-	}
-}
-
-//__global__ void dbg_pos2deldop_krnl() {
-//
-//	if (threadIdx.x == 0) {
-//		printf("frame 0 loops: %i\n", dbgf0);
-//		printf("frame 1 loops: %i\n", dbgf1);
-//		printf("frame 2 loops: %i\n", dbgf2);
-//		printf("frame 3 loops: %i\n", dbgf3);
-//	}
-//}
-
-__host__ void pos2deldop_gpu(
+__host__ void pos2deldop_gpu32(
 		struct par_t *dpar,
 		struct mod_t *dmod,
 		struct dat_t *ddat,
@@ -857,11 +1224,6 @@ __host__ void pos2deldop_gpu(
 	THD.x = maxThreadsPerBlock;	THD64.x = 64;
 	BLKfrm.x = floor((THD64.x - 1 + nfrm_alloc)/THD64.x);
 
-	cudaEvent_t start1, stop1;
-	float milliseconds;
-
-	//int hbadrad[nfrm_alloc];
-
 	gpuErrchk(cudaMalloc((void**)&idop0, sizeof(int)*nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&idel0, sizeof(int)*nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&any_overflow, sizeof(int)*nfrm_alloc));
@@ -877,7 +1239,7 @@ __host__ void pos2deldop_gpu(
 			ndop, set, nfrm_alloc, badradararr, any_overflow);
 	checkErrorAfterKernelLaunch("pos2deldop_init_krnl2");
 	/* Launch kernel to determine data sampling/radar parameters.  */
-	pos2deldop_data_sampling_krnl<<<BLKfrm,THD64>>>(dpar, ddat, frame, pos,
+	pos2deldop_data_sampling_krnl32<<<BLKfrm,THD64>>>(dpar, ddat, frame, pos,
 			axay, xyincr, deldopshift, w, dop, deldoplim, xylim, set,
 			nfrm_alloc, v, orbit_dopoff, badradararr);
 	checkErrorAfterKernelLaunch("pos2deldop_data_sampling_krnl");
@@ -891,10 +1253,9 @@ __host__ void pos2deldop_gpu(
 		BLK[f].x = floor((THD.x -1 + nThreads[f]) / THD.x);
 	}
 
-
 	/* Assign 1 stream to each frame's iteration each of the three kernels */
 	for (int f=0; f<nfrm_alloc; f++) {
-		pos2deldop_pixel_krnl<<<BLK[f],THD,0,p2d_stream[f]>>>(dpar, dmod, ddat, pos,
+		pos2deldop_pixel_krnl32<<<BLK[f],THD,0,p2d_stream[f]>>>(dpar, dmod, ddat, pos,
 				frame, deldoplim, dop, deldopshift, axay, xyincr, idel0, idop0,
 				ndel, ndop, xspan[f], nThreads[f], body, orbit_xoff, orbit_yoff,
 				set, f, any_overflow);
@@ -902,30 +1263,14 @@ __host__ void pos2deldop_gpu(
 
 	/* Launch kernel to copy the deldop limits back to original doubles in
 	 * the frame structures.	 */
-	pos2deldop_deldoplim_krnl<<<BLKfrm,THD64>>>(ddat, frame,
+	pos2deldop_deldoplim_krnl32<<<BLKfrm,THD64>>>(ddat, frame,
 			deldoplim, dop, deldopshift, set, nfrm_alloc);
 	checkErrorAfterKernelLaunch("pos2deldop_deldoplim_krnl");
 
-//	cudaEventCreate(&start1);
-//	cudaEventCreate(&stop1);
-//	cudaEventRecord(start1);
 	/* Launch kernel to take care of any bin overflow */
 	pos2deldop_overflow_krnl<<<BLKfrm,THD64>>>(dpar, frame, idel0, idop0, ndel,
 			ndop, set, nfrm_alloc, badradararr, any_overflow);
 	checkErrorAfterKernelLaunch("pos2deldop_overflow_krnl");
-
-//	cudaEventRecord(stop1);
-//	cudaEventSynchronize(stop1);
-//	milliseconds = 0;
-//	cudaEventElapsedTime(&milliseconds, start1, stop1);
-//	printf("pos2deldop_overflow_krnl in %3.3f ms.\n", milliseconds);
-
-	//gpuErrchk(cudaMemcpy(hbadrad, badradararr, nfrm_alloc*sizeof(int), cudaMemcpyDeviceToHost));
-	//	for (int f=0; f<nfrm_alloc; f++)
-	//		printf("set %i badradar[%i]=%i\n", set, f, hbadrad[f]);
-
-//	dbg_pos2deldop_krnl<<<1,1>>>();
-//	checkErrorAfterKernelLaunch("dbg_pos2deldop_krnl");
 
 	cudaFree(idop0);
 	cudaFree(idel0);
@@ -935,6 +1280,91 @@ __host__ void pos2deldop_gpu(
 	cudaFree(deldopshift);
 	cudaFree(deldoplim);
 	cudaFree(dop);
+}
 
-	//	cudaFree(any_overflow);
+__host__ void pos2deldop_gpu64(
+		struct par_t *dpar,
+		struct mod_t *dmod,
+		struct dat_t *ddat,
+		struct pos_t **pos,
+		struct deldopfrm_t **frame,
+		int4 *xylim,
+		int *ndel,
+		int *ndop,
+		double orbit_xoff,
+		double orbit_yoff,
+		double orbit_dopoff,
+		int body,
+		int set,
+		int nfrm_alloc,
+		int v,
+		int *badradararr,
+		cudaStream_t *p2d_stream)
+{
+	int xspan[nfrm_alloc], yspan, nThreads[nfrm_alloc], *idop0, *idel0,
+	*any_overflow;
+	double2 *axay, *xyincr, *deldopshift;
+	double3 *w;
+	double4 *dop, *deldoplim;
+	int4 host_xylim[nfrm_alloc];
+	dim3 BLK[nfrm_alloc], THD, BLKfrm, THD64;
+	THD.x = maxThreadsPerBlock;	THD64.x = 64;
+	BLKfrm.x = floor((THD64.x - 1 + nfrm_alloc)/THD64.x);
+
+	gpuErrchk(cudaMalloc((void**)&idop0, sizeof(int)*nfrm_alloc));
+	gpuErrchk(cudaMalloc((void**)&idel0, sizeof(int)*nfrm_alloc));
+	gpuErrchk(cudaMalloc((void**)&any_overflow, sizeof(int)*nfrm_alloc));
+	gpuErrchk(cudaMalloc((void**)&w, sizeof(double3)*nfrm_alloc));
+	gpuErrchk(cudaMalloc((void**)&axay, sizeof(double2)*nfrm_alloc));
+	gpuErrchk(cudaMalloc((void**)&xyincr, sizeof(double2)*nfrm_alloc));
+	gpuErrchk(cudaMalloc((void**)&deldopshift, sizeof(double2)*nfrm_alloc));
+	gpuErrchk(cudaMalloc((void**)&deldoplim, sizeof(double4)*nfrm_alloc));
+	gpuErrchk(cudaMalloc((void**)&dop, sizeof(double4)*nfrm_alloc));
+
+	/* Launch single-thread initialization kernel */
+	pos2deldop_init_krnl<<<BLKfrm,THD64>>>(ddat, frame, idel0, idop0, ndel,
+			ndop, set, nfrm_alloc, badradararr, any_overflow);
+	checkErrorAfterKernelLaunch("pos2deldop_init_krnl2");
+	/* Launch kernel to determine data sampling/radar parameters.  */
+	pos2deldop_data_sampling_krnl64<<<BLKfrm,THD64>>>(dpar, ddat, frame, pos,
+			axay, xyincr, deldopshift, w, dop, deldoplim, xylim, set,
+			nfrm_alloc, v, orbit_dopoff, badradararr);
+	checkErrorAfterKernelLaunch("pos2deldop_data_sampling_krnl64");
+	gpuErrchk(cudaMemcpy(host_xylim, xylim, nfrm_alloc*sizeof(int4), cudaMemcpyDeviceToHost));
+
+	/* Figure out the kernel launch parameters for every stream */
+	for (int f=0; f<nfrm_alloc; f++) {
+		xspan[f] = host_xylim[f].x - host_xylim[f].w + 1;
+		yspan = host_xylim[f].z - host_xylim[f].y + 1;
+		nThreads[f] = xspan[f]*yspan;
+		BLK[f].x = floor((THD.x -1 + nThreads[f]) / THD.x);
+	}
+
+	/* Assign 1 stream to each frame's iteration each of the three kernels */
+	for (int f=0; f<nfrm_alloc; f++) {
+		pos2deldop_pixel_krnl64<<<BLK[f],THD,0,p2d_stream[f]>>>(dpar, dmod, ddat, pos,
+				frame, deldoplim, dop, deldopshift, axay, xyincr, idel0, idop0,
+				ndel, ndop, xspan[f], nThreads[f], body, orbit_xoff, orbit_yoff,
+				set, f, any_overflow);
+	} checkErrorAfterKernelLaunch("pos2deldop_pixel_krnl64");
+
+	/* Launch kernel to copy the deldop limits back to original doubles in
+	 * the frame structures.	 */
+	pos2deldop_deldoplim_krnl64<<<BLKfrm,THD64>>>(ddat, frame,
+			deldoplim, dop, deldopshift, set, nfrm_alloc);
+	checkErrorAfterKernelLaunch("pos2deldop_deldoplim_krnl");
+
+	/* Launch kernel to take care of any bin overflow */
+	pos2deldop_overflow_krnl<<<BLKfrm,THD64>>>(dpar, frame, idel0, idop0, ndel,
+			ndop, set, nfrm_alloc, badradararr, any_overflow);
+	checkErrorAfterKernelLaunch("pos2deldop_overflow_krnl");
+
+	cudaFree(idop0);
+	cudaFree(idel0);
+	cudaFree(w);
+	cudaFree(axay);
+	cudaFree(xyincr);
+	cudaFree(deldopshift);
+	cudaFree(deldoplim);
+	cudaFree(dop);
 }

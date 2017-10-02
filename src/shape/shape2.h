@@ -746,9 +746,6 @@ struct facet_t {
   double phi;                   /* azimuth (radians) */
   double area;                  /* surface area */
   double x[3];                  /* mean coordinates of corner vertices */
-//  float dv;						/* CUDA use. Differential volume */
-//  float dcom[3];				/* CUDA use. Differential COM piece for each facet */
-//  float dI[3][3];				/* CUDA use. Differential inertia matrix for each facet */
 };
 
 /* Structure side_t defines a single facet side. */
@@ -829,7 +826,6 @@ struct shape_t {
   double com[3];                /* center of mass */
   double volume;
   double area;
-  float area_s;					/* Used for GPU mode exclusively */
 };
 
 /* Radar scattering law types. */

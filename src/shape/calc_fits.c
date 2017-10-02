@@ -508,12 +508,7 @@ void calc_deldop( struct par_t *par, struct mod_t *mod, struct deldop_t *deldop,
 						(int) par->pos_smooth, 0, 0, c) && v == deldop->v0) {
 					par->posbnd = 1;
 					par->posbnd_logfactor += frame->dof * pos->posbnd_logfactor;
-//					printf("(CPU MODE) frame %i is out of bounds\n", f);
-//					printf("(CPU MODE) frame->dof=%g and posbnd_logfactor=%g\n",
-//							frame->dof, pos->posbnd_logfactor);
 				}
-
-//			dbg_print_pos_arrays_full_host(pos);
 
 			/*  Go through all POS pixels which are visible with sufficiently low
           scattering angle, and mark the facets which project onto their
@@ -1884,16 +1879,6 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 		free_vector( rotphase_unwrapped, 1, ncalc);
 	}
 
-	/* Start debug */
-//	int debug = 0;
-//	if (debug)
-//		dbg_print_pos_arrays_full_host(&lghtcrv->rend[1].pos);
-	//
-//	int debug = 0;
-//	if (debug) {
-//		dbg_print_lc_fit_host(lghtcrv, "CPU_lghtcrv_fit.csv", n);
-//		dbg_print_lghtcrv_xyy2_host(lghtcrv, s, ncalc, "xyy2_arrays_CPU.csv");
-//	}
 }
 
 void write_pos_deldop( struct par_t *par, struct mod_t *mod,

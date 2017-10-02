@@ -1315,7 +1315,6 @@ __host__ double chi2_deldop_gpu(
 	/* Add all frames from device memory to host memory and destroy streams */
 	for (f=0; f<nframes; f++) {
 		chi2_set += h_chi2_deldop_frame[f];
-//		printf("Deldop frame %i chi2: %g\n", f, h_chi2_deldop_frame[f]);
 
 		if (list_breakdown)
 			*chi2_all_deldop += h_chi2_deldop_frame[f];

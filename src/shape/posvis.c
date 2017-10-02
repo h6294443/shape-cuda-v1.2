@@ -304,6 +304,7 @@ int posvis( struct vertices_t *verts, double orbit_offset[3], struct pos_t *pos,
             														  / (2*pos->n + 1);
 		pos->posbnd_logfactor = log(xfactor*yfactor);
 	}
+//	dbg_print_pos_arrays_full_host(pos);
 
 	return outbnd;
 }

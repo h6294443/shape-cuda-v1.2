@@ -13,7 +13,7 @@ void bsstep(
 		double *dydx, 	/* Input - derivatives of dependent variable vector */
 		double *xx, 	/*  */
 		double htry,	/* Input - step size to be attempted */
-        double eps, 	/* Input - desirec accuracy */
+        double eps, 	/* Input - desired accuracy */
         double *yscal, 	/* Input - error scaling vector */
         double *hdid, 	/* step size that was actually accomplished */
         double *hnext, 	/* Estimated next step size */

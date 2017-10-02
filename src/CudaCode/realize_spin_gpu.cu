@@ -117,32 +117,35 @@ __global__ void realize_spin_deldop_krnl(struct mod_t *dmod, struct dat_t *ddat,
 
 	if (f < size) {
 		for (k=0; k<nviews; k++) {
-		dev_realize_impulse(dmod->spin,
-				ddat->set[s].desc.deldop.frame[f].view[k].t,
-				ddat->set[s].desc.deldop.frame[f].t_integrate,
-				ddat->set[s].desc.deldop.frame[f].impulse,
-				&ddat->set[s].desc.deldop.frame[f].n_integrate,
-				s, f, k);
+			dev_realize_impulse(dmod->spin,
+					ddat->set[s].desc.deldop.frame[f].view[k].t,
+					ddat->set[s].desc.deldop.frame[f].t_integrate,
+					ddat->set[s].desc.deldop.frame[f].impulse,
+					&ddat->set[s].desc.deldop.frame[f].n_integrate,
+					s, f, k);
 
-		dev_inteuler(dmod->spin,
-				ddat->set[s].desc.deldop.frame[f].t_integrate,
-				ddat->set[s].desc.deldop.frame[f].impulse,
-				ddat->set[s].desc.deldop.frame[f].n_integrate,
-				ddat->set[s].desc.deldop.frame[f].view[k].intspin,
-				ddat->set[s].desc.deldop.frame[f].view[k].ae,
-				dmod->spin.pa, dpar->int_method, dpar->int_abstol);
+			dev_inteuler(dmod->spin,
+					ddat->set[s].desc.deldop.frame[f].t_integrate,
+					ddat->set[s].desc.deldop.frame[f].impulse,
+					ddat->set[s].desc.deldop.frame[f].n_integrate,
+					ddat->set[s].desc.deldop.frame[f].view[k].intspin,
+					ddat->set[s].desc.deldop.frame[f].view[k].ae,
+					dmod->spin.pa, dpar->int_method, dpar->int_abstol);
 
-		for (j=0; j<=2; j++)
-			ddat->set[s].desc.deldop.frame[f].view[k].intspin[j] += ddat->set[s].omegaoff[j].val;
+			for (j=0; j<=2; j++)
+				ddat->set[s].desc.deldop.frame[f].view[k].intspin[j] += ddat->set[s].omegaoff[j].val;
 
-		dev_cotrans2(ddat->set[s].desc.deldop.frame[f].view[k].intspin,
-				ddat->set[s].desc.deldop.frame[f].view[k].ae,
-				ddat->set[s].desc.deldop.frame[f].view[k].intspin, -1);
+			dev_cotrans2(ddat->set[s].desc.deldop.frame[f].view[k].intspin,
+					ddat->set[s].desc.deldop.frame[f].view[k].ae,
+					ddat->set[s].desc.deldop.frame[f].view[k].intspin, -1);
 
-		for (j=0; j<=2; j++)
-			ddat->set[s].desc.deldop.frame[f].view[k].spin[j] = ddat->set[s].desc.deldop.frame[f].view[k].orbspin[j] +
-			ddat->set[s].desc.deldop.frame[f].view[k].intspin[j];
-	}
+			for (j=0; j<=2; j++)
+				ddat->set[s].desc.deldop.frame[f].view[k].spin[j] = ddat->set[s].desc.deldop.frame[f].view[k].orbspin[j] +
+				ddat->set[s].desc.deldop.frame[f].view[k].intspin[j];
+
+//			printf("Test");
+
+		}
 	}
 }
 __global__ void realize_spin_poset_krnl(struct mod_t *dmod, struct dat_t *ddat,

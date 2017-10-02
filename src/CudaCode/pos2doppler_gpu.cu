@@ -169,6 +169,17 @@ __device__ static float atomicMaxf(float* address, float val)
 	} while (assumed != old);
 	return __int_as_float(old);
 }
+__device__ static float atomicMin64(double* address, double val)
+{
+	unsigned long long* address_as_i = (unsigned long long*) address;
+	unsigned long long old = *address_as_i, assumed;
+	do {
+		assumed = old;
+		old = ::atomicCAS(address_as_i, assumed,
+				__double_as_longlong(::fminf(val, __longlong_as_double(assumed))));
+	} while (assumed != old);
+	return __longlong_as_double(old);
+}
 __device__ static float atomicMinf(float* address, float val)
 {
 	int* address_as_i = (int*) address;
@@ -180,8 +191,19 @@ __device__ static float atomicMinf(float* address, float val)
 	} while (assumed != old);
 	return __int_as_float(old);
 }
+__device__ static float atomicMax64(double* address, double val)
+{
+	unsigned long long* address_as_i = (unsigned long long*) address;
+	unsigned long long old = *address_as_i, assumed;
+	do {
+		assumed = old;
+		old = ::atomicCAS(address_as_i, assumed,
+				__double_as_longlong(::fmaxf(val, __longlong_as_double(assumed))));
+	} while (assumed != old);
+	return __longlong_as_double(old);
+}
 
-__global__ void pos2doppler_init_krnl(
+__global__ void pos2doppler_init_krnl32(
 		struct dat_t *ddat,
 		struct dopfrm_t **frame,
 		struct pos_t **pos,
@@ -223,7 +245,49 @@ __global__ void pos2doppler_init_krnl(
 	}
 }
 
-__global__ void pos2doppler_radar_parameters_krnl(
+__global__ void pos2doppler_init_krnl64(
+		struct dat_t *ddat,
+		struct dopfrm_t **frame,
+		struct pos_t **pos,
+		int4 *xylim,
+		double3 *w,
+		double2 *doplim,
+		int *ndop,
+		int *idop0,
+		int set,
+		int v,
+		int size,
+		int *badradararr) {
+
+	/* nfrm_alloc-threaded kernel */
+	int f = blockIdx.x * blockDim.x + threadIdx.x;
+	if (f < size) {
+		/* Initialize variables  */
+		idop0[f] = 0;
+		if (f==0)	pds_any_overflow = 0;
+		frame[f]->idoplim[0] = ndop[f] + 999999;
+		frame[f]->idoplim[1] = -999999;
+		frame[f]->doplim[0] =  HUGENUMBER;
+		frame[f]->doplim[1] = -HUGENUMBER;
+		badradararr[f] = 0;
+		frame[f]->badradar_logfactor = 0.0;
+
+		/*  Get w, the apparent spin vector in observer coordinates  */
+		dev_cotrans5(w, frame[f]->view[v].oe, frame[f]->view[v].spin, 1, f);
+
+		/* Copy frame->doplim over to the float device variable */
+		doplim[f].x = frame[f]->doplim[0];
+		doplim[f].y = frame[f]->doplim[1];
+
+		xylim[f].w = pos[f]->xlim[0];
+		xylim[f].x = pos[f]->xlim[1];
+		xylim[f].y = pos[f]->ylim[0];
+		xylim[f].z = pos[f]->ylim[1];
+
+	}
+}
+
+__global__ void pos2doppler_radar_parameters_krnl32(
 		struct par_t *dpar,
 		struct dat_t *ddat,
 		struct dopfrm_t **frame,
@@ -307,7 +371,91 @@ __global__ void pos2doppler_radar_parameters_krnl(
 	}
 }
 
-__global__ void pos2doppler_pixel_krnl(
+__global__ void pos2doppler_radar_parameters_krnl64(
+		struct par_t *dpar,
+		struct dat_t *ddat,
+		struct dopfrm_t **frame,
+		struct pos_t **pos,
+		double4 *dop,
+		double3 *w,
+		double2 *axay,
+		double2 *xyincr,
+		double *dopshift,
+		double orbit_dopoff,
+		int set,
+		int v,
+		int size,
+		int *badradararr) {
+
+	/* nfrm_alloc-threaded kernel */
+	int f = blockIdx.x * blockDim.x + threadIdx.x;
+	double dopfact;
+	int dpb, nsinc2, sinc2width;
+	double kmppxl;
+
+	dpb = ddat->set[set].desc.doppler.dop_per_bin;
+	nsinc2 = dpar->nsinc2;
+	sinc2width = dpar->sinc2width;
+
+	if (f < size) {
+		kmppxl = pos[f]->km_per_pixel;
+
+		if (f == 0) 	pds_nsinc2_sq = nsinc2 * nsinc2;
+		/*  Compute the Doppler bin increment per plane-of-sky pixel westward (ax)
+      and northward (ay); these values are scaled by the "dopscale" parameter
+      for this dataset.  Then compute km2Hz, the Doppler increment (Hz) per
+      km perpendicular to the projected spin axis in the plane of the sky.     */
+
+		dopfact = ddat->set[set].desc.doppler.dopscale.val * KM2HZFACT *
+				kmppxl	* ddat->set[set].desc.doppler.Ftx / dpb;
+
+		axay[f].x = -w[f].y*dopfact;
+		axay[f].y =  w[f].x*dopfact;
+		frame[f]->view[v].km2Hz = sqrt(axay[f].x*axay[f].x +
+				axay[f].y*axay[f].y) * dpb	/ kmppxl;
+
+	/* Compute absolute value of the difference between maximum (or minimum)
+	 * Doppler on any given POS pixel's edge and the Doppler at its center                               */
+	/* dop.w - dopdiff_bl
+	 * dop.x - dopdiff_max
+	 * dop.y - dopDC_vig (not used in Doppler)
+	 * dop.z - dop_extra		 */
+
+	if (w[f].x != 0.0 || w[f].y != 0.0)
+		dop[f].z = frame[f]->view[v].km2Hz * 0.5 * kmppxl *
+			sqrt(w[f].x*w[f].x + w[f].y*w[f].y) /
+			MAX( fabs(w[f].x), fabs(w[f].y));
+	else
+		dop[f].z = 0.0;
+
+	/* We may be evaluating the sinc^2 Doppler response function at more than
+	 * one point per POS pixel.
+	 * 	xincr & yincr: Doppler bin increments between adjacent evaluation
+	 * 			points in the x and y directions.
+	 * 	dopdiff_bl: Doppler bin difference between bottom-leftmost (SE-most)
+	 * 			evaluation point and the pixel center.
+	 * 	dopdiff_max: max. positive Doppler bin difference between any
+	 * 			evaluation point and the     pixel center.             */
+	xyincr[f].x = axay[f].x / nsinc2;
+	xyincr[f].y = axay[f].y / nsinc2;
+	dop[f].w = -(nsinc2 - 1)*(xyincr[f].x + xyincr[f].y)/2;
+	dop[f].x = (nsinc2 - 1)*(fabs(xyincr[f].x) + fabs(xyincr[f].x))/2;
+	if (2*dop[f].x + sinc2width + 1 > MAXBINS) {
+		badradararr[f] = 1;
+		frame[f]->badradar_logfactor += log((2*dop[f].x + sinc2width + 1) / MAXBINS);
+		if (dpar->warn_badradar) {
+			printf("\nWARNING in pos2doppler.c for set %2d frame %2d:\n", set, f);
+			printf("        sinc^2 function evaluated at %d Doppler bins, must be <= %d\n",
+					(int) ceil(2*dop[f].x + sinc2width + 1), MAXBINS);
+		}
+	}
+	/* Get the COM Doppler bin, corrected for ephemeris drift and adjusted for
+	 * orbital motion                         */
+	dopshift[f] = frame[f]->dopcom_vig + frame[f]->view[v].dopoff + orbit_dopoff;
+	}
+}
+
+__global__ void pos2doppler_pixel_krnl32(
 		struct par_t *dpar,
 		struct mod_t *dmod,
 		struct dat_t *ddat,
@@ -327,8 +475,7 @@ __global__ void pos2doppler_pixel_krnl(
 		int body,
 		double orbit_xoff,
 		double orbit_yoff,
-		int f,
-		int debug) {
+		int f) {
 
 	/* Multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
@@ -453,8 +600,7 @@ __global__ void pos2doppler_pixel_krnl(
 				k = MIN( idop - idop_min, MAXBINS);
 				sumweights += dop_contribution[k];
 			}
-//			if (debug==1 && x==0 && y==0 && f==0)
-//				printf("sumweights at (0,0): %g\n", sumweights);
+
 			/* The radar cross section within this plane-of-sky pixel is
 			 * [differential radar scattering law]*[POS pixel area in km^2].
 			 * The differential radar scattering law (function radlaw
@@ -465,22 +611,183 @@ __global__ void pos2doppler_pixel_krnl(
 					pos[f]->cose_s[zaddr], pos[f]->comp[x][y], pos[f]->f[x][y])
 		    		 * pos[f]->km_per_pixel * pos[f]->km_per_pixel / sumweights;
 
-//			if (debug==1 && x==0 && y==0 && f==0) {
-//				printf("amp = dev_radlaw arguments\n");
-//				printf("ddat->set[%i].desc.doppler.iradlaw=%i\n", set,ddat->set[set].desc.doppler.iradlaw);
-//				printf("pos[%i]->cose_s[%i] at (0,0)=%f\n",f, zaddr, pos[f]->cose_s[zaddr]);
-//				printf("pos[%i]->comp[%i][%i]=%i\n", f, x, y, pos[f]->comp[x][y]);
-//				printf("pos[%i]->f[%i][%i]=%i\n", f, x, y, pos[f]->f[x][y]);
-//				printf("pos[%i]->km_per_pixel=%g\n", f, pos[f]->km_per_pixel);
-//				printf("sumweights=%g\n", sumweights);
-//				printf("amp=%g\n", amp);
-//				printf("photo law=%i\n", dmod->photo.radtype[ddat->set[set].desc.doppler.iradlaw]);
-//				printf("photo->radar[0].RC.R.val=%g\n", dmod->photo.radar[0].RC.R.val);
-//				printf("photo->radar[0].RC.C.val=%g\n", dmod->photo.radar[0].RC.C.val);
-//
-//			}
+			/* Only add POS pixel's power contributions to model Doppler spect-
+			 * rum if NONE of those contributions fall outside spectrum limits*/
+			if (pds_in_bounds) {
+				/* Add the cross-section contributions to the model frame  */
+				for (idop=idop_min; idop<=idop_max; idop++) {
+					k = MIN( idop - idop_min, MAXBINS);
+					fit_contribution = amp * dop_contribution[k];
 
-//				printf("amp at t(0,0): %g\n", amp);
+					atomicAdd(&frame[f]->fit_s[idop], fit_contribution);
+				}
+			} else {
+
+				/* Add the cross-section contributions to the "overflow" spectrum  */
+				idop1 = MAX( idop_min, -idop0[f]);
+				idop2 = MIN( idop_max, -idop0[f] + MAXOVERFLOW - 1);
+				for (idop=idop1; idop<=idop2; idop++) {
+					k = MIN(idop - idop_min, MAXBINS);
+					fit_contribution = amp * dop_contribution[k];
+					frame[f]->fit_overflow[idop+idop0[f]] += fit_contribution;  // might need atomics
+				}
+			}
+		}  /* if cos(scattering angle) > 0 and POS pixel projects onto the right body */
+	}
+}
+
+__global__ void pos2doppler_pixel_krnl64(
+		struct par_t *dpar,
+		struct mod_t *dmod,
+		struct dat_t *ddat,
+		struct pos_t **pos,
+		struct dopfrm_t **frame,
+		double4 *dop,
+		double2 *axay,
+		double2 *doplim,
+		double2 *xyincr,
+		int *ndop,
+		int *idop0,
+		double *dopshift,
+		int xspan,
+		int set,
+		int nframes,
+		int frame_size,
+		int body,
+		double orbit_xoff,
+		double orbit_yoff,
+		int f) {
+
+	/* Multi-threaded kernel */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int x = offset % xspan + pos[f]->xlim[0];
+	int y = offset / xspan + pos[f]->ylim[0];
+	int n, nsinc2, sinc2width ;
+
+	int idop, idop_min, idop_max, idop1, idop2, i, j, c, fac, k;
+	double tmp, amp, arg_left, sinc2arg, sinc2_mean, arg_bl, fit_contribution,
+	sumweights, dop_contribution[MAXBINS], dopPOS;
+	n = pos[f]->n;
+	nsinc2 = dpar->nsinc2;
+	sinc2width = dpar->sinc2width;
+
+	if (offset < frame_size) {
+		/* Loop through all POS pixels within the rectangular plane-of-sky
+		 * region spanned by the model; for each such pixel which isn't blank
+		 * sky, compute the cross-section contributions to pixels in the model
+		 * Doppler spectrum. Note that functions posclr and posvis flag
+		 * blank-sky pixels by assigning "cose" = cos(scattering angle) = 0.
+		 * Only compute contributions from POS pixels that project onto the
+		 * right body, in case this is the "orbit" action (for which this
+		 * routine is called twice, once for each of the 2 orbiting bodies).*/
+
+		if (pos[f]->cose[x][y] > 0.0 && pos[f]->body[x][y] == body) {
+
+			/* Get the fp Doppler bin of POS pixel center: dopPOS. Also get the
+			 * min and max int Doppler bins to which this pixel contributes
+			 * power: idop_min and idop_max. Each POS pixel contributes power
+			 * to *all* Doppler bins, but here we're zeroing out the sinc^2
+			 * response function beyond the nearest sinc2width bins.
+			 * Actually, if nsinc2 > 1, we'll distribute power to *at least*
+			 * sinc2width Doppler bins: For pixels which span multiple bins
+			 * we'll err on the side of computing more contributions rather
+			 * than fewer. */
+			/* dop.w - dopdiff_bl
+			 * dop.x - dopdiff_max
+			 * dop.y - dopDC_vig
+			 * dop.z - dop_extra		 */
+			dopPOS = axay[f].x*(x - orbit_xoff) + axay[f].y*(y - orbit_yoff) + dopshift[f];
+			idop_min = (int) floor(dopPOS - dop[f].x + 1 - sinc2width/2.0);
+			idop_max = (int) floor(dopPOS + dop[f].x + sinc2width/2.0);
+
+			/* Update the rectangular delay-Doppler region with nonzero power
+			 * according to the model              */
+			atomicMin(&frame[f]->idoplim[0], idop_min);
+			atomicMax(&frame[f]->idoplim[1], idop_max);
+
+			/* Update model's fp Doppler limits, as determined prior to
+			 * convolution with the Doppler response function. At this point
+			 * in the code, doplim is a pair of floating-point bin numbers
+			 * which applies to POS pixel centers; when the loop over POS
+			 * pixels is finished we will convert these limits to Hz and will
+			 * widen the limits to account for nonzero POS pixel width. */
+			/* Note that p2d_doplim[2] is a single-precision (float) copy of
+			 * the original p2d_frame->doplim[2] (double-precision). This is
+			 * necessary to get atomic operations to work.		 */
+			atomicMin64(&doplim[f].x, dopPOS);
+			atomicMax64(&doplim[f].y, dopPOS);
+
+			/* Check if all Doppler bins which will receive power from this POS
+			 * pixel fall within the data frame; if not, initialize the
+			 * "overflow" spectrum if necessary.  */
+			if ( (idop_min >= 1) && (idop_max <= ndop[f]) )
+				pds_in_bounds = 1;
+			else {
+				pds_in_bounds = 0;
+				if (!pds_any_overflow) {
+					pds_any_overflow = 1;
+					for (j=0; j<MAXOVERFLOW; j++)
+						frame[f]->fit_overflow[j] = 0.0;  // To-Do:  This might need attention.
+
+					/* Center the COM in the overflow spectrum: bin [idop] in
+					 * the fit frame corresponds to bin [idop+idop0] in the
+					 * fit_overflow frame.  */
+					idop0[f] = MAXOVERFLOW/2 - (int) floor(dopshift[f] + 0.5);
+				}
+			}
+
+			/* Compute the sinc^2 factors for Doppler mismatching: Take the
+			 * mean of nsinc2^2 points interior to the POS pixel. Do the two
+			 * most common cases (nsinc2 = 1 or 2) without loops to gain speed.
+			 * Note the SINC2 macro multiplies its argument by pi. Then add the
+			 * cross-section contributions to the model spectrum.  */
+
+			for (idop=idop_min; idop<=idop_max; idop++) {
+				switch (nsinc2) {
+				case 1:
+					sinc2_mean = SINC2(dopPOS - idop);
+					break;
+				case 2:
+					arg_bl = dopPOS + dop[f].w - idop;   /* bl = bottom left */
+					sinc2_mean = (SINC2(arg_bl) +
+							SINC2(arg_bl+xyincr[f].x) +
+							SINC2(arg_bl+xyincr[f].y) +
+							SINC2(arg_bl+xyincr[f].x+xyincr[f].y)) / 4;
+					break;
+				default:
+					arg_left = dopPOS + dop[f].w - idop;
+					sinc2_mean = 0.0;
+					for (i=0; i<nsinc2; i++) {
+						sinc2arg = arg_left;
+						for (j=0; j<nsinc2; j++) {
+							sinc2_mean += SINC2(sinc2arg);
+							sinc2arg += xyincr[f].x;
+						}
+						arg_left += xyincr[f].y;
+					}
+					sinc2_mean /= pds_nsinc2_sq;
+					break;
+				}
+				k = MIN( idop - idop_min, MAXBINS);
+				dop_contribution[k] = sinc2_mean;
+			}
+
+			/* Compute the sum of Doppler weighting factors  */
+			sumweights = 0.0;
+			for (idop=idop_min; idop<=idop_max; idop++) {
+				k = MIN( idop - idop_min, MAXBINS);
+				sumweights += dop_contribution[k];
+			}
+
+			/* The radar cross section within this plane-of-sky pixel is
+			 * [differential radar scattering law]*[POS pixel area in km^2].
+			 * The differential radar scattering law (function radlaw
+			 * = d[cross section]/d[area] ) includes a sec(theta) factor to
+			 * account for the fact that the POS pixel area is projected area
+			 * rather than physical area on the target surface.	 */
+			amp = dev_radlaw(&dmod->photo, ddat->set[set].desc.doppler.iradlaw,
+					pos[f]->cose[x][y], pos[f]->comp[x][y], pos[f]->f[x][y])
+		    		 * pos[f]->km_per_pixel * pos[f]->km_per_pixel / sumweights;
 
 			/* Only add POS pixel's power contributions to model Doppler spect-
 			 * rum if NONE of those contributions fall outside spectrum limits*/
@@ -489,75 +796,25 @@ __global__ void pos2doppler_pixel_krnl(
 				for (idop=idop_min; idop<=idop_max; idop++) {
 					k = MIN( idop - idop_min, MAXBINS);
 					fit_contribution = amp * dop_contribution[k];
-					if (debug==1 && x==0 && y==0 && f==0)
-						printf("fit_contribution for k=%i at (0,0): %g\n", k, fit_contribution);
 
-					atomicAdd(&frame[f]->fit_s[idop], fit_contribution);
-
-					if (dpar->action == MAP) {
-						if (dpar->map_mode == MAPMODE_DELDOP) {
-							if (frame[f]->map_fit[idop] > 0.0) {
-								frame[f]->map_pos[x][y] += fit_contribution;
-								c = pos[f]->comp[x][y];
-								fac = pos[f]->f[x][y];
-								frame[f]->map_facet_power[c][fac] += fit_contribution;
-								if (dpar->map_verbose)
-									printf("# POS (%3d, %3d) comp %d facet %4d contributes %e to Dop (%3d)\n",
-											x+n, y+n, c, fac, fit_contribution, idop-1);
-							}
-						} else if (dpar->map_mode == MAPMODE_POS) {
-							if (frame[f]->map_pos[x][y] > 0.0) {
-								frame[f]->map_fit[idop] += fit_contribution;
-								c = pos[f]->comp[x][y];
-								fac = pos[f]->f[x][y];
-								frame[f]->map_facet_power[c][fac] += fit_contribution;
-								if (dpar->map_verbose)
-									printf("# POS (%3d, %3d) comp %d facet %4d contributes %e to Dop (%3d)\n",
-											x+n, y+n, c, fac, fit_contribution, idop-1);
-							}
-						} else {
-							if (frame[f]->map_pos[x][y] > 0.0) {
-								frame[f]->map_fit[idop] += fit_contribution;
-								if (dpar->map_verbose) {
-									c = pos[f]->comp[x][y];
-									fac = pos[f]->f[x][y];
-									printf("# POS (%3d, %3d) comp %d facet %4d contributes %e to Dop (%3d)\n",
-											x+n, y+n, c, fac, fit_contribution, idop-1);
-								}
-							}
-						}
-					}
+					atomicAdd(&frame[f]->fit[idop], fit_contribution);
 				}
 			} else {
 
 				/* Add the cross-section contributions to the "overflow" spectrum  */
-				if (dpar->action == MAP && dpar->map_mode != MAPMODE_DELDOP)
-					if (frame[f]->map_pos[x][y] > 0.0)
-						dpar->map_overflow = 1;
-
 				idop1 = MAX( idop_min, -idop0[f]);
 				idop2 = MIN( idop_max, -idop0[f] + MAXOVERFLOW - 1);
 				for (idop=idop1; idop<=idop2; idop++) {
 					k = MIN(idop - idop_min, MAXBINS);
 					fit_contribution = amp * dop_contribution[k];
 					frame[f]->fit_overflow[idop+idop0[f]] += fit_contribution;  // might need atomics
-					if (dpar->action == MAP && dpar->map_mode == MAPMODE_DELDOP)
-						if (idop >= dpar->map_doplim[0] && idop <= dpar->map_doplim[1]) {
-							frame[f]->map_pos[x][y] += fit_contribution;
-							c = pos[f]->comp[x][y];
-							fac = pos[f]->f[x][y];
-							frame[f]->map_facet_power[c][fac] += fit_contribution;
-							if (dpar->map_verbose)
-								printf("# POS (%3d, %3d) comp %d facet %4d contributes %e to Dop (%3d)\n",
-										x+n, y+n, c, fac, fit_contribution, idop-1);
-						}
 				}
 			}
 		}  /* if cos(scattering angle) > 0 and POS pixel projects onto the right body */
 	}
 }
 
-__global__ void pos2doppler_finish_krnl(
+__global__ void pos2doppler_finish_krnl32(
 		struct par_t *dpar,
 		struct dat_t *ddat,
 		struct dopfrm_t **frame,
@@ -637,7 +894,86 @@ __global__ void pos2doppler_finish_krnl(
 	}
 }
 
-__host__ int pos2doppler_gpu(
+__global__ void pos2doppler_finish_krnl64(
+		struct par_t *dpar,
+		struct dat_t *ddat,
+		struct dopfrm_t **frame,
+		double4 *dop,
+		double2 *doplim,
+		double *dopshift,
+		int *idop0,
+		int *ndop,
+		int set,
+		int size,
+		int *badradararr) {
+
+	/* nfrm_alloc-threaded kernel */
+	int f = blockIdx.x * blockDim.x + threadIdx.x;
+	int j, j1, j2;
+	double lookfact, sdev_sq, variance, dopfactor;
+
+	if (f < size) {
+		/* Copy float device variable over to the frame->doplim   */
+		frame[f]->doplim[0] = doplim[f].x;
+		frame[f]->doplim[1] = doplim[f].y;
+
+		/* Convert model's Doppler limits from float bin numbers to Hz and
+		 * widen the limits to account for nonzero POS pixel width    */
+		frame[f]->doplim[0] = (frame[f]->doplim[0] - dopshift[f])*
+				ddat->set[set].desc.doppler.dop_per_bin - dop[f].z;
+		frame[f]->doplim[1] = (frame[f]->doplim[1] - dopshift[f])*
+				ddat->set[set].desc.doppler.dop_per_bin + dop[f].z;
+
+		/* Calculate overflow contributions to chi squared:
+		 *   o2 = obs^2 contribution, m2 = model^2 contribution.
+		 * Also compute summed cross section and mean Doppler bin for overflow
+		 * region, for use with the "delcorinit" action   */
+		frame[f]->overflow_o2 = 0.0;
+		frame[f]->overflow_m2 = 0.0;
+		frame[f]->overflow_xsec = 0.0;
+		frame[f]->overflow_dopmean = 0.0;
+		sdev_sq = frame[f]->sdev*frame[f]->sdev;
+		variance = sdev_sq;
+		lookfact = (frame[f]->nlooks > 0.0) ? 1.0/frame[f]->nlooks : 0.0;
+		if (pds_any_overflow) {
+			j1 = MAX(frame[f]->idoplim[0] + idop0[f], 0);
+			j2 = MIN(frame[f]->idoplim[1] + idop0[f], MAXOVERFLOW - 1);
+			for (j=j1; j<=j2; j++) {
+				if (frame[f]->fit_overflow[j] != 0.0) {
+					if (dpar->speckle)
+						variance = sdev_sq + lookfact*frame[f]->fit_overflow[j]*
+								frame[f]->fit_overflow[j];
+					frame[f]->overflow_o2 += 1.0;
+					frame[f]->overflow_m2 += frame[f]->fit_overflow[j]*
+							frame[f]->fit_overflow[j]/variance;
+					frame[f]->overflow_xsec += frame[f]->fit_overflow[j];
+					frame[f]->overflow_dopmean += (j - idop0[f])*frame[f]->fit_overflow[j];
+				}
+			}
+			if (frame[f]->overflow_xsec != 0.0)
+				frame[f]->overflow_dopmean /= frame[f]->overflow_xsec;
+
+			/* Print a warning if the model extends even beyond the overflow spectrum  */
+			if (((frame[f]->idoplim[0] + idop0[f]) < 0) ||
+					((frame[f]->idoplim[1] + idop0[f]) >= MAXOVERFLOW) ) {
+				badradararr[f] = 1;
+				dopfactor = (MAX(frame[f]->idoplim[1] + idop0[f], MAXOVERFLOW)
+					- MIN(frame[f]->idoplim[0]+idop0[f],0))/(1.0*MAXOVERFLOW);
+				frame[f]->badradar_logfactor += log(dopfactor);
+				if (dpar->warn_badradar) {
+					printf("\nWARNING in pos2doppler.c for set %2d frame %2d:\n", set, f);
+					printf("        model Doppler spectrum extends too far beyond the data spectrum\n");
+					printf("             data:  bins %2d to %2d\n", 1, ndop[f]);
+					printf("            model:  bins %2d to %2d\n",
+							frame[f]->idoplim[0], frame[f]->idoplim[1]);
+				}
+			}
+		}
+		if (badradararr[f]) pds_badradar_global = 0;
+	}
+}
+
+__host__ int pos2doppler_gpu32(
 		struct par_t *dpar,
 		struct mod_t *dmod,
 		struct dat_t *ddat,
@@ -674,11 +1010,11 @@ __host__ int pos2doppler_gpu(
 	gpuErrchk(cudaMalloc((void**)&idop0,	sizeof(int)*nfrm_alloc));
 
 	/* Launch initialization kernels */
-	pos2doppler_init_krnl<<<BLKfrm,THD64>>>(ddat, frame, pos, xylim, w, doplim,
+	pos2doppler_init_krnl32<<<BLKfrm,THD64>>>(ddat, frame, pos, xylim, w, doplim,
 			ndop, idop0, set, v, nfrm_alloc, badradararr);
 	checkErrorAfterKernelLaunch("pos2doppler_init_krnl in pos2doppler_gpu");
 
-	pos2doppler_radar_parameters_krnl<<<BLKfrm,THD64>>>(dpar,
+	pos2doppler_radar_parameters_krnl32<<<BLKfrm,THD64>>>(dpar,
 			ddat, frame, pos, dop, w, axay, xyincr, dopshift, orbit_dopoff,
 			set, v, nfrm_alloc, badradararr);
 	checkErrorAfterKernelLaunch("pos2doppler_radar_parameters_krnl in"
@@ -692,18 +1028,98 @@ __host__ int pos2doppler_gpu(
 		nThreads[f] = xspan[f]*yspan;
 		BLK[f].x = floor((THD.x -1 + nThreads[f]) / THD.x);
 	}
- int debug = 0;
+
 	for (f=0; f<nfrm_alloc; f++) {
 		/* Loop through all pixels and calculate contributed power */
-		pos2doppler_pixel_krnl<<<BLK[f],THD,0, pds_stream[f]>>>(dpar,dmod,ddat,
+		pos2doppler_pixel_krnl32<<<BLK[f],THD,0, pds_stream[f]>>>(dpar,dmod,ddat,
 				pos, frame, dop, axay, doplim, xyincr, ndop, idop0, dopshift,
-				xspan[f], set, nfrm_alloc, nThreads[f], body, orbit_xoff, orbit_yoff, f,
-				debug);
+				xspan[f], set, nfrm_alloc, nThreads[f], body, orbit_xoff, orbit_yoff, f);
 	}
 	checkErrorAfterKernelLaunch("pos2doppler_pixel_krnl in pos2doppler_gpu");
 
 	/* Finish up Doppler calculations */
-	pos2doppler_finish_krnl<<<BLKfrm,THD64>>>(dpar,ddat,frame,
+	pos2doppler_finish_krnl32<<<BLKfrm,THD64>>>(dpar,ddat,frame,
+			dop, doplim, dopshift, idop0, ndop, set, nfrm_alloc, badradararr);
+	checkErrorAfterKernelLaunch("pos2doppler_finish_krnl in pos2doppler_gpu");
+	gpuErrchk(cudaMemcpyFromSymbol(&badradar, pds_badradar_global, sizeof(int),
+			0, cudaMemcpyDeviceToHost));
+
+	cudaFree(dopshift);
+	cudaFree(axay);
+	cudaFree(xyincr);
+	cudaFree(doplim);
+	cudaFree(w);
+	cudaFree(dop);
+	cudaFree(idop0);
+	return badradar;
+}
+
+__host__ int pos2doppler_gpu64(
+		struct par_t *dpar,
+		struct mod_t *dmod,
+		struct dat_t *ddat,
+		struct pos_t **pos,
+		struct dopfrm_t **frame,
+		int4 *xylim,
+		double orbit_xoff,
+		double orbit_yoff,
+		double orbit_dopoff,
+		int *ndop,
+		int body,
+		int set,
+		int nfrm_alloc,
+		int v,
+		int *badradararr,
+		cudaStream_t *pds_stream)
+{
+	int badradar, xspan[nfrm_alloc], yspan, nThreads[nfrm_alloc], f, *idop0;
+	dim3 BLK[nfrm_alloc], THD, BLKfrm, THD64;
+	THD.x = maxThreadsPerBlock; THD64.x = 64;
+	double *dopshift;
+	double2 *doplim, *axay, *xyincr;
+	double3 *w;
+	double4 *dop;
+	int4 host_xylim[nfrm_alloc];
+	BLKfrm.x = floor((THD64.x - 1 + nfrm_alloc)/THD64.x);
+
+	gpuErrchk(cudaMalloc((void**)&dopshift, sizeof(double)*nfrm_alloc));
+	gpuErrchk(cudaMalloc((void**)&axay, 	sizeof(double2)*nfrm_alloc));
+	gpuErrchk(cudaMalloc((void**)&xyincr,   sizeof(double2)*nfrm_alloc));
+	gpuErrchk(cudaMalloc((void**)&doplim,   sizeof(double2)*nfrm_alloc));
+	gpuErrchk(cudaMalloc((void**)&w, 	   	sizeof(double3)*nfrm_alloc));
+	gpuErrchk(cudaMalloc((void**)&dop, 	   	sizeof(double4)*nfrm_alloc));
+	gpuErrchk(cudaMalloc((void**)&idop0,	sizeof(int)*nfrm_alloc));
+
+	/* Launch initialization kernels */
+	pos2doppler_init_krnl64<<<BLKfrm,THD64>>>(ddat, frame, pos, xylim, w, doplim,
+			ndop, idop0, set, v, nfrm_alloc, badradararr);
+	checkErrorAfterKernelLaunch("pos2doppler_init_krnl in pos2doppler_gpu");
+
+	pos2doppler_radar_parameters_krnl64<<<BLKfrm,THD64>>>(dpar,
+			ddat, frame, pos, dop, w, axay, xyincr, dopshift, orbit_dopoff,
+			set, v, nfrm_alloc, badradararr);
+	checkErrorAfterKernelLaunch("pos2doppler_radar_parameters_krnl in"
+			"in pos2doppler_gpu.cu");
+
+	/* Figure out the kernel launch parameters for every stream */
+	gpuErrchk(cudaMemcpy(host_xylim, xylim, nfrm_alloc*sizeof(int4), cudaMemcpyDeviceToHost));
+	for (f=0; f<nfrm_alloc; f++) {
+		xspan[f] = host_xylim[f].x - host_xylim[f].w + 1;
+		yspan = host_xylim[f].z - host_xylim[f].y + 1;
+		nThreads[f] = xspan[f]*yspan;
+		BLK[f].x = floor((THD.x -1 + nThreads[f]) / THD.x);
+	}
+
+	for (f=0; f<nfrm_alloc; f++) {
+		/* Loop through all pixels and calculate contributed power */
+		pos2doppler_pixel_krnl64<<<BLK[f],THD,0, pds_stream[f]>>>(dpar,dmod,ddat,
+				pos, frame, dop, axay, doplim, xyincr, ndop, idop0, dopshift,
+				xspan[f], set, nfrm_alloc, nThreads[f], body, orbit_xoff, orbit_yoff, f);
+	}
+	checkErrorAfterKernelLaunch("pos2doppler_pixel_krnl in pos2doppler_gpu");
+
+	/* Finish up Doppler calculations */
+	pos2doppler_finish_krnl64<<<BLKfrm,THD64>>>(dpar,ddat,frame,
 			dop, doplim, dopshift, idop0, ndop, set, nfrm_alloc, badradararr);
 	checkErrorAfterKernelLaunch("pos2doppler_finish_krnl in pos2doppler_gpu");
 	gpuErrchk(cudaMemcpyFromSymbol(&badradar, pds_badradar_global, sizeof(int),

@@ -591,7 +591,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % npar_update;
-//		p = first_fitpar = 1;
+//		p = first_fitpar;// = 1;
 		for (p=first_fitpar; p<nfpar; p++) {
 
 			/*  Adjust only parameter p on this try  */
@@ -1836,6 +1836,7 @@ __host__ double objective_gpu(
 	/* Compute penalties and add to reduced chi-square. Individual penalty values
 	 * will be displayed if we set spar->showstate = 1 a few lines back.        */
 	pens = penalties_gpu(sdev_par, sdev_mod, sdev_dat);
+//	printf("pens: %3.9g\n", pens);
 	err += pens;
 	/* Double the objective function if there's an ellipsoid component with tiny
 	 * or negative diameter, if any optical photometric parameters have invalid

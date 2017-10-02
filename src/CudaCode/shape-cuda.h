@@ -141,20 +141,38 @@ __host__ void mkparlist_gpu(struct par_t *dpar, struct mod_t *dmod,
 __host__ double penalties_gpu(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat);
 
-__host__ void pos2deldop_gpu(struct par_t *dpar, struct mod_t *dmod, struct
+__host__ void pos2deldop_gpu32(struct par_t *dpar, struct mod_t *dmod, struct
 		dat_t *ddat, struct pos_t **pos, struct deldopfrm_t **frame, int4
 		*xylim, int *ndel, int *ndop, double orbit_xoff, double orbit_yoff,
 		double orbit_dopoff, int body, int set,	int nfrm_alloc,	int v, int
 		*badradararr, cudaStream_t *p2d_stream);
 
-__host__ int pos2doppler_gpu(struct par_t *dpar, struct mod_t *dmod, struct
+__host__ void pos2deldop_gpu64(struct par_t *dpar, struct mod_t *dmod, struct
+		dat_t *ddat, struct pos_t **pos, struct deldopfrm_t **frame, int4
+		*xylim, int *ndel, int *ndop, double orbit_xoff, double orbit_yoff,
+		double orbit_dopoff, int body, int set,	int nfrm_alloc,	int v, int
+		*badradararr, cudaStream_t *p2d_stream);
+
+__host__ int pos2doppler_gpu32(struct par_t *dpar, struct mod_t *dmod, struct
 		dat_t *ddat, struct pos_t **pos, struct dopfrm_t **frame, int4 *xylim,
 		double orbit_xoff, double orbit_yoff, double orbit_dopoff, int *ndop,
 		int body, int set, int nfrm_alloc, int v, int *badradararr,
 		cudaStream_t *pds_stream);
 
-__host__ int posvis_gpu(struct par_t *dpar, struct mod_t *dmod, struct dat_t
+__host__ int pos2doppler_gpu64(struct par_t *dpar, struct mod_t *dmod, struct
+		dat_t *ddat, struct pos_t **pos, struct dopfrm_t **frame, int4 *xylim,
+		double orbit_xoff, double orbit_yoff, double orbit_dopoff, int *ndop,
+		int body, int set, int nfrm_alloc, int v, int *badradararr,
+		cudaStream_t *pds_stream);
+
+__host__ int posvis_gpu32(struct par_t *dpar, struct mod_t *dmod, struct dat_t
 		*ddat, struct pos_t **pos, struct vertices_t **verts, float3
+		orbit_offset, int *posn, int *outbndarr, int set, int nfrm_alloc, int
+		src, int nf, int body, int comp, unsigned char type,
+		cudaStream_t *pv_stream);
+
+__host__ int posvis_gpu64(struct par_t *dpar, struct mod_t *dmod, struct dat_t
+		*ddat, struct pos_t **pos, struct vertices_t **verts, double3
 		orbit_offset, int *posn, int *outbndarr, int set, int nfrm_alloc, int
 		src, int nf, int body, int comp, unsigned char type,
 		cudaStream_t *pv_stream);
@@ -276,8 +294,12 @@ __global__ void update_spin_angle_krnl(struct mod_t *dmod, double3 *angle_omega_
 __global__ void posmask_init_krnl(struct pos_t **pos, double3 *so,
 		float *pixels_per_km, int size);
 
-__device__ void dev_POSrect_gpu(struct pos_t **pos, int src, float imin_dbl,
+__device__ void dev_POSrect_gpu32(struct pos_t **pos, int src, float imin_dbl,
 		float imax_dbl,	float jmin_dbl,	float jmax_dbl,	float4
+		*ijminmax_overall, int frm);
+
+__device__ void dev_POSrect_gpu64(struct pos_t **pos, int src, double imin_dbl,
+		double imax_dbl, double jmin_dbl, double jmax_dbl, double4
 		*ijminmax_overall, int frm);
 
 __device__ void dev_realize_impulse(struct spin_t spin, double t,

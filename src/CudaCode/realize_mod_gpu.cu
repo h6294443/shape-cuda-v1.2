@@ -131,7 +131,8 @@ static int nv, nf, ns;
 static dim3 nvBLK,nvTHD,nfBLK,nfTHD,nsBLK,nsTHD;
 __host__ void realize_coordinates_gpu(struct par_t *dpar, struct mod_t *dmod, unsigned char type, int gpuid);
 __host__ void check_surface_gpu(struct mod_t *dmod, cudaStream_t *rm_streams);
-__host__ void compute_moments_gpu(struct mod_t *dmod, int nf, cudaStream_t *cm_streams);
+__host__ void compute_moments_gpu32(struct mod_t *dmod, int nf, cudaStream_t *cm_streams);
+__host__ void compute_moments_gpu64(struct mod_t *dmod, int nf, cudaStream_t *cm_streams);
 void *realize_mod_pthread_sub(void *ptr);
 
 typedef struct realize_mod_thread_t
@@ -586,7 +587,7 @@ __host__ void realize_mod_gpu( struct par_t *dpar, struct mod_t *dmod,
 
 	/*  Compute the area and moments (volume, center of mass, and
       inertia tensor) of each component and of the overall model  */
-	compute_moments_gpu(dmod, nf, rm_streams);
+	compute_moments_gpu64(dmod, nf, rm_streams);
 }
 
 __host__ void realize_mod_pthread(struct par_t *dpar0, struct par_t *dpar1,
@@ -648,7 +649,7 @@ void *realize_mod_pthread_sub(void *ptr) {
 
 	/*  Compute the area and moments (volume, center of mass, and
       inertia tensor) of each component and of the overall model  */
-	compute_moments_gpu(data->model, data->nf, data->gpu_stream);
+	compute_moments_gpu32(data->model, data->nf, data->gpu_stream);
 	return(0);
 }
 
@@ -782,9 +783,9 @@ __host__ void check_surface_gpu(struct mod_t *dmod, cudaStream_t *rm_streams)
 	dim3 THD; THD.x = maxThreadsPerBlock;
 
 	/* Calculate launch parameters */
-	nvBLK.x = floor((maxThreadsPerBlock - 1 + nv) / maxThreadsPerBlock);
-	nfBLK.x = floor((maxThreadsPerBlock - 1 + nf) / maxThreadsPerBlock);
-	nsBLK.x = floor((maxThreadsPerBlock - 1 + ns) / maxThreadsPerBlock);
+	nvBLK.x = floor((THD.x - 1 + nv) / THD.x);
+	nfBLK.x = floor((THD.x - 1 + nf) / THD.x);
+	nsBLK.x = floor((THD.x - 1 + ns) / THD.x);
 
 	/* 1-component model: flag all vertices and facets as active, then return  */
 	set_real_active_vert_krnl<<<nvBLK,THD,0,rm_streams[0]>>>(dmod);
@@ -796,7 +797,7 @@ __host__ void check_surface_gpu(struct mod_t *dmod, cudaStream_t *rm_streams)
 	return;
 }
 
-__global__ void comp_moments_1stinit_krnl(struct mod_t *dmod, int c) {
+__global__ void comp_moments_1stinit_krnl(struct mod_t *dmod) {
 	/* Single-thread kernel */
 	int j, k;
 	if (threadIdx.x == 0) {
@@ -826,7 +827,7 @@ __global__ void comp_moments_2ndinit_krnl(struct mod_t *dmod, float area1,
 		dmod->shape.comp[0].area = 0.0; // actually 1st step in calculating surface area
 	}
 }
-__global__ void comp_moments_facet_krnl(struct mod_t *dmod, int c, float *dvarr,
+__global__ void comp_moments_facet_krnl32(struct mod_t *dmod, int c, float *dvarr,
 		float *dcom0, float *dcom1, float *dcom2, float *dI00, float *dI01,
 		float *dI02, float *dI10, float *dI11, float *dI12, float *dI20,
 		float *dI21, float *dI22)
@@ -858,6 +859,29 @@ __global__ void comp_moments_facet_krnl(struct mod_t *dmod, int c, float *dvarr,
 
 	}
 }
+__global__ void comp_moments_facet_krnl64(struct mod_t *dmod, int c, double *dvarr,
+		double *dcom0, double *dcom1, double *dcom2, double *dI00, double *dI01,
+		double *dI02, double *dI10, double *dI11, double *dI12, double *dI20,
+		double *dI21, double *dI22)
+{
+	/* nf-threaded kernel */
+	int f = blockIdx.x * blockDim.x + threadIdx.x;
+	double dI[3][3], dcom[3], dv;
+	if (f < dmod->shape.comp[0].real.nf)
+	{
+		dev_facmom(dmod->shape.comp[c].real.v[ dmod->shape.comp[0].real.f[f].v[0] ].x,
+				dmod->shape.comp[c].real.v[ dmod->shape.comp[0].real.f[f].v[1] ].x,
+				dmod->shape.comp[c].real.v[ dmod->shape.comp[0].real.f[f].v[2] ].x,
+				dmod->shape.comp[c].real.f[f].n,	&dv, dcom, dI);
+
+		/* Assign calculated dv, dcom, dI to each facet for later parallel reduction */
+		dvarr[f]  	= dv;
+		dcom0[f]	= dcom[0];	dcom1[f]= dcom[1];	dcom2[f]= dcom[2];
+		dI00[f] 	= dI[0][0];	dI01[f]	= dI[0][1];	dI02[f]	= dI[0][2];
+		dI10[f] 	= dI[1][0];	dI11[f]	= dI[1][1];	dI12[f]	= dI[1][2];
+		dI20[f] 	= dI[2][0];	dI21[f]	= dI[2][1];	dI22[f]	= dI[2][2];
+	}
+}
 __global__ void comp_moments_com_krnl(struct mod_t *dmod)
 {
 	/* Single-thread kernel */
@@ -872,7 +896,7 @@ __global__ void comp_moments_com_krnl(struct mod_t *dmod)
 	}
 }
 
-__host__ void compute_moments_gpu(struct mod_t *dmod, int nf, cudaStream_t *cm_streams)
+__host__ void compute_moments_gpu32(struct mod_t *dmod, int nf, cudaStream_t *cm_streams)
 {
 	float area1=0.0, area2=0.0, *dv, *dcom0, *dcom1, *dcom2, *dI00, *dI01, *dI02,
 			*dI10, *dI11, *dI12, *dI20, *dI21, *dI22;
@@ -881,7 +905,7 @@ __host__ void compute_moments_gpu(struct mod_t *dmod, int nf, cudaStream_t *cm_s
 
 	/*  Initialize the model's surface area, volume, center-of-mass (COM)
 	 * displacement, and inertia tensor  */
-	comp_moments_1stinit_krnl<<<1,1>>>(dmod, c);
+	comp_moments_1stinit_krnl<<<1,1>>>(dmod);
 	checkErrorAfterKernelLaunch("comp_moments_init_krnl, line 945");
 
 	/* CUDA note:  Only single-component models for now.
@@ -894,7 +918,7 @@ __host__ void compute_moments_gpu(struct mod_t *dmod, int nf, cudaStream_t *cm_s
 	 * implemented. A single-component model is assumed, in which case every
 	 * facet is active and area1=area2 */
 	//	for (c=0; c<dmod->shape.ncomp; c++) {
-	area1 = compute_model_area(dmod, c, nf);
+	area1 = compute_model_area32(dmod, c, nf);
 	area2 = area1;
 
 	/* Allocate temporary dv, dcom, dI pointers */
@@ -917,18 +941,85 @@ __host__ void compute_moments_gpu(struct mod_t *dmod, int nf, cudaStream_t *cm_s
 	checkErrorAfterKernelLaunch("comp_moments_2ndinit_krnl");
 
 	/* Load the temporary arrays with data */
-	comp_moments_facet_krnl<<<nfBLK,nfTHD>>>(dmod, c, dv, dcom0, dcom1, dcom2,
+	comp_moments_facet_krnl32<<<nfBLK,nfTHD>>>(dmod, c, dv, dcom0, dcom1, dcom2,
 			dI00, dI01, dI02, dI10, dI11, dI12, dI20, dI21, dI22);
-	checkErrorAfterKernelLaunch("comp_moments_facets_krnl");
+	checkErrorAfterKernelLaunch("comp_moments_facets_krnl32");
 
 	/* Calculate surface area for this component; for active facets, also add
 	 * the contributions to the area of the overall model    */
-	dvdI_reduce_streams(dmod, dv, dcom0, dcom1, dcom2, dI00, dI01, dI02,
+	dvdI_reduce_streams32(dmod, dv, dcom0, dcom1, dcom2, dI00, dI01, dI02,
 			dI10, dI11, dI12, dI20, dI21, dI22, nf, c, cm_streams);
 
 	/* This kernel computes the overall COM vector */
 	comp_moments_com_krnl<<<1,1>>>(dmod);
 	checkErrorAfterKernelLaunch("comp_moments_facets_krnl");
+
+	/* Free up the temporary arrays */
+	cudaFree(dv);
+	cudaFree(dcom0);	cudaFree(dcom1);	cudaFree(dcom2);
+	cudaFree(dI00);		cudaFree(dI01);		cudaFree(dI02);
+	cudaFree(dI10);		cudaFree(dI11);		cudaFree(dI12);
+	cudaFree(dI20);		cudaFree(dI21);		cudaFree(dI22);
+}
+// TO DO:  all functions in this file need to be adapated to handle multi-component
+// models, which they currently do not support.
+__host__ void compute_moments_gpu64(struct mod_t *dmod, int nf, cudaStream_t *cm_streams)
+{
+	double area1=0.0, area2=0.0, *dv, *dcom0, *dcom1, *dcom2, *dI00, *dI01, *dI02,
+			*dI10, *dI11, *dI12, *dI20, *dI21, *dI22;
+	size_t arrsz = sizeof(double)*nf;
+	int c=0;	// FIX THIS
+
+	/*  Initialize the model's surface area, volume, center-of-mass (COM)
+	 * displacement, and inertia tensor  */
+	comp_moments_1stinit_krnl<<<1,1>>>(dmod);
+	checkErrorAfterKernelLaunch("comp_moments_init_krnl, line 945");
+
+	/* CUDA note:  Only single-component models for now.
+	 * Loop over all model components, computing areas and moments (volume,
+	 * center of mass, and inertia tensor); COM and inertia tensor are computed
+	 * assuming uniform density. For multiple-component models, when computing
+	 * the area and the moments for overall model, ignore facets interior to
+	 * the model (i.e., that are inside some other component).         */
+	/* Note that area2 (area of active facets summed up) is not currently
+	 * implemented. A single-component model is assumed, in which case every
+	 * facet is active and area1=area2 */
+	//	for (c=0; c<dmod->shape.ncomp; c++) {
+	area1 = compute_model_area64(dmod, c, nf);
+	area2 = area1;
+
+	/* Allocate temporary dv, dcom, dI pointers */
+	gpuErrchk(cudaMalloc((void**)&dv,   arrsz));
+	gpuErrchk(cudaMalloc((void**)&dcom0,arrsz));
+	gpuErrchk(cudaMalloc((void**)&dcom1,arrsz));
+	gpuErrchk(cudaMalloc((void**)&dcom2,arrsz));
+	gpuErrchk(cudaMalloc((void**)&dI00, arrsz));
+	gpuErrchk(cudaMalloc((void**)&dI01, arrsz));
+	gpuErrchk(cudaMalloc((void**)&dI02, arrsz));
+	gpuErrchk(cudaMalloc((void**)&dI10, arrsz));
+	gpuErrchk(cudaMalloc((void**)&dI11, arrsz));
+	gpuErrchk(cudaMalloc((void**)&dI12, arrsz));
+	gpuErrchk(cudaMalloc((void**)&dI20, arrsz));
+	gpuErrchk(cudaMalloc((void**)&dI21, arrsz));
+	gpuErrchk(cudaMalloc((void**)&dI22, arrsz));
+
+	/* Set area and initialize per-component COM and Inertia arrays */
+	comp_moments_2ndinit_krnl<<<1,1>>>(dmod, area1, area2, c);
+	checkErrorAfterKernelLaunch("comp_moments_2ndinit_krnl");
+
+	/* Load the temporary arrays with data */
+	comp_moments_facet_krnl64<<<nfBLK,nfTHD>>>(dmod, c, dv, dcom0, dcom1, dcom2,
+			dI00, dI01, dI02, dI10, dI11, dI12, dI20, dI21, dI22);
+	checkErrorAfterKernelLaunch("comp_moments_facets_krnl64");
+
+	/* Calculate surface area for this component; for active facets, also add
+	 * the contributions to the area of the overall model    */
+	dvdI_reduce_streams64(dmod, dv, dcom0, dcom1, dcom2, dI00, dI01, dI02,
+			dI10, dI11, dI12, dI20, dI21, dI22, nf, c, cm_streams);
+
+	/* This kernel computes the overall COM vector */
+	comp_moments_com_krnl<<<1,1>>>(dmod);
+	checkErrorAfterKernelLaunch("comp_moments_com_krnl");
 
 	/* Free up the temporary arrays */
 	cudaFree(dv);

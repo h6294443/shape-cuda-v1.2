@@ -176,12 +176,6 @@ __device__ void dev_derivs( double x, double *y, double *dydx)
 	/*  y[ 4],y[ 5],y[ 6] = ecliptic x-hat in body-fixed coords = m00,m10,m20        */
 	/*  y[ 7],y[ 8],y[ 9] = ecliptic y-hat in body-fixed coords = m01,m11,m21        */
 	/*  y[10],y[11],y[12] = ecliptic z-hat in body-fixed coords = m02,m12,m22        */
-	/*  Vector y contains the values of the twelve variables we're solving for:      */
-	/*                                                                               */
-	/*  y[ 0],y[ 1],y[ 2] = rescaled spin  in body-fixed coords = w0,w1,w2 / wscale  */
-	/*  y[ 3],y[ 4],y[ 5] = ecliptic x-hat in body-fixed coords = m00,m10,m20        */
-	/*  y[ 6],y[ 7],y[ 8] = ecliptic y-hat in body-fixed coords = m01,m11,m21        */
-	/*  y[ 9],y[10],y[11] = ecliptic z-hat in body-fixed coords = m02,m12,m22        */
 
 	/*  Get time derivatives of spin vector components via Euler's equations:
 
@@ -189,13 +183,9 @@ __device__ void dev_derivs( double x, double *y, double *dydx)
                 d(w_y)/dt  =  [(I_z - I_x)/I_y] * w_z * w_x
                 d(w_z)/dt  =  [(I_x - I_y)/I_z] * w_x * w_y                        */
 
-//	dydx[1] = wscale*((I[2] - I[3])/I[1])*y[2]*y[3];
-//	dydx[2] = wscale*((I[3] - I[1])/I[2])*y[3]*y[1];
-//	dydx[3] = wscale*((I[1] - I[2])/I[3])*y[1]*y[2];
-
-	dydx[0] = wscale*((I[2] - I[3])/I[1])*y[1]*y[2];
-	dydx[1] = wscale*((I[3] - I[1])/I[2])*y[2]*y[0];
-	dydx[2] = wscale*((I[1] - I[2])/I[3])*y[0]*y[1];
+	dydx[1] = wscale*((I[2] - I[3])/I[1])*y[2]*y[3];
+	dydx[2] = wscale*((I[3] - I[1])/I[2])*y[3]*y[1];
+	dydx[3] = wscale*((I[1] - I[2])/I[3])*y[1]*y[2];
 
 	/*  Get time derivatives of ecliptic-to-body-fixed coordinate transformation
       matrix elements, which determine the orientation of the ecliptic axes as
@@ -209,20 +199,57 @@ __device__ void dev_derivs( double x, double *y, double *dydx)
          ecliptic axes as seen in the body-fixed reference frame                   */
 
 	for (i=0; i<=6; i+=3) {
-		dydx[3+i] = wscale*(y[4+i]*y[2] - y[5+i]*y[1]);
-		dydx[4+i] = wscale*(y[5+i]*y[0] - y[3+i]*y[2]);
-		dydx[5+i] = wscale*(y[3+i]*y[1] - y[4+i]*y[0]);
+		dydx[4+i] = wscale*(y[5+i]*y[3] - y[6+i]*y[2]);
+		dydx[5+i] = wscale*(y[6+i]*y[1] - y[4+i]*y[3]);
+		dydx[6+i] = wscale*(y[4+i]*y[2] - y[5+i]*y[1]);
 	}
 }
-
+//__device__ void dev_derivs( double x, double *y, double *dydx)
+//{
+//	int i;
+//
+//	/*  Vector y contains the values of the twelve variables we're solving for:      */
+//	/*                                                                               */
+//	/*  y[ 1],y[ 2],y[ 3] = rescaled spin  in body-fixed coords = w0,w1,w2 / wscale  */
+//	/*  y[ 4],y[ 5],y[ 6] = ecliptic x-hat in body-fixed coords = m00,m10,m20        */
+//	/*  y[ 7],y[ 8],y[ 9] = ecliptic y-hat in body-fixed coords = m01,m11,m21        */
+//	/*  y[10],y[11],y[12] = ecliptic z-hat in body-fixed coords = m02,m12,m22        */
+//
+//	/*  Get time derivatives of spin vector components via Euler's equations:
+//
+//                d(w_x)/dt  =  [(I_y - I_z)/I_x] * w_y * w_z
+//                d(w_y)/dt  =  [(I_z - I_x)/I_y] * w_z * w_x
+//                d(w_z)/dt  =  [(I_x - I_y)/I_z] * w_x * w_y                        */
+//
+//	dydx[0] = wscale*((I[2] - I[3])/I[1])*y[1]*y[2];
+//	dydx[1] = wscale*((I[3] - I[1])/I[2])*y[2]*y[0];
+//	dydx[2] = wscale*((I[1] - I[2])/I[3])*y[0]*y[1];
+//
+//	/*  Get time derivatives of ecliptic-to-body-fixed coordinate transformation
+//      matrix elements, which determine the orientation of the ecliptic axes as
+//      expressed in body-fixed coordinates (see above):
+//
+//                d(ecliptic x-hat)/dt  =  -(spin vector) x (ecliptic x-hat)
+//                d(ecliptic y-hat)/dt  =  -(spin vector) x (ecliptic y-hat)
+//                d(ecliptic z-hat)/dt  =  -(spin vector) x (ecliptic z-hat)
+//
+//      -- where the minus signs result from the "backwards" rotation of the
+//         ecliptic axes as seen in the body-fixed reference frame                   */
+//
+//	for (i=0; i<=6; i+=3) {
+//		dydx[3+i] = wscale*(y[4+i]*y[2] - y[5+i]*y[1]);
+//		dydx[4+i] = wscale*(y[5+i]*y[0] - y[3+i]*y[2]);
+//		dydx[5+i] = wscale*(y[3+i]*y[1] - y[4+i]*y[0]);
+//	}
+//}
 
 /*  Brute-force numerical integration of Euler's equations  */
 
 __device__ void dev_intnpa1( double t0, double t, double inertia[3], double w[3], double m[3][3], double eps)
 {
 	int i, j, k, nok, nbad;
-	double y[12];
-
+	double y[13];
+	y[0] = 0.0;
 	/*  If the integration timespan is zero, the "odeint" routine (called
       below) will choke, so instead of calling it we immediately return
       with the "final" values of w and m left at the initial values      */
@@ -232,7 +259,6 @@ __device__ void dev_intnpa1( double t0, double t, double inertia[3], double w[3]
 
 	/*  Assign the principal moments of inertia to global variable (vector) I
       so that the "dev_derivs" routine (called by "odeint") can access them      */
-
 	for (i=0; i<=2; i++)
 		I[i+1] = inertia[i];
 
@@ -241,7 +267,7 @@ __device__ void dev_intnpa1( double t0, double t, double inertia[3], double w[3]
       rescaled to be of order unity; and nine elements of m, the ecliptic-to-body-fixed
       coordinate transformation matrix that describes the model's angular orientation.
       See comments in the "dev_derivs" routine for details on the elements of y.             */
-	k = -1;
+	k = 0;
 	for (i=0; i<=2; i++)
 		y[++k] = w[i]/wscale;
 	for (j=0; j<=2; j++)
@@ -257,13 +283,60 @@ __device__ void dev_intnpa1( double t0, double t, double inertia[3], double w[3]
 
 	/*  Copy the evolved values in y back to w (taking out the scaling factor) and m  */
 
-	k = -1;
+	k = 0;
 	for (i=0; i<=2; i++)
 		w[i] = y[++k]*wscale;
 	for (j=0; j<=2; j++)
 		for (i=0; i<=2; i++)
 			m[i][j] = y[++k];
 }
+
+//__device__ void dev_intnpa1( double t0, double t, double inertia[3], double w[3], double m[3][3], double eps)
+//{
+//	int i, j, k, nok, nbad;
+//	double y[12];
+//
+//	/*  If the integration timespan is zero, the "odeint" routine (called
+//      below) will choke, so instead of calling it we immediately return
+//      with the "final" values of w and m left at the initial values      */
+//
+//	if (fabs(t - t0) < 1.0e-6)
+//		return;
+//
+//	/*  Assign the principal moments of inertia to global variable (vector) I
+//      so that the "dev_derivs" routine (called by "odeint") can access them      */
+//
+//	for (i=0; i<=2; i++)
+//		I[i+1] = inertia[i];
+//
+//	/* Create vector y and fill it with initial values of the 12 variables we're solving
+//      for: three components of w, the sidereal spin vector in body-fixed coordinates,
+//      rescaled to be of order unity; and nine elements of m, the ecliptic-to-body-fixed
+//      coordinate transformation matrix that describes the model's angular orientation.
+//      See comments in the "dev_derivs" routine for details on the elements of y.             */
+//	k = -1;
+//	for (i=0; i<=2; i++)
+//		y[++k] = w[i]/wscale;
+//	for (j=0; j<=2; j++)
+//		for (i=0; i<=2; i++)
+//			y[++k] = m[i][j];
+//
+//	/* Evolve the spin state from t0 to t by numerically solving 12 coupled first-order
+//      differential equations in time, three for w (Euler's equations) and nine for m;
+//      see comments in the "dev_derivs" routine for details on the equations, and Chapter 16
+//      of Numerical Recipes in C for details on the integration method                    */
+//
+//	dev_odeint( y, t0, t, eps, 0.01, 0.0, &nok, &nbad, dev_derivs, dev_bsstep);
+//
+//	/*  Copy the evolved values in y back to w (taking out the scaling factor) and m  */
+//
+//	k = -1;
+//	for (i=0; i<=2; i++)
+//		w[i] = y[++k]*wscale;
+//	for (j=0; j<=2; j++)
+//		for (i=0; i<=2; i++)
+//			m[i][j] = y[++k];
+//}
 
 __device__ void dev_piksrt(int n,double *arr)
 {

@@ -14,7 +14,7 @@ __global__ void dbg_copy_facet_normals_krnl(struct mod_t *dmod, int nf, float3 *
 		dnormals[f].z = __double2float_rn(dmod->shape.comp[0].real.f[f].n[2]);
 	}
 }
-__host__ void dbg_print_facet_normals_host(struct mod_t *mod, char *fn) {
+__host__ void dbg_print_facet_normals_host(struct mod_t *mod, const char *fn) {
 	/* This debug function prints all facet normals in a given model */
 	int nf;
 	FILE *fp_n;
@@ -31,7 +31,7 @@ __host__ void dbg_print_facet_normals_host(struct mod_t *mod, char *fn) {
 	}
 	fclose(fp_n);
 }
-__host__ void dbg_print_facet_normals(struct mod_t *dmod, int nf, char *fn) {
+__host__ void dbg_print_facet_normals(struct mod_t *dmod, int nf, const char *fn) {
 	/* This debug function prints all facet normals in a given model */
 	FILE *fp_n;
 	float3 *dnormals, *hnormals;
