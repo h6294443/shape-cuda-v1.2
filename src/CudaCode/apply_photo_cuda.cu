@@ -96,7 +96,7 @@ __global__ void ap_init_streams_krnl(
 		phase_d[f] = ddat->set[set].desc.lghtcrv.solar_phase[f];
 	}
 }
-__global__ void ap_init_streams_f_krnl(
+__global__ void ap_init_krnl32(
 		struct dat_t *ddat,
 		struct mod_t *dmod,
 		struct pos_t **pos,
@@ -139,7 +139,7 @@ __global__ void ap_lambertlaw_streams_krnl(
 		}
 	}
 }
-__global__ void ap_lambertlaw_streams_f_krnl(
+__global__ void ap_lambertlaw_krnl32(
 		struct mod_t *dmod,
 		struct pos_t **pos,
 		float *intensity_factor,
@@ -191,7 +191,7 @@ __global__ void ap_harmlambert_streams_krnl(
 		}
 	}
 }
-__global__ void ap_harmlambert_streams_f_krnl(
+__global__ void ap_harmlambert_krnl32(
 		struct mod_t *dmod,
 		struct pos_t **pos,
 		int nThreads,
@@ -248,7 +248,7 @@ __global__ void ap_inholambert_streams_krnl(
 		}
 	}
 }
-__global__ void ap_inholambert_streams_f_krnl(
+__global__ void ap_inholambert_krnl32(
 		struct mod_t *dmod,
 		struct pos_t **pos,
 		int nThreads,
@@ -301,7 +301,7 @@ __global__ void ap_lommel_streams_krnl(
 		}
 	}
 }
-__global__ void ap_lommel_streams_f_krnl(
+__global__ void ap_lommel_krnl32(
 		struct mod_t *dmod,
 		struct pos_t **pos,
 		int nThreads,
@@ -356,7 +356,7 @@ __global__ void ap_harmlommel_streams_krnl(
 		}
 	}
 }
-__global__ void ap_harmlommel_streams_f_krnl(
+__global__ void ap_harmlommel_krnl32(
 		struct mod_t *dmod,
 		struct pos_t **pos,
 		int nThreads,
@@ -415,7 +415,7 @@ __global__ void ap_inholommel_streams_krnl(
 		}
 	}
 }
-__global__ void ap_inholommel_streams_f_krnl(
+__global__ void ap_inholommel_krnl32(
 		struct mod_t *dmod,
 		struct pos_t **pos,
 		int nThreads,
@@ -464,7 +464,7 @@ __global__ void ap_geometrical_streams_krnl(
 		}
 	}
 }
-__global__ void ap_geometrical_streams_f_krnl(
+__global__ void ap_geometrical_krnl32(
 		struct mod_t *dmod,
 		struct pos_t **pos,
 		int nThreads,
@@ -515,7 +515,7 @@ __global__ void ap_hapke_streams_krnl(
 		}
 	}
 }
-__global__ void ap_hapke_streams_f_krnl(
+__global__ void ap_hapke_krnl32(
 		struct mod_t *dmod,
 		struct pos_t **pos,
 		int nThreads,
@@ -579,7 +579,7 @@ __global__ void ap_harmhapke_streams_krnl(
 		}
 	}
 }
-__global__ void ap_harmhapke_streams_f_krnl(
+__global__ void ap_harmhapke_krnl32(
 		struct mod_t *dmod,
 		struct pos_t **pos,
 		int nThreads,
@@ -645,7 +645,7 @@ __global__ void ap_inhohapke_streams_krnl(
 		}
 	}
 }
-__global__ void ap_inhohapke_streams_f_krnl(
+__global__ void ap_inhohapke_krnl32(
 		struct mod_t *dmod,
 		struct pos_t **pos,
 		int nThreads,
@@ -699,7 +699,7 @@ __global__ void ap_kaas_init2_krnl(
 				* phasefuncd[frm] * dmod->photo.optical[ap_ilaw].kaas.R.val/PIE;
 	}
 }
-__global__ void ap_kaas_init2f_krnl(
+__global__ void ap_kaas_init_krnl32(
 		struct mod_t *dmod,
 		float *phasefuncd,
 		float *phase_d,
@@ -753,7 +753,7 @@ __global__ void ap_kaas_streams2_krnl(
 			}
 	}
 }
-__global__ void ap_kaas_streams2f_krnl(
+__global__ void ap_kaas_krnl32(
 		struct mod_t *dmod,
 				struct pos_t **pos,
 				int nThreads,
@@ -824,7 +824,7 @@ __global__ void ap_harmkaas_streams_krnl(
 		}
 	}
 }
-__global__ void ap_harmkaas_streams_f_krnl(
+__global__ void ap_harmkaas_krnl32(
 		struct mod_t *dmod,
 		struct pos_t **pos,
 		int nThreads,
@@ -898,7 +898,7 @@ __global__ void ap_inhokaas_streams_krnl(
 		}
 	}
 }
-__global__ void ap_inhokaas_streams_f_krnl(
+__global__ void ap_inhokaas_krnl32(
 		struct mod_t *dmod,
 		struct pos_t **pos,
 		int nThreads,
@@ -1097,7 +1097,7 @@ __host__ void apply_photo_cuda_streams(
 	free(hsum);
 }
 
-__host__ void apply_photo_cuda_streams_f(
+__host__ void apply_photo_gpu32(
 		struct mod_t *dmod,
 		struct dat_t *ddat,
 		struct pos_t **pos,
@@ -1131,9 +1131,9 @@ __host__ void apply_photo_cuda_streams_f(
 	/* Launch single-thread kernel to assign pos address and get type */
 	THD.x = maxThreadsPerBlock;
 	BLK.x = floor((THD.x - 1 + nframes) / THD.x);
-	ap_init_streams_f_krnl<<<BLK,THD>>>(ddat, dmod, pos, set, nframes, type, dsum,
+	ap_init_krnl32<<<BLK,THD>>>(ddat, dmod, pos, set, nframes, type, dsum,
 			intensity_factor, phase_f);
-	checkErrorAfterKernelLaunch("ap_init_streams_f_krnl");
+	checkErrorAfterKernelLaunch("ap_init_krnl32");
 	gpuErrchk(cudaMemcpy(htype, type, sizeof(unsigned char) *2,
 			cudaMemcpyDeviceToHost));
 
@@ -1141,113 +1141,113 @@ __host__ void apply_photo_cuda_streams_f(
 	case LAMBERTLAW:
 		/* Launch Lambert Law kernel */
 		for (f=1; f<=nframes; f++)
-			ap_lambertlaw_streams_f_krnl<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,pos,
+			ap_lambertlaw_krnl32<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,pos,
 					intensity_factor, xylim, nThreads[f], body, span[f], f);
-		checkErrorAfterKernelLaunch("ap_lambertlaw_streams_f_krnl");
+		checkErrorAfterKernelLaunch("ap_lambertlaw_krnl32");
 		break;
 	case HARMLAMBERT:
 		/* Launch the HarmLambert kernel */
 		for (f=1; f<=nframes; f++)
-			ap_harmlambert_streams_f_krnl<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(
+			ap_harmlambert_krnl32<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(
 					dmod, pos, nThreads[f], body, xylim, span[f],
 					intensity_factor, f);
-		checkErrorAfterKernelLaunch("ap_harmlambert_streams_f_krnl");
+		checkErrorAfterKernelLaunch("ap_harmlambert_krnl32");
 		break;
 	case INHOLAMBERT:
 		/* Launch the Inhomogeneous Lambert kernel */
 		for (f=1; f<=nframes; f++)
-			ap_inholambert_streams_f_krnl<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
+			ap_inholambert_krnl32<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
 					pos, nThreads[f], body, xylim, span[f], intensity_factor,f);
-		checkErrorAfterKernelLaunch("ap_inholambert_streams_f_krnl");
+		checkErrorAfterKernelLaunch("ap_inholambert_krnl32");
 		break;
 	case LOMMEL:
 		/* Launch the Lommel kernel */
 		for (f=1; f<=nframes; f++)
-			ap_lommel_streams_f_krnl<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
+			ap_lommel_krnl32<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
 					nThreads[f], body, xylim, span[f], intensity_factor, f);
-		checkErrorAfterKernelLaunch("ap_lommel_streams_f_krnl");
+		checkErrorAfterKernelLaunch("ap_lommel_krnl32");
 		break;
 	case HARMLOMMEL:
 		/* Launch the HarmLommel kernel */
 		for (f=1; f<=nframes; f++)
-			ap_harmlommel_streams_f_krnl<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
+			ap_harmlommel_krnl32<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
 					pos, nThreads[f], body, xylim, span[f], intensity_factor, f);
-		checkErrorAfterKernelLaunch("ap_harmlommel_streams_f_krnl");
+		checkErrorAfterKernelLaunch("ap_harmlommel_krnl32");
 		break;
 	case INHOLOMMEL:
 		/* Launch the Inhomogeneous Lommel kernel */
 		for (f=1; f<=nframes; f++)
-			ap_inholommel_streams_f_krnl<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
+			ap_inholommel_krnl32<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
 					pos, nThreads[f], body, xylim, span[f], intensity_factor, f);
-		checkErrorAfterKernelLaunch("ap_inholommel_streams_f_krnl");
+		checkErrorAfterKernelLaunch("ap_inholommel_krnl32");
 		break;
 	case GEOMETRICAL:
 		/* Launch the Geometrical law kernel */
 		for (f=1; f<=nframes; f++)
-			ap_geometrical_streams_f_krnl<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
+			ap_geometrical_krnl32<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
 					pos, nThreads[f], body, xylim, span[f], intensity_factor, f);
-		checkErrorAfterKernelLaunch("ap_geometrical_streams_f_krnl");
+		checkErrorAfterKernelLaunch("ap_geometrical_krnl32");
 		break;
 	case HAPKE:
 		/* Launch the Hapke kernel */
 		for (f=1; f<=nframes; f++)
-			ap_hapke_streams_f_krnl<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
+			ap_hapke_krnl32<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
 					nThreads[f], body, xylim, span[f], intensity_factor,
 					phase_f, f);
-		checkErrorAfterKernelLaunch("ap_hapke_streams_f_krnl");
+		checkErrorAfterKernelLaunch("ap_hapke_krnl32");
 		break;
 	case HARMHAPKE:
 		/* Launch the HarmHapke kernel */
 		for (f=1; f<=nframes; f++)
-			ap_harmhapke_streams_f_krnl<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
+			ap_harmhapke_krnl32<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
 					pos, nThreads[f], body, xylim, span[f],	intensity_factor,
 					phase_f, f);
-		checkErrorAfterKernelLaunch("ap_harmhapke_streams_krnl");
+		checkErrorAfterKernelLaunch("ap_harmhapke_krnl32");
 		break;
 	case INHOHAPKE:
 		/* Launch the Inhomogeneous Hapke kernel */
 		for (f=1; f<=nframes; f++)
-			ap_inhohapke_streams_f_krnl<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
+			ap_inhohapke_krnl32<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
 					pos, nThreads[f], body, xylim, span[f], intensity_factor,
 					phase_f, f);
-		checkErrorAfterKernelLaunch("ap_inhohapke_streams_krnl");
+		checkErrorAfterKernelLaunch("ap_inhohapke_krnl32");
 		break;
 	case KAASALAINEN:
 		/* Launch single-thread kernel to init Kaas */
 		gpuErrchk(cudaMalloc((void**)&phasefuncf, sizeof(float)*(nframes+1)));
-		ap_kaas_init2f_krnl<<<BLK,THD>>>(dmod, phasefuncf, phase_f,
+		ap_kaas_init_krnl32<<<BLK,THD>>>(dmod, phasefuncf, phase_f,
 				scale_lommsee, scale_lambert, nframes);
-		checkErrorAfterKernelLaunch("ap_kaas_init2f_krnl");
+		checkErrorAfterKernelLaunch("ap_kaas_init_krnl32");
 
 		/* Launch the main Kaasalainen kernel */
 		for (f=1; f<=nframes; f++){
-			ap_kaas_streams2f_krnl<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
+			ap_kaas_krnl32<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
 					nThreads[f], body, xylim, span[f], intensity_factor,
 					phase_f, phasefuncf, scale_lommsee, scale_lambert, f, nframes);
 		}
-		checkErrorAfterKernelLaunch("ap_kaas_streams2f_krnl");
+		checkErrorAfterKernelLaunch("ap_kaas_krnl32");
 		cudaFree(phasefuncf);
 		break;
 	case HARMKAAS:
 		/* Launch the HarmKaas kernel */
 		for (f=1; f<=nframes; f++)
-			ap_harmkaas_streams_f_krnl<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
+			ap_harmkaas_krnl32<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
 					nThreads[f], body, xylim, span[f], intensity_factor, phase_f, f);
-		checkErrorAfterKernelLaunch("ap_harmkaas_streams_krnl");
+		checkErrorAfterKernelLaunch("ap_harmkaas_krnl32");
 		break;
 	case INHOKAAS:
 		/* Launch the HarmKaas kernel */
 		for (f=1; f<=nframes; f++)
-			ap_inhokaas_streams_f_krnl<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
+			ap_inhokaas_krnl32<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
 					pos, nThreads[f], body, xylim, span[f], intensity_factor,
 					phase_f, f);
-		checkErrorAfterKernelLaunch("ap_inhokaas_streams_krnl");
+		checkErrorAfterKernelLaunch("ap_inhokaas_krnl32");
 		break;
 	case NOLAW:
-		bailout("apply_photo.c: can't set optical scattering law = \"none\" when optical data are used\n");
+		bailout("apply_photo_gpu32.c: can't set optical scattering law = \"none\" when optical data are used\n");
 		break;
 	default:
-		bailout("apply_photo.c: can't handle that optical scattering law yet\n");
+		bailout("apply_photo_gpu32.c: can't handle that optical scattering law yet\n");
 	}
 
 	/* Call a streamed parallel reduction which calculates the sums of pos->b

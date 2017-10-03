@@ -1706,7 +1706,7 @@ __host__ void calc_lghtcrv_gpu(
 	} checkErrorAfterKernelLaunch("cf_mark_pixels_krnl (calc_lghtcrv_cuda)");
 
 	/* Compute model brightness for this lightcurve point then copy to device  */
-	apply_photo_cuda_streams_f(dmod, ddat, pos, xylim, span, BLKpx, nThreadspx1,
+	apply_photo_gpu32(dmod, ddat, pos, xylim, span, BLKpx, nThreadspx1,
 			0, s, nframes, nThreadspx, cf_stream);
 
 	/* Now that we have calculated the model lightcurve brightnesses y at each

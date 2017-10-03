@@ -54,13 +54,13 @@ void checkErrorAfterKernelLaunch(const char *location);
 void deviceSyncAfterKernelLaunch(const char *location);
 void pickGPU(int gpuid);
 
-__host__ void apply_photo_cuda_streams(struct mod_t *dmod, struct dat_t *ddat,
-		struct pos_t **pos, int4 *xylim, int2 *span, dim3 *BLKpx, int *nThreads,
-		int body, int set, int nframes, int *nThreadsPx, cudaStream_t *ap_stream);
-
-__host__ void apply_photo_cuda_streams_f(struct mod_t *dmod, struct dat_t *ddat,
+__host__ void apply_photo_gpu32(struct mod_t *dmod, struct dat_t *ddat,
 		struct pos_t **pos, int4 *xylim, int2 *span, dim3 *BLKpx, int *nThreads,
 		int body, int set, int nframes, int *nThreadspx, cudaStream_t *ap_stream);
+
+__host__ void apply_photo_gpu64(struct mod_t *dmod, struct dat_t *ddat,
+		struct pos_t **pos, int4 *xylim, int2 *span, dim3 *BLKpx, int *nThreads,
+		int body, int set, int nframes, int *nThreadsPx, cudaStream_t *ap_stream);
 
 __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod, struct
 		dat_t *ddat, struct par_t *par, struct mod_t *mod, struct dat_t *dat);

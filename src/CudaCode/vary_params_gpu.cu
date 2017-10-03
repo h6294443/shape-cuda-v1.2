@@ -820,7 +820,7 @@ __host__ void vary_params_gpu(
 				/* Compute model brightness for this lightcurve point */
 				/* lghtcrv->y[ncalc]: calculated points for interpolation,
 				 * ncalc-points total 					 */
-				apply_photo_cuda_streams_f(dmod, ddat, pos, xylim, span, BLK, nThreadspx1,
+				apply_photo_gpu32(dmod, ddat, pos, xylim, span, BLK, nThreadspx1,
 							0, s, hnframes[s], npxls, vp_stream);
 
 				/* Now that we have calculated the model lightcurve brightnesses
@@ -1356,7 +1356,7 @@ void *vary_params_pthread_sub(void *ptr) {
 				/* Compute model brightness for this lightcurve point */
 				/* lghtcrv->y[ncalc]: calculated points for interpolation,
 				 * ncalc-points total 					 */
-				apply_photo_cuda_streams_f(data->model, data->data, pos, xylim,
+				apply_photo_gpu32(data->model, data->data, pos, xylim,
 						span, BLK, nThreadspx1,	0, s, data->nframes[s], npxls,
 						data->gpu_stream);
 
