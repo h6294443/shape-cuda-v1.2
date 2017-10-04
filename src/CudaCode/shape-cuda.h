@@ -31,7 +31,7 @@
 extern int CUDA;			/* Use CUDA 									*/
 extern int GPU0, GPU1;		/* Which GPU to use 							*/
 extern int TIMING;			/* Time execution of certain kernels 			*/
-extern int FLOAT;			/* Uses singles (floats) instead of doubles in much of the calculation kernels */
+extern int FP64;			/* Uses doubles throughout the entire CUDA code (CC>6.0) */
 extern int MGPU;			/* Switch for dual-gpu mode */
 extern int PIN;				/* Use pinned host memory instead of GPU memory */
 

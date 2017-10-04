@@ -758,7 +758,7 @@ __global__ void pos2deldop_pixel_krnl32(
 						k = MIN( idop - idop_min, MAXBINS);
 						fit_contribution = amp * del_contribution[idel-idel_min]
 						                                          * dop_contribution[k];
-						frame[f]->fit_overflow[idel+idel0[f]][idop+idop0[f]] += fit_contribution;
+						frame[f]->fit_overflow32[idel+idel0[f]][idop+idop0[f]] += fit_contribution;
 					}
 			}
 		}
@@ -1012,7 +1012,7 @@ __global__ void pos2deldop_pixel_krnl64(
 						k = MIN( idop - idop_min, MAXBINS);
 						fit_contribution = amp * del_contribution[idel-idel_min]
 						                                          * dop_contribution[k];
-						frame[f]->fit_overflow[idel+idel0[f]][idop+idop0[f]] += fit_contribution;\
+						frame[f]->fit_overflow64[idel+idel0[f]][idop+idop0[f]] += fit_contribution;\
 					}
 			}
 		}
@@ -1087,7 +1087,7 @@ __global__ void pos2deldop_deldoplim_krnl64(
 	}
 }
 
-__global__ void pos2deldop_overflow_krnl(
+__global__ void pos2deldop_overflow_krnl32(
 		struct par_t *dpar,
 		struct deldopfrm_t **frame,
 		int *idel0,
@@ -1132,7 +1132,7 @@ __global__ void pos2deldop_overflow_krnl(
 
 			for (i=i1; i<=i2; i++)
 				for (j=j1; j<=j2; j++) {
-					fo = frame[f]->fit_overflow[i][j];
+					fo = frame[f]->fit_overflow32[i][j];
 					if (fo != 0.0) {
 						if (dpar->speckle)
 							variance = sdev_sq + lookfact *	fo * fo;
@@ -1141,18 +1141,9 @@ __global__ void pos2deldop_overflow_krnl(
 						xsec += fo;
 						delmean += (i-idell0) * fo;
 						dopmean += (j-idopp0) * fo;
-//						frame[f]->overflow_o2 += 1.0;
-//						frame[f]->overflow_m2 += fo * fo / variance;
-//						frame[f]->overflow_xsec += fo;
-//						frame[f]->overflow_delmean += (i-idel0[f]) * fo;
-//						frame[f]->overflow_dopmean += (j-idop0[f]) * fo;
 					}
 				}
 
-//			if (frame[f]->overflow_xsec != 0.0) {
-//				frame[f]->overflow_delmean /= frame[f]->overflow_xsec;
-//				frame[f]->overflow_dopmean /= frame[f]->overflow_xsec;
-//			}
 			if (xsec != 0.0) {
 				delmean /= xsec;
 				dopmean /= xsec;
@@ -1181,11 +1172,99 @@ __global__ void pos2deldop_overflow_krnl(
 							frame[f]->idoplim[0], frame[f]->idoplim[1]);
 				}
 			}
-//			o2m2xsec[f].x = o2;
-//			o2m2xsec[f].y = m2;
-//			o2m2xsec[f].z = xsec;
-//			deldopmean[f].x = delmean;
-//			deldopmean[f].y = dopmean;
+			frame[f]->overflow_o2 = o2;
+			frame[f]->overflow_m2 = m2;
+			frame[f]->overflow_xsec = xsec;
+			frame[f]->overflow_delmean = delmean;
+			frame[f]->overflow_dopmean = dopmean;
+		}
+	}
+}
+__global__ void pos2deldop_overflow_krnl64(
+		struct par_t *dpar,
+		struct deldopfrm_t **frame,
+		int *idel0,
+		int *idop0,
+		int *ndel,
+		int *ndop,
+		int set,
+		int size,
+		int *badradararr,
+		int *any_overflow) {
+	/* nfrm_alloc (size) -threaded kernel */
+	int f = blockIdx.x * blockDim.x + threadIdx.x;
+	int i, i1, i2, j, j1, j2, idell0, idopp0;
+	double lookfact, sdev_sq, variance,dopfactor, delfactor, fo;
+	double o2=0.0, m2=0.0, xsec=0.0, delmean=0.0, dopmean=0.0;
+
+	if (f < size) {
+
+		/* Calculate the overflow contributions to chi squared:
+		 *  o2 = obs^2 contribution, m2 = model^2 contribution.
+		 *
+		 *  Also compute the summed cross section and the mean delay and Doppler
+		 *  bins for the overflow region, for use with the "delcorinit" action    */
+
+		frame[f]->overflow_o2 = 0.0;
+		frame[f]->overflow_m2 = 0.0;
+		frame[f]->overflow_xsec = 0.0;
+		frame[f]->overflow_delmean = 0.0;
+		frame[f]->overflow_dopmean = 0.0;
+		sdev_sq = frame[f]->sdev*frame[f]->sdev;
+		variance = sdev_sq;
+		lookfact = (frame[f]->nlooks > 0.0) ? 1.0/frame[f]->nlooks : 0.0;
+
+
+		if (any_overflow[f]) {
+			idell0 = idel0[f];
+			idopp0 = idop0[f];
+			i1 = MAX( frame[f]->idellim[0] + idell0, 0);
+			i2 = MIN( frame[f]->idellim[1] + idell0, MAXOVERFLOW - 1);
+			j1 = MAX( frame[f]->idoplim[0] + idopp0, 0);
+			j2 = MIN( frame[f]->idoplim[1] + idopp0, MAXOVERFLOW - 1);
+
+			for (i=i1; i<=i2; i++)
+				for (j=j1; j<=j2; j++) {
+					fo = frame[f]->fit_overflow64[i][j];
+					if (fo != 0.0) {
+						if (dpar->speckle)
+							variance = sdev_sq + lookfact *	fo * fo;
+						o2 += 1.0; /* o2 */
+						m2 += fo * fo / variance;
+						xsec += fo;
+						delmean += (i-idell0) * fo;
+						dopmean += (j-idopp0) * fo;
+					}
+				}
+
+			if (xsec != 0.0) {
+				delmean /= xsec;
+				dopmean /= xsec;
+			}
+
+			/* Print a warning if the model extends even beyond the overflow image  */
+			if (((frame[f]->idellim[0] + idel0[f]) < 0)            ||
+					((frame[f]->idellim[1] + idel0[f]) >= MAXOVERFLOW) ||
+					((frame[f]->idoplim[0] + idop0[f]) < 0)            ||
+					((frame[f]->idoplim[1] + idop0[f]) >= MAXOVERFLOW)    ) {
+				//p2ds_badradar = 1;
+				badradararr[f] = 1;
+				delfactor = (MAX(frame[f]->idellim[1] + idel0[f], MAXOVERFLOW)
+						- MIN(frame[f]->idellim[0] + idel0[f], 0)         )
+		                						  / (1.0*MAXOVERFLOW);
+				dopfactor = (MAX(frame[f]->idoplim[1] + idop0[f], MAXOVERFLOW)
+						- MIN(frame[f]->idoplim[0] + idop0[f], 0)         )
+		                						  / (1.0*MAXOVERFLOW);
+				frame[f]->badradar_logfactor += log(delfactor*dopfactor);
+				if (dpar->warn_badradar) {
+					printf("\nWARNING in pos2deldop_cuda_streams.c for set %2d frame %2d:\n", set, f);
+					printf("        model delay-Doppler image extends too far beyond the data image\n");
+					printf("             data:  rows %2d to %2d , cols %2d to %2d\n", 1, ndel[f], 1, ndop[f]);
+					printf("            model:  rows %2d to %2d , cols %2d to %2d\n",
+							frame[f]->idellim[0], frame[f]->idellim[1],
+							frame[f]->idoplim[0], frame[f]->idoplim[1]);
+				}
+			}
 			frame[f]->overflow_o2 = o2;
 			frame[f]->overflow_m2 = m2;
 			frame[f]->overflow_xsec = xsec;
@@ -1268,7 +1347,7 @@ __host__ void pos2deldop_gpu32(
 	checkErrorAfterKernelLaunch("pos2deldop_deldoplim_krnl");
 
 	/* Launch kernel to take care of any bin overflow */
-	pos2deldop_overflow_krnl<<<BLKfrm,THD64>>>(dpar, frame, idel0, idop0, ndel,
+	pos2deldop_overflow_krnl32<<<BLKfrm,THD64>>>(dpar, frame, idel0, idop0, ndel,
 			ndop, set, nfrm_alloc, badradararr, any_overflow);
 	checkErrorAfterKernelLaunch("pos2deldop_overflow_krnl");
 
@@ -1355,7 +1434,7 @@ __host__ void pos2deldop_gpu64(
 	checkErrorAfterKernelLaunch("pos2deldop_deldoplim_krnl");
 
 	/* Launch kernel to take care of any bin overflow */
-	pos2deldop_overflow_krnl<<<BLKfrm,THD64>>>(dpar, frame, idel0, idop0, ndel,
+	pos2deldop_overflow_krnl64<<<BLKfrm,THD64>>>(dpar, frame, idel0, idop0, ndel,
 			ndop, set, nfrm_alloc, badradararr, any_overflow);
 	checkErrorAfterKernelLaunch("pos2deldop_overflow_krnl");
 

@@ -34,14 +34,25 @@ void pickGPU(int gpuid) {
 	}
 }
 
-__global__ void zero_fit_overflow_krnl(struct deldop_t *deldop, int f, int size) {
+__global__ void zero_fit_overflow_krnl32(struct deldop_t *deldop, int f, int size) {
 	/* MAXOVERFLOW^2 - threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
 	int x = offset % MAXOVERFLOW;
 	int y = offset / MAXOVERFLOW;
 
 	if (offset < size) {
-		deldop->frame[f].fit_overflow[x][y] = 0.0;
+		deldop->frame[f].fit_overflow32[x][y] = 0.0;
+	}
+}
+
+__global__ void zero_fit_overflow_krnl64(struct deldop_t *deldop, int f, int size) {
+	/* MAXOVERFLOW^2 - threaded kernel */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int x = offset % MAXOVERFLOW;
+	int y = offset / MAXOVERFLOW;
+
+	if (offset < size) {
+		deldop->frame[f].fit_overflow64[x][y] = 0.0;
 	}
 }
 
@@ -53,6 +64,9 @@ __host__ void zero_fit_overflow(struct deldop_t *deldop, int f) {
 	THD.x = maxThreadsPerBlock;
 	BLK.x = floor((THD.x - 1 + threads) / THD.x);
 
-	zero_fit_overflow_krnl<<<BLK,THD>>>(deldop, f, threads);
+	if (FP64)
+		zero_fit_overflow_krnl64<<<BLK,THD>>>(deldop, f, threads);
+	else
+		zero_fit_overflow_krnl32<<<BLK,THD>>>(deldop, f, threads);
 	checkErrorAfterKernelLaunch("zero_fit_overflow_krnl");
 }

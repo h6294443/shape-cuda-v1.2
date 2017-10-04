@@ -1127,17 +1127,18 @@ struct deldopfrm_t {
   double overflow_xsec;         /* overflow summed cross section */
   double overflow_delmean;      /* overflow mean delay bin */
   double overflow_dopmean;      /* overflow mean Doppler bin */
-  float overflow_o2f;           /* overflow obs^2 contribution to chi squared */
-  float overflow_m2f;           /* overflow model^2 contribution to chi squared */
-  float overflow_xsecf;         /* overflow summed cross section */
-  float overflow_delmeanf;      /* overflow mean delay bin */
-  float overflow_dopmeanf;      /* overflow mean Doppler bin */
+  float overflow_o232;           /* overflow obs^2 contribution to chi squared */
+  float overflow_m232;           /* overflow model^2 contribution to chi squared */
+  float overflow_xsec32;         /* overflow summed cross section */
+  float overflow_delmean32;      /* overflow mean delay bin */
+  float overflow_dopmean32;      /* overflow mean Doppler bin */
   double dof;                   /* degrees of freedom */
   double badradar_logfactor;    /* multiples obj. fcn. if model too wide in delay-Doppler space */
   double **map_fit;             /* fit image needed for the map action */
   double **map_pos;             /* POS image needed for the map action */
   double **map_facet_power;     /* array of facet contributions needed for the map action */
-  float **fit_overflow;//[MAXOVERFLOW][MAXOVERFLOW];	/* for CUDA AF use */
+  float **fit_overflow32;//[MAXOVERFLOW][MAXOVERFLOW];	/* for CUDA AF use */
+  double **fit_overflow64;
 };
 
 /* Structure deldop_t describes a delay-Doppler data set. */
