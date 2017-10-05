@@ -136,8 +136,7 @@ typedef struct realize_photo_thread_t
  } realize_photo_data;
 
 __device__ void dev_checkphotopar( double parval, double parmin, double parmax, int mode,
-		unsigned char *badphoto, double *badphoto_logfactor)
-{
+		unsigned char *badphoto, double *badphoto_logfactor){
 
 	/*  Flag photometric parameter as bad if
            mode = 0:  parval <  parmin  or  parval >  parmax
@@ -173,8 +172,7 @@ __device__ void dev_checkphotopar( double parval, double parmin, double parmax, 
 	}
 }
 
-__global__ void get_photo_types_krnl(struct par_t *dpar, struct mod_t *dmod)
-{
+__global__ void get_photo_types_krnl(struct par_t *dpar, struct mod_t *dmod){
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
 		dpar->badphoto = 0;
@@ -186,8 +184,7 @@ __global__ void get_photo_types_krnl(struct par_t *dpar, struct mod_t *dmod)
 	}
 }
 __global__ void opt_lommel_krnl(struct par_t *dpar, struct mod_t *dmod,
-		double optalb_factor, int albedo_mode, int ilaw)
-{
+		double optalb_factor, int albedo_mode, int ilaw){
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
 		if (dmod->photo.optical[ilaw].R.R.state == 'f') {
@@ -201,15 +198,13 @@ __global__ void opt_lommel_krnl(struct par_t *dpar, struct mod_t *dmod,
 				&dpar->badphoto, &dpar->badphoto_logfactor);
 	}
 }
-__global__ void opt_harmlommel_getL_krnl(struct mod_t *dmod, int ilaw)
-{
+__global__ void opt_harmlommel_getL_krnl(struct mod_t *dmod, int ilaw){
 	/* Single-treaded kernel */
 	if (threadIdx.x == 0)
 		dL = dmod->photo.optical[ilaw].harmR.R.nhar;
 }
 __global__ void opt_harmlommel_set_ab_krnl(struct mod_t *dmod, double optalb_factor,
-		int albedo_mode, int ilaw)
-{
+		int albedo_mode, int ilaw){
 	/* L-threaded kernel */
 	int m, l = threadIdx.x;
 	if (threadIdx.x < dmod->photo.optical[ilaw].harmR.R.nhar)
@@ -242,8 +237,7 @@ __global__ void opt_harmlommel_set_ab_krnl(struct mod_t *dmod, double optalb_fac
 		}
 	}
 }
-__global__ void opt_harmlommel_set_nlm_krnl(struct mod_t *dmod, double **nlm, int L)
-{
+__global__ void opt_harmlommel_set_nlm_krnl(struct mod_t *dmod, double **nlm, int L){
 	/* Multi-threaded kernel (L+1)^2 */
 	int l = blockIdx.x * blockDim.x + threadIdx.x;
 	int m;
@@ -254,8 +248,7 @@ __global__ void opt_harmlommel_set_nlm_krnl(struct mod_t *dmod, double **nlm, in
 	}
 }
 __global__ void opt_harmlommel_facet_krnl(struct par_t *dpar, struct mod_t *dmod,
-		double **afactor, double **bfactor, double **nlm, int ilaw)
-{
+		double **afactor, double **bfactor, double **nlm, int ilaw){
 	/* Multi-threaded kernel (nf) */
 	int m, l, c = 0;
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
@@ -294,8 +287,7 @@ __global__ void opt_harmlommel_facet_krnl(struct par_t *dpar, struct mod_t *dmod
 	}
 }
 __global__ void opt_inholommel_A_krnl(struct par_t *dpar, struct mod_t *dmod,
-		int albedo_mode, double optalb_factor, int ilaw)
-{
+		int albedo_mode, double optalb_factor, int ilaw){
 	/* Single-threaded kernel */
 	if(threadIdx.x == 0) {
 		if (dmod->photo.optical[ilaw].inhoR.global.R.state == 'f') {
@@ -312,8 +304,7 @@ __global__ void opt_inholommel_A_krnl(struct par_t *dpar, struct mod_t *dmod,
 	}
 }
 __global__ void opt_inholommel_facet_krnl(struct par_t *dpar, struct mod_t
-		*dmod, int albedo_mode, double optalb_factor, int ilaw)
-{
+		*dmod, int albedo_mode, double optalb_factor, int ilaw){
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
 	int c = 0;
 
@@ -335,8 +326,7 @@ __global__ void opt_inholommel_facet_krnl(struct par_t *dpar, struct mod_t
 			&dpar->badphoto, &dpar->badphoto_logfactor);
 }
 __global__ void opt_hapke_krnl(struct par_t *dpar, struct mod_t *dmod,
-		int albedo_mode, double optalb_factor, int ilaw)
-{
+		int albedo_mode, double optalb_factor, int ilaw){
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
 		if (dmod->photo.optical[ilaw].hapke.w.state == 'f') {
@@ -873,7 +863,7 @@ __global__ void opt_inhokaas_facet_krnl(struct par_t *dpar, struct mod_t
 	}
 }
 __global__ void rad_cosinelaw_krnl(struct par_t *dpar, struct mod_t *dmod,
-		int albedo_mode, float radalb_factor, int ilaw) {
+		int albedo_mode, double radalb_factor, int ilaw) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
 

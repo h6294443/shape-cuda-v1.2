@@ -791,13 +791,13 @@ __host__ void vary_params_gpu(
 							nf, 0, c, htype[s],	vp_stream);
 
 				if (bistatic_all) {
-					posmask_init_krnl<<<BLKfrm,THD64>>>(pos, so, pixels_per_km, nfrm_alloc);
-					checkErrorAfterKernelLaunch("posmask_init_krnl in vary_params_gpu2");
+					posmask_init_krnl32<<<BLKfrm,THD64>>>(pos, so, pixels_per_km, nfrm_alloc);
+					checkErrorAfterKernelLaunch("posmask_init_krnl32 in vary_params_gpu2");
 
 					for (f=1; f<nfrm_alloc; f++) {
 						/* Now call posmask kernel for this stream, then loop
 						 * to next stream and repeat 	 */
-						posmask_krnl<<<BLK[f],THD,0,vp_stream[f-1]>>>(
+						posmask_krnl32<<<BLK[f],THD,0,vp_stream[f-1]>>>(
 								dpar, pos, so, pixels_per_km, posn, npxls[f],
 								lc_xspan[f], f);
 					} checkErrorAfterKernelLaunch("posmask_krnl in vary_params_gpu2");
@@ -1326,13 +1326,13 @@ void *vary_params_pthread_sub(void *ptr) {
 							data->host_type[s],	data->gpu_stream);
 
 				if (bistatic_all) {
-					posmask_init_krnl<<<BLKfrm,THD64>>>(pos, so, pixels_per_km, nfrm_alloc);
-					checkErrorAfterKernelLaunch("posmask_init_krnl");
+					posmask_init_krnl32<<<BLKfrm,THD64>>>(pos, so, pixels_per_km, nfrm_alloc);
+					checkErrorAfterKernelLaunch("posmask_init_krnl32");
 
 					for (f=1; f<nfrm_alloc; f++) {
 						/* Now call posmask kernel for this stream, then loop
 						 * to next stream and repeat 	 */
-						posmask_krnl<<<BLK[f],THD,0,data->gpu_stream[f-1]>>>(
+						posmask_krnl32<<<BLK[f],THD,0,data->gpu_stream[f-1]>>>(
 								data->parameter, pos, so, pixels_per_km, posn,
 								npxls[f], lc_xspan[f], f);
 					} checkErrorAfterKernelLaunch("posmask_krnl");

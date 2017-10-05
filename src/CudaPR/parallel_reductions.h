@@ -14,9 +14,9 @@ __global__ void device_reduce_block_atomic_kernel_f(float *in, float* out, int N
 float2 getNumBlocksAndThreads(int n, int maxBlocks, int maxThreads);
 
 /* Specific reduction kernels */
-__global__ void device_reduce_block_atomic_kernel_brt(struct pos_t **pos, double** out,
+__global__ void device_reduce_block_atomic_kernel_brt(struct pos_t **pos, double *out,
 		int N, int f, int flt);
-__global__ void device_reduce_block_atomic_kernel_ddf(struct dat_t *ddat, float** out,
+__global__ void device_reduce_block_atomic_kernel_ddf(struct dat_t *ddat, float *out,
 		int N, int f, int s);
 __global__ void device_sum_block_atomic_kernel(float *in, float* out, int N);
 
@@ -51,12 +51,15 @@ __host__ double find_max_in_double_array(double *in, int size);
 
 __host__ double find_min_in_double_array(double *in, int size);
 
-__host__ void sum_brightness_streams(struct dat_t *ddat, struct pos_t **pos,
+__host__ void sum_brightness_gpu32(struct dat_t *ddat, struct pos_t **pos,
+		int nframes, int size, int flt, int set, cudaStream_t *sb_stream);
+
+__host__ void sum_brightness_gpu64(struct dat_t *ddat, struct pos_t **pos,
 		int nframes, int size, int flt, int set, cudaStream_t *sb_stream);
 
 __host__ double sum_double_array(double *a, int size);
 
 __host__ void sum_2_double_arrays(double *a, double *b, double *absum, int size);
 
-
-
+__host__ void sum_o2m2om_gpu64(struct dat_t *ddat, double *o2, double *m2, double *om,
+		int nframes, int size, int set, cudaStream_t *sb_stream);

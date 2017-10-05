@@ -1663,18 +1663,17 @@ __host__ void calc_lghtcrv_gpu(
 		}
 	}
 	/* Initialize this stream for the posmask kernel to follow */
-	posmask_init_krnl<<<BLKfrm,THD64>>>(pos, so, pxlpkm, nframes);
+	posmask_init_krnl32<<<BLKfrm,THD64>>>(pos, so, pxlpkm, nframes);
 
 	for (f=1; f<=nframes; f++) {
 		if (houtbndarr[f]) {
 			/* Now call posmask kernel for this stream, then loop
 			 * to next stream and repeat 	 */
-			posmask_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(
+			posmask_krnl32<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(
 					dpar, pos, so, pxlpkm, posn, nThreadspx[f],	span[f].x, f);
 
 		} checkErrorAfterKernelLaunch("posmask_krnl");
 	}
-//	}
 
 	/* Go through all visible and unshadowed POS pixels with low enough
 	 * scattering and incidence angles, and mark facets which project onto

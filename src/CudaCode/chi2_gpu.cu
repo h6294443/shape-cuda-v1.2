@@ -432,7 +432,7 @@ __global__ void c2s_deldop_add_o2_krnl64(
 
 		/* The following two lines implement this:
 		 * om += fit[i][j]*obs[i][j]*oneovervar[i][j];		 */
-		temp = ddat->set[s].desc.deldop.frame[f].fit_s[offset] *
+		temp = ddat->set[s].desc.deldop.frame[f].fit[i][j] *
 				ddat->set[s].desc.deldop.frame[f].obs[i][j] *
 				ddat->set[s].desc.deldop.frame[f].oneovervar[i][j];
 		atomicAdd(&om[f], temp);

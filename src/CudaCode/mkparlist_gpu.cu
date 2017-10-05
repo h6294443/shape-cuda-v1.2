@@ -244,9 +244,9 @@ __global__ void mpl_rad_krnl(struct par_t *dpar, struct mod_t *dmod,
 		int *fpartype) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
-		int ilaw = 0;	/* component index = always zero for now */
-		int i, c, f, m, l;
-		switch (dmod->photo.radtype[ilaw]) {
+		int ilaw, i, c, f, m, l;
+		for (ilaw=0; ilaw<dmod->photo.nradlaws; ilaw++) {
+        switch (dmod->photo.radtype[ilaw]) {
 		case COSINELAW_DIFF:
 			if (dmod->photo.radar[ilaw].RC.R.state == 'f') {
 				fpntr[++p] = &dmod->photo.radar[ilaw].RC.R.val;
@@ -396,8 +396,9 @@ __global__ void mpl_rad_krnl(struct par_t *dpar, struct mod_t *dmod,
 		case NOLAW:
 			break;
 		default:
-			printf("mkparlist_cuda.cu: can't do that radar law yet\n");
+			printf("mkparlist_gpu.cu: can't do that radar law yet\n");
 		}
+        }
 	}
 }
 __global__ void mpl_photo_krnl(struct par_t *dpar, struct mod_t *dmod,
@@ -405,9 +406,10 @@ __global__ void mpl_photo_krnl(struct par_t *dpar, struct mod_t *dmod,
 		int *fpartype) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
-		int c, f, l, m;
-		int ilaw = 0;
-		switch (dmod->photo.opttype[ilaw]) {
+		int ilaw, c, f, l, m;
+
+        for (ilaw=0; ilaw<dmod->photo.noptlaws; ilaw++) {
+        switch (dmod->photo.opttype[ilaw]) {
 		case NOLAW:
 			break;
 		case GEOMETRICAL:
@@ -861,6 +863,7 @@ __global__ void mpl_photo_krnl(struct par_t *dpar, struct mod_t *dmod,
 		default:
 			printf("mkparlist_cuda.c: can't do that optical law yet\n");
 		}
+        }
 	}
 }
 __global__ void mpl_spin_krnl(struct par_t *dpar, struct mod_t *dmod,

@@ -282,8 +282,11 @@ __global__ void posclr_mgpu_krnl(struct pos_t **pos, int *posn, int f, int hf,
 __global__ void cf_mark_pixels_seen_krnl(struct par_t *dpar, struct mod_t *dmod,
 		struct pos_t **pos, int4 *xylim, int npixels, int xspan, int f);
 
-__global__ void posmask_krnl(struct par_t *dpar,struct pos_t **pos,double3 *so,
+__global__ void posmask_krnl32(struct par_t *dpar,struct pos_t **pos,double3 *so,
 		float *pixels_per_km, int *posn, int nThreads, int xspan, int f);
+
+__global__ void posmask_krnl64(struct par_t *dpar,struct pos_t **pos,double3 *so,
+		double *pixels_per_km, int *posn, int nThreads, int xspan, int f);
 
 __global__ void realize_angleoff_krnl(struct dat_t *ddat, int gpuid);
 
@@ -291,7 +294,10 @@ __global__ void realize_omegaoff_krnl(struct dat_t *ddat, int gpuid);
 
 __global__ void update_spin_angle_krnl(struct mod_t *dmod, double3 *angle_omega_save);
 
-__global__ void posmask_init_krnl(struct pos_t **pos, double3 *so,
+__global__ void posmask_init_krnl32(struct pos_t **pos, double3 *so,
+		float *pixels_per_km, int size);
+
+__global__ void posmask_init_krnl64(struct pos_t **pos, double3 *so,
 		float *pixels_per_km, int size);
 
 __device__ void dev_POSrect_gpu32(struct pos_t **pos, int src, float imin_dbl,

@@ -142,10 +142,7 @@ __global__ void realize_spin_deldop_krnl(struct mod_t *dmod, struct dat_t *ddat,
 			for (j=0; j<=2; j++)
 				ddat->set[s].desc.deldop.frame[f].view[k].spin[j] = ddat->set[s].desc.deldop.frame[f].view[k].orbspin[j] +
 				ddat->set[s].desc.deldop.frame[f].view[k].intspin[j];
-
-//			printf("Test");
-
-		}
+        }
 	}
 }
 __global__ void realize_spin_poset_krnl(struct mod_t *dmod, struct dat_t *ddat,
@@ -656,7 +653,6 @@ void *realize_spin_pthread_sub(void *ptr) {
 	cudaFree(angle_omega_save);
 	pthread_exit(0);
 }
-
 
 
 

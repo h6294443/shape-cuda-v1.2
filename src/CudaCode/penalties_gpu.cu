@@ -124,7 +124,7 @@ extern "C" {
 
 __device__ int p_pen_n, p_pen_type, p_ns, p_nf, p_nv, p_ntot, p_got_pa, p_j1,
 			   p_j2, p_jmax;
-__device__ float p_a, p_b, p_pen, p_av, p_av2, p_min_extent, p_max_extent,
+__device__ double p_a, p_b, p_pen, p_av, p_av2, p_min_extent, p_max_extent,
 			   p_sumrho2[NBIFURCATION], p_nrho2[NBIFURCATION], p_meanrho2[NBIFURCATION],
 			   p_deepest_minimum;
 __device__ double p_volume, p_r_eff, p_ap[3][3], p_DEEVE_radius[3],
@@ -144,9 +144,18 @@ __device__ static float atomicMinf(float* address, float val) {
 	} while (assumed != old);
 	return __int_as_float(old);
 }
-
-__device__ void dev_diag_inertia(double inertia[3][3])
+__device__ static float atomicMin64(double* address, double val)
 {
+	unsigned long long* address_as_i = (unsigned long long*) address;
+	unsigned long long old = *address_as_i, assumed;
+	do {
+		assumed = old;
+		old = ::atomicCAS(address_as_i, assumed,
+				__double_as_longlong(::fminf(val, __longlong_as_double(assumed))));
+	} while (assumed != old);
+	return __longlong_as_double(old);
+}
+__device__ void dev_diag_inertia(double inertia[3][3]){
 	int i, j, nrot;
 	double jaca[3][3], jacv[3][3], jacd[3];
 
@@ -506,8 +515,7 @@ __global__ void p_radalbvar_krnl(struct mod_t *dmod, double *av, double *av2) {
 		}
 	}
 }
-__global__ void p_radalbvar_finish_krnl(double avsum, double av2sum)
-{
+__global__ void p_radalbvar_finish_krnl(double avsum, double av2sum){
 	/* Single-threaded task */
 	if (threadIdx.x == 0) {
 		if (p_ntot == 0)
@@ -551,8 +559,7 @@ __global__ void p_radcdel_krnl(struct mod_t *dmod, double *a, double *b) {
 		}
 	}
 }
-__global__ void p_radcdel_finish_krnl(double asum, double bsum)
-{
+__global__ void p_radcdel_finish_krnl(double asum, double bsum){
 	/* Single-thread task */
 	if (threadIdx.x == 0) {
 		if (asum == 0.0)
@@ -588,8 +595,7 @@ __global__ void p_radcvar_krnl(struct mod_t *dmod, double *av, double *av2) {
 		}
 	}
 }
-__global__ void p_radcvar_finish_krnl(double avsum, double av2sum)
-{
+__global__ void p_radcvar_finish_krnl(double avsum, double av2sum){
 	/* Single-threaded task */
 	if (threadIdx.x == 0) {
 		if (p_ntot == 0)
@@ -682,8 +688,7 @@ __global__ void p_nonsmooth_krnl(struct mod_t *dmod, double *a) {
 		}
 	}
 }
-__global__ void p_nonsmooth_finish_krnl(double sum)
-{
+__global__ void p_nonsmooth_finish_krnl(double sum){
 	/* Single-threaded task */
 	if (threadIdx.x == 0){
 		p_pen = sum/p_ntot;
@@ -718,8 +723,7 @@ __global__ void p_concavity_krnl(struct mod_t *dmod, double *a) {
 		}
 	}
 }
-__global__ void p_concavity_finish_krnl(double sum)
-{
+__global__ void p_concavity_finish_krnl(double sum){
 	/* Single-thread task */
 	if (threadIdx.x == 0) {
 		p_pen = sum/p_ntot;
@@ -729,9 +733,7 @@ __global__ void p_rdev_get_radius_krnl(struct mod_t *dmod) {
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
 		p_volume = dmod->shape.volume;
-//		printf("dmod->shape.volume=%3.6g\n", dmod->shape.volume);
 		p_r_eff = pow( 3*p_volume/(4*PIE), 1.0/3.0);
-//		printf("p_r_eff=%3.9g\n", p_r_eff);
 	}
 }
 __global__ void p_rdev_vertex_krnl(struct mod_t *dmod, double *varr) {
@@ -903,8 +905,6 @@ __global__ void p_inertiadev_uni_krnl(struct mod_t *dmod) {
 }
 __global__ void p_pa3tilt_krnl(struct mod_t *dmod) {
 	/* Single-threaded kernel */
-	//double pmoment[3];
-	//float temp;
 
 	if (threadIdx.x == 0) {
 		if (!p_got_pa) {
@@ -1012,7 +1012,6 @@ __global__ void p_bifur_1st_vertex_krnl(struct mod_t *dmod, double *varr) {
 	 * a parallel reduction is run to find min and max */
 	int v = blockIdx.x * blockDim.x + threadIdx.x;
 	int c=0;
-	//double temp;
 
 	if (v < p_nv) {
 		varr[v] = dmod->shape.comp[c].real.v[v].x[p_jmax];
@@ -1088,7 +1087,7 @@ __global__ void p_bifur_deepest_krnl() {
 					if (p_meanrho2[k2] > p_meanrho2[k])
 						temp = min(p_deepest_minimum,
 								p_meanrho2[k]/((p_meanrho2[k1] + p_meanrho2[k2])/2));
-		atomicMinf(&p_deepest_minimum, temp);
+		atomicMin64(&p_deepest_minimum, temp);
 	}
 	__syncthreads();
 

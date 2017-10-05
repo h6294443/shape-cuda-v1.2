@@ -121,12 +121,12 @@ extern "C" {
 /* These 2 device variables are to get nf and nv from the GPU-located dmod file */
 __device__ int dnv, dnf, dns;
 __device__ double d_a[3];
-__device__ float3 d_af;
-__device__ float af_radius, a_over_b_f, b_over_c_f, k_asym_f, x0term_f, numer_f, denom_f, x0_f;
+//__device__ float3 d_af;
+//__device__ float af_radius, a_over_b_f, b_over_c_f, k_asym_f, x0term_f, numer_f, denom_f, x0_f;
 __device__ double a_radius, a_over_b, b_over_c, k_asym, x0term, numer, denom, x0;
 __device__ int harmonic_scatlaw;
-__device__ float rm_area=0.0, rm_ifarea=0.0, rm_vol=0.0, rm_ifvol=0.0,
-		rm_dcom[3], rm_ifdcom[3], rm_dI[3][3], rm_ifdI[3][3];
+//__device__ float rm_area=0.0, rm_ifarea=0.0, rm_vol=0.0, rm_ifvol=0.0,
+//		rm_dcom[3], rm_ifdcom[3], rm_dI[3][3], rm_ifdI[3][3];
 static int nv, nf, ns;
 static dim3 nvBLK,nvTHD,nfBLK,nfTHD,nsBLK,nsTHD;
 __host__ void realize_coordinates_gpu(struct par_t *dpar, struct mod_t *dmod, unsigned char type, int gpuid);
@@ -160,10 +160,10 @@ __global__ void set_diam_krnl(struct par_t *dpar, struct mod_t *dmod, int gpuid,
 }
 __global__ void ellipse_diameter_krnl(struct par_t *dpar, struct mod_t *dmod) {
 	/* This is a single-thread kernel */
-	float diam, diamratio;
+	double diam, diamratio;
 
 	if (threadIdx.x == 0) {
-		diam = (float)dmod->shape.comp[0].desc.ell.two_a.val;
+		diam = dmod->shape.comp[0].desc.ell.two_a.val;
 		if (diam > HAIRWIDTH) {
 			d_a[0] = 2.0/diam; /* 1/radii */
 		} else {
@@ -194,8 +194,7 @@ __global__ void ellipse_diameter_krnl(struct par_t *dpar, struct mod_t *dmod) {
 		d_a[2] *= d_a[2];
 	}
 }
-__global__ void ellipse_distance_krnl(struct par_t *dpar, struct mod_t *dmod)
-{
+__global__ void ellipse_distance_krnl(struct par_t *dpar, struct mod_t *dmod) {
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
 	int j;
 	double den;
@@ -236,8 +235,6 @@ __global__ void ellipse_scalefactor_krnl(struct mod_t *dmod) {
 	}
 }
 __global__ void set_ovoid_parameters_krnl(struct par_t *dpar, struct mod_t *dmod) {
-	//, double a_radius, double a_over_b, double b_over_c, double
-	//  k_asym, double x0term, double numer, double denom, double x0) {
 
 	/* Single-threaded kernel */
 	if (threadIdx.x == 0) {
@@ -284,10 +281,7 @@ __global__ void set_ovoid_parameters_krnl(struct par_t *dpar, struct mod_t *dmod
 		}
 	}
 }
-__global__ void ovoid_distance_krnl(struct par_t *dpar, struct mod_t *dmod)
-//double d_a[3], double a_radius, double a_over_b, double b_over_c, double
-//k_asym, double x0term, double numer, double denom, double x0)
-{
+__global__ void ovoid_distance_krnl(struct par_t *dpar, struct mod_t *dmod) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	int j, k, nrealroots;
 	double a_over_c, h, alpha0, u_x, coeff[4], goodroot, realroot[3], x_over_a;
@@ -338,8 +332,7 @@ __global__ void ovoid_distance_krnl(struct par_t *dpar, struct mod_t *dmod)
 			dmod->shape.comp[0].real.scalefactor[j].val = 1.0;
 	}
 }
-__global__ void harmonic_krnl(struct par_t *dpar, struct mod_t *dmod)
-{
+__global__ void harmonic_krnl(struct par_t *dpar, struct mod_t *dmod){
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	int L, l, m;
 	double r;
@@ -367,8 +360,7 @@ __global__ void harmonic_krnl(struct par_t *dpar, struct mod_t *dmod)
 		}
 	}
 }
-__global__ void harmonic_scalefactor_krnl(struct par_t *dpar, struct mod_t *dmod)
-{
+__global__ void harmonic_scalefactor_krnl(struct par_t *dpar, struct mod_t *dmod) {
 	// This is a 3-thread single thread kernel
 	int j = threadIdx.x;
 
@@ -386,8 +378,7 @@ __global__ void harmonic_scalefactor_krnl(struct par_t *dpar, struct mod_t *dmod
 		}
 	}
 }
-__global__ void vertex_update_dev_krnl(struct par_t *dpar, struct mod_t *dmod)
-{
+__global__ void vertex_update_dev_krnl(struct par_t *dpar, struct mod_t *dmod) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	int v_mirror;
 	if (i < dmod->shape.comp[0].real.nv) {
@@ -398,8 +389,7 @@ __global__ void vertex_update_dev_krnl(struct par_t *dpar, struct mod_t *dmod)
 		}
 	}
 }
-__global__ void vertex_scalefactor_krnl(struct par_t *dpar, struct mod_t *dmod)
-{
+__global__ void vertex_scalefactor_krnl(struct par_t *dpar, struct mod_t *dmod) {
 	// This is a 3-thread single thread kernel
 	//int j = threadIdx.x;
 
@@ -421,8 +411,7 @@ __global__ void vertex_scalefactor_krnl(struct par_t *dpar, struct mod_t *dmod)
 	}
 	__syncthreads();
 }
-__global__ void calc_vertex_co_krnl(struct par_t *dpar, struct mod_t *dmod)
-{
+__global__ void calc_vertex_co_krnl(struct par_t *dpar, struct mod_t *dmod) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	int j;
 	if (i < dnv){
@@ -432,8 +421,7 @@ __global__ void calc_vertex_co_krnl(struct par_t *dpar, struct mod_t *dmod)
 					+ dmod->shape.comp[0].real.v[i].a[j]);
 	}
 }
-__global__ void perform_rotation_krnl(struct par_t *dpar, struct mod_t *dmod)
-{
+__global__ void perform_rotation_krnl(struct par_t *dpar, struct mod_t *dmod) {
 	/* nv-threaded kernel */
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	double x[3];
@@ -459,8 +447,7 @@ __global__ void perform_rotation_krnl(struct par_t *dpar, struct mod_t *dmod)
 			dmod->shape.comp[0].real.v[i].x[j] = x[j];
 	}
 }
-__global__ void perform_translation_krnl(struct par_t *dpar, struct mod_t *dmod)
-{
+__global__ void perform_translation_krnl(struct par_t *dpar, struct mod_t *dmod) {
 	/* nv-threaded kernel */
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	int j, test;
@@ -478,8 +465,7 @@ __global__ void perform_translation_krnl(struct par_t *dpar, struct mod_t *dmod)
 			dmod->shape.comp[0].real.v[i].x[j] += dmod->shape.comp[0].off[j].val;
 	}
 }
-__global__ void set_optical_params_krnl(struct par_t *dpar, struct mod_t *dmod)
-{
+__global__ void set_optical_params_krnl(struct par_t *dpar, struct mod_t *dmod) {
 	/* Single-thread kernel */
 	int ilaw;
 	harmonic_scatlaw = 0;
@@ -494,8 +480,7 @@ __global__ void set_optical_params_krnl(struct par_t *dpar, struct mod_t *dmod)
 				harmonic_scatlaw = 1;
 	}
 }
-__global__ void calc_vertex_nrmls_krnl(struct mod_t *dmod)
-{
+__global__ void calc_vertex_nrmls_krnl(struct mod_t *dmod) {
 	/* nv-threaded kernel */
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	double n[3];
@@ -514,8 +499,7 @@ __global__ void calc_vertex_nrmls_krnl(struct mod_t *dmod)
 			dmod->shape.comp[0].real.v[i].n[k] = n[k];
 	}
 }
-__global__ void facet_krnl(struct par_t *dpar, struct mod_t *dmod)
-{
+__global__ void facet_krnl(struct par_t *dpar, struct mod_t *dmod) {
 	/* For each facet of this component, compute the outward unit normal,
 	 * the area, the mean coordinates of the three corner vertices, and
 	 * the corresponding angular coordinates (for some scattering laws)    */
@@ -541,24 +525,21 @@ __global__ void facet_krnl(struct par_t *dpar, struct mod_t *dmod)
 		}
 	}
 }
-__global__ void set_real_active_vert_krnl(struct mod_t *dmod)
-{
+__global__ void set_real_active_vert_krnl(struct mod_t *dmod) {
 	/* nv-threaded kernel */
 	int v = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (v < dnv) //dmod->shape.comp[0].real.nv)
 		dmod->shape.comp[0].real.v[v].act = 1;
 }
-__global__ void set_real_active_facet_krnl(struct mod_t *dmod)
-{
+__global__ void set_real_active_facet_krnl(struct mod_t *dmod) {
 	/* nf-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (f < dmod->shape.comp[0].real.nf)
 		dmod->shape.comp[0].real.f[f].act = 1;
 }
-__global__ void set_real_active_side_krnl(struct mod_t *dmod)
-{
+__global__ void set_real_active_side_krnl(struct mod_t *dmod) {
 	/* ns-threaded kernel */
 	int k = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -567,8 +548,7 @@ __global__ void set_real_active_side_krnl(struct mod_t *dmod)
 }
 
 __host__ void realize_mod_gpu( struct par_t *dpar, struct mod_t *dmod,
-		unsigned char type, int nf, cudaStream_t *rm_streams)
-{
+		unsigned char type, int nf, cudaStream_t *rm_streams) {
 
 	/*  We need to realize each model component as a polyhedral solid with
       triangular facets.  The first step is to call realize_coordinates,
@@ -593,8 +573,7 @@ __host__ void realize_mod_gpu( struct par_t *dpar, struct mod_t *dmod,
 __host__ void realize_mod_pthread(struct par_t *dpar0, struct par_t *dpar1,
 		struct mod_t *dmod0, struct mod_t *dmod1, unsigned char type, int nf,
 		pthread_t thread1, pthread_t thread2, cudaStream_t *gpu0_stream,
-		cudaStream_t *gpu1_stream)
-{
+		cudaStream_t *gpu1_stream) {
 	/* Note:  The purpose of this p-threaded realize_mod function is to update
 	 * both models - one for each gpu - in the dual gpu mode.  Two models are
 	 * maintained to improve memory access speeds in other functions (mostly
@@ -655,8 +634,7 @@ void *realize_mod_pthread_sub(void *ptr) {
 
 /*  Compute the vertex coordinates and (if necessary) facet angular coordinates
     for each component of the model's vertex realization                         */
-__host__ void realize_coordinates_gpu( struct par_t *dpar, struct mod_t *dmod, unsigned char type, int gpuid)
-{
+__host__ void realize_coordinates_gpu( struct par_t *dpar, struct mod_t *dmod, unsigned char type, int gpuid){
 	dim3 BLK, THD;
 	THD.x = maxThreadsPerBlock;
 	/* Loop over all model components, realizing each one as a polyhedral solid
@@ -778,8 +756,7 @@ __host__ void realize_coordinates_gpu( struct par_t *dpar, struct mod_t *dmod, u
     model lie interior to the model rather than on the model's surface,
     and reset their "act" (active) flags to zero                         */
 
-__host__ void check_surface_gpu(struct mod_t *dmod, cudaStream_t *rm_streams)
-{
+__host__ void check_surface_gpu(struct mod_t *dmod, cudaStream_t *rm_streams) {
 	dim3 THD; THD.x = maxThreadsPerBlock;
 
 	/* Calculate launch parameters */
@@ -810,8 +787,25 @@ __global__ void comp_moments_1stinit_krnl(struct mod_t *dmod) {
 		}
 	}
 }
-__global__ void comp_moments_2ndinit_krnl(struct mod_t *dmod, float area1,
+__global__ void comp_moments_2ndinit_krnl32(struct mod_t *dmod, float area1,
 		float area2, int c) {
+	/* Single-threaded kernel - meant to initialize the individual component
+	 * com and inertia arrays */
+	if (threadIdx.x == 0) {
+		int j, k;
+		dmod->shape.comp[c].area = area1;
+		dmod->shape.area = area2;
+		dmod->shape.comp[0].volume = 0.0;
+		for (k=0; k<=2; k++) {
+			dmod->shape.comp[0].com[k] = 0.0;
+			for (j=0; j<=2; j++)
+				dmod->shape.comp[0].inertia[k][j] = 0.0;
+		}
+		dmod->shape.comp[0].area = 0.0; // actually 1st step in calculating surface area
+	}
+}
+__global__ void comp_moments_2ndinit_krnl64(struct mod_t *dmod, double area1,
+		double area2, int c) {
 	/* Single-threaded kernel - meant to initialize the individual component
 	 * com and inertia arrays */
 	if (threadIdx.x == 0) {
@@ -830,8 +824,7 @@ __global__ void comp_moments_2ndinit_krnl(struct mod_t *dmod, float area1,
 __global__ void comp_moments_facet_krnl32(struct mod_t *dmod, int c, float *dvarr,
 		float *dcom0, float *dcom1, float *dcom2, float *dI00, float *dI01,
 		float *dI02, float *dI10, float *dI11, float *dI12, float *dI20,
-		float *dI21, float *dI22)
-{
+		float *dI21, float *dI22) {
 	/* nf-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
 	double dI[3][3], dcom[3], dv;
@@ -862,8 +855,7 @@ __global__ void comp_moments_facet_krnl32(struct mod_t *dmod, int c, float *dvar
 __global__ void comp_moments_facet_krnl64(struct mod_t *dmod, int c, double *dvarr,
 		double *dcom0, double *dcom1, double *dcom2, double *dI00, double *dI01,
 		double *dI02, double *dI10, double *dI11, double *dI12, double *dI20,
-		double *dI21, double *dI22)
-{
+		double *dI21, double *dI22) {
 	/* nf-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
 	double dI[3][3], dcom[3], dv;
@@ -882,8 +874,7 @@ __global__ void comp_moments_facet_krnl64(struct mod_t *dmod, int c, double *dva
 		dI20[f] 	= dI[2][0];	dI21[f]	= dI[2][1];	dI22[f]	= dI[2][2];
 	}
 }
-__global__ void comp_moments_com_krnl(struct mod_t *dmod)
-{
+__global__ void comp_moments_com_krnl(struct mod_t *dmod) {
 	/* Single-thread kernel */
 	if (threadIdx.x == 0) {
 		int j;
@@ -896,9 +887,9 @@ __global__ void comp_moments_com_krnl(struct mod_t *dmod)
 	}
 }
 
-__host__ void compute_moments_gpu32(struct mod_t *dmod, int nf, cudaStream_t *cm_streams)
-{
-	float area1=0.0, area2=0.0, *dv, *dcom0, *dcom1, *dcom2, *dI00, *dI01, *dI02,
+__host__ void compute_moments_gpu32(struct mod_t *dmod, int nf, cudaStream_t *cm_streams) {
+
+    float area1=0.0, area2=0.0, *dv, *dcom0, *dcom1, *dcom2, *dI00, *dI01, *dI02,
 			*dI10, *dI11, *dI12, *dI20, *dI21, *dI22;
 	size_t arrsz = sizeof(float)*nf;
 	int c=0;
@@ -937,7 +928,7 @@ __host__ void compute_moments_gpu32(struct mod_t *dmod, int nf, cudaStream_t *cm
 	gpuErrchk(cudaMalloc((void**)&dI22, arrsz));
 
 	/* Set area and initialize per-component COM and Inertia arrays */
-	comp_moments_2ndinit_krnl<<<1,1>>>(dmod, area1, area2, c);
+	comp_moments_2ndinit_krnl32<<<1,1>>>(dmod, area1, area2, c);
 	checkErrorAfterKernelLaunch("comp_moments_2ndinit_krnl");
 
 	/* Load the temporary arrays with data */
@@ -1004,7 +995,7 @@ __host__ void compute_moments_gpu64(struct mod_t *dmod, int nf, cudaStream_t *cm
 	gpuErrchk(cudaMalloc((void**)&dI22, arrsz));
 
 	/* Set area and initialize per-component COM and Inertia arrays */
-	comp_moments_2ndinit_krnl<<<1,1>>>(dmod, area1, area2, c);
+	comp_moments_2ndinit_krnl64<<<1,1>>>(dmod, area1, area2, c);
 	checkErrorAfterKernelLaunch("comp_moments_2ndinit_krnl");
 
 	/* Load the temporary arrays with data */
