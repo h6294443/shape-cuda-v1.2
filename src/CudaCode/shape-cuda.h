@@ -298,7 +298,7 @@ __global__ void posmask_init_krnl32(struct pos_t **pos, double3 *so,
 		float *pixels_per_km, int size);
 
 __global__ void posmask_init_krnl64(struct pos_t **pos, double3 *so,
-		float *pixels_per_km, int size);
+		double *pixels_per_km, int size);
 
 __device__ void dev_POSrect_gpu32(struct pos_t **pos, int src, float imin_dbl,
 		float imax_dbl,	float jmin_dbl,	float jmax_dbl,	float4
