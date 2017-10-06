@@ -24,17 +24,26 @@ __global__ void set_idata_pntr_krnl(struct dat_t *ddat, float *d_idata,
 		int set, int frm, int size);
 
 /* Specific reduction functions */
-__host__ float compute_deldop_xsec_gpu(struct dat_t *ddat, int nframes,
+__host__ float compute_deldop_xsec_gpu32(struct dat_t *ddat, int nframes,
 		int size, int set, cudaStream_t *sb_stream);
 
-__host__ float compute_doppler_xsec(struct dat_t *ddat, int ndop,
+__host__ double compute_deldop_xsec_gpu64(struct dat_t *ddat, int nframes,
+		int size, int set, cudaStream_t *sb_stream);
+
+__host__ float compute_doppler_xsec32(struct dat_t *ddat, int ndop,
+		int set, int frm);
+
+__host__ double compute_doppler_xsec64(struct dat_t *ddat, int ndop,
 		int set, int frm);
 
 __host__ float compute_model_area32(struct mod_t *dmod, int c, int size);
 
-__host__ float compute_model_area64(struct mod_t *dmod, int c, int size);
+__host__ double compute_model_area64(struct mod_t *dmod, int c, int size);
 
-__host__ float compute_zmax_gpu(struct dat_t *ddat, struct pos_t **pos,
+__host__ float compute_zmax_gpu32(struct dat_t *ddat, struct pos_t **pos,
+		int nframes, int size, int set, cudaStream_t *sb_stream);
+
+__host__ double compute_zmax_gpu64(struct dat_t *ddat, struct pos_t **pos,
 		int nframes, int size, int set, cudaStream_t *sb_stream);
 
 __host__ void dvdI_reduce_streams32(struct mod_t *dmod, float *dv, float *dcom0,

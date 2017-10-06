@@ -1,8 +1,6 @@
 /* Cuda utility functions */
 __device__ double atomicAdd_dbl(double* address, double val);
-__global__ void cf_gamma_trans_streams_krnl(struct par_t *dpar, struct dat_t *ddat,
-		int s, int f, int nThreads, unsigned char type);
-__global__ void clrvect_krnl(struct dat_t *ddat, int size, int s, int f);
+__global__ void clrvect_krnl(struct dat_t *ddat, int size, int s, int f, int dblflg);
 __global__ void zero_fit_overflow_krnl(struct dat_t *ddat, int s, int f, int size);
 __device__ int cubic_realroots_cuda( double *coeff, double *realroot);
 __device__ void dev_bsstep(double *y, double *dydx, double *xx, double htry, double eps,
@@ -25,7 +23,8 @@ __device__ void dev_euler2mat( double m[3][3], double phi, double theta, double 
 __device__ void dev_facmom( double fv0[3], double fv1[3], double fv2[3], double fn[3],
         double *dv, double dvr[3], double dI[3][3]);
 __device__ double dev_facnrm( struct vertices_t verts, int fi);
-__device__ int dev_gamma_trans(float *datum, double gamma);
+__device__ int dev_gamma_trans32(float *datum, double gamma);
+__device__ int dev_gamma_trans64(double *datum, double gamma);
 __device__ double dev_gammln(double xx);
 __device__ double dev_hapke( double cosi, double cose, double phase,
         double w, double h, double B0, double g, double theta);

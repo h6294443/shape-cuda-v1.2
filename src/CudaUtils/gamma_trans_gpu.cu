@@ -11,29 +11,17 @@ extern "C" {
 #include "../shape/head.h"
 }
 
-__device__ int dev_gamma_trans(float *datum, double gamma)
+__device__ int dev_gamma_trans32(float *datum, double gamma)
 {
   if ((*datum) <= 0.0)
     return 0;
   (*datum) = pow( (double)(*datum), 1/gamma);
   return 1;
 }
-__global__ void cf_gamma_trans_streams_krnl(struct par_t *dpar, struct dat_t *ddat,
-		int s, int f, int nThreads, unsigned char type) {
-	/* Multi-threaded kernel */
-	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	if (offset < nThreads) {
-		/*  Carry out a gamma transformation on the fit image if requested  */
-		if (dpar->dd_gamma != 1.0) {
-			switch (type) {
-			case DELAY:
-				dev_gamma_trans(&ddat->set[s].desc.deldop.frame[f].fit_s[offset],
-						dpar->dd_gamma);
-				break;
-			case DOPPLER:
-				//cf_dop_frame->fit[offset] = fit[offset];
-				break;
-			}
-		}
-	}
+__device__ int dev_gamma_trans64(double *datum, double gamma)
+{
+  if ((*datum) <= 0.0)
+    return 0;
+  (*datum) = pow( (*datum), 1/gamma);
+  return 1;
 }

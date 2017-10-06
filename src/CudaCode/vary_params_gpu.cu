@@ -418,7 +418,7 @@ __global__ void get_xylim_krnl(struct par_t *dpar, struct pos_t **pos,
 	}
 }
 
-__global__ void posclr_krnl(struct pos_t **pos, int *posn, int f, int bdflag)
+__global__ void posclr_krnl(struct pos_t **pos, int *posn, int f, int dblflg)
 {
 	/* Multi-threaded kernel (2*pos->n + 1)^2 threads) */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
@@ -434,29 +434,43 @@ __global__ void posclr_krnl(struct pos_t **pos, int *posn, int f, int bdflag)
 		 * which the pixel center projects to  dummy values                  */
 		pos[f]->body[i][j] = pos[f]->comp[i][j] = pos[f]->f[i][j] = -1;
 
-		pos[f]->b_s[offset] = pos[f]->cose_s[offset] = pos[f]->cosi_s[offset] = 0.0;
-		pos[f]->z_s[offset] = -HUGENUMBER;
-		if (bdflag)
+		if (dblflg) {
+			pos[f]->b[i][j] = pos[f]->cose[i][j] = pos[f]->cosi[i][j] = 0.0;
+			pos[f]->z[i][j] = -HUGENUMBER;
+
+			/* For a bistatic situation (lightcurve or plane-of-sky dataset), zero out
+			 * cos(incidence angle) and reset the distance towards the sun, the body,
+			 * component, and facet numbers as viewed from the sun, and the model's
+			 * maximum projected extent as viewed from the sun to dummy values    */
+			if (pos[f]->bistatic) {
+				pos[f]->bodyill[i][j] = pos[f]->compill[i][j] = pos[f]->fill[i][j] = -1;
+
+				pos[f]->cosill[i][j] = 0.0;
+				pos[f]->zill[i][j] = -HUGENUMBER;
+
+				pos[f]->xlim2[0] = pos[f]->ylim2[0] =  n;
+				pos[f]->xlim2[1] = pos[f]->ylim2[1] = -n;
+			}
+		}
+		else {
+			pos[f]->b_s[offset] = pos[f]->cose_s[offset] = pos[f]->cosi_s[offset] = 0.0;
+			pos[f]->z_s[offset] = -HUGENUMBER;
 			pos[f]->b_d[offset] = 0.0;
+			if (pos[f]->bistatic) {
+				pos[f]->bodyill[i][j] = pos[f]->compill[i][j] = pos[f]->fill[i][j] = -1;
+
+				pos[f]->cosill_s[offset] = 0.0;
+				pos[f]->zill_s[offset] = -HUGENUMBER;
+
+				pos[f]->xlim2[0] = pos[f]->ylim2[0] =  n;
+				pos[f]->xlim2[1] = pos[f]->ylim2[1] = -n;
+			}
+		}
 
 		/* In the x direction, reset the model's leftmost and rightmost
 		 * pixel number to dummy values, and similarly for the y direction   */
 		pos[f]->xlim[0] = pos[f]->ylim[0] =  n;
 		pos[f]->xlim[1] = pos[f]->ylim[1] = -n;
-
-		/* For a bistatic situation (lightcurve or plane-of-sky dataset), zero out
-		 * cos(incidence angle) and reset the distance towards the sun, the body,
-		 * component, and facet numbers as viewed from the sun, and the model's
-		 * maximum projected extent as viewed from the sun to dummy values    */
-		if (pos[f]->bistatic) {
-			pos[f]->bodyill[i][j] = pos[f]->compill[i][j] = pos[f]->fill[i][j] = -1;
-
-			pos[f]->cosill_s[offset] = 0.0;
-			pos[f]->zill_s[offset] = -HUGENUMBER;
-
-			pos[f]->xlim2[0] = pos[f]->ylim2[0] =  n;
-			pos[f]->xlim2[1] = pos[f]->ylim2[1] = -n;
-		}
 	}
 }
 
@@ -623,7 +637,7 @@ __host__ void vary_params_gpu(
 					 * to create the fit image by mapping power from the plane
 					 * of sky to delay-Doppler space.    				  */
 					clrvect_krnl<<<ddBLK[f],THD, 0, vp_stream[f]>>>(ddat,
-							ddsize[f], s, f);
+							ddsize[f], s, f, FP64);
 				}/* End frames loop again to call pos2deldop streams version */
 			} checkErrorAfterKernelLaunch("clrvect_streams_krnl");
 
@@ -634,7 +648,7 @@ __host__ void vary_params_gpu(
 			/* Calculate zmax for all frames (assumption: all pos in this set
 			 * have the same pixel dimensions) */
 			if (hcomp_zmax[s]) {
-				zmax = compute_zmax_gpu(ddat, pos, nfrm_alloc, npxls[0], s, vp_stream);
+				zmax = compute_zmax_gpu32(ddat, pos, nfrm_alloc, npxls[0], s, vp_stream);
 				zmax_final_krnl<<<1,1>>>(zmax);
 				checkErrorAfterKernelLaunch("zmax_finalize_streams2_krnl");
 			}
@@ -646,7 +660,7 @@ __host__ void vary_params_gpu(
 				cudaEventRecord(start1);
 			}
 			/* Calculate radar cross section for each frame in set */
-			xsec[0] = compute_deldop_xsec_gpu(ddat, hnframes[s], ddsize[0], s, vp_stream);
+			xsec[0] = compute_deldop_xsec_gpu32(ddat, hnframes[s], ddsize[0], s, vp_stream);
 			xsec_deldop_krnl<<<1,1>>>(xsec[0]);
 			checkErrorAfterKernelLaunch("compute_xsec_final_streams2_krnl");
 
@@ -712,7 +726,7 @@ __host__ void vary_params_gpu(
 					 * to create the fit image by mapping power from the plane
 					 * of sky to delay-Doppler space.    				      */
 					clrvect_krnl<<<ddBLK[f],THD, 0, vp_stream[f]>>>(ddat,
-							hndop[f], s, f);
+							hndop[f], s, f, FP64);
 					/* End frames loop again to call pos2deldop streams version */
 				}
 			} checkErrorAfterKernelLaunch("clrvect_streams_krnl");
@@ -725,7 +739,7 @@ __host__ void vary_params_gpu(
 				if (hcomp_xsec[f]) {
 					/* Compute cross section */
 					xsec[f]=0.0;
-					xsec[f] = compute_doppler_xsec(ddat, hndop[f], s, f);
+					xsec[f] = compute_doppler_xsec32(ddat, hndop[f], s, f);
 				}
 			}
 			/* Finalize the xsec calculations and calculate cosdelta if specified */
@@ -1159,7 +1173,7 @@ void *vary_params_pthread_sub(void *ptr) {
 						 * to create the fit image by mapping power from the plane
 						 * of sky to delay-Doppler space.    				  */
 						clrvect_krnl<<<ddBLK[f],THD, 0, data->gpu_stream[f]>>>
-								(data->data, ddsize[f], s, f);
+								(data->data, ddsize[f], s, f, FP64);
 					}/* End frames loop again to call pos2deldop streams version */
 				} checkErrorAfterKernelLaunch("clrvect_krnl");
 
@@ -1171,11 +1185,11 @@ void *vary_params_pthread_sub(void *ptr) {
 				/* Calculate zmax for all frames (assumption: all pos in this set
 				 * have the same pixel dimensions) */
 				if (data->zmax_flag[s])
-					data->returns[0] += compute_zmax_gpu(data->data, pos,
+					data->returns[0] += compute_zmax_gpu32(data->data, pos,
 							nfrm_alloc, npxls[0], s, data->gpu_stream);
 
 				/* Calculate radar cross section for each frame in set */
-				data->returns[1] += compute_deldop_xsec_gpu(data->data,
+				data->returns[1] += compute_deldop_xsec_gpu32(data->data,
 						data->nframes[s], ddsize[0], s,	data->gpu_stream);
 
 				if (data->cosdelta_flag[s]) {
@@ -1234,7 +1248,7 @@ void *vary_params_pthread_sub(void *ptr) {
 					 * to create the fit image by mapping power from the plane
 					 * of sky to delay-Doppler space.    				      */
 					clrvect_krnl<<<ddBLK[f],THD, 0, data->gpu_stream[f]>>>
-							(data->data, hndop[f], s, f);
+							(data->data, hndop[f], s, f, FP64);
 					/* End frames loop again to call pos2deldop streams version */
 				}
 			} checkErrorAfterKernelLaunch("clrvect_krnl");
@@ -1248,7 +1262,7 @@ void *vary_params_pthread_sub(void *ptr) {
 				if (hcomp_xsec[f]) {
 					/* Compute cross section */
 					xsec[f]=0.0;
-					xsec[f] = compute_doppler_xsec(data->data, hndop[f], s, f);
+					xsec[f] = compute_doppler_xsec32(data->data, hndop[f], s, f);
 				}
 			}
 			/* Finalize the xsec calculations and calculate cosdelta if specified */

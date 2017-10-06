@@ -1084,31 +1084,45 @@ __host__ double chi2_gpu(
 	for (s=0; s<nsets; s++) {
 		switch (htype[s]) {
 		case DELAY:
-			chi2 = chi2_deldop_gpu32(dpar, ddat, s, list_breakdown,
-					&chi2_all_deldop, &chi2_fit0_deldop, &dof_fit0_deldop,
-					hnframes[s], c2s_stream);
+			if (FP64)
+				chi2 = chi2_deldop_gpu64(dpar, ddat, s, list_breakdown,
+						&chi2_all_deldop, &chi2_fit0_deldop, &dof_fit0_deldop,
+						hnframes[s], c2s_stream);
+			else
+				chi2 = chi2_deldop_gpu32(dpar, ddat, s, list_breakdown,
+						&chi2_all_deldop, &chi2_fit0_deldop, &dof_fit0_deldop,
+						hnframes[s], c2s_stream);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl");
-//			printf("chi2 for set %i (Delay-Doppler) = %g\n", s, chi2);
+			//			printf("chi2 for set %i (Delay-Doppler) = %g\n", s, chi2);
 			break;
 		case DOPPLER:
-			chi2 = chi2_doppler_gpu32(dpar, ddat, s,list_breakdown,
-					&chi2_all_doppler, &chi2_fit0_doppler, &dof_fit0_doppler,
-					hnframes[s], c2s_stream);
+			if (FP64)
+				chi2 = chi2_doppler_gpu64(dpar, ddat, s,list_breakdown,
+						&chi2_all_doppler, &chi2_fit0_doppler, &dof_fit0_doppler,
+						hnframes[s], c2s_stream);
+			else
+				chi2 = chi2_doppler_gpu32(dpar, ddat, s,list_breakdown,
+						&chi2_all_doppler, &chi2_fit0_doppler, &dof_fit0_doppler,
+						hnframes[s], c2s_stream);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl, chi2_cuda_streams");
-//			printf("chi2 for set %i (Doppler) = %g\n", s, chi2);
+			//			printf("chi2 for set %i (Doppler) = %g\n", s, chi2);
 			break;
 		case POS:
 			printf("\nWrite chi2_poset_cuda!\n");
 			//			dat->set[s].chi2 = chi2_poset(dpar, s);
 			break;
 		case LGHTCRV:
-			chi2 = chi2_lghtcrv_gpu(dpar, ddat, s, list_breakdown,
-					&chi2_all_lghtcrv, hnframes[s], hlc_n[s]);
+			if (FP64)
+				chi2 = chi2_lghtcrv_gpu(dpar, ddat, s, list_breakdown,
+						&chi2_all_lghtcrv, hnframes[s], hlc_n[s]);
+			else
+				chi2 = chi2_lghtcrv_gpu(dpar, ddat, s, list_breakdown,
+						&chi2_all_lghtcrv, hnframes[s], hlc_n[s]);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl, chi2_cuda");
-//			printf("chi2 for set %i (Lightcurve) = %g\n", s, chi2);
+			//			printf("chi2 for set %i (Lightcurve) = %g\n", s, chi2);
 			break;
 		default:
 			printf("chi2_cuda_streams.cu: can't handle this type yet\n");
@@ -1637,13 +1651,7 @@ __host__ double chi2_deldop_gpu64(
 	/* Add contributions from power within limits of data frame. This kernel
 	 * also takes care of the frame's calibration factor and  computes chi2
 	 * for this frame */
-	/* WARNING WARNING WARNING */
-	/* This kernel is for accuracy testing only. Must develop a proper
-	 * parallel reduction for this instead */
-	for (f=0; f<nframes; f++)
-		c2s_deldop_add_o2_krnl64<<<BLK[f],THD,0,c2s_stream[f]>>>(dpar,
-				ddat, o2, m2, om, ndel, ndop, nThreads[f], s, f);
-	checkErrorAfterKernelLaunch("c2s_deldop_add_o2_krnl64");
+	sum_o2m2om_gpu64(ddat, o2, m2, om, nframes, hndel[0]*hndop[0], s, c2s_stream);
 
 	c2s_add_deldop_contributions_krnl64<<<BLKfrm,THD64>>>(dpar, ddat, o2, m2,
 			om, weight, ndel, ndop, chi2_deldop_frame, s, nframes);

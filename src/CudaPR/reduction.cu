@@ -28,6 +28,18 @@ __device__ static float atomicMaxf(float* address, float val)
 	return __int_as_float(old);
 }
 
+__device__ static float atomicMax64(double* address, double val)
+{
+	unsigned long long* address_as_i = (unsigned long long*) address;
+	unsigned long long old = *address_as_i, assumed;
+	do {
+		assumed = old;
+		old = ::atomicCAS(address_as_i, assumed,
+				__double_as_longlong(::fmaxf(val, __longlong_as_double(assumed))));
+	} while (assumed != old);
+	return __longlong_as_double(old);
+}
+
 unsigned int nextPow2(unsigned int x)
 {
     --x;
@@ -53,6 +65,12 @@ double warpReduceSumD(double val) {
 }
 __inline__ __device__
 float warpReduceMax(float val) {
+  for (int offset = warpSize/2; offset > 0; offset /= 2)
+    val = fmaxf((__shfl_down(val, offset)),val);
+  return val;
+}
+__inline__ __device__
+double warpReduceMaxD(float val) {
   for (int offset = warpSize/2; offset > 0; offset /= 2)
     val = fmaxf((__shfl_down(val, offset)),val);
   return val;
@@ -105,6 +123,22 @@ float blockReduceMax(float val) {
   //ensure we only grab a value from shared memory if that warp existed
   val = (threadIdx.x<blockDim.x/warpSize) ? shared[lane] : float(0.0);
   if(wid==0) val=warpReduceMax(val);
+
+  return val;
+}
+__inline__ __device__ double blockReduceMaxD(double val) {
+  static __shared__ double shared[32];
+  int lane=threadIdx.x%warpSize;
+  int wid=threadIdx.x/warpSize;
+  val=warpReduceMax(val);
+
+  //write reduced value to shared memory
+  if(lane==0) shared[wid]=val;
+  __syncthreads();
+
+  //ensure we only grab a value from shared memory if that warp existed
+  val = (threadIdx.x<blockDim.x/warpSize) ? shared[lane] : double(0.0);
+  if(wid==0) val=warpReduceMaxD(val);
 
   return val;
 }
@@ -215,7 +249,7 @@ __global__ void device_reduce_block_atomic_kernel_om_64(struct dat_t *ddat, doub
   if(threadIdx.x==0)
     atomicAdd_dbl(&out[0],sum);
 }
-__global__ void device_zmax_block_atomic_kernel(struct pos_t **pos, float* out,
+__global__ void device_zmax_block_atomic_krnl32(struct pos_t **pos, float* out,
 		int N, int f) {
   float zmax=float(0.0);
   for(int i=blockIdx.x*blockDim.x+threadIdx.x;i<N;i+=blockDim.x*gridDim.x) {
@@ -225,7 +259,21 @@ __global__ void device_zmax_block_atomic_kernel(struct pos_t **pos, float* out,
   if(threadIdx.x==0)
     atomicMaxf(&out[0],zmax);
 }
-__global__ void device_reduce_block_atomic_kernel_ddf2(struct dat_t *ddat, float *out,
+__global__ void device_zmax_block_atomic_krnl64(struct pos_t **pos, double* out,
+		int N, int f) {
+  double zmax=float(0.0);
+  int i, j, xspan;
+  for (int offset=blockIdx.x*blockDim.x+threadIdx.x; offset<N; offset+=blockDim.x*gridDim.x) {
+	  xspan = 2* pos[f]->n + 1;
+	  i = offset % xspan + pos[f]->xlim[0];
+	  j = offset / xspan + pos[f]->ylim[0];
+	  zmax = fmaxf(zmax, pos[f]->z[i][j]);
+  }
+  zmax=blockReduceMaxD(zmax);
+  if(threadIdx.x==0)
+    atomicMax64(&out[0],zmax);
+}
+__global__ void device_reduce_block_atomic_kernel_ddf2_32(struct dat_t *ddat, float *out,
 		int N, int f, int s) {
 	/* Used for delay-doppler cross section calculation */
   float sum=0.0;
@@ -236,6 +284,20 @@ __global__ void device_reduce_block_atomic_kernel_ddf2(struct dat_t *ddat, float
 	  sum += ddat->set[s].desc.deldop.frame[f].fit_s[i];
   }
   sum=blockReduceSum(sum);
+  if(threadIdx.x==0)
+    atomicAdd(out,sum);
+}
+__global__ void device_reduce_block_atomic_kernel_ddf2_64(struct dat_t *ddat, double *out,
+		int N, int f, int s) {
+	/* Used for delay-doppler cross section calculation */
+  double sum=0.0;
+  int idel, idop;
+  for(int offset=blockIdx.x * blockDim.x + threadIdx.x;  offset<N;  offset += blockDim.x * gridDim.x) {
+        idel = offset % ddat->set[s].desc.deldop.frame[f].ndel + 1;
+        idop = offset / ddat->set[s].desc.deldop.frame[f].ndel + 1;
+        sum += ddat->set[s].desc.deldop.frame[f].fit[idel][idop];
+  }
+  sum=blockReduceSumD(sum);
   if(threadIdx.x==0)
     atomicAdd(out,sum);
 }
@@ -1069,7 +1131,7 @@ minz<double>(int size, int threads, int blocks,
                int whichKernel, double *d_idata, double *d_odata);
 
 
-__global__ void set_idata_pntr_krnl(struct dat_t *ddat, float *d_idata,
+__global__ void set_idata_pntr_krnl32(struct dat_t *ddat, float *d_idata,
 		int set, int frm, int size) {
 	/* MULTI-threaded kernel */
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1082,6 +1144,25 @@ __global__ void set_idata_pntr_krnl(struct dat_t *ddat, float *d_idata,
 			break;
 		case DOPPLER:
 			d_idata[i] = ddat->set[set].desc.doppler.frame[frm].fit_s[i];
+			break;
+		}
+	}
+}
+__global__ void set_idata_pntr_krnl64(struct dat_t *ddat, double *d_idata,
+		int set, int frm, int size) {
+	/* MULTI-threaded kernel */
+	int idel, idop, offset = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (offset < size){
+
+		switch (ddat->set[set].type) {
+		case DELAY:
+            idel = offset % ddat->set[set].desc.deldop.frame[frm].ndel + 1;
+            idop = offset / ddat->set[set].desc.deldop.frame[frm].ndel + 1;
+			d_idata[offset] = ddat->set[set].desc.deldop.frame[frm].fit[idel][idop];
+			break;
+		case DOPPLER:
+			d_idata[offset] = ddat->set[set].desc.doppler.frame[frm].fit[offset+1];
 			break;
 		}
 	}
@@ -1180,11 +1261,18 @@ __global__ void set_o2m2om_values_krnl(double *d_odata0, double *d_odata1,
 		om[f] = d_odata2[2];
 	}
 }
-__global__ void zmax_streams_intermediary_krnl(struct dat_t *ddat, float *d_in,
+__global__ void zmax_intermediary_krnl32(struct dat_t *ddat, float *d_in,
 		float *d_out, int s, int f) {
 	/* Single-threaded kernel to add each frame's zmax to a sum for the set */
 	if (threadIdx.x ==0) {
 		d_out[f] = d_in[0] * __double2float_rn(ddat->set[s].desc.deldop.frame[f].weight);
+	}
+}
+__global__ void zmax_intermediary_krnl64(struct dat_t *ddat, double *d_in,
+		double *d_out, int s, int f) {
+	/* Single-threaded kernel to add each frame's zmax to a sum for the set */
+	if (threadIdx.x ==0) {
+		d_out[f] = d_in[0] * ddat->set[s].desc.deldop.frame[f].weight;
 	}
 }
 __global__ void zmax_mgpu_intermediary_krnl(struct dat_t *ddat, float *d_in,
@@ -1196,20 +1284,37 @@ __global__ void zmax_mgpu_intermediary_krnl(struct dat_t *ddat, float *d_in,
 		d_out[hf] = d_in[0] * __double2float_rn(ddat->set[s].desc.deldop.frame[f].weight);
 	}
 }
-__global__ void zmax_final_streams_krnl(float *d_odata_final, int nframes) {
+__global__ void zmax_final_krnl32(float *d_odata_final, int nframes) {
 	/* Single threaded kernel to sup up the zmax figures for all frames */
 
 	if (threadIdx.x == 0)
 		for (int f=1; f<nframes; f++)
 			d_odata_final[0] += d_odata_final[f];
 }
-__global__ void deldop_xsec_intermediate_krnl(struct dat_t *ddat, float *d_odata,
+__global__ void zmax_final_krnl64(double *d_odata_final, int nframes) {
+	/* Single threaded kernel to sup up the zmax figures for all frames */
+
+	if (threadIdx.x == 0)
+		for (int f=1; f<nframes; f++)
+			d_odata_final[0] += d_odata_final[f];
+}
+__global__ void deldop_xsec_intermediate_krnl32(struct dat_t *ddat, float *d_odata,
 		float *deldop_cross_section, float *dsum_rad_xsec, int s, int f) {
 	if (threadIdx.x==0) {
 		deldop_cross_section[f] = __double2float_rn(ddat->set[s].desc.deldop.frame[f].overflow_xsec);
 		deldop_cross_section[f] += d_odata[0];
 		deldop_cross_section[f] *= ddat->set[s].desc.deldop.frame[f].cal.val;
 		atomicAdd(&dsum_rad_xsec[0], (__double2float_rn(ddat->set[s].desc.deldop.frame[f].weight) *
+				deldop_cross_section[f]));
+	}
+}
+__global__ void deldop_xsec_intermediate_krnl64(struct dat_t *ddat, double *d_odata,
+		double *deldop_cross_section, double *dsum_rad_xsec, int s, int f) {
+	if (threadIdx.x==0) {
+		deldop_cross_section[f] = ddat->set[s].desc.deldop.frame[f].overflow_xsec;
+		deldop_cross_section[f] += d_odata[0];
+		deldop_cross_section[f] *= ddat->set[s].desc.deldop.frame[f].cal.val;
+		atomicAdd(&dsum_rad_xsec[0], (ddat->set[s].desc.deldop.frame[f].weight *
 				deldop_cross_section[f]));
 	}
 }
@@ -1538,8 +1643,6 @@ __host__ void sum_brightness_gpu64(struct dat_t *ddat, struct pos_t **pos,
 		cudaMemsetAsync(d_odata11, 0, arrsz, sb_stream[11]);
 	}
 	checkErrorAfterKernelLaunch("device_reduce_block_atomic_krnl_brt");
-
-
 	cudaFree(d_odata0);
 	cudaFree(d_odata1);
 	cudaFree(d_odata2);
@@ -1554,7 +1657,7 @@ __host__ void sum_brightness_gpu64(struct dat_t *ddat, struct pos_t **pos,
 	cudaFree(d_odata11);
 }
 
-__host__ float compute_zmax_gpu(struct dat_t *ddat, struct pos_t **pos,
+__host__ float compute_zmax_gpu32(struct dat_t *ddat, struct pos_t **pos,
 		int nframes, int size, int set, cudaStream_t *sb_stream) {
 	/* Function finds zmax for each deldop frame (pos[f]->z[]) in a streamed
 	 * calculation. Eight frames at a time.
@@ -1611,72 +1714,72 @@ __host__ float compute_zmax_gpu(struct dat_t *ddat, struct pos_t **pos,
 		f++;
 		if (f >= nframes) break;
 		cudaMemsetAsync(d_odata0, 0, arrsz, sb_stream[0]);
-		device_zmax_block_atomic_kernel<<< dimGrid,dimBlock,0,sb_stream[0]>>>
+		device_zmax_block_atomic_krnl32<<< dimGrid,dimBlock,0,sb_stream[0]>>>
 				(pos, d_odata0,	size, f);
-		zmax_streams_intermediary_krnl<<<1,1,0,sb_stream[0]>>>
+		zmax_intermediary_krnl32<<<1,1,0,sb_stream[0]>>>
 				(ddat, d_odata0, d_odata_final, set, f);
 
 		f++;
 		if (f >= nframes) break;
 		cudaMemsetAsync(d_odata1, 0, arrsz, sb_stream[1]);
-		device_zmax_block_atomic_kernel<<< dimGrid,dimBlock,0,sb_stream[1]>>>
+		device_zmax_block_atomic_krnl32<<< dimGrid,dimBlock,0,sb_stream[1]>>>
 				(pos, d_odata1, size, f);
-		zmax_streams_intermediary_krnl<<<1,1,0,sb_stream[1]>>>
+		zmax_intermediary_krnl32<<<1,1,0,sb_stream[1]>>>
 				(ddat, d_odata1, d_odata_final, set, f);
 
 		f++;
 		if (f >= nframes) break;
 		cudaMemsetAsync(d_odata2, 0, arrsz, sb_stream[2]);
-		device_zmax_block_atomic_kernel<<< dimGrid,dimBlock,0,sb_stream[2]>>>
+		device_zmax_block_atomic_krnl32<<< dimGrid,dimBlock,0,sb_stream[2]>>>
 				(pos, d_odata2, size, f);
-		zmax_streams_intermediary_krnl<<<1,1,0,sb_stream[2]>>>
+		zmax_intermediary_krnl32<<<1,1,0,sb_stream[2]>>>
 				(ddat, d_odata2, d_odata_final, set, f);
 
 		f++;
 		if (f >= nframes) break;
 		cudaMemsetAsync(d_odata3, 0, arrsz, sb_stream[3]);
-		device_zmax_block_atomic_kernel<<< dimGrid,dimBlock,0,sb_stream[3]>>>
+		device_zmax_block_atomic_krnl32<<< dimGrid,dimBlock,0,sb_stream[3]>>>
 				(pos, d_odata3, size, f);
-		zmax_streams_intermediary_krnl<<<1,1,0,sb_stream[3]>>>
+		zmax_intermediary_krnl32<<<1,1,0,sb_stream[3]>>>
 				(ddat, d_odata3, d_odata_final, set, f);
 
 		f++;
 		if (f >= nframes) break;
 		cudaMemsetAsync(d_odata4, 0, arrsz, sb_stream[4]);
-		device_zmax_block_atomic_kernel<<< dimGrid,dimBlock,0,sb_stream[4]>>>
+		device_zmax_block_atomic_krnl32<<< dimGrid,dimBlock,0,sb_stream[4]>>>
 				(pos, d_odata4, size, f);
-		zmax_streams_intermediary_krnl<<<1,1,0,sb_stream[4]>>>
+		zmax_intermediary_krnl32<<<1,1,0,sb_stream[4]>>>
 				(ddat, d_odata4, d_odata_final, set, f);
 
 		f++;
 		if (f >= nframes) break;
 		cudaMemsetAsync(d_odata5, 0, arrsz, sb_stream[5]);
-		device_zmax_block_atomic_kernel<<< dimGrid,dimBlock,0,sb_stream[5]>>>
+		device_zmax_block_atomic_krnl32<<< dimGrid,dimBlock,0,sb_stream[5]>>>
 				(pos, d_odata5, size, f);
-		zmax_streams_intermediary_krnl<<<1,1,0,sb_stream[5]>>>
+		zmax_intermediary_krnl32<<<1,1,0,sb_stream[5]>>>
 				(ddat, d_odata5, d_odata_final, set, f);
 
 		f++;
 		if (f >= nframes) break;
 		cudaMemsetAsync(d_odata6, 0, arrsz, sb_stream[6]);
-		device_zmax_block_atomic_kernel<<< dimGrid,dimBlock,0,sb_stream[6]>>>
+		device_zmax_block_atomic_krnl32<<< dimGrid,dimBlock,0,sb_stream[6]>>>
 				(pos, d_odata6, size, f);
-		zmax_streams_intermediary_krnl<<<1,1,0,sb_stream[6]>>>
+		zmax_intermediary_krnl32<<<1,1,0,sb_stream[6]>>>
 				(ddat, d_odata6, d_odata_final, set, f);
 
 		f++;
 		if (f >= nframes) break;
 		cudaMemsetAsync(d_odata7, 0, arrsz, sb_stream[7]);
-		device_zmax_block_atomic_kernel<<< dimGrid,dimBlock,0,sb_stream[7]>>>
+		device_zmax_block_atomic_krnl32<<< dimGrid,dimBlock,0,sb_stream[7]>>>
 				(pos, d_odata7, size, f);
-		zmax_streams_intermediary_krnl<<<1,1,0,sb_stream[7]>>>
+		zmax_intermediary_krnl32<<<1,1,0,sb_stream[7]>>>
 				(ddat, d_odata7, d_odata_final, set, f);
 	}
 	checkErrorAfterKernelLaunch("device_zmax_block_atomic_krnl");
 
 	/* Now just sum up all frames in d_odata_final in a loop, copy results back
 	 * to a host array and then return the first element - sum_deldop_zmax */
-	zmax_final_streams_krnl<<<1,1>>>(d_odata_final, nframes);
+	zmax_final_krnl32<<<1,1>>>(d_odata_final, nframes);
 	checkErrorAfterKernelLaunch("zmax_final_streams_krnl");
 	gpuErrchk(cudaMemcpy(sum_deldop_zmax_arr, d_odata_final, arrsz2,
 			cudaMemcpyDeviceToHost));
@@ -1694,8 +1797,117 @@ __host__ float compute_zmax_gpu(struct dat_t *ddat, struct pos_t **pos,
 	cudaFree(d_odata_final);
 	return sum_deldop_zmax;
 }
+__host__ double compute_zmax_gpu64(struct dat_t *ddat, struct pos_t **pos,
+		int nframes, int size, int set, cudaStream_t *sb_stream) {
+	/* Function finds zmax for each deldop frame (pos[f]->z[]) in a streamed
+	 * calculation. Eight frames at a time.
+	 * This version gets all frames in the set done simultaneously in streams,
+	 * which are passed to this function from the parent function.
+	 *
+	 * Assumptions made for this streams version:
+	 * 	- All pos in the set have the same parameters (i.e., size)
+	 *
+	 * Input arguments:
+	 * 	- pos		- all pos structures in current dataset
+	 * 	- nframes	- number of frames in dataset
+	 * 	- size		- size of each pos array, i.e. # of pixels
+	 * 	- sb_stream	- array of cudaStreams, guaranteed to be as large as the
+	 * 				  largest dataset requires and at least 13	  */
 
-__host__ float compute_deldop_xsec_gpu(struct dat_t *ddat, int nframes,
+	int f=-1, maxThreads = maxThreadsPerBlock;		// max # of threads per block
+	int maxBlocks = 2048;		// max # of blocks per grid
+	int numBlocks = 0;			// initialize numBlocks
+	int numThreads = 0;			// initialize numThreads
+	double *d_odata0, *d_odata1, *d_odata2, *d_odata3, *d_odata4, *d_odata_final,
+        *sum_deldop_zmax_arr, sum_deldop_zmax;
+	float2 xblock_ythread;		// used for return value of getNumBlocksAndThreads
+	dim3 BLK,THD;
+	THD.x = maxThreadsPerBlock;
+	BLK.x = floor((THD.x - 1 + size)/THD.x);
+
+	/* Find number of blocks & threads needed for reduction call */
+	/* NOTE: This assumes all frames/pos are the same size!      */
+	xblock_ythread = getNumBlocksAndThreads(size, maxBlocks, maxThreads);
+	numBlocks = xblock_ythread.x;
+	numThreads = xblock_ythread.y;
+	dim3 dimBlock(numThreads, 1, 1);
+	dim3 dimGrid(numBlocks, 1, 1);
+	size_t arrsz = sizeof(double) * numBlocks;
+	size_t arrsz2 = sizeof(double) * nframes;
+
+	/* Allocate memory */
+	sum_deldop_zmax_arr = (double *)malloc(arrsz2);
+	gpuErrchk(cudaMalloc((void**)&d_odata0, arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata1, arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata2, arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata3, arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata4, arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata_final, arrsz2));
+	gpuErrchk(cudaMemsetAsync(d_odata_final, 0, arrsz2, sb_stream[8]));
+
+	/* Call reduction  */
+	while (f<nframes) {
+		f++;
+		if (f >= nframes) break;
+		cudaMemsetAsync(d_odata0, 0, arrsz, sb_stream[0]);
+		device_zmax_block_atomic_krnl64<<< dimGrid,dimBlock,0,sb_stream[0]>>>
+				(pos, d_odata0,	size, f);
+		zmax_intermediary_krnl64<<<1,1,0,sb_stream[0]>>>
+				(ddat, d_odata0, d_odata_final, set, f);
+
+		f++;
+		if (f >= nframes) break;
+		cudaMemsetAsync(d_odata1, 0, arrsz, sb_stream[1]);
+		device_zmax_block_atomic_krnl64<<< dimGrid,dimBlock,0,sb_stream[1]>>>
+				(pos, d_odata1, size, f);
+		zmax_intermediary_krnl64<<<1,1,0,sb_stream[1]>>>
+				(ddat, d_odata1, d_odata_final, set, f);
+
+		f++;
+		if (f >= nframes) break;
+		cudaMemsetAsync(d_odata2, 0, arrsz, sb_stream[2]);
+		device_zmax_block_atomic_krnl64<<< dimGrid,dimBlock,0,sb_stream[2]>>>
+				(pos, d_odata2, size, f);
+		zmax_intermediary_krnl64<<<1,1,0,sb_stream[2]>>>
+				(ddat, d_odata2, d_odata_final, set, f);
+
+		f++;
+		if (f >= nframes) break;
+		cudaMemsetAsync(d_odata3, 0, arrsz, sb_stream[3]);
+		device_zmax_block_atomic_krnl64<<< dimGrid,dimBlock,0,sb_stream[3]>>>
+				(pos, d_odata3, size, f);
+		zmax_intermediary_krnl64<<<1,1,0,sb_stream[3]>>>
+				(ddat, d_odata3, d_odata_final, set, f);
+
+		f++;
+		if (f >= nframes) break;
+		cudaMemsetAsync(d_odata4, 0, arrsz, sb_stream[4]);
+		device_zmax_block_atomic_krnl64<<< dimGrid,dimBlock,0,sb_stream[4]>>>
+				(pos, d_odata4, size, f);
+		zmax_intermediary_krnl64<<<1,1,0,sb_stream[4]>>>
+				(ddat, d_odata4, d_odata_final, set, f);
+	}
+	checkErrorAfterKernelLaunch("device_zmax_block_atomic_krnl64");
+
+	/* Now just sum up all frames in d_odata_final in a loop, copy results back
+	 * to a host array and then return the first element - sum_deldop_zmax */
+	zmax_final_krnl64<<<1,1>>>(d_odata_final, nframes);
+	checkErrorAfterKernelLaunch("zmax_final_krnl64");
+	gpuErrchk(cudaMemcpy(sum_deldop_zmax_arr, d_odata_final, arrsz2,
+			cudaMemcpyDeviceToHost));
+	sum_deldop_zmax = sum_deldop_zmax_arr[0];
+
+	free(sum_deldop_zmax_arr);
+	cudaFree(d_odata0);
+	cudaFree(d_odata1);
+	cudaFree(d_odata2);
+	cudaFree(d_odata3);
+	cudaFree(d_odata4);
+	cudaFree(d_odata_final);
+	return sum_deldop_zmax;
+}
+
+__host__ float compute_deldop_xsec_gpu32(struct dat_t *ddat, int nframes,
 		int size, int set, cudaStream_t *sb_stream) {
 	/* Function finds zmax for each deldop frame (pos[f]->z[]) in a streamed
 	 * calculation. Eight frames at a time.
@@ -1753,67 +1965,67 @@ __host__ float compute_deldop_xsec_gpu(struct dat_t *ddat, int nframes,
 		f++;
 		if (f >= nframes) break;
 		cudaMemsetAsync(d_odata0, 0, arrsz, sb_stream[0]);
-		device_reduce_block_atomic_kernel_ddf2<<< dimGrid, dimBlock, 0, sb_stream[0]>>>
+		device_reduce_block_atomic_kernel_ddf2_32<<< dimGrid, dimBlock, 0, sb_stream[0]>>>
 				(ddat,d_odata0, size, f, set);
-		deldop_xsec_intermediate_krnl<<<1,1,0,sb_stream[0]>>>(ddat, d_odata0,
+		deldop_xsec_intermediate_krnl32<<<1,1,0,sb_stream[0]>>>(ddat, d_odata0,
 				deldop_cross_section, dsum_rad_xsec, set, f);
 		f++;
 		if (f >= nframes) break;
 		cudaMemsetAsync(d_odata1, 0, arrsz, sb_stream[1]);
-		device_reduce_block_atomic_kernel_ddf2<<< dimGrid, dimBlock, 0, sb_stream[1]>>>
+		device_reduce_block_atomic_kernel_ddf2_32<<< dimGrid, dimBlock, 0, sb_stream[1]>>>
 				(ddat, d_odata1, size, f, set);
-		deldop_xsec_intermediate_krnl<<<1,1,0,sb_stream[1]>>>(ddat, d_odata1,
+		deldop_xsec_intermediate_krnl32<<<1,1,0,sb_stream[1]>>>(ddat, d_odata1,
 				deldop_cross_section, dsum_rad_xsec, set, f);
 
 		f++;
 		if (f >= nframes) break;
 		cudaMemsetAsync(d_odata2, 0, arrsz, sb_stream[2]);
-		device_reduce_block_atomic_kernel_ddf2<<< dimGrid, dimBlock, 0, sb_stream[2]>>>
+		device_reduce_block_atomic_kernel_ddf2_32<<< dimGrid, dimBlock, 0, sb_stream[2]>>>
 				(ddat, d_odata2, size, f, set);
-		deldop_xsec_intermediate_krnl<<<1,1,0,sb_stream[2]>>>(ddat, d_odata2,
+		deldop_xsec_intermediate_krnl32<<<1,1,0,sb_stream[2]>>>(ddat, d_odata2,
 				deldop_cross_section, dsum_rad_xsec, set, f);
 
 		f++;
 		if (f >= nframes) break;
 		cudaMemsetAsync(d_odata3, 0, arrsz, sb_stream[3]);
-		device_reduce_block_atomic_kernel_ddf2<<< dimGrid, dimBlock, 0, sb_stream[3]>>>
+		device_reduce_block_atomic_kernel_ddf2_32<<< dimGrid, dimBlock, 0, sb_stream[3]>>>
 				(ddat, d_odata3, size, f, set);
-		deldop_xsec_intermediate_krnl<<<1,1,0,sb_stream[3]>>>(ddat, d_odata3,
+		deldop_xsec_intermediate_krnl32<<<1,1,0,sb_stream[3]>>>(ddat, d_odata3,
 				deldop_cross_section, dsum_rad_xsec, set, f);
 
 		f++;
 		if (f >= nframes) break;
 		cudaMemsetAsync(d_odata4, 0, arrsz, sb_stream[4]);
-		device_reduce_block_atomic_kernel_ddf2<<< dimGrid, dimBlock, 0, sb_stream[4]>>>
+		device_reduce_block_atomic_kernel_ddf2_32<<< dimGrid, dimBlock, 0, sb_stream[4]>>>
 				(ddat, d_odata4, size, f, set);
-		deldop_xsec_intermediate_krnl<<<1,1,0,sb_stream[4]>>>(ddat, d_odata4,
+		deldop_xsec_intermediate_krnl32<<<1,1,0,sb_stream[4]>>>(ddat, d_odata4,
 				deldop_cross_section, dsum_rad_xsec, set, f);
 
 		f++;
 		if (f >= nframes) break;
 		cudaMemsetAsync(d_odata5, 0, arrsz, sb_stream[5]);
-		device_reduce_block_atomic_kernel_ddf2<<< dimGrid, dimBlock, 0, sb_stream[5]>>>
+		device_reduce_block_atomic_kernel_ddf2_32<<< dimGrid, dimBlock, 0, sb_stream[5]>>>
 				(ddat, d_odata5, size, f, set);
-		deldop_xsec_intermediate_krnl<<<1,1,0,sb_stream[5]>>>(ddat, d_odata5,
+		deldop_xsec_intermediate_krnl32<<<1,1,0,sb_stream[5]>>>(ddat, d_odata5,
 				deldop_cross_section, dsum_rad_xsec, set, f);
 
 		f++;
 		if (f >= nframes) break;
 		cudaMemsetAsync(d_odata6, 0, arrsz, sb_stream[6]);
-		device_reduce_block_atomic_kernel_ddf2<<< dimGrid, dimBlock, 0, sb_stream[6]>>>
+		device_reduce_block_atomic_kernel_ddf2_32<<< dimGrid, dimBlock, 0, sb_stream[6]>>>
 				(ddat, d_odata6, size, f, set);
-		deldop_xsec_intermediate_krnl<<<1,1,0,sb_stream[6]>>>(ddat, d_odata6,
+		deldop_xsec_intermediate_krnl32<<<1,1,0,sb_stream[6]>>>(ddat, d_odata6,
 				deldop_cross_section, dsum_rad_xsec, set, f);
 
 		f++;
 		if (f >= nframes) break;
 		cudaMemsetAsync(d_odata7, 0, arrsz, sb_stream[7]);
-		device_reduce_block_atomic_kernel_ddf2<<< dimGrid, dimBlock, 0, sb_stream[7]>>>
+		device_reduce_block_atomic_kernel_ddf2_32<<< dimGrid, dimBlock, 0, sb_stream[7]>>>
 				(ddat, d_odata7, size, f, set);
-		deldop_xsec_intermediate_krnl<<<1,1,0,sb_stream[7]>>>(ddat, d_odata7,
+		deldop_xsec_intermediate_krnl32<<<1,1,0,sb_stream[7]>>>(ddat, d_odata7,
 				deldop_cross_section, dsum_rad_xsec, set, f);
 	}
-	checkErrorAfterKernelLaunch("device_zmax_block_atomic_krnl");
+	checkErrorAfterKernelLaunch("device_reduce_block_atomic_krnl_ddf2_32");
 
 	/* Now copy dsum_rad_xsec over to a host copy */
 	gpuErrchk(cudaMemcpy(hsum_rad_xsec, dsum_rad_xsec, sizeof(float)*2,
@@ -1833,7 +2045,114 @@ __host__ float compute_deldop_xsec_gpu(struct dat_t *ddat, int nframes,
 	cudaFree(d_odata7);
 	return sum_deldop_xsec;
 }
+__host__ double compute_deldop_xsec_gpu64(struct dat_t *ddat, int nframes,
+		int size, int set, cudaStream_t *sb_stream) {
+	/* Function finds zmax for each deldop frame (pos[f]->z[]) in a streamed
+	 * calculation. Eight frames at a time.
+	 * This version gets all frames in the set done simultaneously in streams,
+	 * which are passed to this function from the parent function.
+	 *
+	 * Assumptions made for this streams version:
+	 * 	- All pos in the set have the same parameters (i.e., size)
+	 *
+	 * Input arguments:
+	 * 	- pos		- all pos structures in current dataset
+	 * 	- nframes	- number of frames in dataset
+	 * 	- size		- size of each pos array, i.e. # of pixels
+	 * 	- sb_stream	- array of cudaStreams, guaranteed to be as large as the
+	 * 				  largest dataset requires and at least 13	  */
 
+	int f=-1, maxThreads = maxThreadsPerBlock;		// max # of threads per block
+	int maxBlocks = 2048;		// max # of blocks per grid
+	int numBlocks = 0;			// initialize numBlocks
+	int numThreads = 0;			// initialize numThreads
+	double *d_odata0, *d_odata1, *d_odata2, *d_odata3, *d_odata4, sum_deldop_xsec;
+	float2 xblock_ythread;		// used for return value of getNumBlocksAndThreads
+	dim3 BLK,THD;
+	THD.x = maxThreadsPerBlock;
+	BLK.x = floor((THD.x - 1 + size)/THD.x);
+	double *deldop_cross_section, *dsum_rad_xsec, *hsum_rad_xsec;
+	/* Find number of blocks & threads needed for reduction call */
+	/* NOTE: This assumes all frames/pos are the same size!      */
+	xblock_ythread = getNumBlocksAndThreads(size, maxBlocks, maxThreads);
+	numBlocks = xblock_ythread.x;
+	numThreads = xblock_ythread.y;
+	dim3 dimBlock(numThreads, 1, 1);
+	dim3 dimGrid(numBlocks, 1, 1);
+	size_t arrsz = sizeof(double) * numBlocks;
+	size_t arrsz2 = sizeof(double) * nframes;
+
+	/* Allocate memory */
+	hsum_rad_xsec = (double *)malloc(sizeof(double)*2);
+	gpuErrchk(cudaMalloc((void**)&dsum_rad_xsec, sizeof(double)*2));
+	gpuErrchk(cudaMalloc((void**)&d_odata0, arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata1, arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata2, arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata3, arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata4, arrsz));
+	gpuErrchk(cudaMalloc((void**)&deldop_cross_section, arrsz2));
+	gpuErrchk(cudaMemsetAsync(deldop_cross_section, 0, arrsz2, sb_stream[8]));
+	gpuErrchk(cudaMemsetAsync(dsum_rad_xsec, 0, sizeof(float)*2, sb_stream[9]));
+
+	/* Call reduction  */
+	while (f<nframes) {
+		f++;
+		if (f >= nframes) break;
+		cudaMemsetAsync(d_odata0, 0, arrsz, sb_stream[0]);
+		device_reduce_block_atomic_kernel_ddf2_64<<< dimGrid, dimBlock, 0, sb_stream[0]>>>
+				(ddat,d_odata0, size, f, set);
+		deldop_xsec_intermediate_krnl64<<<1,1,0,sb_stream[0]>>>(ddat, d_odata0,
+				deldop_cross_section, dsum_rad_xsec, set, f);
+		f++;
+		if (f >= nframes) break;
+		cudaMemsetAsync(d_odata1, 0, arrsz, sb_stream[1]);
+		device_reduce_block_atomic_kernel_ddf2_64<<< dimGrid, dimBlock, 0, sb_stream[1]>>>
+				(ddat, d_odata1, size, f, set);
+		deldop_xsec_intermediate_krnl64<<<1,1,0,sb_stream[1]>>>(ddat, d_odata1,
+				deldop_cross_section, dsum_rad_xsec, set, f);
+
+		f++;
+		if (f >= nframes) break;
+		cudaMemsetAsync(d_odata2, 0, arrsz, sb_stream[2]);
+		device_reduce_block_atomic_kernel_ddf2_64<<< dimGrid, dimBlock, 0, sb_stream[2]>>>
+				(ddat, d_odata2, size, f, set);
+		deldop_xsec_intermediate_krnl64<<<1,1,0,sb_stream[2]>>>(ddat, d_odata2,
+				deldop_cross_section, dsum_rad_xsec, set, f);
+
+		f++;
+		if (f >= nframes) break;
+		cudaMemsetAsync(d_odata3, 0, arrsz, sb_stream[3]);
+		device_reduce_block_atomic_kernel_ddf2_64<<< dimGrid, dimBlock, 0, sb_stream[3]>>>
+				(ddat, d_odata3, size, f, set);
+		deldop_xsec_intermediate_krnl64<<<1,1,0,sb_stream[3]>>>(ddat, d_odata3,
+				deldop_cross_section, dsum_rad_xsec, set, f);
+
+		f++;
+		if (f >= nframes) break;
+		cudaMemsetAsync(d_odata4, 0, arrsz, sb_stream[4]);
+		device_reduce_block_atomic_kernel_ddf2_64<<< dimGrid, dimBlock, 0, sb_stream[4]>>>
+				(ddat, d_odata4, size, f, set);
+		deldop_xsec_intermediate_krnl64<<<1,1,0,sb_stream[4]>>>(ddat, d_odata4,
+				deldop_cross_section, dsum_rad_xsec, set, f);
+
+	}
+	checkErrorAfterKernelLaunch("device_reduce_block_atomic_krnl_ddf2_64");
+
+	/* Now copy dsum_rad_xsec over to a host copy */
+	gpuErrchk(cudaMemcpy(hsum_rad_xsec, dsum_rad_xsec, sizeof(double)*2,
+			cudaMemcpyDeviceToHost));
+	sum_deldop_xsec = hsum_rad_xsec[0];
+
+	free(hsum_rad_xsec);
+	cudaFree(dsum_rad_xsec);
+	cudaFree(deldop_cross_section);
+	cudaFree(d_odata0);
+	cudaFree(d_odata1);
+	cudaFree(d_odata2);
+	cudaFree(d_odata3);
+	cudaFree(d_odata4);
+	return sum_deldop_xsec;
+}
 __host__ void sum_2_double_arrays(double *a, double *b, double *absum, int size) {
 	/* Function sums up two arrays of doubles.  Returns both sums in host-array
 	 * absum  */
@@ -2155,7 +2474,7 @@ __host__ double find_min_in_double_array(double *in, int size) {
 	return min;
 }
 
-__host__ float compute_doppler_xsec(struct dat_t *ddat, int ndop,
+__host__ float compute_doppler_xsec32(struct dat_t *ddat, int ndop,
 		int set, int frm) {
 	/* Function calculates a delay-Doppler frame's radar cross section with
 	 * Nvidia's reduction sample code (simplified and adapted for use with
@@ -2181,8 +2500,8 @@ __host__ float compute_doppler_xsec(struct dat_t *ddat, int ndop,
 	 * data set and frame to the right deldop fit array	 */
 	cudaCalloc((void**)&d_idata, sizeof(float), size);
 
-	set_idata_pntr_krnl<<<BLK,THD>>>(ddat, d_idata, set, frm, size);
-	checkErrorAfterKernelLaunch("set_idata_pntr_krnl in compute_doppler_xsec");
+	set_idata_pntr_krnl32<<<BLK,THD>>>(ddat, d_idata, set, frm, size);
+	checkErrorAfterKernelLaunch("set_idata_pntr_krnl32 in compute_doppler_xsec32");
 
 	/* Find number of blocks & threads needed for reduction call */
 	xblock_ythread = getNumBlocksAndThreads(size, maxBlocks, maxThreads);
@@ -2225,6 +2544,82 @@ __host__ float compute_doppler_xsec(struct dat_t *ddat, int ndop,
 	}
 
 	gpuErrchk(cudaMemcpy(h_odata, d_odata, 1*sizeof(float), cudaMemcpyDeviceToHost));
+	xsec = h_odata[0];
+	free(h_odata);
+	cudaFree(d_odata);
+	cudaFree(d_idata);
+	return xsec;
+}
+__host__ double compute_doppler_xsec64(struct dat_t *ddat, int ndop,
+		int set, int frm) {
+	/* Function calculates a delay-Doppler frame's radar cross section with
+	 * Nvidia's reduction sample code (simplified and adapted for use with
+	 * shape).  The function returns the cross section as a float 	 */
+
+	int s, size=ndop;			// array size
+	int maxThreads = maxThreadsPerBlock;		// max # of threads per block
+	int maxBlocks = 2048;		// max # of blocks per grid
+	int whichKernel = 6;		// id of reduction kernel
+	int numBlocks = 0;			// initialize numBlocks
+	int numThreads = 0;			// initialize numThreads
+	double xsec = 0.0;			// radar cross section; return value
+	double *d_odata;				// temp. float array for reduction output
+	double *d_idata; 			// temp. float arrays for reduction input
+	double *h_odata;				// the host output array
+	float2 xblock_ythread;		// used for return value of getNumBlocksAndThreads
+
+	dim3 BLK,THD;
+	THD.x = maxThreadsPerBlock;
+	BLK.x = floor((THD.x - 1 + size)/THD.x);
+
+	/* Allocate memory for d_idata, then set that pointer equal to the right
+	 * data set and frame to the right deldop fit array	 */
+	cudaCalloc((void**)&d_idata, sizeof(double), size);
+
+	set_idata_pntr_krnl64<<<BLK,THD>>>(ddat, d_idata, set, frm, size);
+	checkErrorAfterKernelLaunch("set_idata_pntr_krnl64 in compute_doppler_xsec64");
+
+	/* Find number of blocks & threads needed for reduction call */
+	xblock_ythread = getNumBlocksAndThreads(size, maxBlocks, maxThreads);
+	numBlocks = xblock_ythread.x;
+	numThreads = xblock_ythread.y;
+
+	/* Allocate memory for d_odata and d_odata2 with enough elements to hold
+	 * the reduction of each block during the first call */
+	cudaCalloc((void**)&d_odata,  sizeof(double), numBlocks);
+	h_odata = (double *) malloc(numBlocks*sizeof(double));
+
+	/* Call reduction for first time */
+	reduce<double>(size, numThreads, numBlocks, whichKernel, d_idata, d_odata);
+	checkErrorAfterKernelLaunch("reduce<double> in compute_deldop_xsec");
+
+	/* Reset d_idata for later use as buffer */
+	gpuErrchk(cudaMemset(d_idata, 0, size*sizeof(double)));
+
+	/* Now sum partial block sums on GPU, using the reduce6<> kernel */
+	s = numBlocks;
+
+	while (s > 1)
+	{
+		int threads = 0, blocks = 0;
+		xblock_ythread = getNumBlocksAndThreads(s, maxBlocks, maxThreads);
+		blocks = xblock_ythread.x;
+		threads = xblock_ythread.y;
+
+		/* Copy the first d_odata back into d_idata2  */
+		cudaMemcpy(d_idata, d_odata, s*sizeof(double), cudaMemcpyDeviceToDevice);
+
+		reduce<double>(s, threads, blocks, whichKernel, d_idata, d_odata);
+
+		if (whichKernel < 3)
+			s = (s + threads - 1) / threads;
+		else
+			s = (s + (threads*2-1)) / (threads*2);
+		if (s > 1)
+			printf("s is bigger than one");
+	}
+
+	gpuErrchk(cudaMemcpy(h_odata, d_odata, 1*sizeof(double), cudaMemcpyDeviceToHost));
 	xsec = h_odata[0];
 	free(h_odata);
 	cudaFree(d_odata);
@@ -2279,7 +2674,7 @@ __host__ float compute_model_area32(struct mod_t *dmod, int c, int size) {
 	return area;
 }
 
-__host__ float compute_model_area64(struct mod_t *dmod, int c, int size) {
+__host__ double compute_model_area64(struct mod_t *dmod, int c, int size) {
 	/* Function calculates the model's surface area with Nvidia's reduction
 	 * sample code (simplified and adapted for use with shape).  The function
 	 * returns the cross section as a double. There is another similar function
