@@ -29,8 +29,8 @@ C_DEPS += \
 src/astro/%.o: ../src/astro/%.c
 	@echo 'Building file: $<'
 	@echo 'Invoking: NVCC Compiler'
-	/usr/local/cuda-9.0/bin/nvcc -G -g -lineinfo -pg -O0 --use_fast_math -Xcompiler -rdynamic -gencode arch=compute_61,code=sm_61 -m64 -odir "src/astro" -M -o "$(@:%.o=%.d)" "$<"
-	/usr/local/cuda-9.0/bin/nvcc -G -g -lineinfo -pg -O0 --use_fast_math -Xcompiler -rdynamic --compile -m64  -x c -o  "$@" "$<"
+	/usr/local/cuda-9.0/bin/nvcc -G -g -lineinfo -pg -O0 -Xcompiler -rdynamic -gencode arch=compute_61,code=sm_61 -m64 -odir "src/astro" -M -o "$(@:%.o=%.d)" "$<"
+	/usr/local/cuda-9.0/bin/nvcc -G -g -lineinfo -pg -O0 -Xcompiler -rdynamic --compile -m64  -x c -o  "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 

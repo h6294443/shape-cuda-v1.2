@@ -537,6 +537,8 @@ void calc_deldop( struct par_t *par, struct mod_t *mod, struct deldop_t *deldop,
 						/ deldop->nviews;
 			}
 
+//			dbg_print_deldop_fit_host2(frame, "CPU_deldop_fit.csv");
+
 			/*  If smearing is being modeled, include the delay-Doppler
           calculations from this view in the summed results for this frame  */
 

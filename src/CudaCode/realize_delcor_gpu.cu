@@ -159,6 +159,13 @@ __global__ void rd_doppler_krnl(struct dat_t *ddat, int s,
 		}
 	}
 }
+__global__ void dbg_krnl(struct dat_t *ddat, int s) {
+	/* Single-threaded kernel */
+	if (threadIdx.x == 0) {
+		for (int i=0; i<=ddat->set[s].desc.doppler.delcor.n; i++)
+			printf("delcor[%i]=%3.6g\n", i, ddat->set[s].desc.doppler.delcor.a[i].val);
+	}
+}
 
 __host__ void realize_delcor_gpu(struct dat_t *ddat, double delta_delcor0, int delcor0_mode,
 		int nsets, int *nframes)
@@ -175,6 +182,7 @@ __host__ void realize_delcor_gpu(struct dat_t *ddat, double delta_delcor0, int d
 	 * n_delcor is # of coefficients in that dataset's polynomial,
 	 * t0_delcor is the reference epoch for the polynomial.  */
 
+	cudaSetDevice(GPU0);
 	/* Initialize the flags */
 	rd_init_flags_krnl<<<1,1>>>();
 	checkErrorAfterKernelLaunch("rd_init_flags_krnl");
@@ -200,6 +208,11 @@ __host__ void realize_delcor_gpu(struct dat_t *ddat, double delta_delcor0, int d
 
 		} else if (type == DOPPLER) {
 
+//			dbg_krnl<<<1,1>>>(ddat,s);
+//			checkErrorAfterKernelLaunch("dbg_krnl");
+//			for (int i=0; i<=ddat->set[s].desc.doppler.delcor.n; i++)
+//				printf("Host delcor: %3.6g\n", ddat->set[s].desc.doppler.delcor.a[i].val);
+//
 			/* Launch the Doppler kernel for realize_delcor_cuda */
 			rd_doppler_krnl<<<1,1>>>(ddat, s, delta_delcor0, delcor0_mode);
 			checkErrorAfterKernelLaunch("rd_doppler_krnl (realize_delcor_cuda)");

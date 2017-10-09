@@ -239,7 +239,13 @@ __host__ void show_deldoplim_gpu(struct dat_t *ddat,
 __host__ void show_deldoplim_pthread(struct dat_t *ddat0, struct dat_t *ddat1,
 		unsigned char *type, int nsets, int *nframes, int maxframes, int *GPUID);
 
-__host__ void vary_params_gpu(struct par_t *dpar, struct mod_t *dmod, struct
+__host__ void vary_params_gpu32(struct par_t *dpar, struct mod_t *dmod, struct
+		dat_t *ddat, int action, double *deldop_zmax, double *rad_xsec, double
+		*opt_brightness, double *cos_subradarlat, int *hnframes, int *hlc_n,
+		int *nviews, struct vertices_t **verts, unsigned char *htype, unsigned
+		char *dtype, int nf, int nsets, cudaStream_t *vp_stream, int max_frames);
+
+__host__ void vary_params_gpu64(struct par_t *dpar, struct mod_t *dmod, struct
 		dat_t *ddat, int action, double *deldop_zmax, double *rad_xsec, double
 		*opt_brightness, double *cos_subradarlat, int *hnframes, int *hlc_n,
 		int *nviews, struct vertices_t **verts, unsigned char *htype, unsigned

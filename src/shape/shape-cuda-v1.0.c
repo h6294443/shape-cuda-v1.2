@@ -13,7 +13,7 @@ int CUDA   = 0;		/* Use CUDA code or run CPU code 	*/
 int TIMING = 0;		/* Time certain kernel executions	*/
 int GPU0   = 1;		/* Which GPU will run code 			*/
 int GPU1   = 0;
-int FP64  = 0;
+int FP64   = 0;
 int MGPU   = 0;		/* Switch for dual-gpu mode (interweave) 		*/
 int PIN    = 0;
 int maxThreadsPerBlock = 0;
@@ -571,6 +571,10 @@ int main(int argc, char *argv[])
 	elapsed += (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
 
 	printf("\n\n###   Elapsed time from start to finish: %g    ###\n\n", elapsed);
+	if (FP64&&CUDA)
+		printf("Full double-precision (more accurate) shape-cuda performed with one GPU\n");
+	if (!FP64&&CUDA)
+		printf("Mixed single/double-precision (faster) shape-cuda performed with one GPU\n");
 
 	return 0;
 }

@@ -883,7 +883,7 @@ __host__ int posvis_gpu64(
 //	int n = 200;
 //	int npixels = 401*401;
 //	f = 0;
-//	dbg_print_pos_arrays_full(pos, f, npixels, n);
+//	dbg_print_pos_arrays_full64(pos, f, npixels, n);
 
 	/* Free temp arrays, destroy streams and timers, as applicable */
 

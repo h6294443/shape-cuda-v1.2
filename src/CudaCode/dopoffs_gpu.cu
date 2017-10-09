@@ -28,8 +28,12 @@ __global__ void dopoffs_krnl(struct dat_t *ddat, int s, int nframes) {
 			dop = 0.0;
 			arg = ddat->set[s].desc.doppler.frame[f].view[k].t -
 					ddat->set[s].desc.doppler.delcor.t0;
-			for (n=1; n<=ddat->set[s].desc.doppler.delcor.n; n++) {
+			for (n=1; n<=2/*ddat->set[s].desc.doppler.delcor.n*/; n++) {
+//				printf("n:%i\n", n);
+//				printf("nviews=%i and delcor.n=%i\n", ddat->set[s].desc.doppler.nviews, ddat->set[s].desc.doppler.delcor.n);
+//				printf("set[%i] delcor.a[%i] = %3.6g\n", s, n, ddat->set[s].desc.doppler.delcor.a[n].val);
 				dop += n*ddat->set[s].desc.doppler.delcor.a[n].val*x;
+
 				x *= arg;
 			}
 
@@ -47,6 +51,6 @@ __host__ void dopoffs_gpu(struct dat_t *ddat, int s, int nframes)
 
   /* Launch nframes-threaded kernel */
   THD.x = nframes;
-  dopoffs_krnl<<<BLK,THD>>>(ddat, s, nframes);
-  checkErrorAfterKernelLaunch("dopoffs_cuda_krnl (dopoffs_cuda)");
+  dopoffs_krnl<<<1,THD>>>(ddat, s, nframes);
+  checkErrorAfterKernelLaunch("dopoffs_krnl");
 }

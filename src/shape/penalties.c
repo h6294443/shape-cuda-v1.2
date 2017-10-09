@@ -626,7 +626,11 @@ double penalties( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
               ntot++;
             }
         }
+       // printf("# of sides ns: %i\n", ns);
+       // printf("ntot: %i\n", ntot);
+        printf("nonsmooth pen: %3.8g\n", pen);
         pen /= ntot;
+//        printf("nonsmooth pen: %3.8g\n", pen*1e6);
         break;
     case CONCAVITY:
 
@@ -864,7 +868,7 @@ double penalties( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
         /*  Compute the squared magnitude of the model's COM displacement  */
         for (k=0; k<=2; k++) {
           pen += mod->shape.com[k]*mod->shape.com[k];
-          printf("mod->shape.com[%i]=%3.6g\n", k, mod->shape.com[k]);
+//          printf("mod->shape.com[%i]=%3.6g\n", k, mod->shape.com[k]);
         }
 
         pen /= (r_eff*r_eff);
@@ -1236,6 +1240,7 @@ double penalties( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
              fabs(par->pen.weight[i])*par->pen.base[i],
              par->pen.weight[i], par->pen.base[i]);
   }
+  printf("sum (penalties.c): %3.8g\n", sum);
   return sum;
 }
 

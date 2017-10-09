@@ -748,7 +748,7 @@ __host__ int read_deldop_gpu( FILE *fp, struct par_t *par, struct deldop_t *deld
 		}
 		cudaCalloc1((void**)&deldop->frame[i].obs, sizeof(double*), ndel);
 		cudaCalloc1((void**)&deldop->frame[i].oneovervar, sizeof(double*), ndel);
-				deldop->frame[i].obs -= 1;
+		deldop->frame[i].obs -= 1;
 		deldop->frame[i].oneovervar -= 1;
 
 		/* Allocate double pointers (inner loop) and offset addressing */
@@ -934,20 +934,16 @@ __host__ int read_doppler_gpu( FILE *fp, struct par_t *par, struct doppler_t *do
 	/* Read the delay correction polynomial itself:
       coefficients have units of usec, usec/day, usec/day^2, etc.  */
 	doppler->delcor.n = getint( fp);
-	cudaCalloc1((void**)&doppler->delcor.a, sizeof(struct param_t),
-			doppler->delcor.n+1);
-	cudaCalloc1((void**)&doppler->delcor.equals_set, sizeof(int), doppler->delcor.n);
-//	n_equals = 0;
+	cudaCalloc((void**)&doppler->delcor.a, sizeof(struct param_t),
+			(doppler->delcor.n+2));
+	cudaCalloc((void**)&doppler->delcor.equals_set, sizeof(int), doppler->delcor.n);
+
 	for (i=0; i<=doppler->delcor.n; i++) {
 		npar += readparam( fp, &doppler->delcor.a[i]);
-		if (doppler->delcor.a[i].state == '=')
-			doppler->delcor.equals_set[i] = -1;
-//			n_equals++;
+		doppler->delcor.equals_set[i] = -1;
 	}
 	if (doppler->delcor.a[0].state == 'f')
 		bailout("can't use \"f\" state for a Doppler dataset's 0th-order delay polynomial coefficient\n");
-//	if (n_equals > 0 && n_equals <= doppler->delcor.n)
-//		bailout("can't use \"=\" state for just part of a delay polynomial\n");
 	doppler->delcor.delcor0_save = doppler->delcor.a[0].val;
 
 	/* Read the Doppler scaling factor  */
@@ -1504,7 +1500,6 @@ __host__ int read_lghtcrv_gpu( struct dat_t *dat, FILE *fp, struct par_t *par, s
           positive --> an explicit list of epochs follows
           zero     --> specification of evenly spaced epochs follows
           negative --> use the same epochs as for the observations */
-
 	np = lghtcrv->ncalc_obsfile = getint( fp);
 	if (np != 0)
 		lghtcrv->jdstart = lghtcrv->jdstop = lghtcrv->jdinterval = -HUGENUMBER;
@@ -1618,15 +1613,18 @@ __host__ int read_lghtcrv_gpu( struct dat_t *dat, FILE *fp, struct par_t *par, s
 	cudaCalloc1((void**)&lghtcrv->fit, 		 sizeof(double), lghtcrv->n);
 	cudaCalloc1((void**)&lghtcrv->oneovervar, 	 sizeof(double), lghtcrv->n);
 	cudaCalloc1((void**)&lghtcrv->rotphase_obs, sizeof(double), lghtcrv->n);
-	cudaCalloc1((void**)&lghtcrv->t0, 			 sizeof(double), lghtcrv->n);
 	cudaCalloc1((void**)&lghtcrv->t, 			 sizeof(double*),lghtcrv->n);
 
 	/* Offset the outer loop of lghtcrv->t */
 	lghtcrv->t -= 1;
+	lghtcrv->fit -= 1;
+	lghtcrv->obs -= 1;
+	lghtcrv->oneovervar -= 1;
+	lghtcrv->rotphase_obs -= 1;
 
 	/* Do inner loop for double pointers */
 	for (int j=1; j<=lghtcrv->n; j++)
-		cudaCalloc1((void**)&lghtcrv->t[j], sizeof(double), (lghtcrv->nviews+1));
+		cudaCalloc1((void**)&lghtcrv->t[j], sizeof(double), (lghtcrv->nviews));
 
 	/* If we are setting calculation epochs equal to the unique observation
 	 * epochs, create a vector to hold the raw observation epochs - later to be
@@ -2553,11 +2551,11 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
 	for (i=-n; i<=n; i++) {
 		/* First allocate with cuda managed memory */
 		if (FP64) {
-			cudaCalloc1((void**)&dat->pos.cosi[i],  sizeof(double*), (2*n+1));
-			cudaCalloc1((void**)&dat->pos.cose[i],  sizeof(double*), (2*n+1));
-			cudaCalloc1((void**)&dat->pos.z[i], 	sizeof(double*), (2*n+1));
-			cudaCalloc1((void**)&dat->pos.cosill[i],sizeof(double*), (2*n+1));
-			cudaCalloc1((void**)&dat->pos.zill[i], 	sizeof(double*), (2*n+1));
+			cudaCalloc1((void**)&dat->pos.cosi[i],  sizeof(double), (2*n+1));
+			cudaCalloc1((void**)&dat->pos.cose[i],  sizeof(double), (2*n+1));
+			cudaCalloc1((void**)&dat->pos.z[i], 	sizeof(double), (2*n+1));
+			cudaCalloc1((void**)&dat->pos.cosill[i],sizeof(double), (2*n+1));
+			cudaCalloc1((void**)&dat->pos.zill[i], 	sizeof(double), (2*n+1));
 			cudaCalloc1((void**)&dat->pos.b[i], 	sizeof(double), (2*n+1));
 			dat->pos.b[i] 		-= -n;
 			dat->pos.cosi[i] 	-= -n;
@@ -2636,12 +2634,13 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
 							sizeof(double*),  (2*n+1));
 					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.zill,
 							sizeof(double*),  (2*n+1));
-					dat->set[s].desc.deldop.frame[f].pos.body 		-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.cosi -= n;
-					dat->set[s].desc.deldop.frame[f].pos.cose -= n;
-					dat->set[s].desc.deldop.frame[f].pos.z -= n;
-					dat->set[s].desc.deldop.frame[f].pos.cosill -= n;
-					dat->set[s].desc.deldop.frame[f].pos.zill -= n;
+
+					dat->set[s].desc.deldop.frame[f].pos.cosi 	-= -n;
+					dat->set[s].desc.deldop.frame[f].pos.cose 	-= -n;
+					dat->set[s].desc.deldop.frame[f].pos.z		-= -n;
+					dat->set[s].desc.deldop.frame[f].pos.cosill -= -n;
+					dat->set[s].desc.deldop.frame[f].pos.zill 	-= -n;
+					dat->set[s].desc.deldop.frame[f].pos.b	 	-= -n;
 
 					for (i=-n; i<=n; i++) {
 						/* First allocate the outer loop with cuda managed memory */
@@ -2659,12 +2658,12 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
 								sizeof(double), 	(2*n+1));
 
 						/* Now offset indexing for the inner loop */
-						dat->set[s].desc.deldop.frame[f].pos.b	 		-= -n;
+						dat->set[s].desc.deldop.frame[f].pos.b[i]	 	-= -n;
 						dat->set[s].desc.deldop.frame[f].pos.cosi[i] 	-= -n;
 						dat->set[s].desc.deldop.frame[f].pos.cose[i] 	-= -n;
 						dat->set[s].desc.deldop.frame[f].pos.z[i] 		-= -n;
-						dat->set[s].desc.deldop.frame[f].pos.cosill[i] -= -n;
-						dat->set[s].desc.deldop.frame[f].pos.zill[i] -= -n;
+						dat->set[s].desc.deldop.frame[f].pos.cosill[i]  -= -n;
+						dat->set[s].desc.deldop.frame[f].pos.zill[i]    -= -n;
 					}
 				}
 				/* Single-precisision unrolled 1D pointers: */
@@ -2684,11 +2683,12 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
 				}
 
 				/* Offset indexing for these double pointers */
-				dat->set[s].desc.deldop.frame[f].pos.comp 		-= -n;
-				dat->set[s].desc.deldop.frame[f].pos.f 			-= -n;
-				dat->set[s].desc.deldop.frame[f].pos.bodyill	-= -n;
-				dat->set[s].desc.deldop.frame[f].pos.compill 	-= -n;
-				dat->set[s].desc.deldop.frame[f].pos.fill 		-= -n;
+				dat->set[s].desc.deldop.frame[f].pos.body 	-= -n;
+				dat->set[s].desc.deldop.frame[f].pos.comp 	-= -n;
+				dat->set[s].desc.deldop.frame[f].pos.f 		-= -n;
+				dat->set[s].desc.deldop.frame[f].pos.bodyill-= -n;
+				dat->set[s].desc.deldop.frame[f].pos.compill-= -n;
+				dat->set[s].desc.deldop.frame[f].pos.fill 	-= -n;
 
 				for (i=-n; i<=n; i++) {
 					/* First allocate the outer loop with cuda managed memory */
@@ -2707,7 +2707,6 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
 
 					/* Now offset indexing for the inner loop */
 					dat->set[s].desc.deldop.frame[f].pos.body[i] 	-= -n;
-					dat->set[s].desc.deldop.frame[f].pos.b[i]	 	-= -n;
 					dat->set[s].desc.deldop.frame[f].pos.comp[i] 	-= -n;
 					dat->set[s].desc.deldop.frame[f].pos.f[i] 		-= -n;
 					dat->set[s].desc.deldop.frame[f].pos.bodyill[i] -= -n;
@@ -2752,12 +2751,12 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
 					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.zill,
 							sizeof(double*),  (2*n+1));
 
-					dat->set[s].desc.doppler.frame[f].pos.cosi -= n;
-					dat->set[s].desc.doppler.frame[f].pos.b 		-= -n;
-					dat->set[s].desc.doppler.frame[f].pos.cose -= n;
-					dat->set[s].desc.doppler.frame[f].pos.z -= n;
-					dat->set[s].desc.doppler.frame[f].pos.cosill -= n;
-					dat->set[s].desc.doppler.frame[f].pos.zill -= n;
+					dat->set[s].desc.doppler.frame[f].pos.cosi 	 -= -n;
+					dat->set[s].desc.doppler.frame[f].pos.b 	 -= -n;
+					dat->set[s].desc.doppler.frame[f].pos.cose 	 -= -n;
+					dat->set[s].desc.doppler.frame[f].pos.z 	 -= -n;
+					dat->set[s].desc.doppler.frame[f].pos.cosill -= -n;
+					dat->set[s].desc.doppler.frame[f].pos.zill   -= -n;
 
 					for (i=-n; i<=n; i++) {
 						/* First allocate the outer loop with cuda managed memory */
@@ -2868,12 +2867,12 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
 					cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.zill,
 							sizeof(double*),  (2*n+1));
 
-					dat->set[s].desc.poset.frame[f].pos.cosi -= n;
-					dat->set[s].desc.poset.frame[f].pos.b	 -= -n;
-					dat->set[s].desc.poset.frame[f].pos.cose -= n;
-					dat->set[s].desc.poset.frame[f].pos.z -= n;
-					dat->set[s].desc.poset.frame[f].pos.cosill -= n;
-					dat->set[s].desc.poset.frame[f].pos.zill -= n;
+					dat->set[s].desc.poset.frame[f].pos.cosi 	-= -n;
+					dat->set[s].desc.poset.frame[f].pos.b	 	-= -n;
+					dat->set[s].desc.poset.frame[f].pos.cose 	-= -n;
+					dat->set[s].desc.poset.frame[f].pos.z 		-= -n;
+					dat->set[s].desc.poset.frame[f].pos.cosill	-= -n;
+					dat->set[s].desc.poset.frame[f].pos.zill 	-= -n;
 
 					for (i=-n; i<=n; i++) {
 						/* First allocate the outer loop with cuda managed memory */
@@ -2949,122 +2948,118 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
 			}
 			break;
 		case LGHTCRV:
-			for (i=1; i<=dat->set[s].desc.lghtcrv.ncalc; i++) {
-				dat->set[s].desc.lghtcrv.rend[i].pos.n = n;
-				dat->set[s].desc.lghtcrv.rend[i].pos.km_per_pixel = par->pos_width/(2.0*n);
-				dat->set[s].desc.lghtcrv.rend[i].pos.bistatic = 1;
+			for (f=1; f<=dat->set[s].desc.lghtcrv.ncalc; f++) {
+				dat->set[s].desc.lghtcrv.rend[f].pos.n = n;
+				dat->set[s].desc.lghtcrv.rend[f].pos.km_per_pixel = par->pos_width/(2.0*n);
+				dat->set[s].desc.lghtcrv.rend[f].pos.bistatic = 1;
 				npx = (2*n+1)*(2*n+1);
 
 				/* First allocate the outer loop with cuda managed memory */
-				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.body,
+				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.body,
 						sizeof(int*), 	(2*n+1));
-				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.comp,
+				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.comp,
 						sizeof(int*), 	(2*n+1));
-				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.f,
+				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.f,
 						sizeof(int*), 	(2*n+1));
-				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.bodyill,
+				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.bodyill,
 						sizeof(int*), 	(2*n+1));
-				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.compill,
+				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.compill,
 						sizeof(int*), 	(2*n+1));
-				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.fill,
+				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.fill,
 						sizeof(int*), 	(2*n+1));
+				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.b,
+						sizeof(double*), 	(2*n+1));
 
 				/* Select double pointers */
 				if (FP64) {
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.b,
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.cosi,
 							sizeof(double*), npx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosi,
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.cose,
 							sizeof(double*), npx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cose,
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.z,
 							sizeof(double*), npx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.z,
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.cosill,
 							sizeof(double*), npx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosill,
-							sizeof(double*), npx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.zill,
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.zill,
 							sizeof(double*), npx);
 
-					dat->set[s].desc.lghtcrv.rend[i].pos.cosi -= n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.b	 -= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.cose -= n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.z -= n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.cosill -= n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.zill -= n;
+					dat->set[s].desc.lghtcrv.rend[f].pos.cosi 	-= -n;
+					dat->set[s].desc.lghtcrv.rend[f].pos.cose 	-= -n;
+					dat->set[s].desc.lghtcrv.rend[f].pos.z 		-= -n;
+					dat->set[s].desc.lghtcrv.rend[f].pos.cosill	-= -n;
+					dat->set[s].desc.lghtcrv.rend[f].pos.zill 	-= -n;
 
 					for (i=-n; i<=n; i++) {
 						/* First allocate the outer loop with cuda managed memory */
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosi[i],
+						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.cosi[i],
 								sizeof(double), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cose[i],
+						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.cose[i],
 								sizeof(double), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.b[i],
+						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.z[i],
 								sizeof(double), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.z[i],
+						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.cosill[i],
 								sizeof(double), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosill[i],
-								sizeof(double), 	(2*n+1));
-						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.zill[i],
+						cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.zill[i],
 								sizeof(double), 	(2*n+1));
 
 						/* Now offset indexing for the inner loop */
-						dat->set[s].desc.lghtcrv.rend[i].pos.cosi[i] 	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.cose[i] 	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.b[i]	 	-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.z[i] 		-= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.cosill[i] -= -n;
-						dat->set[s].desc.lghtcrv.rend[i].pos.zill[i] -= -n;
+						dat->set[s].desc.lghtcrv.rend[f].pos.cosi[i] 	-= -n;
+						dat->set[s].desc.lghtcrv.rend[f].pos.cose[i] 	-= -n;
+						dat->set[s].desc.lghtcrv.rend[f].pos.z[i] 		-= -n;
+						dat->set[s].desc.lghtcrv.rend[f].pos.cosill[i] -= -n;
+						dat->set[s].desc.lghtcrv.rend[f].pos.zill[i] -= -n;
 					}
 				}
 				else {
 					/* Single-precision unrolled 1D pointers: */
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.b_s,
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.b_s,
 							sizeof(float), npx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosi_s,
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.cosi_s,
 							sizeof(float), npx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cose_s,
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.cose_s,
 							sizeof(float), npx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.z_s,
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.z_s,
 							sizeof(float), npx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.cosill_s,
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.cosill_s,
 							sizeof(float), npx);
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.zill_s,
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.zill_s,
 							sizeof(float), npx);
 				}
 
-				/* Double precision 1-D pointer */
-				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.b_d,
-						sizeof(double), npx);
-
 				/* Offset indexing for these double pointers */
-				dat->set[s].desc.lghtcrv.rend[i].pos.body 		-= -n;
-				dat->set[s].desc.lghtcrv.rend[i].pos.comp 		-= -n;
-				dat->set[s].desc.lghtcrv.rend[i].pos.f 			-= -n;
-				dat->set[s].desc.lghtcrv.rend[i].pos.bodyill	-= -n;
-				dat->set[s].desc.lghtcrv.rend[i].pos.compill	-= -n;
-				dat->set[s].desc.lghtcrv.rend[i].pos.fill 		-= -n;
+				dat->set[s].desc.lghtcrv.rend[f].pos.b	 	-= -n;
+				dat->set[s].desc.lghtcrv.rend[f].pos.body 	-= -n;
+				dat->set[s].desc.lghtcrv.rend[f].pos.comp 	-= -n;
+				dat->set[s].desc.lghtcrv.rend[f].pos.f 		-= -n;
+				dat->set[s].desc.lghtcrv.rend[f].pos.bodyill-= -n;
+				dat->set[s].desc.lghtcrv.rend[f].pos.compill-= -n;
+				dat->set[s].desc.lghtcrv.rend[f].pos.fill 	-= -n;
 
 				for (j=-n; j<=n; j++) {
 					/* First allocate the outer loop with cuda managed memory */
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.body[j],
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.body[j],
 							sizeof(int), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.comp[j],
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.comp[j],
 							sizeof(int), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.f[j],
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.f[j],
 							sizeof(int), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.bodyill[j],
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.bodyill[j],
 							sizeof(int), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.compill[j],
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.compill[j],
 							sizeof(int), 	(2*n+1));
-					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[i].pos.fill[j],
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.fill[j],
 							sizeof(int),	(2*n+1));
+					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.b[j],
+							sizeof(double), 	(2*n+1));
 
 					/* Now offset indexing for the inner loop */
-					dat->set[s].desc.lghtcrv.rend[i].pos.body[j]	-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.comp[j]	-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.f[j] 		-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.bodyill[j]	-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.compill[j]	-= -n;
-					dat->set[s].desc.lghtcrv.rend[i].pos.fill[j]	-= -n;
+					dat->set[s].desc.lghtcrv.rend[f].pos.body[j]	-= -n;
+					dat->set[s].desc.lghtcrv.rend[f].pos.comp[j]	-= -n;
+					dat->set[s].desc.lghtcrv.rend[f].pos.f[j] 		-= -n;
+					dat->set[s].desc.lghtcrv.rend[f].pos.bodyill[j]	-= -n;
+					dat->set[s].desc.lghtcrv.rend[f].pos.compill[j]	-= -n;
+					dat->set[s].desc.lghtcrv.rend[f].pos.fill[j]	-= -n;
+					dat->set[s].desc.lghtcrv.rend[f].pos.b[j]	-= -n;
 				}
 			}
 			break;

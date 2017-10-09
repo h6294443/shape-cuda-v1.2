@@ -88,6 +88,7 @@ __global__ void ap_init_krnl32(struct dat_t *ddat, struct mod_t *dmod,
 	if (f <= nframes) {
 		ap_ilaw = ddat->set[set].desc.lghtcrv.ioptlaw;
 		type[0] = dmod->photo.opttype[ap_ilaw];
+		type[1] = 0;
 		dsum[f] = 0.0;
 		temp = __double2float_rn(pos[f]->km_per_pixel/AU);
 		intensity_factor[f] = temp*temp;
@@ -103,6 +104,7 @@ __global__ void ap_init_krnl64(struct dat_t *ddat, struct mod_t *dmod,
 	if (f <= nframes) {
 		ap_ilaw = ddat->set[set].desc.lghtcrv.ioptlaw;
 		type[0] = dmod->photo.opttype[ap_ilaw];
+		type[1] = 0;
 		dsum[f] = 0.0;
 		temp = pos[f]->km_per_pixel/AU;
 		intensity_factor[f] = temp*temp;
@@ -555,17 +557,16 @@ __global__ void ap_kaas_krnl32(struct mod_t *dmod, struct pos_t **pos,
         float *scale_lommsee, float *scale_lambert, int frm, int nframes) {
 			/* Multi-threaded kernel */
 			int offset = blockIdx.x * blockDim.x + threadIdx.x;
-			int i = offset % span.x + xylim[frm].w;
-			int j = offset / span.x + xylim[frm].y;
 			int n = pos[frm]->n;
-			int pos_spn = 2*n+1;
-			int pxa = (j+n)*pos_spn + (i+n);
+			int i = offset % span.x - n;
+			int j = offset / span.x - n;
+			int pxa = (j+n)*span.x + (i+n);
 
 			if (offset < nThreads) {
 				if (pos[frm]->cose_s[pxa] > 0.0 && pos[frm]->cosi_s[pxa] > 0.0
 						&& pos[frm]->body[i][j] == body) {
 
-					pos[frm]->b_s[pxa] = intensity_factor[frm] * pos[frm]->cosi_s[pxa]
+					pos[frm]->b[i][j] = intensity_factor[frm] * pos[frm]->cosi_s[pxa]
 			       *(scale_lommsee[frm] / (pos[frm]->cosi_s[pxa] + pos[frm]->cose_s[pxa])
 			  		  + scale_lambert[frm]);
 				}
@@ -577,10 +578,9 @@ __global__ void ap_kaas_krnl64(struct mod_t *dmod, struct pos_t **pos,
         double *scale_lommsee, double *scale_lambert, int frm, int nframes) {
 			/* Multi-threaded kernel */
 			int offset = blockIdx.x * blockDim.x + threadIdx.x;
-			int i = offset % span.x + xylim[frm].w;
-			int j = offset / span.x + xylim[frm].y;
 			int n = pos[frm]->n;
-			int pos_spn = 2*n+1;
+			int i = offset % span.x - n;
+			int j = offset / span.x - n;
 
             if (offset < nThreads) {
 				if (pos[frm]->cose[i][j] > 0.0 && pos[frm]->cosi[i][j] > 0.0
@@ -843,7 +843,7 @@ __host__ void apply_photo_gpu32(struct mod_t *dmod,	struct dat_t *ddat,
 
 	/* Call a streamed parallel reduction which calculates the sums of pos->b
 	 * for all frames in a dataset (up to 4 simultaneously)	 */
-	sum_brightness_gpu32(ddat, pos, nframes, nThreadspx[1], 1, set, ap_stream);
+//	sum_brightness_gpu32(ddat, pos, nframes, nThreadspx[1], 1, set, ap_stream);
 
 	cudaFree(dsum);
 	cudaFree(sum);

@@ -296,8 +296,11 @@ __global__ void c2s_init_krnl(struct dat_t *ddat, unsigned char *dtype,int nsets
 }
 __global__ void c2s_retrieve_chi2_krnl(struct dat_t *ddat) {
 	/* Single-threaded kernel */
-	if (threadIdx.x == 0)
+	if (threadIdx.x == 0) {
 		c2s_chi2 = ddat->chi2;
+		printf("ddat->chi2=%3.6f\n", ddat->chi2);
+	}
+
 }
 __global__ void c2s_deldop_init_krnl32(struct dat_t *ddat, int s,	int *ndel,
 		int *ndop, float *o2, float *m2, float *om, float *weight, int nframes) {
@@ -656,6 +659,7 @@ __global__ void c2s_add_dop_contrbts_srl_krnl64(
 		//if (list_breakdown)
 		//c2s_chi2_all_doppler += err;
 
+
 		/* Compute chi-square contributions and dof due to bins whose model
 		 * signal is =< 'chi2fit0_thresh' standard deviations of the noise in
 		 * the data frame   */
@@ -741,10 +745,10 @@ __global__ void c2s_add_dop_contrbts_krnl(
 __global__ void c2s_doppler_add_o2_krnl32(struct dat_t *ddat, float *o2, float *m2,
 		float *om, int *ndop, int s, int f) {
 	/* ndop-threaded kernel */
-	int j = blockIdx.x * blockDim.x + threadIdx.x;
+	int j = blockIdx.x * blockDim.x + threadIdx.x + 1;
 	float temp;
 
-	if (j < ndop[f]) {
+	if (j <= ndop[f]) {
 		/* Add contributions from power within frame limits */
 
 		/* Next 2 lines implement: o2 += obs[j]*obs[j]*oneovervar[j];	 */
@@ -769,10 +773,10 @@ __global__ void c2s_doppler_add_o2_krnl32(struct dat_t *ddat, float *o2, float *
 __global__ void c2s_doppler_add_o2_krnl64(struct dat_t *ddat, double *o2, double
 		*m2, double *om, int *ndop, int s, int f) {
 	/* ndop-threaded kernel */
-	int j = blockIdx.x * blockDim.x + threadIdx.x;
-	float temp;
+	int j = blockIdx.x * blockDim.x + threadIdx.x+1;
+	double temp;
 
-	if (j < ndop[f]) {
+	if (j <= ndop[f]) {
 		/* Add contributions from power within frame limits */
 
 		/* Next 2 lines implement: o2 += obs[j]*obs[j]*oneovervar[j];	 */
@@ -788,7 +792,7 @@ __global__ void c2s_doppler_add_o2_krnl64(struct dat_t *ddat, double *o2, double
 		atomicAdd(&m2[f], temp);
 
 		/* Next 2 lines implement: om += fit[j]*obs[j]*oneovervar[j];		 */
-		temp = ddat->set[s].desc.doppler.frame[f].fit_s[j] *
+		temp = ddat->set[s].desc.doppler.frame[f].fit[j] *
 				ddat->set[s].desc.doppler.frame[f].obs[j] *
 				ddat->set[s].desc.doppler.frame[f].oneovervar[j];
 		atomicAdd(&om[f], temp);
@@ -810,6 +814,7 @@ __global__ void c2s_lghtcrv_serial_krnl(struct dat_t *ddat, int s, double *dof_c
 			o2m2om[0].x += obs * obs * oneovervar;
 			o2m2om[0].y += fit * fit * oneovervar;
 			o2m2om[0].z += fit * obs * oneovervar;
+			o2m2om[1].x = o2m2om[1].y = o2m2om[1].z = 0.0;
 		}
 	}
 
@@ -851,8 +856,10 @@ __global__ void c2s_get_prntflgs_krnl(struct par_t *dpar, struct dat_t *ddat) {
 }
 __global__ void c2_add_chi2_krnl(struct dat_t *ddat, int s) {
 	/* Single-threaded kernel */
-	if (threadIdx.x == 0)
+	if (threadIdx.x == 0) {
 		ddat->chi2 += ddat->set[s].chi2;
+		printf("add ddat->set[%i].chi2=%3.6f to ddat->chi2=%3.6f\n", s, ddat->set[s].chi2, ddat->chi2);
+	}
 }
 __global__ void set_global_chi2_krnl(struct dat_t *ddat, double chi2a, double chi2b) {
 	/* Single-threaded kernel */
@@ -861,8 +868,10 @@ __global__ void set_global_chi2_krnl(struct dat_t *ddat, double chi2a, double ch
 }
 __global__ void c2_set_chi2_krnl(struct dat_t *ddat, double chi2, int s) {
 	/* Single-threaded kernel */
-	if (threadIdx.x == 0)
+	if (threadIdx.x == 0){
 		ddat->set[s].chi2 = chi2;
+		printf("Set chi2 for ddat->set[s].chi2=%3.6f\n", ddat->set[s].chi2);
+	}
 }
 __global__ void deldop_wrt_chi2fit0_krnl32(struct par_t *dpar, struct dat_t *ddat,
 		int s, int f, int *ndel, int *ndop, int nThreads, float *returns,
@@ -1094,7 +1103,7 @@ __host__ double chi2_gpu(
 						hnframes[s], c2s_stream);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl");
-			//			printf("chi2 for set %i (Delay-Doppler) = %g\n", s, chi2);
+			printf("chi2 for set %i (Delay-Doppler) = %g\n", s, chi2);
 			break;
 		case DOPPLER:
 			if (FP64)
@@ -1107,22 +1116,18 @@ __host__ double chi2_gpu(
 						hnframes[s], c2s_stream);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl, chi2_cuda_streams");
-			//			printf("chi2 for set %i (Doppler) = %g\n", s, chi2);
+			printf("chi2 for set %i (Doppler) = %g\n", s, chi2);
 			break;
 		case POS:
 			printf("\nWrite chi2_poset_cuda!\n");
 			//			dat->set[s].chi2 = chi2_poset(dpar, s);
 			break;
 		case LGHTCRV:
-			if (FP64)
-				chi2 = chi2_lghtcrv_gpu(dpar, ddat, s, list_breakdown,
-						&chi2_all_lghtcrv, hnframes[s], hlc_n[s]);
-			else
-				chi2 = chi2_lghtcrv_gpu(dpar, ddat, s, list_breakdown,
-						&chi2_all_lghtcrv, hnframes[s], hlc_n[s]);
+			chi2 = chi2_lghtcrv_gpu(dpar, ddat, s, list_breakdown,
+					&chi2_all_lghtcrv, hnframes[s], hlc_n[s]);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl, chi2_cuda");
-			//			printf("chi2 for set %i (Lightcurve) = %g\n", s, chi2);
+			printf("chi2 for set %i (Lightcurve) = %g\n", s, chi2);
 			break;
 		default:
 			printf("chi2_cuda_streams.cu: can't handle this type yet\n");
@@ -1138,6 +1143,7 @@ __host__ double chi2_gpu(
 	checkErrorAfterKernelLaunch("c2s_retrieve_chi2_krnl, chi2_cuda_streams");
 	gpuErrchk(cudaMemcpyFromSymbol(&chi2, c2s_chi2, sizeof(double),
 			0, cudaMemcpyDeviceToHost));
+	printf("Retrieved chi2=%3.6g\n", chi2);
 	/*.......................................................................*/
 
 
@@ -1623,6 +1629,7 @@ __host__ double chi2_deldop_gpu64(
 	double *o2, *m2, *om, *weight, *returns, *hreturns;
 	chi2_set = 0.0;
 
+
 	gpuErrchk(cudaMalloc((void**)&o2, 				sizeof(double)*nframes));
 	gpuErrchk(cudaMalloc((void**)&m2, 				sizeof(double)*nframes));
 	gpuErrchk(cudaMalloc((void**)&om, 				sizeof(double)*nframes));
@@ -1749,7 +1756,7 @@ __host__ double chi2_doppler_gpu32(struct par_t *dpar, struct dat_t *ddat, int s
 	/* Add all frames from device memory to host memory and destroy streams */
 	for (f=0; f<nframes; f++) {
 		chi2_set += h_chi2_doppler_frame[f];
-
+//		printf("h_chi2_doppler_frame[%i]=%3.6g\n", f, h_chi2_doppler_frame[f]);
 		if (list_breakdown)
 			*chi2_all_doppler += h_chi2_doppler_frame[f];
 	}
@@ -1834,6 +1841,7 @@ __host__ double chi2_doppler_gpu64(struct par_t *dpar, struct dat_t *ddat, int s
 	/* Add all frames from device memory to host memory and destroy streams */
 	for (f=0; f<nframes; f++) {
 		chi2_set += h_chi2_doppler_frame[f];
+//		printf("h_chi2_doppler_frame[%i]=%3.6g\n", f, h_chi2_doppler_frame[f]);
 
 		if (list_breakdown)
 			*chi2_all_doppler += h_chi2_doppler_frame[f];

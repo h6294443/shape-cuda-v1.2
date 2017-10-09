@@ -176,7 +176,7 @@ __global__ void device_reduce_block_atomic_kernel_brt32(struct pos_t **pos, doub
 	/* Used for brightness calculation in light curves */
   double sum=double(0.0);
   for(int i=blockIdx.x*blockDim.x+threadIdx.x; i<N; i+=blockDim.x*gridDim.x) {
-    sum+=pos[f]->b_s[i];
+    sum+=pos[f]->b_d[i];
     //else    	sum+=pos[f]->b_d[i];
   }
   sum=blockReduceSumD(sum);
@@ -187,11 +187,11 @@ __global__ void device_reduce_block_atomic_kernel_brt64(struct pos_t **pos, doub
 		int N, int f) {
 	/* Used for brightness calculation in light curves */
   double sum=double(0.0);
-  int i, j, xspan;
-  xspan = 2 * pos[f]->n + 1;
+  int i, j, xspan, n = pos[f]->n;
+  xspan = 2 * n + 1;
   for(int offset=blockIdx.x*blockDim.x+threadIdx.x; offset<N; offset+=blockDim.x*gridDim.x) {
-    i = offset % xspan + pos[f]->xlim[0];
-	j = offset / xspan + pos[f]->ylim[0];
+    i = offset % xspan - n;
+	j = offset / xspan - n;
     sum+=pos[f]->b[i][j];
   }
   sum=blockReduceSumD(sum);
@@ -262,11 +262,11 @@ __global__ void device_zmax_block_atomic_krnl32(struct pos_t **pos, float* out,
 __global__ void device_zmax_block_atomic_krnl64(struct pos_t **pos, double* out,
 		int N, int f) {
   double zmax=float(0.0);
-  int i, j, xspan;
+  int i, j, n;
   for (int offset=blockIdx.x*blockDim.x+threadIdx.x; offset<N; offset+=blockDim.x*gridDim.x) {
-	  xspan = 2* pos[f]->n + 1;
-	  i = offset % xspan + pos[f]->xlim[0];
-	  j = offset / xspan + pos[f]->ylim[0];
+	  n = pos[f]->n;
+	  i = offset % (2*n+1) - n;
+	  j = offset / (2*n+1) - n;
 	  zmax = fmaxf(zmax, pos[f]->z[i][j]);
   }
   zmax=blockReduceMaxD(zmax);
@@ -1143,7 +1143,7 @@ __global__ void set_idata_pntr_krnl32(struct dat_t *ddat, float *d_idata,
 			d_idata[i] = ddat->set[set].desc.deldop.frame[frm].fit_s[i];
 			break;
 		case DOPPLER:
-			d_idata[i] = ddat->set[set].desc.doppler.frame[frm].fit_s[i];
+			d_idata[i] = ddat->set[set].desc.doppler.frame[frm].fit_s[i+1];
 			break;
 		}
 	}
@@ -1257,8 +1257,8 @@ __global__ void set_o2m2om_values_krnl(double *d_odata0, double *d_odata1,
 	/* Single-threaded kernel (but streamed) */
 	if (threadIdx.x ==0) {
 		o2[f] = d_odata0[0];
-		m2[f] = d_odata1[1];
-		om[f] = d_odata2[2];
+		m2[f] = d_odata1[0];
+		om[f] = d_odata2[0];
 	}
 }
 __global__ void zmax_intermediary_krnl32(struct dat_t *ddat, float *d_in,
@@ -2092,7 +2092,7 @@ __host__ double compute_deldop_xsec_gpu64(struct dat_t *ddat, int nframes,
 	gpuErrchk(cudaMalloc((void**)&d_odata4, arrsz));
 	gpuErrchk(cudaMalloc((void**)&deldop_cross_section, arrsz2));
 	gpuErrchk(cudaMemsetAsync(deldop_cross_section, 0, arrsz2, sb_stream[8]));
-	gpuErrchk(cudaMemsetAsync(dsum_rad_xsec, 0, sizeof(float)*2, sb_stream[9]));
+	gpuErrchk(cudaMemsetAsync(dsum_rad_xsec, 0, sizeof(double)*2, sb_stream[9]));
 
 	/* Call reduction  */
 	while (f<nframes) {
@@ -2153,6 +2153,7 @@ __host__ double compute_deldop_xsec_gpu64(struct dat_t *ddat, int nframes,
 	cudaFree(d_odata4);
 	return sum_deldop_xsec;
 }
+
 __host__ void sum_2_double_arrays(double *a, double *b, double *absum, int size) {
 	/* Function sums up two arrays of doubles.  Returns both sums in host-array
 	 * absum  */
@@ -2673,7 +2674,6 @@ __host__ float compute_model_area32(struct mod_t *dmod, int c, int size) {
 	free(h_data);
 	return area;
 }
-
 __host__ double compute_model_area64(struct mod_t *dmod, int c, int size) {
 	/* Function calculates the model's surface area with Nvidia's reduction
 	 * sample code (simplified and adapted for use with shape).  The function
@@ -2815,7 +2815,6 @@ __host__ void dvdI_reduce_streams32(struct mod_t *dmod, float *dv, float *dcom0,
 	cudaFree(d_odata_dI20);		cudaFree(d_odata_dI21);		cudaFree(d_odata_dI22);
 
 }
-
 __host__ void dvdI_reduce_streams64(struct mod_t *dmod, double *dv, double *dcom0,
 		double *dcom1, double *dcom2, double *dI00, double *dI01, double *dI02,
 		double *dI10, double *dI11, double *dI12, double *dI20, double *dI21,

@@ -10,7 +10,7 @@ __global__ void clrvect_krnl(struct dat_t *ddat, int size, int s, int f, int dbl
 		if (ddat->set[s].type == DELAY) {
 			if (dblflg) {
 				idel = offset % ddat->set[s].desc.deldop.frame[f].ndel + 1;
-				idop = offset / ddat->set[s].desc.deldop.frame[f].ndop + 1;
+				idop = offset / ddat->set[s].desc.deldop.frame[f].ndel + 1;
 				ddat->set[s].desc.deldop.frame[f].fit[idel][idop] = 0.0;
 			}
 			else
@@ -21,7 +21,7 @@ __global__ void clrvect_krnl(struct dat_t *ddat, int size, int s, int f, int dbl
 			if (dblflg)
 				ddat->set[s].desc.doppler.frame[f].fit[offset+1] = 0.0;
 			else
-				ddat->set[s].desc.doppler.frame[f].fit_s[offset] = 0.0;
+				ddat->set[s].desc.doppler.frame[f].fit_s[offset+1] = 0.0;
 		}
 	}
 }

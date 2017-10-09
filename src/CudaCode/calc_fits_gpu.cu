@@ -693,8 +693,8 @@ void *calc_fits_pthread_sub(void *ptr) {
 
 	int c=0, s, nfrm_alloc, *ndel, *ndop, *posn, *bistatic, *outbndarr;
 	int4 *xylim;
-	float **fit_store, *overflow, *pxlpkm;
-	double *u;
+	float **fit_store32, *overflow32, *pxlpkm32;
+	double *u, **fit_store64, *overflow64, *pxlpkm64;
 	double3 *so;
 	dim3 BLK,THD;
 	struct pos_t **pos;
@@ -725,48 +725,88 @@ void *calc_fits_pthread_sub(void *ptr) {
 	gpuErrchk(cudaMalloc((void**)&dframe, sizeof(dopfrm_t*) * nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&dview0, sizeof(dopview_t*) * nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&rend, sizeof(crvrend_t*) * nfrm_alloc));
-	gpuErrchk(cudaMalloc((void**)&fit_store, sizeof(float*) * nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&ndel, sizeof(int) * nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&ndop, sizeof(int) * nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&posn, sizeof(int) * nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&bistatic, sizeof(int) * nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&xylim, sizeof(int4) * nfrm_alloc));
-	gpuErrchk(cudaMalloc((void**)&overflow, sizeof(float) * 6));
 	gpuErrchk(cudaMalloc((void**)&outbndarr, sizeof(int) * nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&u, sizeof(double) * nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&so, 	 	sizeof(double3) *((nfrm_alloc*3)+1)));
-	gpuErrchk(cudaMalloc((void**)&pxlpkm,   sizeof(float) * nfrm_alloc));
+
+
+	if (FP64) {
+		gpuErrchk(cudaMalloc((void**)&fit_store64, sizeof(double*) * nfrm_alloc));
+		gpuErrchk(cudaMalloc((void**)&overflow64, sizeof(double) * 6));
+		gpuErrchk(cudaMalloc((void**)&pxlpkm64,   sizeof(double) * nfrm_alloc));
+	} else {
+		gpuErrchk(cudaMalloc((void**)&fit_store32, sizeof(float*) * nfrm_alloc));
+		gpuErrchk(cudaMalloc((void**)&overflow32, sizeof(float) * 6));
+		gpuErrchk(cudaMalloc((void**)&pxlpkm32,   sizeof(float) * nfrm_alloc));
+	}
 
 	/* Calculate the fits for each dataset in turn  */
 	for (s=0; s<data->nsets; s++) {
 		if (data->GPUID[s]==data->gpuid) {
-			switch (data->type[s]) {
-			case DELAY:
-				calc_deldop_gpu32(data->parameter, data->model, data->data,
-						data->verts, s, data->nframes[s], data->nviews[s],
-						data->type[s], data->nf, pos, ddframe, ddview0,
-						fit_store, ndel, ndop, posn, xylim, overflow, outbndarr,
-						data->gpu_stream);
-				break;
-			case DOPPLER:
-				calc_doppler_gpu32(data->parameter, data->model, data->data,
-						data->verts, s, data->nframes[s], data->nviews[s],
-						data->type[s], data->nf, pos, dframe, dview0, fit_store,
-						ndop,posn,xylim,overflow,outbndarr,data->gpu_stream);
-				break;
-			case POS:
-				printf("Write calc_poset_cuda!");
-				//			calc_poset_cuda(dpar, dmod, s);
-				break;
-			case LGHTCRV:
-				calc_lghtcrv_gpu32(data->parameter, data->model, data->data,
-						data->verts, s, data->nframes[s], data->nviews[s],
-						data->type[s], data->hlc_n[s], data->nf, pos, rend,
-						posn, bistatic, pxlpkm, overflow, xylim, outbndarr, so,
-						u, data->gpu_stream);
-				break;
-			default:
-				printf("calc_fits_pthreads_sub.c: can't handle this type yet\n");
+			if (FP64) {
+				switch (data->type[s]) {
+				case DELAY:
+					calc_deldop_gpu64(data->parameter, data->model, data->data,
+							data->verts, s, data->nframes[s], data->nviews[s],
+							data->type[s], data->nf, pos, ddframe, ddview0,
+							fit_store64, ndel, ndop, posn, xylim, overflow64, outbndarr,
+							data->gpu_stream);
+					break;
+				case DOPPLER:
+					calc_doppler_gpu64(data->parameter, data->model, data->data,
+							data->verts, s, data->nframes[s], data->nviews[s],
+							data->type[s], data->nf, pos, dframe, dview0, fit_store64,
+							ndop,posn,xylim,overflow64,outbndarr,data->gpu_stream);
+					break;
+				case POS:
+					printf("Write calc_poset_cuda!");
+					//			calc_poset_cuda(dpar, dmod, s);
+					break;
+				case LGHTCRV:
+					calc_lghtcrv_gpu64(data->parameter, data->model, data->data,
+							data->verts, s, data->nframes[s], data->nviews[s],
+							data->type[s], data->hlc_n[s], data->nf, pos, rend,
+							posn, bistatic, pxlpkm64, overflow64, xylim, outbndarr, so,
+							u, data->gpu_stream);
+					break;
+				default:
+					printf("calc_fits_pthreads_sub.c: can't handle this type yet\n");
+				}
+			}
+			else {
+				switch (data->type[s]) {
+				case DELAY:
+					calc_deldop_gpu32(data->parameter, data->model, data->data,
+							data->verts, s, data->nframes[s], data->nviews[s],
+							data->type[s], data->nf, pos, ddframe, ddview0,
+							fit_store32, ndel, ndop, posn, xylim, overflow32, outbndarr,
+							data->gpu_stream);
+					break;
+				case DOPPLER:
+					calc_doppler_gpu32(data->parameter, data->model, data->data,
+							data->verts, s, data->nframes[s], data->nviews[s],
+							data->type[s], data->nf, pos, dframe, dview0, fit_store32,
+							ndop,posn,xylim,overflow32,outbndarr,data->gpu_stream);
+					break;
+				case POS:
+					printf("Write calc_poset_cuda!");
+					//			calc_poset_cuda(dpar, dmod, s);
+					break;
+				case LGHTCRV:
+					calc_lghtcrv_gpu32(data->parameter, data->model, data->data,
+							data->verts, s, data->nframes[s], data->nviews[s],
+							data->type[s], data->hlc_n[s], data->nf, pos, rend,
+							posn, bistatic, pxlpkm32, overflow32, xylim, outbndarr, so,
+							u, data->gpu_stream);
+					break;
+				default:
+					printf("calc_fits_pthreads_sub.c: can't handle this type yet\n");
+				}
 			}
 		}
 	}
@@ -777,17 +817,23 @@ void *calc_fits_pthread_sub(void *ptr) {
 	cudaFree(rend);
 	cudaFree(ddview0);
 	cudaFree(dview0);
-	cudaFree(fit_store);
 	cudaFree(ndel);
 	cudaFree(ndop);
 	cudaFree(posn);
 	cudaFree(bistatic);
 	cudaFree(xylim);
-	cudaFree(overflow);
 	cudaFree(outbndarr);
 	cudaFree(u);
 	cudaFree(so);
-	cudaFree(pxlpkm);
+	if (FP64) {
+		cudaFree(fit_store64);
+		cudaFree(overflow64);
+		cudaFree(pxlpkm64);
+	} else {
+		cudaFree(fit_store32);
+		cudaFree(overflow32);
+		cudaFree(pxlpkm32);
+	}
 
 	pthread_exit(0);
 }
@@ -910,7 +956,7 @@ __global__ void cfs_set_lghtcrv_shortcuts_krnl32(struct dat_t *ddat,
 	/* nfrm_alloc-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x + 1;
 	if (f <= size) {
-
+		posn[0] = 0;
 		rend[f] = &ddat->set[s].desc.lghtcrv.rend[f];//&cfs_lghtcrv->rend[f];
 		pos[f] = &rend[f]->pos;
 		posn[f] = pos[f]->n;
@@ -925,14 +971,15 @@ __global__ void cfs_set_lghtcrv_shortcuts_krnl32(struct dat_t *ddat,
 }
 __global__ void cfs_set_lghtcrv_shortcuts_krnl64(struct dat_t *ddat,
 		struct crvrend_t **rend, struct pos_t **pos, double *overflow,
-		int *posn, int s, int size) {
+		int *posn, int s, int size, int *outbndarr) {
 	/* nfrm_alloc-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x + 1;
 	if (f <= size) {
-
+		posn[0] = 0;
 		rend[f] = &ddat->set[s].desc.lghtcrv.rend[f];//&cfs_lghtcrv->rend[f];
 		pos[f] = &rend[f]->pos;
 		posn[f] = pos[f]->n;
+		outbndarr[0] = 0;
 		if (f==1) {
 			overflow[0] = 0.0;
 			overflow[1] = 0.0;
@@ -1043,6 +1090,9 @@ __global__ void cfs_get_exclude_seen_krnl(struct par_t *dpar, struct pos_t **pos
 	int f = blockIdx.x * blockDim.x + threadIdx.x + lghtcrv;
 
 	if (f<(size+lghtcrv)) {
+		if (lghtcrv) {
+			xylim[0].w = xylim[0].x = xylim[0].y = xylim[0].z = 0;
+		}
 		cfs_exclude_seen = dpar->exclude_seen;
 		xylim[f].w = pos[f]->xlim[0];
 		xylim[f].x = pos[f]->xlim[1];
@@ -1558,6 +1608,9 @@ __host__ void calc_deldop_gpu64(struct par_t *dpar, struct mod_t *dmod,
 	/* Copy the badradar flag returns for all frames to a host copy */
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
 			cudaMemcpyDeviceToHost));
+
+//	dbg_print_deldop_fit(ddat, 0, 0, "1080Ti_deldop_fit.csv");
+
 
 	for (f=0; f<nframes; f++) {
 		for (v2=v0_index+1; v2<=v0_index+nviews; v2++) {
@@ -2334,7 +2387,7 @@ __host__ void calc_lghtcrv_gpu64(
 
 	/* Set shortcuts and copy pos->n back for all frames */
 	cfs_set_lghtcrv_shortcuts_krnl64<<<BLKfrm,THD64>>>(ddat, rend, pos, overflow,
-			posn, s, nframes);
+			posn, s, nframes, outbndarr);
 	checkErrorAfterKernelLaunch("cfs_set_lghtcrv_shortcuts_krnl32");
 	gpuErrchk(cudaMemcpy(&hposn, posn, sizeof(int)* nfplus,
 			cudaMemcpyDeviceToHost));
@@ -2431,7 +2484,7 @@ __host__ void calc_lghtcrv_gpu64(
 		 * scattering angle and mark the facets which project onto
 		 * their centers as having been "seen" at least once           */
 		if (s != exclude_seen)
-			cf_mark_pixels_seen_krnl32<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(
+			cf_mark_pixels_seen_krnl64<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(
 					dpar, dmod, pos, xylim, nThreadspx1[f], span[f].x, f);
 	} checkErrorAfterKernelLaunch("cf_mark_pixels_krnl");
 

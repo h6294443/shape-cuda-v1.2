@@ -21,7 +21,7 @@
 					<folderInfo id="com.nvidia.cuda.ide.eight_zero.configuration.debug.1362592750." name="/" resourcePath="">
 						<toolChain id="com.nvidia.cuda.ide.toolchain.nine_zero.1552359229" name="CUDA Toolkit 9.0" superClass="com.nvidia.cuda.ide.toolchain.nine_zero">
 							<targetPlatform archList="all" binaryParser="com.nvidia.cuda.ide.elf;com.nvidia.cuda.ide.macho;com.nvidia.cuda.ide.cubin" id="com.nvidia.cuda.ide.targetPlatform.295030298" isAbstract="false" name="Debug Platform" osList="linux,macosx" superClass="com.nvidia.cuda.ide.targetPlatform"/>
-							<builder buildPath="${workspace_loc:/shape-cuda-v1.0}/Debug" id="com.nvidia.cuda.ide.builder.1962866340" keepEnvironmentInBuildfile="false" name="CUDA Toolkit 9.0 Builder" superClass="com.nvidia.cuda.ide.builder"/>
+							<builder buildPath="${workspace_loc:/shape-cuda-v1.0}/Debug" id="com.nvidia.cuda.ide.builder.1962866340" keepEnvironmentInBuildfile="false" name="CUDA Toolkit 9.0 Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="com.nvidia.cuda.ide.builder"/>
 							<tool id="nvcc.compiler.base.1941303319" name="NVCC Compiler" superClass="nvcc.compiler.base">
 								<option id="nvcc.compiler.deviceDebug.1007121487" name="Generate device debug information (-G)" superClass="nvcc.compiler.deviceDebug" value="true" valueType="boolean"/>
 								<option id="nvcc.compiler.option.level.383692793" name="Generate host debug information (-g)" superClass="nvcc.compiler.option.level" value="true" valueType="boolean"/>
@@ -32,7 +32,8 @@
 								<option id="nvcc.compiler.compileroptions.160154659" name="Preprocessor options (-Xcompiler)" superClass="nvcc.compiler.compileroptions" valueType="stringList">
 									<listOptionValue builtIn="false" value="-rdynamic"/>
 								</option>
-								<option id="nvcc.compiler.usefastmath.1613106708" name="Make use of fast math library (-use_fast_math)" superClass="nvcc.compiler.usefastmath" value="true" valueType="boolean"/>
+								<option id="nvcc.compiler.usefastmath.1613106708" name="Make use of fast math library (-use_fast_math)" superClass="nvcc.compiler.usefastmath" value="false" valueType="boolean"/>
+								<option id="nvcc.compiler.fmad.649876343" name="Contract FP multiplies and adds/subtracts into FP multiply-add operations (-fmad)" superClass="nvcc.compiler.fmad" value="true" valueType="boolean"/>
 								<inputType id="nvcc.compiler.input.cu.1405009591" superClass="nvcc.compiler.input.cu"/>
 								<inputType id="nvcc.compiler.input.cpp.1434277222" superClass="nvcc.compiler.input.cpp"/>
 								<inputType id="nvcc.compiler.input.c.1499556521" superClass="nvcc.compiler.input.c"/>
@@ -98,7 +99,8 @@
 								<option id="nvcc.compiler.option.level.1775852754" name="Generate host debug information (-g)" superClass="nvcc.compiler.option.level"/>
 								<option defaultValue="nvcc.compiler.optimization.level.most" id="nvcc.compiler.optimization.level.1825966710" name="Optimization Level" superClass="nvcc.compiler.optimization.level" valueType="enumerated"/>
 								<option id="nvcc.compiler.pic.584814069" name="Position Independent Code (-fPIC)" superClass="nvcc.compiler.pic"/>
-								<option id="nvcc.compiler.usefastmath.869688444" name="Make use of fast math library (-use_fast_math)" superClass="nvcc.compiler.usefastmath" value="true" valueType="boolean"/>
+								<option id="nvcc.compiler.usefastmath.869688444" name="Make use of fast math library (-use_fast_math)" superClass="nvcc.compiler.usefastmath" value="false" valueType="boolean"/>
+								<option id="nvcc.compiler.fmad.360180010" name="Contract FP multiplies and adds/subtracts into FP multiply-add operations (-fmad)" superClass="nvcc.compiler.fmad" value="false" valueType="boolean"/>
 								<inputType id="nvcc.compiler.input.cu.225709564" superClass="nvcc.compiler.input.cu"/>
 								<inputType id="nvcc.compiler.input.cpp.1583113646" superClass="nvcc.compiler.input.cpp"/>
 								<inputType id="nvcc.compiler.input.c.1071179034" superClass="nvcc.compiler.input.c"/>

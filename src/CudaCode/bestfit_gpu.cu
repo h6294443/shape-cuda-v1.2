@@ -409,7 +409,6 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	cudaStream_t bf_stream[max_streams];
 	for (int f=0; f<max_streams; f++)
 		gpuErrchk(cudaStreamCreate(&bf_stream[f]));
-	//cudaStream_t bf1_stream[max_streams];
 
 	/*..........................End section..................................*/
 
@@ -502,13 +501,19 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 
 		realize_photo_gpu(dpar, dmod, 1.0, 1.0, 0, nf);  /* set R_save to R */
 
-		vary_params_gpu(dpar, dmod, ddat, action, &deldop_zmax_save,
-				&rad_xsec_save, &opt_brightness_save, &cos_subradarlat_save,
-				nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-				bf_stream, max_frames);
+		if (FP64)
+			vary_params_gpu64(dpar, dmod, ddat, action, &deldop_zmax_save,
+					&rad_xsec_save, &opt_brightness_save, &cos_subradarlat_save,
+					nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+					bf_stream, max_frames);
+		else
+			vary_params_gpu32(dpar, dmod, ddat, action, &deldop_zmax_save,
+					&rad_xsec_save, &opt_brightness_save, &cos_subradarlat_save,
+					nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+					bf_stream, max_frames);
 	}
 	printf("rad_xsec: %f\n", rad_xsec_save);
-	printf("deldop_zmax: %f\n", (float)deldop_zmax_save);
+	printf("deldop_zmax: %f\n", deldop_zmax_save);
 
 	/* Point hotparam to a dummy variable (dummyval) rather than to a model pa-
 	 * rameter; then call objective(0.0) to set dummy variable = 0.0, realize
@@ -565,7 +570,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	 * tive function at each step. Stop when fractional decrease in the objec-
 	 * tive function from one iteration to the next is less than term_prec.   */
 
-	do {
+//	do {
 		showvals = 1;        /* show reduced chi-square and penalties at beginning */
 		beginerr = enderr;
 		printf("# iteration %d %f", ++iter, beginerr);
@@ -591,8 +596,8 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % npar_update;
-//		p = first_fitpar;// = 1;
-		for (p=first_fitpar; p<nfpar; p++) {
+		p = first_fitpar;// = 1;
+//		for (p=first_fitpar; p<nfpar; p++) {
 
 			/*  Adjust only parameter p on this try  */
 			bf_set_hotparam_pntr_krnl<<<1,1>>>(fpntr, fpartype, p);
@@ -731,10 +736,16 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 				 * correction polynomial coefficients, to Doppler scaling fac-
 				 * tors, and to radar and optical albedos                  */
 
-				vary_params_gpu(dpar,dmod,ddat,11,&deldop_zmax,
-						&rad_xsec, &opt_brightness, &cos_subradarlat,
-						nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-						bf_stream, max_frames);
+				if (FP64)
+					vary_params_gpu64(dpar,dmod,ddat,11,&deldop_zmax,
+							&rad_xsec, &opt_brightness, &cos_subradarlat,
+							nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+							bf_stream, max_frames);
+				else
+					vary_params_gpu32(dpar,dmod,ddat,11,&deldop_zmax,
+							&rad_xsec, &opt_brightness, &cos_subradarlat,
+							nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+							bf_stream, max_frames);
 
 				delta_delcor0 = (deldop_zmax - deldop_zmax_save)*KM2US;
 				if (cos_subradarlat != 0.0)
@@ -752,10 +763,16 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 				 * law, since single-scattering albedo w isn't just an overall
 				 * scaling factor  */
 				if (vary_hapke) {
-					vary_params_gpu(dpar,dmod,ddat,12,&dummyval2,
-							&dummyval3,&opt_brightness,&dummyval4,
-							nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-							bf_stream, max_frames);
+					if (FP64)
+						vary_params_gpu64(dpar,dmod,ddat,12,&dummyval2,
+								&dummyval3,&opt_brightness,&dummyval4,
+								nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+								bf_stream, max_frames);
+					else
+						vary_params_gpu32(dpar,dmod,ddat,12,&dummyval2,
+								&dummyval3,&opt_brightness,&dummyval4,
+								nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+								bf_stream, max_frames);
 				}
 			} else if (newphoto) {
 				rad_xsec_save = rad_xsec;
@@ -836,7 +853,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 //				write_mod( dpar, dmod);
 //				write_dat( dpar, ddat);
 			}
-		}  // End fitpar loop
+//		}  // End fitpar loop
 
 		/* End of this iteration: Write model and data to disk, and display the
 		 * region within each delay-Doppler or Doppler frame for which model
@@ -893,7 +910,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			keep_iterating = ((beginerr - enderr)/enderr >= term_prec);
 		}
 
-	} while (keep_iterating);
+//	} while (keep_iterating);
 
 		/* Show final values of reduced chi-square, individual penalty functions,
 		 * and the objective function  */
@@ -1735,11 +1752,9 @@ __host__ double objective_gpu(
 	int *dflags, *hflags;
 	int max_frames;
 
-//	gpuErrchk(cudaSetDevice(GPU0));
-	gpuErrchk(cudaMalloc((void**)&dflags, sizeof(int)*7));
+	gpuErrchk(cudaMalloc((void**)&dflags, sizeof(int)*6));
 	gpuErrchk(cudaMalloc((void**)&dlogfactors, sizeof(double)*7));
-//	hflags 	 	= (unsigned char *) malloc(7*sizeof(unsigned char));
-	hflags 	 	= (int *) malloc(7*sizeof(int));
+	hflags 	 	= (int *) malloc(6*sizeof(int));
 	hlogfactors	= (double *) malloc(7*sizeof(double));
 
 	/* Initialize local parameters  */
@@ -1784,10 +1799,16 @@ __host__ double objective_gpu(
 		 * tion polynomial coefficients, to Doppler scaling factors,and to radar
 		 * and optical albedos, then send them to the branch nodes  */
 
-		vary_params_gpu(sdev_par, sdev_mod, sdev_dat, spar->action,
-				&deldop_zmax, &rad_xsec, &opt_brightness, &cos_subradarlat,
-				nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-				bf_stream, max_frames);
+		if (FP64)
+			vary_params_gpu64(sdev_par, sdev_mod, sdev_dat, spar->action,
+					&deldop_zmax, &rad_xsec, &opt_brightness, &cos_subradarlat,
+					nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+					bf_stream, max_frames);
+		else
+			vary_params_gpu32(sdev_par, sdev_mod, sdev_dat, spar->action,
+					&deldop_zmax, &rad_xsec, &opt_brightness, &cos_subradarlat,
+					nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+					bf_stream, max_frames);
 
 		delta_delcor0 = (deldop_zmax - deldop_zmax_save)*KM2US;
 		if (cos_subradarlat != 0.0)
@@ -1836,7 +1857,8 @@ __host__ double objective_gpu(
 	/* Compute penalties and add to reduced chi-square. Individual penalty values
 	 * will be displayed if we set spar->showstate = 1 a few lines back.        */
 	pens = penalties_gpu(sdev_par, sdev_mod, sdev_dat);
-//	printf("pens: %3.9g\n", pens);
+	printf("err: %3.6f\n", err);
+	printf("pens: %3.6f\n", pens);
 	err += pens;
 	/* Double the objective function if there's an ellipsoid component with tiny
 	 * or negative diameter, if any optical photometric parameters have invalid
@@ -1864,9 +1886,9 @@ __host__ double objective_gpu(
 	 */
 	ocs_get_flags_krnl<<<1,1>>>(sdev_par, dflags, dlogfactors);
 	checkErrorAfterKernelLaunch("bf_get_flags_krnl");
-	gpuErrchk(cudaMemcpy(hflags, dflags, sizeof(int)*7,
+	gpuErrchk(cudaMemcpy(hflags, dflags, sizeof(int)*6,
 			cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpy(hlogfactors, dlogfactors, sizeof(double)*6,
+	gpuErrchk(cudaMemcpy(hlogfactors, dlogfactors, sizeof(double)*7,
 			cudaMemcpyDeviceToHost));
 
 	if (hflags[0]==1) {
@@ -1926,7 +1948,7 @@ __host__ double objective_gpu(
 	free(hlogfactors);
 	cudaFree(dflags);
 	cudaFree(dlogfactors);
-//	printf("(GPU MODE) err (return value): %g\n", err);
+	//printf("(GPU MODE) err (return value): %g\n", err);
 	return err;
 }
 

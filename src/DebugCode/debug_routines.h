@@ -16,7 +16,8 @@ __host__ void dbg_print_lghtcrv_pos_arrays(struct dat_t *ddat, int set, int f, i
 __host__ void dbg_print_lghtcrv_pos_arrays_host(struct lghtcrv_t *lghtcrv, int f, int set);
 __host__ void dbg_print_pos_arrays2(struct pos_t **pos, int f, int npixels, int n);
 __host__ void dbg_print_pos_arrays2_host(struct pos_t *pos);
-__host__ void dbg_print_pos_arrays_full(struct pos_t **pos, int f, int npixels, int n);
+__host__ void dbg_print_pos_arrays_full32(struct pos_t **pos, int f, int npixels, int n);
+__host__ void dbg_print_pos_arrays_full64(struct pos_t **pos, int f, int npixels, int n);
 __host__ void dbg_print_pos_arrays_full_host(struct pos_t *pos);
 __host__ void dbg_print_facet_normals_host(struct mod_t *mod, const char *fn);
 __host__ void dbg_print_facet_normals(struct mod_t *dmod, int nf, const char *fn);
