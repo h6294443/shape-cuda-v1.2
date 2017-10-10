@@ -843,7 +843,7 @@ __host__ void apply_photo_gpu32(struct mod_t *dmod,	struct dat_t *ddat,
 
 	/* Call a streamed parallel reduction which calculates the sums of pos->b
 	 * for all frames in a dataset (up to 4 simultaneously)	 */
-//	sum_brightness_gpu32(ddat, pos, nframes, nThreadspx[1], 1, set, ap_stream);
+	sum_brightness_gpu64(ddat, pos, nframes, nThreadspx[1], 1, set, ap_stream);
 
 	cudaFree(dsum);
 	cudaFree(sum);
@@ -981,7 +981,7 @@ __host__ void apply_photo_gpu64(
 		/* Launch the main Kaasalainen kernel */
 		for (f=1; f<=nframes; f++){
 			ap_kaas_krnl64<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
-					nThreads[f], body, xylim, span[f], intensity_factor,
+					nThreadspx[f], body, xylim, span[f], intensity_factor,
 					phase, phasefunc, scale_lommsee, scale_lambert, f, nframes);
 		}
 		checkErrorAfterKernelLaunch("ap_kaas_krnl64");

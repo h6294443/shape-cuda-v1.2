@@ -452,8 +452,6 @@ __global__ void posvis_facet_krnl64(
 		int smooth,
 		int *outbndarr,
 		int set) {
-	/* (nf * nframes)-threaded kernel.  This version eliminates as much double
-	 * math as possible */
 
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
 	int i, i1, i2, j, j1, j2, imin, imax, jmin, jmax;
@@ -605,7 +603,7 @@ __global__ void posvis_facet_krnl64(
 									 * for this pixel  */
 									if ( (pos[frm]->fill[i][j] < 0) || (pos[frm]->f[i][j] < 0)){
 										if (src)
-											atomicExch((unsigned long long int*)&pos[frm]->z[i][j], __double_as_longlong(z));
+											atomicExch((unsigned long long int*)&pos[frm]->zill[i][j], __double_as_longlong(z));
 
 										else
 											atomicExch((unsigned long long int*)&pos[frm]->z[i][j], __double_as_longlong(z));
@@ -738,8 +736,6 @@ __host__ int posvis_gpu32(
 
 	int f, outbnd, smooth, start;
 	dim3 BLK,THD, BLKfrm, THD64;
-	cudaEvent_t start1, stop1;
-	float milliseconds;
 	float4 *ijminmax_overall;
 	float3 *oa, *usrc;
 
@@ -758,12 +754,6 @@ __host__ int posvis_gpu32(
 	gpuErrchk(cudaMalloc((void**)&oa, sizeof(float3) * oasize));
 	gpuErrchk(cudaMalloc((void**)&usrc, sizeof(float3) * nfrm_alloc));
 
-	if (TIMING) {
-		/* Create the timer events */
-		cudaEventCreate(&start1);
-		cudaEventCreate(&stop1);
-		cudaEventRecord(start1);
-	}
 	posvis_init_krnl32<<<BLKfrm,THD64>>>(dpar, pos, ijminmax_overall, oa, usrc,
 			outbndarr, comp, start, src, nfrm_alloc, set);
 	checkErrorAfterKernelLaunch("posvis_init_krnl32");
@@ -783,14 +773,6 @@ __host__ int posvis_gpu32(
 	gpuErrchk(cudaMemcpyFromSymbol(&outbnd, posvis_streams_outbnd, sizeof(int), 0,
 			cudaMemcpyDeviceToHost));
 
-	if (TIMING) {
-		cudaEventRecord(stop1);
-		cudaEventSynchronize(stop1);
-		milliseconds = 0;
-		cudaEventElapsedTime(&milliseconds, start1, stop1);
-		printf("%i facets in posvis_cuda_2 in %3.3f ms with %i frames.\n", nf, milliseconds, nfrm_alloc);
-	}
-
 //	int n = 200;
 //	int npixels = 401*401;
 //	f = 0;
@@ -802,11 +784,6 @@ __host__ int posvis_gpu32(
 	cudaFree(oa);
 	cudaFree(usrc);
 
-
-	if (TIMING) {
-		cudaEventDestroy(start1);
-		cudaEventDestroy(stop1);
-	}
 	return outbnd;
 }
 
@@ -827,8 +804,6 @@ __host__ int posvis_gpu64(
 
 	int f, outbnd, smooth, start;
 	dim3 BLK,THD, BLKfrm, THD64;
-	cudaEvent_t start1, stop1;
-	float milliseconds;
 	double4 *ijminmax_overall;
 	double3 *oa, *usrc;
 
@@ -847,12 +822,6 @@ __host__ int posvis_gpu64(
 	gpuErrchk(cudaMalloc((void**)&oa, sizeof(double3) * oasize));
 	gpuErrchk(cudaMalloc((void**)&usrc, sizeof(double3) * nfrm_alloc));
 
-	if (TIMING) {
-		/* Create the timer events */
-		cudaEventCreate(&start1);
-		cudaEventCreate(&stop1);
-		cudaEventRecord(start1);
-	}
 	posvis_init_krnl64<<<BLKfrm,THD64>>>(dpar, pos, ijminmax_overall, oa, usrc,
 			outbndarr, comp, start, src, nfrm_alloc, set);
 	checkErrorAfterKernelLaunch("posvis_init_krnl64");
@@ -872,14 +841,6 @@ __host__ int posvis_gpu64(
 	gpuErrchk(cudaMemcpyFromSymbol(&outbnd, posvis_streams_outbnd, sizeof(int), 0,
 			cudaMemcpyDeviceToHost));
 
-	if (TIMING) {
-		cudaEventRecord(stop1);
-		cudaEventSynchronize(stop1);
-		milliseconds = 0;
-		cudaEventElapsedTime(&milliseconds, start1, stop1);
-		printf("%i facets in posvis_cuda_2 in %3.3f ms with %i frames.\n", nf, milliseconds, nfrm_alloc);
-	}
-
 //	int n = 200;
 //	int npixels = 401*401;
 //	f = 0;
@@ -891,11 +852,6 @@ __host__ int posvis_gpu64(
 	cudaFree(oa);
 	cudaFree(usrc);
 
-
-	if (TIMING) {
-		cudaEventDestroy(start1);
-		cudaEventDestroy(stop1);
-	}
 	return outbnd;
 }
 

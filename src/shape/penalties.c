@@ -1240,7 +1240,7 @@ double penalties( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
              fabs(par->pen.weight[i])*par->pen.base[i],
              par->pen.weight[i], par->pen.base[i]);
   }
-  printf("sum (penalties.c): %3.8g\n", sum);
+  //printf("sum (penalties.c): %3.8g\n", sum);
   return sum;
 }
 

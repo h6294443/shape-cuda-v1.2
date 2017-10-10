@@ -174,14 +174,17 @@ __global__ void device_reduce_block_atomic_kernel64(double *in, double* out, int
 __global__ void device_reduce_block_atomic_kernel_brt32(struct pos_t **pos, double* out,
 		int N, int f) {
 	/* Used for brightness calculation in light curves */
-  double sum=double(0.0);
-  for(int i=blockIdx.x*blockDim.x+threadIdx.x; i<N; i+=blockDim.x*gridDim.x) {
-    sum+=pos[f]->b_d[i];
-    //else    	sum+=pos[f]->b_d[i];
-  }
-  sum=blockReduceSumD(sum);
-  if(threadIdx.x==0)
-    atomicAdd_dbl(&out[0],sum);
+	double sum=double(0.0);
+	int i, j, xspan, n = pos[f]->n;
+	xspan = 2 * n + 1;
+	for(int offset=blockIdx.x*blockDim.x+threadIdx.x; offset<N; offset+=blockDim.x*gridDim.x) {
+		i = offset % xspan - n;
+		j = offset / xspan - n;
+		sum+=pos[f]->b[i][j];
+	}
+	sum=blockReduceSumD(sum);
+	if(threadIdx.x==0)
+		atomicAdd_dbl(&out[0],sum);
 }
 __global__ void device_reduce_block_atomic_kernel_brt64(struct pos_t **pos, double* out,
 		int N, int f) {

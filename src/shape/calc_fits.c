@@ -1667,6 +1667,9 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 		lghtcrv->y[i] = apply_photo( mod, lghtcrv->ioptlaw, lghtcrv->solar_phase[i],
 				intensityfactor, pos, 0);
 
+//		dbg_print_pos_arrays_full_host(pos);
+
+
 		/*  Carry out screen and disk output for the write action  */
 
 		if (par->action == WRITE) {

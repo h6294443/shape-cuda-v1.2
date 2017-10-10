@@ -4,12 +4,15 @@ extern "C" {
 }
 
 __global__ void dbg_copy_pos_arrays_full_krnl32(struct pos_t **pos, int f,
-		int npixels, float *b, float *cosi, float *cose, float *zz) {
+		int npixels, double *b, float *cosi, float *cose, float *zz) {
 	/* npixels-threaded debug kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int n = pos[f]->n;
+	int i = offset % (2*n+1) - n;
+	int j = offset / (2*n+1) - n;
 
 	if (offset < npixels) {
-		b[offset] = pos[f]->b_s[offset];
+		b[offset] = pos[f]->b[i][j];
 		cosi[offset] = pos[f]->cosi_s[offset];
 		cose[offset] = pos[f]->cose_s[offset];
 		zz[offset] = pos[f]->z_s[offset];
@@ -119,13 +122,14 @@ __host__ void dbg_print_pos_arrays_full32(struct pos_t **pos, int f,
 	 *  - pos->b_s,
 	 *
 	 *  all of length nPixels in the lghtcrv specified by 'set' in 'ddat' */
-	float *b, *cosi, *cose, *zz;
+	float *cosi, *cose, *zz;
 	FILE *fp_b, *fp_cosi, *fp_cose, *fp_z;
 	dim3 BLK,THD;
 	const char *filename;
 	int i, j, pxa, thd = 256;
+	double *b;
 
-	cudaCalloc1((void**)&b, sizeof(float), npixels);
+	cudaCalloc1((void**)&b, sizeof(double), npixels);
 	cudaCalloc1((void**)&cosi, sizeof(float), npixels);
 	cudaCalloc1((void**)&cose, sizeof(float), npixels);
 	cudaCalloc1((void**)&zz, sizeof(float), npixels);
@@ -135,13 +139,13 @@ __host__ void dbg_print_pos_arrays_full32(struct pos_t **pos, int f,
 	checkErrorAfterKernelLaunch("dbg_copy_pos_arrays_full_krnl");
 	deviceSyncAfterKernelLaunch("dbg_copy_pos_arrays_full_krnl");
 
-	filename = "GPU_pos-b_s.csv";
+	filename = "1080Ti_b_32.csv";
 	fp_b = fopen(filename, "w+");
-	filename = "GPU_pos-cosi_s.csv";
+	filename = "1080Ti_cosis32.csv";
 	fp_cosi = fopen(filename, "w+");
-	filename = "GPU_pos-cose_s.csv";
+	filename = "1080Ti_coses32.csv";
 	fp_cose = fopen(filename, "w+");
-	filename = "GPU_pos-z_s.csv";
+	filename = "1080Ti_zs32.csv";
 	fp_z = fopen(filename, "w+");
 
 	/* Print top corner set label */
@@ -215,13 +219,13 @@ __host__ void dbg_print_pos_arrays_full64(struct pos_t **pos, int f,
 	checkErrorAfterKernelLaunch("dbg_copy_pos_arrays_full_krnl");
 	deviceSyncAfterKernelLaunch("dbg_copy_pos_arrays_full_krnl");
 
-	filename = "GPU_pos-b_s.csv";
+	filename = "1080Ti_b_64.csv";
 	fp_b = fopen(filename, "w+");
-	filename = "GPU_pos-cosi_s.csv";
+	filename = "1080Ti_cosi64.csv";
 	fp_cosi = fopen(filename, "w+");
-	filename = "GPU_pos-cose_s.csv";
+	filename = "1080Ti_cose64.csv";
 	fp_cose = fopen(filename, "w+");
-	filename = "GPU_pos-z_s.csv";
+	filename = "1080Ti_z64.csv";
 	fp_z = fopen(filename, "w+");
 
 	/* Print top corner set label */
