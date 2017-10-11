@@ -354,7 +354,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	 * tive function at each step. Stop when fractional decrease in the objec-
 	 * tive function from one iteration to the next is less than term_prec.   */
 
-	do {
+//	do {
 		showvals = 1;        /* show reduced chi-square and penalties at beginning */
 		beginerr = enderr;
 		printf("# iteration %d %f", ++iter, beginerr);
@@ -377,9 +377,9 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % par->npar_update;
-	//	p = first_fitpar;
+		p = first_fitpar;
 //		p = 1;
-		for (p=first_fitpar; p<par->nfpar; p++) {
+//		for (p=first_fitpar; p<par->nfpar; p++) {
 
 			/*  Adjust only parameter p on this try  */
 			hotparam = par->fpntr[p];
@@ -566,7 +566,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 //				write_mod( par, mod);
 //				write_dat( par, dat);
 			}
-		}
+//		}
 
 		/* End of this iteration: Write model and data to disk, and display the
 		 * region within each delay-Doppler or Doppler frame for which model
@@ -625,7 +625,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			keep_iterating = ((beginerr - enderr)/enderr >= par->term_prec);
 		}
 
-	} while (keep_iterating);
+//	} while (keep_iterating);
 
 	/* Show final values of reduced chi-square, individual penalty functions,
 	 * and the objective function  */

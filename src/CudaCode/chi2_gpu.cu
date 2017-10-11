@@ -296,11 +296,8 @@ __global__ void c2s_init_krnl(struct dat_t *ddat, unsigned char *dtype,int nsets
 }
 __global__ void c2s_retrieve_chi2_krnl(struct dat_t *ddat) {
 	/* Single-threaded kernel */
-	if (threadIdx.x == 0) {
+	if (threadIdx.x == 0)
 		c2s_chi2 = ddat->chi2;
-		printf("ddat->chi2=%3.6f\n", ddat->chi2);
-	}
-
 }
 __global__ void c2s_deldop_init_krnl32(struct dat_t *ddat, int s,	int *ndel,
 		int *ndop, float *o2, float *m2, float *om, float *weight, int nframes) {
@@ -856,10 +853,8 @@ __global__ void c2s_get_prntflgs_krnl(struct par_t *dpar, struct dat_t *ddat) {
 }
 __global__ void c2_add_chi2_krnl(struct dat_t *ddat, int s) {
 	/* Single-threaded kernel */
-	if (threadIdx.x == 0) {
+	if (threadIdx.x == 0)
 		ddat->chi2 += ddat->set[s].chi2;
-		printf("add ddat->set[%i].chi2=%3.6f to ddat->chi2=%3.6f\n", s, ddat->set[s].chi2, ddat->chi2);
-	}
 }
 __global__ void set_global_chi2_krnl(struct dat_t *ddat, double chi2a, double chi2b) {
 	/* Single-threaded kernel */
@@ -868,10 +863,8 @@ __global__ void set_global_chi2_krnl(struct dat_t *ddat, double chi2a, double ch
 }
 __global__ void c2_set_chi2_krnl(struct dat_t *ddat, double chi2, int s) {
 	/* Single-threaded kernel */
-	if (threadIdx.x == 0){
+	if (threadIdx.x == 0)
 		ddat->set[s].chi2 = chi2;
-		printf("Set chi2 for ddat->set[s].chi2=%3.6f\n", ddat->set[s].chi2);
-	}
 }
 __global__ void deldop_wrt_chi2fit0_krnl32(struct par_t *dpar, struct dat_t *ddat,
 		int s, int f, int *ndel, int *ndop, int nThreads, float *returns,

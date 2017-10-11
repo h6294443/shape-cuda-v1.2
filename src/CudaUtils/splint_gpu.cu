@@ -53,7 +53,7 @@ __global__ void lghtcrv_splint_krnl(struct dat_t *ddat, int set, int n, int ncal
 				ddat->set[set].desc.lghtcrv.fit[i] += interp;
 			}
 			ddat->set[set].desc.lghtcrv.fit[i] /= ddat->set[set].desc.lghtcrv.nviews;
-			printf("lghtcrv->fit[%i]=%3.8g\n", i, ddat->set[set].desc.lghtcrv.fit[i]);
+//			printf("lghtcrv->fit[%i]=%3.8g\n", i, ddat->set[set].desc.lghtcrv.fit[i]);
 
 		}
 	}

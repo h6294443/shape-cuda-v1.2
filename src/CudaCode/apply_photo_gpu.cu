@@ -555,12 +555,12 @@ __global__ void ap_kaas_krnl32(struct mod_t *dmod, struct pos_t **pos,
         int nThreads, int body, int4 *xylim, int2 span,
         float *intensity_factor, float *phase, float *phasefunc,
         float *scale_lommsee, float *scale_lambert, int frm, int nframes) {
-			/* Multi-threaded kernel */
-			int offset = blockIdx.x * blockDim.x + threadIdx.x;
-			int n = pos[frm]->n;
-			int i = offset % span.x - n;
-			int j = offset / span.x - n;
-			int pxa = (j+n)*span.x + (i+n);
+	/* Multi-threaded kernel */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int i = offset % span.x + xylim[frm].w;
+	int j = offset / span.x + xylim[frm].y;
+	int n = pos[frm]->n;
+	int pxa = (j+n)*span.x + (i+n);
 
 			if (offset < nThreads) {
 				if (pos[frm]->cose_s[pxa] > 0.0 && pos[frm]->cosi_s[pxa] > 0.0
@@ -578,9 +578,8 @@ __global__ void ap_kaas_krnl64(struct mod_t *dmod, struct pos_t **pos,
         double *scale_lommsee, double *scale_lambert, int frm, int nframes) {
 			/* Multi-threaded kernel */
 			int offset = blockIdx.x * blockDim.x + threadIdx.x;
-			int n = pos[frm]->n;
-			int i = offset % span.x - n;
-			int j = offset / span.x - n;
+			int i = offset % span.x + xylim[frm].w;
+			int j = offset / span.x + xylim[frm].y;
 
             if (offset < nThreads) {
 				if (pos[frm]->cose[i][j] > 0.0 && pos[frm]->cosi[i][j] > 0.0
@@ -703,6 +702,14 @@ __host__ void apply_photo_gpu32(struct mod_t *dmod,	struct dat_t *ddat,
 		struct pos_t **pos, int4 *xylim, int2 *span, dim3 *BLKpx, int *nThreads,
 		int body, int set, int nframes, int *nThreadspx, cudaStream_t *ap_stream)
 {
+	/* The following function launches kernels to calculate the per-pixel brightness
+	 * of the model asteroid.  None of kernels examine ALL of the pixels in any
+	 * one pos; rather only the area defined by pos->xlim and pos->ylim.  In this
+	 * context, the input argument span contains the x and y direction spans for
+	 * each frame's pos.  BLKpx defines the number of blocks needed for those
+	 * kernels.  nThreadspx defines the number of pixels calculated for each
+	 * frame's pos.  nThreads defines the full number of pixels per pos.	 */
+
 	unsigned char *type, *htype;
 	int f;
 	float *dsum;

@@ -2479,12 +2479,12 @@ __host__ void calc_lghtcrv_gpu64(
 	} checkErrorAfterKernelLaunch("cf_mark_pixels_krnl");
 
 
-	for (f=1; f<=nframes; f++)
-		BLKpx[f].x = floor((THD.x-1+nThreadspx[f])/THD.x);
+//	for (f=1; f<=nframes; f++)
+//		BLKpx[f].x = floor((THD.x-1+nThreadspx[f])/THD.x);
 	/* Compute model brightness for this lightcurve point then copy to device  */
 	apply_photo_gpu64(dmod, ddat, pos, xylim, span, BLKpx, nThreadspx,
-			0, s, nframes, nThreadspx, cf_stream);
-	dbg_print_pos_arrays_full64(pos, 1,	nThreadspx[1], hposn[1]);
+			0, s, nframes, nThreadspx1, cf_stream);
+//	dbg_print_pos_arrays_full64(pos, 1,	nThreadspx[1], hposn[1]);
 	/* Now that we have calculated the model lightcurve brightnesses y at each
 	 * of the epochs x, we use cubic spline interpolation (Numerical Recipes
 	 * routines spline and splint) to get model lightcurve brightness fit[i] at
