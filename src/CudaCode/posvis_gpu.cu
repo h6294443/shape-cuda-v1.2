@@ -113,7 +113,8 @@ __global__ void posvis_init_krnl32(
 		int start,
 		int src,
 		int size,
-		int set) {
+		int set,
+		int src_override) {
 
 	/* nfrm_alloc-threaded */
 	int f = blockIdx.x * blockDim.x + threadIdx.x + start;
@@ -122,6 +123,7 @@ __global__ void posvis_init_krnl32(
 		if (f == start) {
 			posvis_streams_outbnd = 0;
 			pvst_smooth = dpar->pos_smooth;
+			if (src_override)	pvst_smooth = 0;
 		}
 		ijminmax_overall[f].w = ijminmax_overall[f].y = HUGENUMBER;
 		ijminmax_overall[f].x = ijminmax_overall[f].z = -HUGENUMBER;
@@ -161,7 +163,8 @@ __global__ void posvis_init_krnl64(
 		int start,
 		int src,
 		int size,
-		int set) {
+		int set,
+		int src_override) {
 
 	/* nfrm_alloc-threaded */
 	int f = blockIdx.x * blockDim.x + threadIdx.x + start;
@@ -170,6 +173,7 @@ __global__ void posvis_init_krnl64(
 		if (f == start) {
 			posvis_streams_outbnd = 0;
 			pvst_smooth = dpar->pos_smooth;
+			if (src_override)	pvst_smooth = 0;
 		}
 		ijminmax_overall[f].w = ijminmax_overall[f].y = HUGENUMBER;
 		ijminmax_overall[f].x = ijminmax_overall[f].z = -HUGENUMBER;
@@ -394,7 +398,7 @@ __global__ void posvis_facet_krnl32(
 										n.y = tv0.y + s * (tv1.y - tv0.y) + t * (tv2.y - tv1.y);
 										n.z = tv0.z + s * (tv1.z - tv0.z) + t * (tv2.z - tv1.z);
 										dev_cotrans8(&n, oa, n, 1, frm);
-										dev_normalize2(n);
+										dev_normalize2(&n);
 									}
 
 									/* Determine scattering and/or incidence
@@ -403,6 +407,7 @@ __global__ void posvis_facet_krnl32(
 									 * we are viewing from Earth (src = 0),
 									 * pos->cosi is also changed.                 */
 									if (n.z > 0.0) {
+
 										if (src)
 											atomicExch(&pos[frm]->cosill_s[pxa], n.z);
 										else
@@ -485,7 +490,6 @@ __global__ void posvis_facet_krnl64(
 		n.x = verts[0]->f[f].n[0];
 		n.y = verts[0]->f[f].n[1];
 		n.z = verts[0]->f[f].n[2];
-
 		dev_cotrans3(&n, oa, n, 1, frm);
 
 		/* Consider this facet further only if its normal points somewhat
@@ -630,8 +634,9 @@ __global__ void posvis_facet_krnl64(
 										n.x = tv0.x + s * (tv1.x - tv0.x) + t * (tv2.x - tv1.x);
 										n.y = tv0.y + s * (tv1.y - tv0.y) + t * (tv2.y - tv1.y);
 										n.z = tv0.z + s * (tv1.z - tv0.z) + t * (tv2.z - tv1.z);
+
 										dev_cotrans3(&n, oa, n, 1, frm);
-										dev_normalize3(n);
+										dev_normalize3(&n);
 									}
 
 									/* Determine scattering and/or incidence
@@ -640,13 +645,16 @@ __global__ void posvis_facet_krnl64(
 									 * we are viewing from Earth (src = 0),
 									 * pos->cosi is also changed.                 */
 									if (n.z > 0.0) {
+
 										if (src)
 											atomicExch((unsigned long long int*)&pos[frm]->cosill[i][j],
 													__double_as_longlong(n.z));
 										else
 											atomicExch((unsigned long long int*)&pos[frm]->cose[i][j],
 													__double_as_longlong(n.z));
+
 										if ((!src) && (pos[frm]->bistatic)) {
+
 											double temp = dev_dot_d3(n,usrc[frm]);
 											atomicExch((unsigned long long int*)&pos[frm]->cosi[i][j],
 													__double_as_longlong(temp));
@@ -732,7 +740,8 @@ __host__ int posvis_gpu32(
 		int nfrm_alloc,
 		int src,
 		int nf,
-		int body, int comp, unsigned char type, cudaStream_t *pv_stream) {
+		int body, int comp, unsigned char type, cudaStream_t *pv_stream,
+		int src_override) {
 
 	int f, outbnd, smooth, start;
 	dim3 BLK,THD, BLKfrm, THD64;
@@ -755,7 +764,7 @@ __host__ int posvis_gpu32(
 	gpuErrchk(cudaMalloc((void**)&usrc, sizeof(float3) * nfrm_alloc));
 
 	posvis_init_krnl32<<<BLKfrm,THD64>>>(dpar, pos, ijminmax_overall, oa, usrc,
-			outbndarr, comp, start, src, nfrm_alloc, set);
+			outbndarr, comp, start, src, nfrm_alloc, set, src_override);
 	checkErrorAfterKernelLaunch("posvis_init_krnl32");
 
 	for (f=start; f<nfrm_alloc; f++) {
@@ -787,6 +796,7 @@ __host__ int posvis_gpu32(
 	return outbnd;
 }
 
+
 __host__ int posvis_gpu64(
 		struct par_t *dpar,
 		struct mod_t *dmod,
@@ -800,7 +810,8 @@ __host__ int posvis_gpu64(
 		int nfrm_alloc,
 		int src,
 		int nf,
-		int body, int comp, unsigned char type, cudaStream_t *pv_stream) {
+		int body, int comp, unsigned char type, cudaStream_t *pv_stream,
+		int src_override) {
 
 	int f, outbnd, smooth, start;
 	dim3 BLK,THD, BLKfrm, THD64;
@@ -811,6 +822,13 @@ __host__ int posvis_gpu64(
 	THD.x = maxThreadsPerBlock;	THD64.x = 64;
 	BLK.x = floor((THD.x - 1 + nf) / THD.x);
 	BLKfrm.x = floor((THD64.x - 1 + nfrm_alloc)/THD64.x);
+
+//	double3 *dbg_hoa;
+//	double3 *dbg_n, *dbg_hn;
+//	cudaCalloc((void**)&dbg_n, sizeof(double3), nf);
+//	dbg_hn = (double3 *) malloc(nf*sizeof(double3));
+//	dbg_hoa = (double3 *) malloc(3*nfrm_alloc*sizeof(double3));
+
 
 	/* Set up the offset addressing for lightcurves if this is a lightcurve */
 	if (type == LGHTCRV)	start = 1;	/* fixes the lightcurve offsets */
@@ -823,8 +841,9 @@ __host__ int posvis_gpu64(
 	gpuErrchk(cudaMalloc((void**)&usrc, sizeof(double3) * nfrm_alloc));
 
 	posvis_init_krnl64<<<BLKfrm,THD64>>>(dpar, pos, ijminmax_overall, oa, usrc,
-			outbndarr, comp, start, src, nfrm_alloc, set);
+			outbndarr, comp, start, src, nfrm_alloc, set, src_override);
 	checkErrorAfterKernelLaunch("posvis_init_krnl64");
+
 
 	for (f=start; f<nfrm_alloc; f++) {
 		/* Now the main facet kernel */
@@ -833,6 +852,13 @@ __host__ int posvis_gpu64(
 				nf, f, smooth, outbndarr, set);
 	}
 	checkErrorAfterKernelLaunch("posvis_facet_krnl64");
+
+//	posvis_facet_krnl64<<<BLK,THD, 0, pv_stream[1]>>>(pos, verts,
+//					ijminmax_overall, orbit_offset, oa, usrc,	src, body, comp,
+//					nf, 1, smooth, outbndarr, set);
+//	dbg_krnl_psvs<<<1,1>>>();
+//	gpuErrchk(cudaMemcpy(dbg_hn, dbg_n, sizeof(double3)*nf, cudaMemcpyDeviceToHost));
+//	dbg_print_facet_normals_dbl3(dbg_hn, nf, "FP64_nrmls.csv");
 
 	/* Take care of any posbnd flags */
 	posvis_outbnd_krnl64<<<BLKfrm,THD64>>>(pos,

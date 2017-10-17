@@ -61,10 +61,11 @@ __host__ double find_max_in_double_array(double *in, int size);
 __host__ double find_min_in_double_array(double *in, int size);
 
 __host__ void sum_brightness_gpu32(struct dat_t *ddat, struct pos_t **pos,
-		int nframes, int size, int flt, int set, cudaStream_t *sb_stream);
+		int nframes, int size, int set, int4 maxxylim, cudaStream_t *sb_stream);
 
 __host__ void sum_brightness_gpu64(struct dat_t *ddat, struct pos_t **pos,
-		int nframes, int size, int flt, int set, cudaStream_t *sb_stream);
+		int nframes, int size, int flt, int set, int maxthds,
+		int4 maxxylim, cudaStream_t *sb_stream);
 
 __host__ double sum_double_array(double *a, int size);
 

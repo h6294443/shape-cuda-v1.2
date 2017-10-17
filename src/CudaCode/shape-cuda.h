@@ -48,7 +48,7 @@ extern double **fpntr;			/* par->pntr 		*/
 extern int *fpartype;			/* par->fpartype	*/
 
 /* Device Functions */
-void CUDACount();
+void CUDACount(int showCUDAInfo);
 void allocate_CUDA_structs(struct par_t par, struct mod_t mod, struct dat_t dat);
 void checkErrorAfterKernelLaunch(const char *location);
 void deviceSyncAfterKernelLaunch(const char *location);
@@ -56,11 +56,18 @@ void pickGPU(int gpuid);
 
 __host__ void apply_photo_gpu32(struct mod_t *dmod, struct dat_t *ddat,
 		struct pos_t **pos, int4 *xylim, int2 *span, dim3 *BLKpx, int *nThreads,
-		int body, int set, int nframes, int *nThreadspx, cudaStream_t *ap_stream);
+		int body, int set, int nframes, int *nThreadspx, int maxthds,
+		int4 maxxylim,cudaStream_t *ap_stream);
+
+__host__ void apply_photo_gpu48(struct mod_t *dmod,	struct dat_t *ddat,
+		struct pos_t **pos, int4 *xylim, int2 *span, dim3 *BLKpx,
+		int body, int set, int nframes, int maxthds,
+		int4 maxxylim, cudaStream_t *ap_stream);
 
 __host__ void apply_photo_gpu64(struct mod_t *dmod, struct dat_t *ddat,
 		struct pos_t **pos, int4 *xylim, int2 *span, dim3 *BLKpx, int *nThreads,
-		int body, int set, int nframes, int *nThreadsPx, cudaStream_t *ap_stream);
+		int body, int set, int nframes, int *nThreadsPx, int maxthds,
+		int4 maxxylim,cudaStream_t *ap_stream);
 
 __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod, struct
 		dat_t *ddat, struct par_t *par, struct mod_t *mod, struct dat_t *dat);
@@ -169,13 +176,13 @@ __host__ int posvis_gpu32(struct par_t *dpar, struct mod_t *dmod, struct dat_t
 		*ddat, struct pos_t **pos, struct vertices_t **verts, float3
 		orbit_offset, int *posn, int *outbndarr, int set, int nfrm_alloc, int
 		src, int nf, int body, int comp, unsigned char type,
-		cudaStream_t *pv_stream);
+		cudaStream_t *pv_stream, int src_override);
 
 __host__ int posvis_gpu64(struct par_t *dpar, struct mod_t *dmod, struct dat_t
 		*ddat, struct pos_t **pos, struct vertices_t **verts, double3
 		orbit_offset, int *posn, int *outbndarr, int set, int nfrm_alloc, int
 		src, int nf, int body, int comp, unsigned char type,
-		cudaStream_t *pv_stream);
+		cudaStream_t *pv_stream, int src_override);
 
 __host__ int read_dat_gpu( struct par_t *par, struct mod_t *mod, struct dat_t *dat);
 

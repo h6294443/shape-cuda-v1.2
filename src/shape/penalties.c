@@ -628,7 +628,7 @@ double penalties( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
         }
        // printf("# of sides ns: %i\n", ns);
        // printf("ntot: %i\n", ntot);
-        printf("nonsmooth pen: %3.8g\n", pen);
+//        printf("nonsmooth pen: %3.8g\n", pen);
         pen /= ntot;
 //        printf("nonsmooth pen: %3.8g\n", pen*1e6);
         break;

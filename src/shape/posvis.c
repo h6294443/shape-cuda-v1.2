@@ -91,6 +91,9 @@ int posvis( struct vertices_t *verts, double orbit_offset[3], struct pos_t *pos,
 	jmin_overall, jmax_overall, n[3], oa[3][3], usrc[3];
 	double **cosa, **cosb, **zz;
 
+//	double3 *dbg_hn;
+//	dbg_hn = (double3 *) malloc(verts->nf*sizeof(double3));
+//	int dbg_occ = 0;
 	/*  Initialize variables  */
 	outbnd = 0;
 	pos->posbnd_logfactor = 0.0;
@@ -242,7 +245,6 @@ int posvis( struct vertices_t *verts, double orbit_offset[3], struct pos_t *pos,
 									zz[i][j] = z;
 
 									if (smooth) {
-
 										/* Get smoothed version of facet unit
 										 * normal: Take the linear combination
 										 * of the three vertex normals; trans-
@@ -265,11 +267,14 @@ int posvis( struct vertices_t *verts, double orbit_offset[3], struct pos_t *pos,
 									 * we are viewing from Earth (src = 0),
 									 * pos->cosi is also changed.                 */
 									if (n[2] > 0.0) {
+
 										cosa[i][j] = n[2];
 										if ((!src) && (pos->bistatic)) {
+
 											cosb[i][j] = dot( n, usrc);
-											if (cosb[i][j] <= 0.0)
+											if (cosb[i][j] <= 0.0) {
 												cosa[i][j] = 0.0;
+											}
 										}
 									}
 
@@ -305,7 +310,8 @@ int posvis( struct vertices_t *verts, double orbit_offset[3], struct pos_t *pos,
 		pos->posbnd_logfactor = log(xfactor*yfactor);
 	}
 //	dbg_print_pos_arrays_full_host(pos);
-
+//	dbg_print_facet_normals_dbl3(dbg_hn, verts->nf, "CPU_nrmls.csv");
+//	dbg_print_facet_normals_dbl3(dbg_hn, nf, "FP64_nrmls.csv");
 	return outbnd;
 }
 

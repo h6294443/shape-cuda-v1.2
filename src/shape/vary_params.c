@@ -283,7 +283,7 @@ void vary_params( struct par_t *par, struct mod_t *mod, struct dat_t *dat,
 					intensityfactor = pow( pos->km_per_pixel/AU, 2.0);
 					lghtcrv->y[i] = apply_photo( mod, lghtcrv->ioptlaw,
 							lghtcrv->solar_phase[i],
-							intensityfactor, pos, 0);
+							intensityfactor, pos, 0, s, i);
 				}
 
 				/* Now that we have calculated the model lightcurve brightnesses

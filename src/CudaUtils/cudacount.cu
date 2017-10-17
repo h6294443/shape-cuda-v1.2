@@ -9,8 +9,7 @@ extern "C" {
 }
 //int maxThreadsPerBlock = 0;
 
-void CUDACount() {
-	int showCUDAInfo = 1;
+void CUDACount(int showCUDAInfo) {
 	int nDevices, i;
 	int canAccess0, canAccess1;
 

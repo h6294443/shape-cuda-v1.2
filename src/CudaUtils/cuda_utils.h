@@ -49,8 +49,8 @@ __device__ void dev_mtrnsps( double a[3][3], double b[3][3]);
 __device__ void dev_mtrnsps2(double3 *a, double b[3][3], int f);
 __device__ void dev_mtrnsps3(float3 *a, double b[3][3], int frm);
 __device__ double dev_normalize(double *u);
-__device__ float dev_normalize2(float3 u);
-__device__ double dev_normalize3(double3 u);
+__device__ float dev_normalize2(float3 *u);
+__device__ double dev_normalize3(double3 *u);
 __device__ void dev_odeint( double ystart[13], double x1, double x2, double eps,
 	double h1, double hmin, int *nok, int *nbad, void (*derivs)(double,double *,double *),
 	void (*drkqc)(double *,double *,double *,double,double,double

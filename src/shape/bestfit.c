@@ -303,6 +303,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 
 	/* Compute deldop_zmax_save, cos_subradarlat_save, rad_xsec_save, and
 	 * opt_brightness_save for the initial model  */
+	call_vary_params = 1;
 	if (call_vary_params)
 	{
 		realize_mod( par, mod);
@@ -334,6 +335,11 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	if (par->baddopscale)	printf("  (BAD DOPSCALE)");
 	printf("\n");
 	fflush(stdout);
+
+//	int debug = 1;
+//	if (debug)
+//		return(0);
+//
 
 	/* Display the region within each delay-Doppler or Doppler frame that, ac-
 	 * cording to initial model, has nonzero power. A warning is displayed if
@@ -377,9 +383,9 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % par->npar_update;
-		p = first_fitpar;
+//		p = first_fitpar;
 //		p = 1;
-//		for (p=first_fitpar; p<par->nfpar; p++) {
+		for (p=2/*first_fitpar*/; p<3/*par->nfpar*/; p++) {
 
 			/*  Adjust only parameter p on this try  */
 			hotparam = par->fpntr[p];
@@ -442,6 +448,9 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			 * fractional tolerance.                                      */
 			enderr = brent_abs( ax, bx, cx, objective,
 					par->fpartol[p], par->fparabstol[p], &xmin);
+
+
+			printf("xmin, %3.8g\n", xmin);
 
 			/* Realize whichever part(s) of the model has changed.
 			 *
@@ -558,7 +567,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			 * parameters (i.e. delay correction polynomial coefficients) do.  */
 			if (++cntr >= par->npar_update) {
 				cntr = 0;
-				showvals = 1;
+	//			showvals = 1;
 				calc_fits( par, mod, dat);
 				chi2( par, dat, 0);
 //				if (mpi_nproc > 1)
@@ -566,7 +575,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 //				write_mod( par, mod);
 //				write_dat( par, dat);
 			}
-//		}
+		}
 
 		/* End of this iteration: Write model and data to disk, and display the
 		 * region within each delay-Doppler or Doppler frame for which model
@@ -781,6 +790,7 @@ double objective( double x)
 	 * will be displayed if we set spar->showstate = 1 a few lines back.        */
 	pens = penalties( spar, smod, sdat);
 //	printf("pens: %3.9g\n", pens);
+//	printf("%3.8g, %3.8g, %3.8g\n", x, err, pens);
 	err += pens;
 
 	/* Double the objective function if there's an ellipsoid component with tiny

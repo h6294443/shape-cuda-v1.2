@@ -283,9 +283,9 @@ void view_mod( struct par_t *par, struct mod_t *mod)
 
   /*  If we're using the optical scattering law for the image,
       call apply_photo to compute the POS pixel values          */
-
+int s = 0;
   if ((*par).view_scatlaw == OPTICALVIEW)
-    apply_photo( mod, 0, solar_phase, intensityfactor, &pos, 0);
+    apply_photo( mod, 0, solar_phase, intensityfactor, &pos, 0, s, i);
 
   /*  Figure out the name of the image file  */
 

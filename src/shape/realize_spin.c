@@ -257,6 +257,15 @@ void realize_spin( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
           for (j=0; j<=2; j++)
             (*lghtcrv).rend[i].spin[j] = (*lghtcrv).rend[i].orbspin[j] +
                                          (*lghtcrv).rend[i].intspin[j];
+
+//          if (s==6 && i==5) {
+//        	  for (j=0; j<=2; j++)
+//        		  printf("set[%i].lghtcrv.rend[%i].spin[%i], %3.8g\n", s, i, j, dat->set[s].desc.lghtcrv.rend[i].spin[j]);
+//
+//        	  for (int w=0; w<3; w++)
+//        		  for (int x=0; x<3; x++)
+//        			  printf("ae[%i][%i], %3.8g\n", w, x, lghtcrv->rend[i].ae[w][x]);
+//          }
         }
         break;
     default:

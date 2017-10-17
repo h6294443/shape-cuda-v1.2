@@ -1399,7 +1399,7 @@ __host__ void calc_deldop_gpu32(struct par_t *dpar, struct mod_t *dmod,
 	 * NOTE: Limited to single component for now */
 	for (v2=v0_index+1; v2<=v0_index+nviews; v2++)
 		posvis_gpu32(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
-				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream);
+				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream, 0);
 
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
 			cudaMemcpyDeviceToHost));
@@ -1556,7 +1556,7 @@ __host__ void calc_deldop_gpu64(struct par_t *dpar, struct mod_t *dmod,
 	 * NOTE: Limited to single component for now */
 	for (v2=v0_index+1; v2<=v0_index+nviews; v2++)
 		posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
-				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream);
+				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream, 0);
 
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
 			cudaMemcpyDeviceToHost));
@@ -1718,7 +1718,7 @@ __host__ void calc_doppler_gpu32(struct par_t *dpar, struct mod_t *dmod,
 	/* NOTE: Limited to single component for now */
 	for (v2=v0_index+1; v2<=v0_index+nviews; v2++)
 		posvis_gpu32(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
-				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream);
+				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream, 0);
 
 	/* Copy the posbnd flag returns for all frames to a host copy */
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
@@ -1882,7 +1882,7 @@ __host__ void calc_doppler_gpu64(struct par_t *dpar, struct mod_t *dmod,
 	/* NOTE: Limited to single component for now */
 	for (v2=v0_index+1; v2<=v0_index+nviews; v2++)
 		posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
-				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream);
+				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream, 0);
 
 	/* Copy the posbnd flag returns for all frames to a host copy */
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
@@ -2234,7 +2234,7 @@ __host__ void calc_lghtcrv_gpu32(
 	 * angle, distance toward Earth at center of each POS pixel; set posbnd
 	 * parameter = 1 if any model portion extends beyond POS frame limits*/
 	posvis_gpu32(dpar, dmod, ddat, pos, verts, orbit_off3, hposn, outbndarr,
-			s, (nframes+1), 0, nf, 0, c, type, cf_stream);
+			s, (nframes+1), 0, nf, 0, c, type, cf_stream, 0);
 
 	/* Copy the posbnd flag returns for all frames to a host copy */
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*(nfplus),
@@ -2250,7 +2250,7 @@ __host__ void calc_lghtcrv_gpu32(
 	}
 
 	posvis_gpu32(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
-			outbndarr, s, (nframes+1), 1, nf, 0, c, type, cf_stream);
+			outbndarr, s, (nframes+1), 1, nf, 0, c, type, cf_stream, 1);
 	/* Copy the posbnd flag returns for all frames to a host copy */
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nfplus,
 			cudaMemcpyDeviceToHost));
@@ -2266,14 +2266,12 @@ __host__ void calc_lghtcrv_gpu32(
 	posmask_init_krnl32<<<BLKfrm,THD64>>>(pos, so, pxlpkm, nframes);
 
 	for (f=1; f<=nframes; f++) {
-		if (houtbndarr[f]) {
 			/* Now call posmask kernel for this stream, then loop
 			 * to next stream and repeat 	 */
 			posmask_krnl32<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(
 					dpar, pos, so, pxlpkm, posn, nThreadspx[f],	span[f].x, f);
 
-		} checkErrorAfterKernelLaunch("posmask_krnl");
-	}
+	} checkErrorAfterKernelLaunch("posmask_krnl");
 
 	/* Go through all visible and unshadowed POS pixels with low enough
 	 * scattering and incidence angles, and mark facets which project onto
@@ -2288,12 +2286,25 @@ __host__ void calc_lghtcrv_gpu32(
 	gpuErrchk(cudaMemcpy(&hxylim, xylim, sizeof(int4)*nfplus, cudaMemcpyDeviceToHost));
 
 	/* Calculate launch parameters for all frames */
+	int xspan_max = 0, yspan_max = 0, maxthds = 0;
+	int4 maxxylim;
+	maxxylim.w = maxxylim.y = 1e3;
+	maxxylim.x = maxxylim.z = -1e3;
 	for (f=1; f<=nframes; f++) {
 		span[f].x = hxylim[f].x - hxylim[f].w + 1;
 		span[f].y = hxylim[f].z - hxylim[f].y + 1;
 		nThreadspx1[f] = span[f].x * span[f].y;
 		BLKpx[f].x = floor ((THD.x -1 + nThreadspx1[f]) / THD.x);
+		maxxylim.w = min(maxxylim.w, hxylim[f].w);
+		maxxylim.x = max(maxxylim.x, hxylim[f].x);
+		maxxylim.y = min(maxxylim.y, hxylim[f].y);
+		maxxylim.z = max(maxxylim.z, hxylim[f].z);
+
 	}
+	xspan_max = maxxylim.x - maxxylim.w + 1;
+	yspan_max = maxxylim.z - maxxylim.y + 1;
+	maxthds = xspan_max * yspan_max;
+
 
 	for (f=1; f<=nframes; f++) {
 		/* Go through all POS pixels which are visible with low enough
@@ -2304,11 +2315,19 @@ __host__ void calc_lghtcrv_gpu32(
 					dpar, dmod, pos, xylim, nThreadspx1[f], span[f].x, f);
 	} checkErrorAfterKernelLaunch("cf_mark_pixels_krnl (calc_lghtcrv_cuda)");
 
-	/* Compute model brightness for this lightcurve point then copy to device  */
-	apply_photo_gpu32(dmod, ddat, pos, xylim, span, BLKpx, nThreadspx1,
-			0, s, nframes, nThreadspx, cf_stream);
+//	/* Compute model brightness for this lightcurve point then copy to device  */
+//	apply_photo_gpu32(dmod, ddat, pos, xylim, span, BLKpx, nThreadspx,
+//			0, s, nframes, nThreadspx1, maxthds, maxxylim, cf_stream);
 
-//	dbg_print_pos_arrays_full32(pos, 1,	nThreadspx[1], hposn[1]);
+	apply_photo_gpu48(dmod, ddat, pos, xylim, span, BLKpx, 0, s, nframes, maxthds, maxxylim, cf_stream);
+
+//	if (s==6) {
+//		int debug = 0;
+//		int frm = 5;
+//		if (debug)
+//			dbg_print_pos_arrays_full32(pos, frm,	nThreadspx[frm], hposn[frm]);
+//	}
+//	dbg_print_facet_normals(dmod, nf, "FP32_facet_normals.csv");
 
 	/* Now that we have calculated the model lightcurve brightnesses y at each
 	 * of the epochs x, we use cubic spline interpolation (Numerical Recipes
@@ -2325,6 +2344,9 @@ __host__ void calc_lghtcrv_gpu32(
 	 *
 	 * spline( lghtcrv->x, lghtcrv->y, ncalc, 2.0e30, 2.0e30, lghtcrv->y2);
 	 */
+//	if (s==6)
+//		printf("\n6\n");
+
 	nThreads = nframes;
 	THD.x = maxThreadsPerBlock;
 	gpuErrchk(cudaMemset(u, 0, sizeof(double)*nfplus));
@@ -2402,7 +2424,7 @@ __host__ void calc_lghtcrv_gpu64(
 	 * angle, distance toward Earth at center of each POS pixel; set posbnd
 	 * parameter = 1 if any model portion extends beyond POS frame limits*/
 	posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_off3, hposn, outbndarr,
-			s, (nframes+1), 0, nf, 0, c, type, cf_stream);
+			s, (nframes+1), 0, nf, 0, c, type, cf_stream, 0);
 
 	/* Copy the posbnd flag returns for all frames to a host copy */
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*(nfplus),
@@ -2423,7 +2445,7 @@ __host__ void calc_lghtcrv_gpu64(
 	/* Because posvis_gpu processes all frames at the same time, if
 	 * any of the frames are bistatic, all of them get calculated again  */
 	posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
-			outbndarr, s, (nframes+1), 1, nf, 0, c, type, cf_stream);
+			outbndarr, s, (nframes+1), 1, nf, 0, c, type, cf_stream, 1);
 
 	/* Copy the posbnd flag returns for all frames to a host copy */
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nfplus,
@@ -2440,14 +2462,11 @@ __host__ void calc_lghtcrv_gpu64(
 	posmask_init_krnl64<<<BLKfrm,THD64>>>(pos, so, pxlpkm, nframes);
 
 	for (f=1; f<=nframes; f++) {
-		if (houtbndarr[f]) {
 			/* Now call posmask kernel for this stream, then loop
 			 * to next stream and repeat 	 */
 			posmask_krnl64<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(
 					dpar, pos, so, pxlpkm, posn, nThreadspx[f],	span[f].x, f);
-
-		} checkErrorAfterKernelLaunch("posmask_krnl64");
-	}
+	} checkErrorAfterKernelLaunch("posmask_krnl64");
 
 	/* Go through all visible and unshadowed POS pixels with low enough
 	 * scattering and incidence angles, and mark facets which project onto
@@ -2462,12 +2481,24 @@ __host__ void calc_lghtcrv_gpu64(
 	gpuErrchk(cudaMemcpy(&hxylim, xylim, sizeof(int4)*nfplus, cudaMemcpyDeviceToHost));
 
 	/* Calculate launch parameters for all frames */
+	int xspan_max = 0, yspan_max = 0, maxthds = 0;
+	int4 maxxylim;
+	maxxylim.w = maxxylim.y = 1e3;
+	maxxylim.x = maxxylim.z = -1e3;
 	for (f=1; f<=nframes; f++) {
 		span[f].x = hxylim[f].x - hxylim[f].w + 1;
 		span[f].y = hxylim[f].z - hxylim[f].y + 1;
 		nThreadspx1[f] = span[f].x * span[f].y;
 		BLKpx[f].x = floor ((THD.x -1 + nThreadspx1[f]) / THD.x);
+		maxxylim.w = min(maxxylim.w, hxylim[f].w);
+		maxxylim.x = max(maxxylim.x, hxylim[f].x);
+		maxxylim.y = min(maxxylim.y, hxylim[f].y);
+		maxxylim.z = max(maxxylim.z, hxylim[f].z);
+
 	}
+	xspan_max = maxxylim.x - maxxylim.w + 1;
+	yspan_max = maxxylim.z - maxxylim.y + 1;
+	maxthds = xspan_max * yspan_max;
 
 	for (f=1; f<=nframes; f++) {
 		/* Go through all POS pixels which are visible with low enough
@@ -2478,13 +2509,10 @@ __host__ void calc_lghtcrv_gpu64(
 					dpar, dmod, pos, xylim, nThreadspx1[f], span[f].x, f);
 	} checkErrorAfterKernelLaunch("cf_mark_pixels_krnl");
 
-
-//	for (f=1; f<=nframes; f++)
-//		BLKpx[f].x = floor((THD.x-1+nThreadspx[f])/THD.x);
 	/* Compute model brightness for this lightcurve point then copy to device  */
 	apply_photo_gpu64(dmod, ddat, pos, xylim, span, BLKpx, nThreadspx,
-			0, s, nframes, nThreadspx1, cf_stream);
-//	dbg_print_pos_arrays_full64(pos, 1,	nThreadspx[1], hposn[1]);
+			0, s, nframes, nThreadspx1, maxthds, maxxylim, cf_stream);
+//	dbg_print_pos_arrays_full64(pos, 1, nThreadspx[1], hposn[1]);
 	/* Now that we have calculated the model lightcurve brightnesses y at each
 	 * of the epochs x, we use cubic spline interpolation (Numerical Recipes
 	 * routines spline and splint) to get model lightcurve brightness fit[i] at

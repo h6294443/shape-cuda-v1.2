@@ -49,12 +49,17 @@ int main(int argc, char *argv[])
 	/*  initialize  */
 	init( argc, argv, progname);
 
-	if (argc == 6) {
+	if (argc >= 6) {
 		if (strcmp(argv[4], "-GPU")==0) {
 			CUDA = 1;
 			MGPU = 0;
 			x = strtol(argv[5], NULL, 10);
 			GPU0 = (int)x;
+
+			if (argc > 6) {
+				if (strcmp(argv[6], "-FP32")==0)		FP64 = 0;
+				if (strcmp(argv[6], "-FP64")==0)		FP64 = 1;
+			}
 		}
 		else if (strcmp(argv[4],"-MGPU")==0) {
 			CUDA = 1;
@@ -63,6 +68,11 @@ int main(int argc, char *argv[])
 			GPU0 = (int)x;
 			if (GPU0==0)	GPU1 = 1;
 			else GPU1 = 0;
+
+			if (argc > 6) {
+				if (strcmp(argv[6], "-FP32")==0)		FP64 = 0;
+				if (strcmp(argv[6], "-FP64")==0)		FP64 = 1;
+			}
 		}
 		else if (strcmp(argv[4], "-HMT")==0) {
 			CUDA = 0;
@@ -74,26 +84,68 @@ int main(int argc, char *argv[])
 		else
 			CUDA = 0;
 	}
-	else if (argc == 7){
-		if (strcmp(argv[4],"MGPU")==0) {
-			CUDA = 1;
-			MGPU = 1;
-			x = strtol(argv[5], NULL, 10);
-			GPU0 = (int)x;
-			x = strtol(argv[6], NULL, 10);
-			GPU1 = (int)x;
-		}
-		else {
-			CUDA = 0;
-			MGPU = 0;
-		}
-	}
+//	else if (argc == 7){
+//		if (strcmp(argv[4],"MGPU")==0) {
+//			CUDA = 1;
+//			MGPU = 1;
+//			x = strtol(argv[5], NULL, 10);
+//			GPU0 = (int)x;
+//			x = strtol(argv[6], NULL, 10);
+//			GPU1 = (int)x;
+//		}
+//		else {
+//			CUDA = 0;
+//			MGPU = 0;
+//		}
+//	}
+
+
+
+//	if (argc == 6) {
+//		if (strcmp(argv[4], "-GPU")==0) {
+//			CUDA = 1;
+//			MGPU = 0;
+//			x = strtol(argv[5], NULL, 10);
+//			GPU0 = (int)x;
+//		}
+//		else if (strcmp(argv[4],"-MGPU")==0) {
+//			CUDA = 1;
+//			MGPU = 1;
+//			x = strtol(argv[5], NULL, 10);
+//			GPU0 = (int)x;
+//			if (GPU0==0)	GPU1 = 1;
+//			else GPU1 = 0;
+//		}
+//		else if (strcmp(argv[4], "-HMT")==0) {
+//			CUDA = 0;
+//			MGPU = 0;
+//			HMT = 1;
+//			x = strtol(argv[5], NULL, 10);
+//			HMT_threads = (int) x;
+//		}
+//		else
+//			CUDA = 0;
+//	}
+//	else if (argc == 7){
+//		if (strcmp(argv[4],"MGPU")==0) {
+//			CUDA = 1;
+//			MGPU = 1;
+//			x = strtol(argv[5], NULL, 10);
+//			GPU0 = (int)x;
+//			x = strtol(argv[6], NULL, 10);
+//			GPU1 = (int)x;
+//		}
+//		else {
+//			CUDA = 0;
+//			MGPU = 0;
+//		}
+//	}
 
 	if (CUDA) {
 		printf("Shape-CUDA-v1.2 running\n");
 		printf("Now with even more face-melting concurrency.\n");
 		/* Check available CUDA devices, if any, before proceeding */
-		CUDACount();
+		CUDACount(0);
 		maxThreadsPerBlock = 256;
 		gpuErrchk(cudaSetDevice(GPU0));
 	}

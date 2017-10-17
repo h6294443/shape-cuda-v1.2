@@ -280,7 +280,7 @@ void *vary_params_hmt_sub(void *ptr) {
 						 * point */
 						intensityfactor = pow(pos->km_per_pixel/AU, 2.0);
 						lghtcrv->y[i] = apply_photo(data->model, lghtcrv->ioptlaw,
-								lghtcrv->solar_phase[i], intensityfactor, pos, 0);
+								lghtcrv->solar_phase[i], intensityfactor, pos, 0, s, i);
 					}
 
 					/* Now that we have calculated the model lightcurve brightnesses

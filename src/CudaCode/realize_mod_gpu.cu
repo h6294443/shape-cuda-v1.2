@@ -513,7 +513,7 @@ __global__ void facet_krnl(struct par_t *dpar, struct mod_t *dmod) {
 		dmod->shape.comp[0].real.f[f].area = dev_facnrm(dmod->shape.comp[0].real, f);
 
 		for (j=0; j<=2; j++)
-			dmod->shape.comp[0].real.f[f].x[j] = (dmod->shape.comp[0].real.v[ dmod->shape.comp[0].real.f[f].v[0] ].x[j] +
+			dmod->shape.comp[0].real.f[f].x[j] = (dmod->shape.comp[0].real.v[  dmod->shape.comp[0].real.f[f].v[0] ].x[j] +
 					dmod->shape.comp[0].real.v[ dmod->shape.comp[0].real.f[f].v[1] ].x[j] +
 					dmod->shape.comp[0].real.v[ dmod->shape.comp[0].real.f[f].v[2] ].x[j]   )/3;
 

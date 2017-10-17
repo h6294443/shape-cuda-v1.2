@@ -1403,7 +1403,7 @@ void annotate_plot( struct par_t *par, struct mod_t *mod, double spin_ecl[3],
                     double maxbrightness, double posmax, struct pos_t *pos,
                     int **color, double **brightness, double **z);
 double apply_photo( struct mod_t *mod, int ilaw, double phase, double intensityfactor,
-                    struct pos_t *pos, int body);
+                    struct pos_t *pos, int body, int s, int frm);
 void bailout(const char *message);
 double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat);
 void branch( struct par_t *par, struct mod_t *mod, struct dat_t *dat);

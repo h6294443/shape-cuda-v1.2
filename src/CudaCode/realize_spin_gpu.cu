@@ -186,8 +186,7 @@ __global__ void realize_spin_lghtcrv_krnl(struct mod_t *dmod, struct dat_t *ddat
 {
 	/* nframes-threaded kernel (+1 for lightcurve) */
 	int j, i = blockIdx.x * blockDim.x + threadIdx.x + 1;
-	if (i < size)
-	{
+	if (i < size)	{
 		dev_realize_impulse(dmod->spin,
 				ddat->set[s].desc.lghtcrv.x[i],
 				ddat->set[s].desc.lghtcrv.rend[i].t_integrate,
@@ -213,6 +212,15 @@ __global__ void realize_spin_lghtcrv_krnl(struct mod_t *dmod, struct dat_t *ddat
 		for (j=0; j<=2; j++)
 			ddat->set[s].desc.lghtcrv.rend[i].spin[j] = ddat->set[s].desc.lghtcrv.rend[i].orbspin[j] +
 			ddat->set[s].desc.lghtcrv.rend[i].intspin[j];
+
+//		if (s==6 && i==5) {
+//			for (j=0; j<=2; j++)
+//				printf("set[%i].lghtcrv.rend[%i].spin[%i], %3.8g\n", s, i, j, ddat->set[s].desc.lghtcrv.rend[i].spin[j]);
+//			for (int w=0; w<3; w++)
+//				for (int x=0; x<3; x++)
+//					printf("ae[%i][%i], %3.8g\n", w, x, ddat->set[s].desc.lghtcrv.rend[i].ae[w][x]);
+//		}
+
 	}
 }
 __device__ void dev_realize_impulse(struct spin_t spin, double t,

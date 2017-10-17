@@ -724,7 +724,7 @@ __host__ void vary_params_gpu32(
 			 * toward Earth of each POS pixel. Pass the frame streams, too. */
 			posvis_gpu32(dpar, dmod, ddat, pos, verts, orbit_offset,
 					hposn, outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s],
-					vp_stream);
+					vp_stream, 0);
 
 			for (f=0; f<nfrm_alloc; f++) {
 				if (hcomp_zmax[s] || hcomp_xsec[f]) {
@@ -794,7 +794,7 @@ __host__ void vary_params_gpu32(
 			 * toward Earth of each POS pixel. Pass the frame streams, too. */
 			posvis_gpu32(dpar, dmod, ddat, pos, verts, orbit_offset,
 					hposn, outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s],
-					vp_stream);
+					vp_stream, 0);
 
 			for (f=0; f<nfrm_alloc; f++) {
 				if (hcomp_xsec[f]) {
@@ -863,7 +863,7 @@ __host__ void vary_params_gpu32(
 				/* Determine which POS pixels cover the target */
 				posvis_gpu32(dpar, dmod, ddat, pos, verts, orbit_offset,
 						hposn, outbndarr, s, hnframes[s], 0, nf, 0, c, htype[s],
-						vp_stream);
+						vp_stream, 0);
 
 				/* Now view the model from the source (sun) and get the facet
 				 * number and distance toward the source of each pixel in this
@@ -875,7 +875,7 @@ __host__ void vary_params_gpu32(
 				if (bistatic_all)
 					posvis_gpu32(dpar, dmod, ddat, pos, verts,
 							orbit_offset, hposn, outbndarr, s, hnframes[s], 1,
-							nf, 0, c, htype[s],	vp_stream);
+							nf, 0, c, htype[s],	vp_stream, 1);
 
 				if (bistatic_all) {
 					posmask_init_krnl32<<<BLKfrm,THD64>>>(pos, so, pixels_per_km, nfrm_alloc);
@@ -897,18 +897,29 @@ __host__ void vary_params_gpu32(
 						cudaMemcpyDeviceToHost));
 
 				/* Calculate launch parameters for all frames */
+				int xspan_max = 0, yspan_max = 0, maxthds = 0;
+				int4 maxxylim;
+				maxxylim.w = maxxylim.y = 1e3;
+				maxxylim.x = maxxylim.z = -1e3;
 				for (f=1; f<=hnframes[s]; f++) {
 					span[f].x = hxylim[f].x - hxylim[f].w + 1;
 					span[f].y = hxylim[f].z - hxylim[f].y + 1;
 					nThreadspx1[f] = span[f].x * span[f].y;
 					BLK[f].x = floor ((THD.x -1 + nThreadspx1[f]) / THD.x);
+					maxxylim.w = min(maxxylim.w, hxylim[f].w);
+					maxxylim.x = max(maxxylim.x, hxylim[f].x);
+					maxxylim.y = min(maxxylim.y, hxylim[f].y);
+					maxxylim.z = max(maxxylim.z, hxylim[f].z);
 				}
+				xspan_max = maxxylim.x - maxxylim.w + 1;
+				yspan_max = maxxylim.z - maxxylim.y + 1;
+				maxthds = xspan_max * yspan_max;
 
 				/* Compute model brightness for this lightcurve point */
 				/* lghtcrv->y[ncalc]: calculated points for interpolation,
 				 * ncalc-points total 					 */
 				apply_photo_gpu32(dmod, ddat, pos, xylim, span, BLK, nThreadspx1,
-							0, s, hnframes[s], npxls, vp_stream);
+							0, s, hnframes[s], npxls, maxthds, maxxylim, vp_stream);
 
 				/* Now that we have calculated the model lightcurve brightnesses
 				 * y at each of the epochs x, we use cubic spline interpolation
@@ -1121,7 +1132,7 @@ __host__ void vary_params_gpu64(
 			 * toward Earth of each POS pixel. Pass the frame streams, too. */
 			posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_offset,
 					hposn, outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s],
-					vp_stream);
+					vp_stream, 0);
 
 			for (f=0; f<nfrm_alloc; f++) {
 				if (hcomp_zmax[s] || hcomp_xsec[f]) {
@@ -1191,7 +1202,7 @@ __host__ void vary_params_gpu64(
 			 * toward Earth of each POS pixel. Pass the frame streams, too. */
 			posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_offset,
 					hposn, outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s],
-					vp_stream);
+					vp_stream, 0);
 
 			for (f=0; f<nfrm_alloc; f++) {
 				if (hcomp_xsec[f]) {
@@ -1260,7 +1271,7 @@ __host__ void vary_params_gpu64(
 				/* Determine which POS pixels cover the target */
 				posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_offset,
 						hposn, outbndarr, s, hnframes[s], 0, nf, 0, c, htype[s],
-						vp_stream);
+						vp_stream, 0);
 
 				/* Now view the model from the source (sun) and get the facet
 				 * number and distance toward the source of each pixel in this
@@ -1272,7 +1283,7 @@ __host__ void vary_params_gpu64(
 				if (bistatic_all)
 					posvis_gpu64(dpar, dmod, ddat, pos, verts,
 							orbit_offset, hposn, outbndarr, s, hnframes[s], 1,
-							nf, 0, c, htype[s],	vp_stream);
+							nf, 0, c, htype[s],	vp_stream, 1);
 
 				if (bistatic_all) {
 					posmask_init_krnl64<<<BLKfrm,THD64>>>(pos, so, pixels_per_km, nfrm_alloc);
@@ -1294,18 +1305,29 @@ __host__ void vary_params_gpu64(
 						cudaMemcpyDeviceToHost));
 
 				/* Calculate launch parameters for all frames */
+				int xspan_max = 0, yspan_max = 0, maxthds = 0;
+				int4 maxxylim;
+				maxxylim.w = maxxylim.y = 1e3;
+				maxxylim.x = maxxylim.z = -1e3;
 				for (f=1; f<=hnframes[s]; f++) {
 					span[f].x = hxylim[f].x - hxylim[f].w + 1;
 					span[f].y = hxylim[f].z - hxylim[f].y + 1;
 					nThreadspx1[f] = span[f].x * span[f].y;
 					BLK[f].x = floor ((THD.x -1 + nThreadspx1[f]) / THD.x);
+					maxxylim.w = min(maxxylim.w, hxylim[f].w);
+					maxxylim.x = max(maxxylim.x, hxylim[f].x);
+					maxxylim.y = min(maxxylim.y, hxylim[f].y);
+					maxxylim.z = max(maxxylim.z, hxylim[f].z);
 				}
+				xspan_max = maxxylim.x - maxxylim.w + 1;
+				yspan_max = maxxylim.z - maxxylim.y + 1;
+				maxthds = xspan_max * yspan_max;
 
 				/* Compute model brightness for this lightcurve point */
 				/* lghtcrv->y[ncalc]: calculated points for interpolation,
 				 * ncalc-points total 					 */
 				apply_photo_gpu64(dmod, ddat, pos, xylim, span, BLK, nThreadspx1,
-							0, s, hnframes[s], npxls, vp_stream);
+							0, s, hnframes[s], npxls, maxthds, maxxylim, vp_stream);
 
 				/* Now that we have calculated the model lightcurve brightnesses
 				 * y at each of the epochs x, we use cubic spline interpolation
@@ -1634,7 +1656,7 @@ void *vary_params_pthread_sub(void *ptr) {
 				 * toward Earth of each POS pixel. Pass the frame streams, too. */
 				posvis_gpu32(data->parameter, data->model, data->data, pos,
 						data->verts, orbit_offset, hposn, outbndarr, s, nfrm_alloc,
-						0, data->nf, 0, c, data->host_type[s], data->gpu_stream);
+						0, data->nf, 0, c, data->host_type[s], data->gpu_stream, 0);
 
 				for (f=0; f<nfrm_alloc; f++) {
 					if (data->zmax_flag[s] || hcomp_xsec[f]) {
@@ -1708,7 +1730,7 @@ void *vary_params_pthread_sub(void *ptr) {
 			 * toward Earth of each POS pixel. Pass the frame streams, too. */
 			posvis_gpu32(data->parameter, data->model, data->data, pos,
 					data->verts, orbit_offset, hposn, outbndarr, s, nfrm_alloc,
-					0, data->nf, 0, c, data->host_type[s], data->gpu_stream);
+					0, data->nf, 0, c, data->host_type[s], data->gpu_stream, 0);
 
 			for (f=0; f<nfrm_alloc; f++) {
 				if (hcomp_xsec[f]) {
@@ -1792,7 +1814,7 @@ void *vary_params_pthread_sub(void *ptr) {
 				posvis_gpu32(data->parameter, data->model, data->data, pos,
 						data->verts, orbit_offset, hposn, outbndarr, s,
 						data->nframes[s], 0, data->nf, 0, c, data->host_type[s],
-						data->gpu_stream);
+						data->gpu_stream, 0);
 
 				/* Now view the model from the source (sun) and get the facet
 				 * number and distance toward the source of each pixel in this
@@ -1805,7 +1827,7 @@ void *vary_params_pthread_sub(void *ptr) {
 					posvis_gpu32(data->parameter, data->model, data->data, pos,
 							data->verts, orbit_offset, hposn, outbndarr, s,
 							data->nframes[s], 1, data->nf, 0, c,
-							data->host_type[s],	data->gpu_stream);
+							data->host_type[s],	data->gpu_stream, 1);
 
 				if (bistatic_all) {
 					posmask_init_krnl32<<<BLKfrm,THD64>>>(pos, so, pixels_per_km, nfrm_alloc);
@@ -1828,19 +1850,30 @@ void *vary_params_pthread_sub(void *ptr) {
 						cudaMemcpyDeviceToHost));
 
 				/* Calculate launch parameters for all frames */
+				int xspan_max = 0, yspan_max = 0, maxthds = 0;
+				int4 maxxylim;
+				maxxylim.w = maxxylim.y = 1e3;
+				maxxylim.x = maxxylim.z = -1e3;
 				for (f=1; f<=data->nframes[s]; f++) {
 					span[f].x = hxylim[f].x - hxylim[f].w + 1;
 					span[f].y = hxylim[f].z - hxylim[f].y + 1;
 					nThreadspx1[f] = span[f].x * span[f].y;
 					BLK[f].x = floor ((THD.x -1 + nThreadspx1[f]) / THD.x);
+					maxxylim.w = min(maxxylim.w, hxylim[f].w);
+					maxxylim.x = max(maxxylim.x, hxylim[f].x);
+					maxxylim.y = min(maxxylim.y, hxylim[f].y);
+					maxxylim.z = max(maxxylim.z, hxylim[f].z);
 				}
+				xspan_max = maxxylim.x - maxxylim.w + 1;
+				yspan_max = maxxylim.z - maxxylim.y + 1;
+				maxthds = xspan_max * yspan_max;
 
 				/* Compute model brightness for this lightcurve point */
 				/* lghtcrv->y[ncalc]: calculated points for interpolation,
 				 * ncalc-points total 					 */
 				apply_photo_gpu32(data->model, data->data, pos, xylim,
 						span, BLK, nThreadspx1,	0, s, data->nframes[s], npxls,
-						data->gpu_stream);
+						maxthds, maxxylim, data->gpu_stream);
 
 				/* Now that we have calculated the model lightcurve brightnesses
 				 * y at each of the epochs x, we use cubic spline interpolation

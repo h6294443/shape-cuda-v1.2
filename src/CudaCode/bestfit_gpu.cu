@@ -550,6 +550,10 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	if (hflags[5]==1)		printf("  (BAD DOPSCALE)");		printf("\n");
 	fflush(stdout);
 
+
+//	int debug = 1;
+//	if (debug)
+//		return(0);
 	/* Display the region within each delay-Doppler or Doppler frame that, ac-
 	 * cording to initial model, has nonzero power. A warning is displayed if
 	 * any region extends beyond the data limits: the vignetting is too tight,
@@ -596,8 +600,8 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % npar_update;
-		p = first_fitpar;// = 1;
-//		for (p=first_fitpar; p<nfpar; p++) {
+//		p = first_fitpar;// = 1;
+		for (p=2/*first_fitpar*/; p<3/*nfpar*/; p++) {
 
 			/*  Adjust only parameter p on this try  */
 			bf_set_hotparam_pntr_krnl<<<1,1>>>(fpntr, fpartype, p);
@@ -714,6 +718,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			checkErrorAfterKernelLaunch("bf_set_hotparam_val_krnl");
 			gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
 					sizeof(double),	0, cudaMemcpyDeviceToHost));
+			printf("xmin, %3.8g\n", xmin);
 
 			if (newsize || newshape)
 				realize_mod_gpu(dpar, dmod, type, nf, bf_stream);
@@ -853,7 +858,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 //				write_mod( dpar, dmod);
 //				write_dat( dpar, ddat);
 			}
-//		}  // End fitpar loop
+		}  // End fitpar loop
 
 		/* End of this iteration: Write model and data to disk, and display the
 		 * region within each delay-Doppler or Doppler frame for which model
@@ -966,15 +971,13 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			final_chi2, dofstring, final_redchi2);
 	printf("#\n");
 	printf("\nIterations total: %i\n", iter);
-	printf("GPU fit enderr: %g\n", enderr);
+	printf("GPU fit enderr: %3.8g\n", enderr);
 	fflush(stdout);
 
 	/* Destroy the streams */
 	cudaSetDevice(GPU0);
 	for (int f=0; f<max_frames; f++)
 		cudaStreamDestroy(bf_stream[f]);
-
-
 
 	free(hflags);
 	free(htype);
@@ -1857,8 +1860,9 @@ __host__ double objective_gpu(
 	/* Compute penalties and add to reduced chi-square. Individual penalty values
 	 * will be displayed if we set spar->showstate = 1 a few lines back.        */
 	pens = penalties_gpu(sdev_par, sdev_mod, sdev_dat);
-	printf("err: %3.6f\n", err);
-	printf("pens: %3.6f\n", pens);
+//	printf("err: %3.6f\n", err);
+//	printf("pens: %3.6f\n", pens);
+//	printf("%3.8g, %3.8g, %3.8g\n", x, err, pens);
 	err += pens;
 	/* Double the objective function if there's an ellipsoid component with tiny
 	 * or negative diameter, if any optical photometric parameters have invalid
@@ -1908,7 +1912,6 @@ __host__ double objective_gpu(
 	if (hflags[2]==1) {
 		check_posbnd = 1;     /* tells bestfit about this problem */
 		posbnd_factor = hlogfactors[0] * exp(hlogfactors[3]);
-//		printf("# hlogfactors[0] = %g and hlogfactors[3] = %g\n", hlogfactors[0], hlogfactors[3]);
 		err *= posbnd_factor;
 		if (showvals)
 			printf("# objective func multiplied by %.1f: model extends beyond POS frame\n",

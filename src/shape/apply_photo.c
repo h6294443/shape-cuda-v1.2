@@ -76,11 +76,11 @@ Modified 2004 February 29 by CM:
 #define TINY 1.0e-40
 
 double apply_photo( struct mod_t *mod, int ilaw, double phase, double intensityfactor,
-                    struct pos_t *pos, int body)
+                    struct pos_t *pos, int body, int s, int frm)
 {
   int i, j, c, f;
   double sum=0.0, scale, phasefunc, scale_lommsee, scale_lambert;
-
+//  int dbg_occ = 0;
   switch (mod->photo.opttype[ilaw]) {
   case LAMBERTLAW:
       scale = mod->photo.optical[ilaw].R.R.val/PIE;
@@ -232,6 +232,16 @@ double apply_photo( struct mod_t *mod, int ilaw, double phase, double intensityf
                       * phasefunc * mod->photo.optical[ilaw].kaas.R.val/(4*PIE);
       scale_lambert = mod->photo.optical[ilaw].kaas.wt.val
                       * phasefunc * mod->photo.optical[ilaw].kaas.R.val/PIE;
+
+      /* Debug */
+      if (s==6 && frm==5) {
+    	  printf("set %i intensity_factor[%i], %3.8g\n", s, frm, intensityfactor);
+    	  printf("set %i phasefunc[%i], %3.8g\n", s, frm, phasefunc);
+    	  printf("set %i scale_lommsee[%i], %3.8g\n", s, frm, scale_lommsee);
+    	  printf("set %i scale_lambert[%i], %3.8g\n", s, frm, scale_lambert);
+      }
+      /* End debug */
+
       for (i=pos->xlim[0]; i<=pos->xlim[1]; i++)
         for (j=pos->ylim[0]; j<=pos->ylim[1]; j++)
           if (pos->cose[i][j] > 0.0 && pos->cosi[i][j] > 0.0
@@ -240,8 +250,10 @@ double apply_photo( struct mod_t *mod, int ilaw, double phase, double intensityf
                              * pos->cosi[i][j]
                              * ( scale_lommsee / (pos->cosi[i][j] + pos->cose[i][j])
                                  + scale_lambert                                          );
+//            dbg_occ++;
             sum += pos->b[i][j];
           }
+
       break;
   case HARMKAAS:
       for (i=pos->xlim[0]; i<=pos->xlim[1]; i++)

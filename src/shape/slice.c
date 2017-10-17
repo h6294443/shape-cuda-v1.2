@@ -448,7 +448,7 @@ void slice( struct par_t *par, struct mod_t *mod)
       call apply_photo to compute the POS pixel values          */
 
   if (par->slice_scatlaw == OPTICALVIEW)
-    apply_photo( mod, 0, solar_phase, intensityfactor, &pos, 0);
+    apply_photo( mod, 0, solar_phase, intensityfactor, &pos, 0, s, i);
 
 
   /*  Figure out the name of the image file  */

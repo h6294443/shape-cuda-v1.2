@@ -58,3 +58,19 @@ __host__ void dbg_print_facet_normals(struct mod_t *dmod, int nf, const char *fn
 	}
 	fclose(fp_n);
 }
+
+__host__ void dbg_print_facet_normals_dbl3(double3 *normals, int nf, const char *fn) {
+	/* This debug function prints all facet normals in a given model */
+	FILE *fp_n;
+	fp_n = fopen(fn, "w+");
+
+	/* Print top row */
+	fprintf(fp_n, ", value, \n");
+
+	for (int f=0; f<nf; f++) {
+		fprintf(fp_n, "%i, %g, \n", f, normals[f].x);
+		fprintf(fp_n, "%i, %g, \n", f, normals[f].y);
+		fprintf(fp_n, "%i, %g, \n", f, normals[f].z);
+	}
+	fclose(fp_n);
+}

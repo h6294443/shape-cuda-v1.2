@@ -1031,12 +1031,12 @@ void calc_orbit_poset( struct par_t *par,
 
 		intensityfactor = pow( pos1->km_per_pixel/AU, 2.0);
 		apply_photo( mod1, poset1->ioptlaw, view0_1->solar_phase, intensityfactor,
-				pos1, 0);
+				pos1, 0, s, i);
 		apply_photo( mod2, poset1->ioptlaw, view0_1->solar_phase, intensityfactor,
-				pos1, 1);
+				pos1, 1, s, i);
 		if (par->is_triple)
 			apply_photo( mod3, poset1->ioptlaw, view0_1->solar_phase, intensityfactor,
-					pos1, 2);
+					pos1, 2, s, i);
 
 		/*  Resample the sky rendering to get the model plane-of-sky image    */
 		/*  (if using bicubic interpolation or cubic convolution, force       */
@@ -1319,14 +1319,14 @@ void calc_orbit_lghtcrv( struct par_t *par,
 		intensityfactor = pow( pos1->km_per_pixel/AU, 2.0);
 		lghtcrv1->y[i]  = apply_photo( mod1, lghtcrv1->ioptlaw,
 				lghtcrv1->solar_phase[i], intensityfactor,
-				pos1, 0);
+				pos1, 0, s, i);
 		lghtcrv1->y[i] += apply_photo( mod2, lghtcrv1->ioptlaw,
 				lghtcrv1->solar_phase[i],
-				intensityfactor, pos1, 1);
+				intensityfactor, pos1, 1, s, i);
 		if (par->is_triple)
 			lghtcrv1->y[i] += apply_photo( mod3, lghtcrv1->ioptlaw,
 					lghtcrv1->solar_phase[i], intensityfactor,
-					pos1, 2);
+					pos1, 2, s, i);
 
 		/*  If specified, output the model plane-of-sky image for each epoch
         at which a model lightcurve brightness has been calculated: This

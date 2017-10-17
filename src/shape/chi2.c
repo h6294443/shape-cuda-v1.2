@@ -273,13 +273,13 @@ double chi2( struct par_t *par, struct dat_t *dat, int list_breakdown)
 			dat->set[s].chi2 = chi2_deldop( par, &dat->set[s].desc.deldop,
 					list_breakdown, s, &chi2_all_deldop,
 					&chi2_fit0_deldop, &dof_fit0_deldop);
-			printf("chi2 for set %i (Delay-Doppler) = %g\n", s, dat->set[s].chi2);
+			printf("chi2_set[%i] (Deldop), %3.8g\n", s, dat->set[s].chi2);
 			break;
 		case DOPPLER:
 			dat->set[s].chi2 = chi2_doppler( par, &dat->set[s].desc.doppler,
 					list_breakdown, s, &chi2_all_doppler,
 					&chi2_fit0_doppler, &dof_fit0_doppler);
-			printf("chi2 for set %i (Doppler) = %g\n", s, dat->set[s].chi2);
+			printf("chi2_set[%i] (Doppler), %3.8g\n", s, dat->set[s].chi2);
 			break;
 		case POS:
 			dat->set[s].chi2 = chi2_poset( par, &dat->set[s].desc.poset,
@@ -289,7 +289,7 @@ double chi2( struct par_t *par, struct dat_t *dat, int list_breakdown)
 		case LGHTCRV:
 			dat->set[s].chi2 = chi2_lghtcrv( par, &dat->set[s].desc.lghtcrv,
 					list_breakdown, s, &chi2_all_lghtcrv);
-			printf("chi2 for set %i (Lightcurve) = %g\n", s, dat->set[s].chi2);
+			printf("chi2_set[%i] (lghtcrv), %3.8g\n", s, dat->set[s].chi2);
 			break;
 		default:
 			bailout("chi2.c: can't handle this type yet\n");
@@ -391,7 +391,6 @@ double chi2( struct par_t *par, struct dat_t *dat, int list_breakdown)
 
 	return dat->chi2;
 }
-
 
 double chi2_deldop( struct par_t *par, struct deldop_t *deldop, int list_breakdown,
 		int s, double *chi2_all_deldop, double *chi2_fit0_deldop,
@@ -728,8 +727,6 @@ double chi2_deldop( struct par_t *par, struct deldop_t *deldop, int list_breakdo
 	return chi2_set;
 }
 
-
-
 double chi2_doppler( struct par_t *par, struct doppler_t *doppler, int list_breakdown,
 		int s, double *chi2_all_doppler, double *chi2_fit0_doppler,
 		double *dof_fit0_doppler)
@@ -869,7 +866,6 @@ double chi2_doppler( struct par_t *par, struct doppler_t *doppler, int list_brea
 	}
 	return chi2_set;
 }
-
 
 double chi2_poset( struct par_t *par, struct poset_t *poset, int list_breakdown,
 		int s, double *chi2_all_poset, double *chi2_fit0_poset,
@@ -1133,7 +1129,6 @@ double chi2_poset( struct par_t *par, struct poset_t *poset, int list_breakdown,
 	return chi2_set;
 }
 
-
 double chi2_lghtcrv( struct par_t *par, struct lghtcrv_t *lghtcrv, int list_breakdown,
 		int s, double *chi2_all_lghtcrv)
 {
@@ -1146,7 +1141,6 @@ double chi2_lghtcrv( struct par_t *par, struct lghtcrv_t *lghtcrv, int list_brea
 	ncalc = lghtcrv->ncalc;
 
 	/*  Compute contributions to chi-square  */
-
 	o2 = m2 = om = 0.0;
 	for (i=1; i<=n; i++) {
 
@@ -1156,6 +1150,8 @@ double chi2_lghtcrv( struct par_t *par, struct lghtcrv_t *lghtcrv, int list_brea
 		o2 += lghtcrv->obs[i] * lghtcrv->obs[i] * lghtcrv->oneovervar[i];
 		m2 += lghtcrv->fit[i] * lghtcrv->fit[i] * lghtcrv->oneovervar[i];
 		om += lghtcrv->fit[i] * lghtcrv->obs[i] * lghtcrv->oneovervar[i];
+//		printf("%i, %3.8g, %3.8g, %3.8g\n", i, lghtcrv->fit[i], lghtcrv->fit[i], lghtcrv->oneovervar[i]);
+//		printf("%i, %3.8g\n", i, lghtcrv->fit[i]);
 	}
 	/* If this lightcurve's calibration factor is allowed to float,
       set it to minimize chi-square, the sum over all points of
@@ -1182,10 +1178,15 @@ double chi2_lghtcrv( struct par_t *par, struct lghtcrv_t *lghtcrv, int list_brea
 	if (list_breakdown)
 		*chi2_all_lghtcrv += err;
 
-//	printf("\nerr: %g\n",err);
-//	printf("\no2: %g\n", o2);
-//	printf("\nm2: %g\n", m2);
-//	printf("\nom: %g\n", om);
+//	printf("dof=%3.8g\n", dof);
+//	printf("weight=%3.8g\n", lghtcrv->weight);
+//	printf("calval=%3.8g\n", calval);
+//	printf("weight * (o2 - 2 * calval * om + calval * calval * m2) = %3.8g\n", err);
+//
+//	//printf("err: %g\n",err);
+//	printf("o2: %g\n", o2);
+//	printf("m2: %g\n", m2);
+//	printf("om: %g\n", om);
 
 	/*  For the "write" and "orbit" actions, display chi-square
       and write files with data and fits; the files must be

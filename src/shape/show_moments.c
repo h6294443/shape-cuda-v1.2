@@ -1618,12 +1618,12 @@ void write_pa_views( struct par_t *par, struct mod_t *mod, double ap[3][3],
       printf("WARNING: +PA%d view extends beyond POS frame\n", pa_indices[axis]);
 
     /*  Compute the POS pixel values  */
-
+int s = 0;
     if ((*par).pa_scatlaw == OPTICALVIEW) {
         for (k=(-pos.n); k<=pos.n; k++)
           for (l=(-pos.n); l<=pos.n; l++)
             pos.cosi[k][l] = pos.cose[k][l];
-        apply_photo( mod, 0, 0.0, intensityfactor, &pos, 0);
+        apply_photo( mod, 0, 0.0, intensityfactor, &pos, 0, s, i);
         for (k=(-pos.n); k<=pos.n; k++)
           for (l=(-pos.n); l<=pos.n; l++)
             brightness[k][l] = pos.b[k][l];
@@ -1732,7 +1732,7 @@ void write_pa_views( struct par_t *par, struct mod_t *mod, double ap[3][3],
         for (k=(-pos.n); k<=pos.n; k++)
           for (l=(-pos.n); l<=pos.n; l++)
             pos.cosi[k][l] = pos.cose[k][l];
-        apply_photo( mod, 0, 0.0, intensityfactor, &pos, 0);
+        apply_photo( mod, 0, 0.0, intensityfactor, &pos, 0, s, i);
         for (k=(-pos.n); k<=pos.n; k++)
           for (l=(-pos.n); l<=pos.n; l++)
             brightness[k][l] = pos.b[k][l];

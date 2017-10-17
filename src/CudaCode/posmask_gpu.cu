@@ -12,6 +12,7 @@ __global__ void posmask_init_krnl32(struct pos_t **pos, double3 *so,
 		pixels_per_km[f] = 1/pos[f]->km_per_pixel;
 	}
 }
+
 __global__ void posmask_init_krnl64(struct pos_t **pos, double3 *so,
 		double *pixels_per_km, int size) {
 	/* nfrm_alloc-threaded kernel */
@@ -22,6 +23,7 @@ __global__ void posmask_init_krnl64(struct pos_t **pos, double3 *so,
 		pixels_per_km[f] = 1/pos[f]->km_per_pixel;
 	}
 }
+
 __global__ void posmask_krnl32(
 		struct par_t *dpar,
 		struct pos_t **pos,
@@ -146,6 +148,7 @@ __global__ void posmask_krnl32(
 		}
 	}
 }
+
 __global__ void posmask_krnl64(
 		struct par_t *dpar,
 		struct pos_t **pos,
@@ -165,7 +168,7 @@ __global__ void posmask_krnl64(
 	double kmpxl = (float)pos[f]->km_per_pixel;
 	int im, jm, i1, j1, i2, j2, i_sign, j_sign;
 	double3 xk;
-	double i0_f, j0_f, zill, t, u, bignum;
+	double i0_dbl, j0_dbl, zill, t, u, bignum;
 	bignum = 0.99*HUGENUMBER;  /* z = -HUGENUMBER for blank-sky pixels */
 
 	/*  Loop through all POS pixels  */
@@ -180,10 +183,10 @@ __global__ void posmask_krnl64(
 			 * which pixel (im,jm) this corresponds to in the projected view as
 			 * seen from the source (sun)             */
 			dev_cotrans3(&xk, so, xk, 1, f);	/* go into source coordinates */
-			i0_f = xk.x*pixels_per_km[f];     /* unrounded (double precision) */
-			j0_f = xk.y*pixels_per_km[f];
-			im = dev_vp_iroundf(i0_f);            /* center of nearest pixel in mask */
-			jm = dev_vp_iroundf(j0_f);
+			i0_dbl = xk.x*pixels_per_km[f];     /* unrounded (double precision) */
+			j0_dbl = xk.y*pixels_per_km[f];
+			im = dev_vp_iroundf(i0_dbl);            /* center of nearest pixel in mask */
+			jm = dev_vp_iroundf(j0_dbl);
 
 			/* If center of projected pixel "seen" from source (as determined
 			 * by routine posvis) lies within the boundaries of the mask,
@@ -191,8 +194,8 @@ __global__ void posmask_krnl64(
 			 * a body, component, and facet different from those seen in the
 			 * POS, calculate distance from mask pixel to source and compare to
 			 * distance from POS pixel to source.                             */
-			if (fabs(i0_f) < n && fabs(j0_f) < n
-					&& pos[f]->zill[i][j] > -bignum
+			if (fabs(i0_dbl) < n && fabs(j0_dbl) < n
+					&& pos[f]->zill[im][jm] > -bignum
 					&&(pos[f]->f[i][j]    != pos[f]->fill[im][jm]    ||
 							pos[f]->comp[i][j] != pos[f]->compill[im][jm] ||
 							pos[f]->body[i][j] != pos[f]->bodyill[im][jm]    )) {
@@ -201,8 +204,8 @@ __global__ void posmask_krnl64(
 				 * pixel, use bilinear interpolation to get distance towards
 				 * source where the line between source and POS pixel's center
 				 * intersects the mask pixel.                                */
-				i1 = (int) floor( i0_f);
-				j1 = (int) floor( j0_f);
+				i1 = (int) floor( i0_dbl);
+				j1 = (int) floor( j0_dbl);
 
 				if (pos[f]->zill[i1][j1]     > -bignum &&
 						pos[f]->zill[i1+1][j1]   > -bignum &&
@@ -212,8 +215,8 @@ __global__ void posmask_krnl64(
 					/* Do standard bilinear interpolation: None of the four
 					 * surrounding "grid square" pixels in the mask is
 					 * blank sky                           */
-					t = i0_f - i1;
-					u = j0_f - j1;
+					t = i0_dbl - i1;
+					u = j0_dbl - j1;
 					zill = (1 - t)*(1 - u)*pos[f]->zill[i1][j1]
 					      + t*(1 - u)*pos[f]->zill[i1+1][j1]
 					      + t*u*pos[f]->zill[i1+1][j1+1]
@@ -223,29 +226,29 @@ __global__ void posmask_krnl64(
 					 * four surrounding "grid square" pixels in mask is blank
 					 * sky, so standard bilinear interpolation won't work.  */
 					zill = pos[f]->zill[im][jm];
-					i_sign = (i0_f >= im) ? 1 : -1;
+					i_sign = (i0_dbl >= im) ? 1 : -1;
 					i2 = im + i_sign;
 
 					if (abs(i2) <= n && pos[f]->zill[i2][jm] > -bignum) {
-						zill += fabs(i0_f - im)  *
+						zill += fabs(i0_dbl - im)  *
 						(pos[f]->zill[i2][jm] - pos[f]->zill[im][jm]);
 					} else {
 						i2 = im - i_sign;
 						if (abs(i2) <= n && pos[f]->zill[i2][jm] > -bignum)
-							zill -= fabs(i0_f - im)
+							zill -= fabs(i0_dbl - im)
 							* (pos[f]->zill[i2][jm] - pos[f]->zill[im][jm]);
 					}
 
-					j_sign = (j0_f >= jm) ? 1 : -1;
+					j_sign = (j0_dbl >= jm) ? 1 : -1;
 					j2 = jm + j_sign;
 
 					if (abs(j2) <= n && pos[f]->zill[im][j2] > -bignum) {
-						zill += fabs(j0_f - jm)
+						zill += fabs(j0_dbl - jm)
                         	  * (pos[f]->zill[im][j2] - pos[f]->zill[im][jm]);
 					} else {
 						j2 = jm - j_sign;
 						if (abs(j2) <= n && pos[f]->zill[im][j2] > -bignum)
-							zill -= fabs(j0_f - jm)
+							zill -= fabs(j0_dbl - jm)
 							* (pos[f]->zill[im][j2] - pos[f]->zill[im][jm]);
 					}
 				}

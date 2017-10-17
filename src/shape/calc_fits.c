@@ -437,7 +437,6 @@ void calc_fits( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	}
 }
 
-
 void calc_deldop( struct par_t *par, struct mod_t *mod, struct deldop_t *deldop,
 		int s)
 {
@@ -804,7 +803,6 @@ void calc_deldop( struct par_t *par, struct mod_t *mod, struct deldop_t *deldop,
 	}  /* end loop over frames */
 }
 
-
 void calc_doppler( struct par_t *par, struct mod_t *mod, struct doppler_t *doppler,
 		int s)
 {
@@ -1121,7 +1119,6 @@ void calc_doppler( struct par_t *par, struct mod_t *mod, struct doppler_t *doppl
 	}  /* end loop over frames */
 }
 
-
 void calc_poset( struct par_t *par, struct mod_t *mod, struct poset_t *poset,
 		int s)
 {
@@ -1235,7 +1232,7 @@ void calc_poset( struct par_t *par, struct mod_t *mod, struct poset_t *poset,
 
 			intensityfactor = pow( pos->km_per_pixel/AU, 2.0);
 			apply_photo( mod, poset->ioptlaw, frame->view[v].solar_phase,
-					intensityfactor, pos, 0);
+					intensityfactor, pos, 0, s, i);
 
 			/*  Resample the sky rendering to get the model plane-of-sky image    */
 			/*  (if using bicubic interpolation or cubic convolution, force       */
@@ -1475,7 +1472,6 @@ void calc_poset( struct par_t *par, struct mod_t *mod, struct poset_t *poset,
 	}  /* end loop over frames */
 }
 
-
 void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtcrv,
 		int s)
 {
@@ -1665,9 +1661,13 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 		/*  Compute the model brightness for this model lightcurve point  */
 		intensityfactor = pow( pos->km_per_pixel/AU, 2.0);
 		lghtcrv->y[i] = apply_photo( mod, lghtcrv->ioptlaw, lghtcrv->solar_phase[i],
-				intensityfactor, pos, 0);
+				intensityfactor, pos, 0, s, i);
 
-//		dbg_print_pos_arrays_full_host(pos);
+		if (s==6 && i==5) {
+			int debug = 0;
+			if (debug)
+				dbg_print_pos_arrays_full_host(pos);
+		}
 
 
 		/*  Carry out screen and disk output for the write action  */
@@ -1857,6 +1857,17 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
       Smearing is handled by interpolating the brightness at the time t of
       each individual view and then taking the mean of all views that
       correspond to a given observed lightcurve point.                         */
+///* DEBUG */
+	int debug = 0;
+	if (s==6) {
+		if (debug) {
+			for (i=1; i<=n; i++) {
+//				printf("lghtcrv->x[%i]=%3.8g\n", i, lghtcrv->x[i]);
+				printf("%3.8g\n", lghtcrv->y[i]);
+//				printf("lghtcrv->y2[%i]=%3.8g\n", i, lghtcrv->y2[i]);
+			}
+		}
+	}
 
 	spline( lghtcrv->x, lghtcrv->y, ncalc, 2.0e30, 2.0e30, lghtcrv->y2);
 
@@ -1871,6 +1882,15 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 	}
 
 
+
+
+
+//	for (i=1; i<=n; i++) {
+//		printf("lghtcrv->fit[%i]=%3.8g\n", i, lghtcrv->fit[i]);
+//	}
+
+	/* End debug */
+
 	/*  Deal with flags for model that extends beyond the POS frame  */
 
 	par->posbnd_logfactor += lghtcrv->dof * (posbnd_logfactor/ncalc);
@@ -1883,6 +1903,7 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 		free_vector( to_earth_long, 1, ncalc);
 		free_vector( rotphase_unwrapped, 1, ncalc);
 	}
+
 
 }
 

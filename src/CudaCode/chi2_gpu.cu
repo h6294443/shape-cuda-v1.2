@@ -808,28 +808,36 @@ __global__ void c2s_lghtcrv_serial_krnl(struct dat_t *ddat, int s, double *dof_c
 			fit = ddat->set[s].desc.lghtcrv.fit[i];
 			oneovervar = ddat->set[s].desc.lghtcrv.oneovervar[i];
 
+//			printf("%i, %3.8g, %3.8g, %3.8g\n", i, fit, fit, oneovervar);
+
 			o2m2om[0].x += obs * obs * oneovervar;
 			o2m2om[0].y += fit * fit * oneovervar;
 			o2m2om[0].z += fit * obs * oneovervar;
 			o2m2om[1].x = o2m2om[1].y = o2m2om[1].z = 0.0;
 		}
+
+
+		/* If lightcurve's calibration factor is allowed to float, set it to mini-
+		 * mize chi-square (sum over all points of {(obs-calfact*fit)^2/variance}*/
+		if (ddat->set[s].desc.lghtcrv.cal.state == 'f') {
+			if (o2m2om[0].z > 0.0)
+				ddat->set[s].desc.lghtcrv.cal.val = o2m2om[0].z/o2m2om[0].y;
+			else
+				ddat->set[s].desc.lghtcrv.cal.val = TINYCALFACT;
+		}
+		calval = ddat->set[s].desc.lghtcrv.cal.val;
+
+		/* Compute chi-square for dataset  */
+		dof_chi2set[0] = ddat->set[s].desc.lghtcrv.dof;
+		dof_chi2set[1] = ddat->set[s].desc.lghtcrv.weight * (o2m2om[0].x - 2 *
+				calval * o2m2om[0].z + calval * calval * o2m2om[0].y);
+
+//		printf("dof=%3.8g\n", dof_chi2set[0]);
+//		printf("weight=%3.8g\n", ddat->set[s].desc.lghtcrv.weight);
+//		printf("calval=%3.8g\n", calval);
+//		printf("weight * (o2 - 2 * calval * om + calval * calval * m2) = %3.8g\n", dof_chi2set[1]);
+
 	}
-
-	/* If lightcurve's calibration factor is allowed to float, set it to mini-
-	 * mize chi-square (sum over all points of {(obs-calfact*fit)^2/variance}*/
-	if (ddat->set[s].desc.lghtcrv.cal.state == 'f') {
-		if (o2m2om[0].z > 0.0)
-			ddat->set[s].desc.lghtcrv.cal.val = o2m2om[0].z/o2m2om[0].y;
-		else
-			ddat->set[s].desc.lghtcrv.cal.val = TINYCALFACT;
-	}
-	calval = ddat->set[s].desc.lghtcrv.cal.val;
-
-	/* Compute chi-square for dataset  */
-	dof_chi2set[0] = ddat->set[s].desc.lghtcrv.dof;
-	dof_chi2set[1] = ddat->set[s].desc.lghtcrv.weight * (o2m2om[0].x - 2 *
-			calval * o2m2om[0].z + calval * calval * o2m2om[0].y);
-
 
 }
 __global__ void c2s_get_prntflgs_krnl(struct par_t *dpar, struct dat_t *ddat) {
@@ -1096,7 +1104,7 @@ __host__ double chi2_gpu(
 						hnframes[s], c2s_stream);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl");
-			printf("chi2 for set %i (Delay-Doppler) = %g\n", s, chi2);
+			printf("chi2_set[%i] (Deldop), %3.8g\n", s, chi2);
 			break;
 		case DOPPLER:
 			if (FP64)
@@ -1109,7 +1117,7 @@ __host__ double chi2_gpu(
 						hnframes[s], c2s_stream);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl, chi2_cuda_streams");
-			printf("chi2 for set %i (Doppler) = %g\n", s, chi2);
+			printf("chi2_set[%i] (Doppler), %3.8g\n", s, chi2);
 			break;
 		case POS:
 			printf("\nWrite chi2_poset_cuda!\n");
@@ -1120,7 +1128,7 @@ __host__ double chi2_gpu(
 					&chi2_all_lghtcrv, hnframes[s], hlc_n[s]);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl, chi2_cuda");
-			printf("chi2 for set %i (Lightcurve) = %g\n", s, chi2);
+			printf("chi2_set[%i] (lghtcrv), %3.8g\n", s, chi2);
 			break;
 		default:
 			printf("chi2_cuda_streams.cu: can't handle this type yet\n");
@@ -1136,7 +1144,7 @@ __host__ double chi2_gpu(
 	checkErrorAfterKernelLaunch("c2s_retrieve_chi2_krnl, chi2_cuda_streams");
 	gpuErrchk(cudaMemcpyFromSymbol(&chi2, c2s_chi2, sizeof(double),
 			0, cudaMemcpyDeviceToHost));
-	printf("Retrieved chi2=%3.6g\n", chi2);
+//	printf("Retrieved chi2=%3.6g\n", chi2);
 	/*.......................................................................*/
 
 
@@ -1946,20 +1954,24 @@ __host__ double chi2_lghtcrv_gpu(
 
 	gpuErrchk(cudaMalloc((void**)&dof_chi2set, sizeof(double) * 2));
 	gpuErrchk(cudaMalloc((void**)&o2m2om, sizeof(double3) * 2));
-	h_o2m2om = (double3 *) malloc(2*sizeof(double3));
+//	h_o2m2om = (double3 *) malloc(2*sizeof(double3));
 
 	BLK = floor((THD.x - 1 + lc_n)/THD.x);
 	c2s_lghtcrv_serial_krnl<<<1,1>>>(ddat, s, dof_chi2set, o2m2om);
 	gpuErrchk(cudaMemcpy(&h_dof_chi2set, dof_chi2set, sizeof(double)*2,
 			cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpy(h_o2m2om, o2m2om, sizeof(double3)*2, cudaMemcpyDeviceToHost));
+//	gpuErrchk(cudaMemcpy(h_o2m2om, o2m2om, sizeof(double3)*2, cudaMemcpyDeviceToHost));
+
+//	printf("o2=%3.6g\n", h_o2m2om[0].x);
+//	printf("m2=%3.6g\n", h_o2m2om[0].y);
+//	printf("om=%3.6g\g", h_o2m2om[0].z);
 
 	if (list_breakdown)
 		*chi2_all_lghtcrv += h_dof_chi2set[1];
 
 	cudaFree(dof_chi2set);
 	cudaFree(o2m2om);
-	free(h_o2m2om);
+//	free(h_o2m2om);
 	return h_dof_chi2set[1];
 }
 
