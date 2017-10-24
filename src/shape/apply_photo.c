@@ -233,15 +233,6 @@ double apply_photo( struct mod_t *mod, int ilaw, double phase, double intensityf
       scale_lambert = mod->photo.optical[ilaw].kaas.wt.val
                       * phasefunc * mod->photo.optical[ilaw].kaas.R.val/PIE;
 
-      /* Debug */
-      if (s==6 && frm==5) {
-    	  printf("set %i intensity_factor[%i], %3.8g\n", s, frm, intensityfactor);
-    	  printf("set %i phasefunc[%i], %3.8g\n", s, frm, phasefunc);
-    	  printf("set %i scale_lommsee[%i], %3.8g\n", s, frm, scale_lommsee);
-    	  printf("set %i scale_lambert[%i], %3.8g\n", s, frm, scale_lambert);
-      }
-      /* End debug */
-
       for (i=pos->xlim[0]; i<=pos->xlim[1]; i++)
         for (j=pos->ylim[0]; j<=pos->ylim[1]; j++)
           if (pos->cose[i][j] > 0.0 && pos->cosi[i][j] > 0.0

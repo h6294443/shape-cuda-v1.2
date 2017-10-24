@@ -220,6 +220,23 @@ __global__ void device_reduce_block_atomic_kernel_o2_64(struct dat_t *ddat, doub
   if(threadIdx.x==0)
     atomicAdd_dbl(&out[0],sum);
 }
+__global__ void device_reduce_block_atomic_kernel_m2_32(struct dat_t *ddat, double* out,
+		int N, int f, int s) {
+	/* Used for brightness calculation in light curves */
+  double sum=double(0.0);
+  int i, j;
+  for(int offset=blockIdx.x*blockDim.x+threadIdx.x; offset<N; offset+=blockDim.x*gridDim.x) {
+	  i = offset % ddat->set[s].desc.deldop.frame[f].ndel + 1;
+	  j = offset / ddat->set[s].desc.deldop.frame[f].ndel + 1;
+
+	  sum += ddat->set[s].desc.deldop.frame[f].fit_s[offset] *
+    		ddat->set[s].desc.deldop.frame[f].fit_s[offset] *
+    		ddat->set[s].desc.deldop.frame[f].oneovervar[i][j];
+  }
+  sum=blockReduceSumD(sum);
+  if(threadIdx.x==0)
+    atomicAdd_dbl(&out[0],sum);
+}
 __global__ void device_reduce_block_atomic_kernel_m2_64(struct dat_t *ddat, double* out,
 		int N, int f, int s) {
 	/* Used for brightness calculation in light curves */
@@ -231,6 +248,23 @@ __global__ void device_reduce_block_atomic_kernel_m2_64(struct dat_t *ddat, doub
 
 	  sum += ddat->set[s].desc.deldop.frame[f].fit[i][j] *
     		ddat->set[s].desc.deldop.frame[f].fit[i][j] *
+    		ddat->set[s].desc.deldop.frame[f].oneovervar[i][j];
+  }
+  sum=blockReduceSumD(sum);
+  if(threadIdx.x==0)
+    atomicAdd_dbl(&out[0],sum);
+}
+__global__ void device_reduce_block_atomic_kernel_om_32(struct dat_t *ddat, double* out,
+		int N, int f, int s) {
+	/* Used for brightness calculation in light curves */
+  double sum=double(0.0);
+  int i, j;
+  for(int offset=blockIdx.x*blockDim.x+threadIdx.x; offset<N; offset+=blockDim.x*gridDim.x) {
+	  i = offset % ddat->set[s].desc.deldop.frame[f].ndel + 1;
+	  j = offset / ddat->set[s].desc.deldop.frame[f].ndel + 1;
+
+	  sum += ddat->set[s].desc.deldop.frame[f].fit_s[offset] *
+    		ddat->set[s].desc.deldop.frame[f].obs[i][j] *
     		ddat->set[s].desc.deldop.frame[f].oneovervar[i][j];
   }
   sum=blockReduceSumD(sum);
@@ -1430,7 +1464,6 @@ __host__ void sum_brightness_gpu32(struct dat_t *ddat, struct pos_t **pos,
 	cudaFree(d_odata4);
 	cudaFree(d_odata5);
 }
-
 __host__ void sum_brightness_gpu64(struct dat_t *ddat, struct pos_t **pos,
 		int nframes, int size, int flt, int set, int maxthds,
 		int4 maxxylim, cudaStream_t *sb_stream) {
@@ -2793,6 +2826,70 @@ __host__ void dvdI_reduce_streams64(struct mod_t *dmod, double *dv, double *dcom
 
 }
 
+__host__ void sum_o2m2om_gpu32(struct dat_t *ddat, double *o2, double *m2, double *om,
+		int nframes, int size, int set, cudaStream_t *sb_stream) {
+
+	/* Function sums up values o2, m2, and om for the chi2 calculation for
+	 * Delay-Doppler data in double precision. */
+
+	int f=0, maxThreads = maxThreadsPerBlock;
+	int maxBlocks = 2048;
+	int numBlocks = 0;
+	int numThreads = 0;
+	double *d_odata0, *d_odata1, *d_odata2;
+	float2 xblock_ythread;
+	dim3 BLK,THD;
+	THD.x = maxThreadsPerBlock;
+	BLK.x = floor((THD.x - 1 + size)/THD.x);
+
+	/* Find number of blocks & threads needed for reduction call */
+	/* NOTE: This assumes all frames are the same size!      */
+	xblock_ythread = getNumBlocksAndThreads(size, maxBlocks, maxThreads);
+	numBlocks = xblock_ythread.x;
+	numThreads = xblock_ythread.y;
+	dim3 dimBlock(numThreads, 1, 1);
+	dim3 dimGrid(numBlocks, 1, 1);
+	size_t arrsz = sizeof(double) * numBlocks;
+
+	/* Allocate memory for d_odata and set to zero */
+	gpuErrchk(cudaMalloc((void**)&d_odata0, arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata1, arrsz));
+	gpuErrchk(cudaMalloc((void**)&d_odata2, arrsz));
+	cudaMemsetAsync(d_odata0, 0, arrsz, sb_stream[0]);
+	cudaMemsetAsync(d_odata1, 0, arrsz, sb_stream[1]);
+	cudaMemsetAsync(d_odata2, 0, arrsz, sb_stream[2]);
+
+	/* Call reduction  */
+	for (f=0; f<nframes; f++) {
+		/* First, launch kernels to calculate o2, m2, om for this frame */
+		device_reduce_block_atomic_kernel_o2_64<<< dimGrid,dimBlock,0,sb_stream[0]>>>
+				(ddat, d_odata0, size, f, set);
+
+		device_reduce_block_atomic_kernel_m2_32<<< dimGrid,dimBlock,0,sb_stream[1]>>>
+				(ddat, d_odata1, size, f, set);
+
+		device_reduce_block_atomic_kernel_om_32<<< dimGrid,dimBlock,0,sb_stream[2]>>>
+				(ddat, d_odata2, size, f, set);
+
+		/* Synchronize host to all three streams used */
+		gpuErrchk(cudaStreamSynchronize(sb_stream[0]));
+		gpuErrchk(cudaStreamSynchronize(sb_stream[1]));
+		gpuErrchk(cudaStreamSynchronize(sb_stream[2]));
+
+		/* Now transfer the calculated sums to variables o2, m2, and om of
+		 * this frame, then set the sum arrays back to zero */
+		set_o2m2om_values_krnl<<<1,1,0,sb_stream[0]>>>(d_odata0, d_odata1,
+				d_odata2, o2, om, m2, f);
+		cudaMemsetAsync(d_odata0, 0, arrsz, sb_stream[0]);
+		cudaMemsetAsync(d_odata1, 0, arrsz, sb_stream[0]);
+		cudaMemsetAsync(d_odata2, 0, arrsz, sb_stream[0]);
+	}
+	checkErrorAfterKernelLaunch("device_reduce_block_atomic_krnl_o2/m2/om_32");
+
+	cudaFree(d_odata0);
+	cudaFree(d_odata1);
+	cudaFree(d_odata2);
+}
 __host__ void sum_o2m2om_gpu64(struct dat_t *ddat, double *o2, double *m2, double *om,
 		int nframes, int size, int set, cudaStream_t *sb_stream) {
 

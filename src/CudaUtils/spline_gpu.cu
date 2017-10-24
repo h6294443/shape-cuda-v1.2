@@ -48,14 +48,16 @@ __global__ void lghtcrv_spline_krnl(struct dat_t *ddat, int set, double
 			y2[k] = y2[k] * y2[k+1] + u[k];
 
 //	/* Debug use */
-		int debug = 0;
-		if (debug) {
-			for (i=1; i<=n; i++) {
-				//			printf("lghtcrv->x[%i]=%3.8g\n", i, x[i]);
-				printf("%3.8g\n", y[i]);
-				//			printf("lghtcrv->y2[%i]=%3.8g\n", i, y2[i]);
-			}
-		}
+//		int debug = 0;
+//		if (set==9) {
+//			if (debug) {
+//				for (i=1; i<=n; i++) {
+//					//			printf("lghtcrv->x[%i]=%3.8g\n", i, x[i]);
+//					printf("%3.8g\n", y[i]);
+//					//			printf("lghtcrv->y2[%i]=%3.8g\n", i, y2[i]);
+//				}
+//			}
+//		}
 
 
 	}

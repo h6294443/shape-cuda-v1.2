@@ -287,7 +287,7 @@ __global__ void cf_finish_fit_store_krnl(struct dat_t *ddat, float **fit_store,
 __global__ void cf_set_final_pars_krnl(struct par_t *dpar, struct
 		dat_t *ddat);
 
-__global__ void posclr_krnl(struct pos_t **pos, int *posn, int f, int bdflag);
+__global__ void posclr_krnl(struct pos_t **pos, int *posn, int f, int dblflg, int lcflg);
 
 __global__ void posclr_mgpu_krnl(struct pos_t **pos, int *posn, int f, int hf,
 		int bdflag);

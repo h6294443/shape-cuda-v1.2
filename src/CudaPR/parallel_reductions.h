@@ -71,5 +71,8 @@ __host__ double sum_double_array(double *a, int size);
 
 __host__ void sum_2_double_arrays(double *a, double *b, double *absum, int size);
 
+__host__ void sum_o2m2om_gpu32(struct dat_t *ddat, double *o2, double *m2, double *om,
+		int nframes, int size, int set, cudaStream_t *sb_stream);
+
 __host__ void sum_o2m2om_gpu64(struct dat_t *ddat, double *o2, double *m2, double *om,
 		int nframes, int size, int set, cudaStream_t *sb_stream);

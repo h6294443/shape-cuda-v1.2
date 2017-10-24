@@ -508,7 +508,7 @@ __global__ void get_xylim_krnl(struct par_t *dpar, struct pos_t **pos,
 	}
 }
 
-__global__ void posclr_krnl(struct pos_t **pos, int *posn, int f, int dblflg)
+__global__ void posclr_krnl(struct pos_t **pos, int *posn, int f, int dblflg, int lcflg)
 {
 	/* Multi-threaded kernel (2*pos->n + 1)^2 threads) */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
@@ -523,9 +523,10 @@ __global__ void posclr_krnl(struct pos_t **pos, int *posn, int f, int dblflg)
 		 * Earth) to a dummy value, and reset the body, component, and facet onto
 		 * which the pixel center projects to  dummy values                  */
 		pos[f]->body[i][j] = pos[f]->comp[i][j] = pos[f]->f[i][j] = -1;
+		if (lcflg)	pos[f]->b[i][j] = 0.0;
 
 		if (dblflg) {
-			pos[f]->b[i][j] = pos[f]->cose[i][j] = pos[f]->cosi[i][j] = 0.0;
+			pos[f]->cose[i][j] = pos[f]->cosi[i][j] = 0.0;
 			pos[f]->z[i][j] = -HUGENUMBER;
 
 			/* For a bistatic situation (lightcurve or plane-of-sky dataset), zero out
@@ -543,7 +544,7 @@ __global__ void posclr_krnl(struct pos_t **pos, int *posn, int f, int dblflg)
 			}
 		}
 		else {
-			pos[f]->b_s[offset] = pos[f]->cose_s[offset] = pos[f]->cosi_s[offset] = 0.0;
+			/*pos[f]->b_s[offset] = */pos[f]->cose_s[offset] = pos[f]->cosi_s[offset] = 0.0;
 			pos[f]->z_s[offset] = -HUGENUMBER;
 			//pos[f]->b_d[offset] = 0.0;
 			if (pos[f]->bistatic) {
@@ -716,7 +717,7 @@ __host__ void vary_params_gpu32(
 			for (f=0; f<nfrm_alloc; f++) {
 				/* Start the if block for computing zmax and/or cross-section */
 				if (hcomp_zmax[s] || hcomp_xsec[f]) {
-					posclr_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,FP64);
+					posclr_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,FP64, 0);
 				}
 			} checkErrorAfterKernelLaunch("posclr_krnl");
 
@@ -786,7 +787,7 @@ __host__ void vary_params_gpu32(
 			for (f=0; f<nfrm_alloc; f++) {
 				/* Start the if block for computing zmax and/or cross-section */
 				if (hcomp_xsec[f]) {
-					posclr_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,FP64);
+					posclr_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,FP64, 0);
 				}
 			} checkErrorAfterKernelLaunch("posclr_krnl");
 
@@ -856,7 +857,7 @@ __host__ void vary_params_gpu32(
 				for (f=1; f<nfrm_alloc; f++) {
 					/* Start the if block for computing zmax and/or cross-section */
 					if (hcomp_xsec[f]) {
-						posclr_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,FP64);
+						posclr_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,FP64, 1);
 					}
 				} checkErrorAfterKernelLaunch("posclr_krnl (Doppler in vary_params_gpu2)");
 
@@ -1124,7 +1125,7 @@ __host__ void vary_params_gpu64(
 			for (f=0; f<nfrm_alloc; f++) {
 				/* Start the if block for computing zmax and/or cross-section */
 				if (hcomp_zmax[s] || hcomp_xsec[f]) {
-					posclr_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,FP64);
+					posclr_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,FP64, 0);
 				}
 			} checkErrorAfterKernelLaunch("posclr_krnl");
 
@@ -1194,7 +1195,7 @@ __host__ void vary_params_gpu64(
 			for (f=0; f<nfrm_alloc; f++) {
 				/* Start the if block for computing zmax and/or cross-section */
 				if (hcomp_xsec[f]) {
-					posclr_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,FP64);
+					posclr_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,FP64, 0);
 				}
 			} checkErrorAfterKernelLaunch("posclr_krnl");
 
@@ -1264,7 +1265,7 @@ __host__ void vary_params_gpu64(
 				for (f=1; f<nfrm_alloc; f++) {
 					/* Start the if block for computing zmax and/or cross-section */
 					if (hcomp_xsec[f]) {
-						posclr_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,FP64);
+						posclr_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,FP64, 1);
 					}
 				} checkErrorAfterKernelLaunch("posclr_krnl");
 
@@ -1648,7 +1649,7 @@ void *vary_params_pthread_sub(void *ptr) {
 				for (f=0; f<nfrm_alloc; f++) {
 					/* Start the if block for computing zmax and/or cross-section */
 					if (data->zmax_flag[s] || hcomp_xsec[f]) {
-						posclr_krnl<<<BLK[f],THD, 0, data->gpu_stream[f]>>>(pos,posn,f,0);
+						posclr_krnl<<<BLK[f],THD, 0, data->gpu_stream[f]>>>(pos,posn,f, FP64, 0);
 					}
 				} checkErrorAfterKernelLaunch("posclr_krnl");
 
@@ -1722,7 +1723,7 @@ void *vary_params_pthread_sub(void *ptr) {
 				/* Start the if block for computing zmax and/or cross-section */
 				if (hcomp_xsec[f]) {
 					posclr_krnl<<<BLK[f],THD, 0, data->gpu_stream[f]>>>
-							(pos, posn, f, 0);
+							(pos, posn, f, FP64, 0);
 				}
 			} checkErrorAfterKernelLaunch("posclr_krnl");
 
@@ -1806,7 +1807,7 @@ void *vary_params_pthread_sub(void *ptr) {
 					/* Start the if block for computing zmax and/or cross-section */
 					if (hcomp_xsec[f]) {
 						posclr_krnl<<<BLK[f],THD, 0, data->gpu_stream[f]>>>
-								(pos, posn, f, 0);
+								(pos, posn, f, FP64, 1);
 					}
 				} checkErrorAfterKernelLaunch("posclr_krnl");
 

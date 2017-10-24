@@ -601,7 +601,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % npar_update;
 //		p = first_fitpar;// = 1;
-		for (p=2/*first_fitpar*/; p<3/*nfpar*/; p++) {
+		for (p=first_fitpar; p<10/*nfpar*/; p++) {
 
 			/*  Adjust only parameter p on this try  */
 			bf_set_hotparam_pntr_krnl<<<1,1>>>(fpntr, fpartype, p);
@@ -696,6 +696,16 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			 * a modified version of brent that has an absolute fitting tole-
 			 * rance as one of its arguments, in addition to the existing
 			 * fractional tolerance.                                      */
+
+			printf("ax, %3.8g\n", ax);
+			printf("bx, %3.8g\n", bx);
+			printf("cx, %3.8g\n", cx);
+			printf("obja, %3.8g\n", obja);
+			printf("objb, %3.8g\n", objb);
+			printf("objc, %3.8g\n", objc);
+			printf("hfpartol[%i], %3.8g\n", p, hfpartol[p]);
+			printf("hfparabstol[%i], %3.8g\n",p, hfparabstol[p]);
+
 			enderr = brent_abs_gpu(ax, bx, cx, objective_gpu, hfpartol[p],
 					hfparabstol[p], &xmin, verts, htype, dtype, nframes, nviews, lc_n,
 					nsets, nf, bf_stream);
@@ -1863,6 +1873,7 @@ __host__ double objective_gpu(
 //	printf("err: %3.6f\n", err);
 //	printf("pens: %3.6f\n", pens);
 //	printf("%3.8g, %3.8g, %3.8g\n", x, err, pens);
+//	printf("%3.8g, %3.8g\n", err, pens);
 	err += pens;
 	/* Double the objective function if there's an ellipsoid component with tiny
 	 * or negative diameter, if any optical photometric parameters have invalid

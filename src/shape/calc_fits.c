@@ -509,6 +509,8 @@ void calc_deldop( struct par_t *par, struct mod_t *mod, struct deldop_t *deldop,
 					par->posbnd_logfactor += frame->dof * pos->posbnd_logfactor;
 				}
 
+//			dbg_print_pos_arrays_full_host(pos);
+
 			/*  Go through all POS pixels which are visible with sufficiently low
           scattering angle, and mark the facets which project onto their
           centers as having been "seen" at least once                        */
@@ -1658,16 +1660,18 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 				}
 		}
 
+//		if (s==9 && i==5) {
+//			int debug = 0;
+//			if (debug)
+//				dbg_print_pos_arrays_full_host(pos);
+//		}
+
 		/*  Compute the model brightness for this model lightcurve point  */
 		intensityfactor = pow( pos->km_per_pixel/AU, 2.0);
 		lghtcrv->y[i] = apply_photo( mod, lghtcrv->ioptlaw, lghtcrv->solar_phase[i],
 				intensityfactor, pos, 0, s, i);
 
-		if (s==6 && i==5) {
-			int debug = 0;
-			if (debug)
-				dbg_print_pos_arrays_full_host(pos);
-		}
+
 
 
 		/*  Carry out screen and disk output for the write action  */
@@ -1858,16 +1862,16 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
       each individual view and then taking the mean of all views that
       correspond to a given observed lightcurve point.                         */
 ///* DEBUG */
-	int debug = 0;
-	if (s==6) {
-		if (debug) {
-			for (i=1; i<=n; i++) {
-//				printf("lghtcrv->x[%i]=%3.8g\n", i, lghtcrv->x[i]);
-				printf("%3.8g\n", lghtcrv->y[i]);
-//				printf("lghtcrv->y2[%i]=%3.8g\n", i, lghtcrv->y2[i]);
-			}
-		}
-	}
+//	int debug = 0;
+//	if (s==9) {
+//		if (debug) {
+//			for (i=1; i<=n; i++) {
+////				printf("lghtcrv->x[%i]=%3.8g\n", i, lghtcrv->x[i]);
+//				printf("%3.8g\n", lghtcrv->y[i]);
+////				printf("lghtcrv->y2[%i]=%3.8g\n", i, lghtcrv->y2[i]);
+//			}
+//		}
+//	}
 
 	spline( lghtcrv->x, lghtcrv->y, ncalc, 2.0e30, 2.0e30, lghtcrv->y2);
 

@@ -592,15 +592,6 @@ __global__ void ap_kaas_krnl48(struct mod_t *dmod, struct pos_t **pos,
 			*(scale_lommsee[frm] / (pos[frm]->cosi_s[pxa] + pos[frm]->cose_s[pxa])
 			 + scale_lambert[frm]);
 		}
-
-		/* Debug */
-		if (offset==0 && s==6 && frm==5) {
-			printf("set %i intensity_factor[%i], %3.8g\n", s, frm, intensity_factor[frm]);
-//			printf("set %i phase[%i], %3.8g\n", s, frm, phase[frm]);
-			printf("set %i phasefunc[%i], %3.8g\n", s, frm, phasefunc[frm]);
-			printf("set %i scale_lommsee[%i], %3.8g\n", s, frm, scale_lommsee[frm]);
-			printf("set %i scale_lambert[%i], %3.8g\n", s, frm, scale_lambert[frm]);
-		}
 	}
 }
 __global__ void ap_kaas_krnl64(struct mod_t *dmod, struct pos_t **pos,

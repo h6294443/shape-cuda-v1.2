@@ -1390,7 +1390,7 @@ __host__ void calc_deldop_gpu32(struct par_t *dpar, struct mod_t *dmod,
 	}
 	for (f=0; f<nframes; f++)
 		/* Launch posclr_krnl to initialize POS view */
-		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f,FP64);
+		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f,FP64, 0);
 	checkErrorAfterKernelLaunch("posclr_krnl (calc_fits_gpu2)");
 
 	/* Call posvis to get facet number, scattering angle, distance
@@ -1403,6 +1403,11 @@ __host__ void calc_deldop_gpu32(struct par_t *dpar, struct mod_t *dmod,
 
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
 			cudaMemcpyDeviceToHost));
+//
+//	f=0;
+//	dbg_print_pos_arrays_full32(pos, f, nThreadspx[f], hposn[f]);
+
+
 
 	for (f=0; f<nframes; f++)
 		for (v2=v0_index+1; v2<=v0_index+nviews; v2++)
@@ -1547,7 +1552,7 @@ __host__ void calc_deldop_gpu64(struct par_t *dpar, struct mod_t *dmod,
 	}
 	for (f=0; f<nframes; f++)
 		/* Launch posclr_krnl to initialize POS view */
-		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f, FP64);
+		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f, FP64, 0);
 	checkErrorAfterKernelLaunch("posclr_krnl");
 
 	/* Call posvis to get facet number, scattering angle, distance
@@ -1560,6 +1565,10 @@ __host__ void calc_deldop_gpu64(struct par_t *dpar, struct mod_t *dmod,
 
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
 			cudaMemcpyDeviceToHost));
+//
+//	f=0;
+//	dbg_print_pos_arrays_full64(pos, f, nThreadspx[f], hposn[f]);
+
 
 	for (f=0; f<nframes; f++)
 		for (v2=v0_index+1; v2<=v0_index+nviews; v2++)
@@ -1709,7 +1718,7 @@ __host__ void calc_doppler_gpu32(struct par_t *dpar, struct mod_t *dmod,
 
 	for (f=0; f<nframes; f++)
 		/* Launch posclr_krnl to initialize POS view */
-		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f, FP64);
+		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f, FP64, 0);
 	checkErrorAfterKernelLaunch("posclr_krnl (calc_doppler_gpu2)");
 
 	/* Call posvis_cuda_2 to get facet number, scattering angle, distance
@@ -1873,7 +1882,7 @@ __host__ void calc_doppler_gpu64(struct par_t *dpar, struct mod_t *dmod,
 
 	for (f=0; f<nframes; f++)
 		/* Launch posclr_krnl to initialize POS view */
-		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f, FP64);
+		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f, FP64, 0);
 	checkErrorAfterKernelLaunch("posclr_krnl ");
 
 	/* Call posvis_cuda_2 to get facet number, scattering angle, distance
@@ -2227,7 +2236,7 @@ __host__ void calc_lghtcrv_gpu32(
 
 	for (f=1; f<=ncalc; f++) {
 		/* Clear the POS-view to initialize */
-		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn, f, FP64);
+		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn, f, FP64, 1);
 	} checkErrorAfterKernelLaunch("cfs_set_pos_ae_streams and posclr_streams_krnl");
 
 	/* Call routine posvis to get  facet number, scattering & incidence
@@ -2319,14 +2328,16 @@ __host__ void calc_lghtcrv_gpu32(
 //	apply_photo_gpu32(dmod, ddat, pos, xylim, span, BLKpx, nThreadspx,
 //			0, s, nframes, nThreadspx1, maxthds, maxxylim, cf_stream);
 
+	if (s==6) {
+		int debug = 0;
+		int frm = 5;
+		if (debug)
+			dbg_print_pos_arrays_full32(pos, frm,	nThreadspx[frm], hposn[frm]);
+	}
+
 	apply_photo_gpu48(dmod, ddat, pos, xylim, span, BLKpx, 0, s, nframes, maxthds, maxxylim, cf_stream);
 
-//	if (s==6) {
-//		int debug = 0;
-//		int frm = 5;
-//		if (debug)
-//			dbg_print_pos_arrays_full32(pos, frm,	nThreadspx[frm], hposn[frm]);
-//	}
+
 //	dbg_print_facet_normals(dmod, nf, "FP32_facet_normals.csv");
 
 	/* Now that we have calculated the model lightcurve brightnesses y at each
@@ -2417,7 +2428,7 @@ __host__ void calc_lghtcrv_gpu64(
 
 	for (f=1; f<=ncalc; f++) {
 		/* Clear the POS-view to initialize */
-		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn, f, FP64);
+		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn, f, FP64, 1);
 	} checkErrorAfterKernelLaunch("cfs_set_pos_ae and posclr_krnl");
 
 	/* Call routine posvis to get  facet number, scattering & incidence

@@ -441,10 +441,10 @@ __global__ void c2s_deldop_add_o2_krnl64(
 __global__ void c2s_add_deldop_contributions_krnl32(
 		struct par_t *dpar,
 		struct dat_t *ddat,
-		float *o2,
-		float *m2,
-		float *om,
-		float *weight,
+		double *o2,
+		double *m2,
+		double *om,
+		double *weight,
 		int *ndel,
 		int *ndop,
 		double *chi2_deldop_frame,
@@ -875,7 +875,7 @@ __global__ void c2_set_chi2_krnl(struct dat_t *ddat, double chi2, int s) {
 		ddat->set[s].chi2 = chi2;
 }
 __global__ void deldop_wrt_chi2fit0_krnl32(struct par_t *dpar, struct dat_t *ddat,
-		int s, int f, int *ndel, int *ndop, int nThreads, float *returns,
+		int s, int f, int *ndel, int *ndop, int nThreads, double *returns,
 		float *o2_fit0_dof_fit0) {
 
 	/* ndel*ndop-threaded kernel */
@@ -1104,7 +1104,7 @@ __host__ double chi2_gpu(
 						hnframes[s], c2s_stream);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl");
-			printf("chi2_set[%i] (Deldop), %3.8g\n", s, chi2);
+//			printf("chi2_set[%i] (Deldop), %3.8g\n", s, chi2);
 			break;
 		case DOPPLER:
 			if (FP64)
@@ -1117,7 +1117,7 @@ __host__ double chi2_gpu(
 						hnframes[s], c2s_stream);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl, chi2_cuda_streams");
-			printf("chi2_set[%i] (Doppler), %3.8g\n", s, chi2);
+//			printf("chi2_set[%i] (Doppler), %3.8g\n", s, chi2);
 			break;
 		case POS:
 			printf("\nWrite chi2_poset_cuda!\n");
@@ -1128,7 +1128,7 @@ __host__ double chi2_gpu(
 					&chi2_all_lghtcrv, hnframes[s], hlc_n[s]);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl, chi2_cuda");
-			printf("chi2_set[%i] (lghtcrv), %3.8g\n", s, chi2);
+//			printf("chi2_set[%i] (lghtcrv), %3.8g\n", s, chi2);
 			break;
 		default:
 			printf("chi2_cuda_streams.cu: can't handle this type yet\n");
@@ -1532,23 +1532,23 @@ __host__ double chi2_deldop_gpu32(
 	BLKfrm.x = floor((THD64.x -1 + nframes)/THD64.x);
 	float *o2_fit0_dof_fit0;
 	/* o2, m2, and om are per-frame radar variables */
-	float *o2, *m2, *om, *weight, *returns, *hreturns;
+	double *o2, *m2, *om, *weight, *returns, *hreturns;
 	chi2_set = 0.0;
 
-	gpuErrchk(cudaMalloc((void**)&o2, 				sizeof(float)*nframes));
-	gpuErrchk(cudaMalloc((void**)&m2, 				sizeof(float)*nframes));
-	gpuErrchk(cudaMalloc((void**)&om, 				sizeof(float)*nframes));
-	gpuErrchk(cudaMalloc((void**)&weight, 			sizeof(float)*nframes));
+	gpuErrchk(cudaMalloc((void**)&o2, 				sizeof(double)*nframes));
+	gpuErrchk(cudaMalloc((void**)&m2, 				sizeof(double)*nframes));
+	gpuErrchk(cudaMalloc((void**)&om, 				sizeof(double)*nframes));
+	gpuErrchk(cudaMalloc((void**)&weight, 			sizeof(double)*nframes));
 	gpuErrchk(cudaMalloc((void**)&chi2_deldop_frame,sizeof(double)*nframes));
 	gpuErrchk(cudaMalloc((void**)&ndel,				sizeof(int)*nframes));
 	gpuErrchk(cudaMalloc((void**)&ndop,				sizeof(int)*nframes));
-	gpuErrchk(cudaMalloc((void**)&returns, 			sizeof(float)*2));
+	gpuErrchk(cudaMalloc((void**)&returns, 			sizeof(double)*2));
 	gpuErrchk(cudaMalloc((void**)&o2_fit0_dof_fit0,	sizeof(float)*2));
-	hreturns = (float *) malloc(2*sizeof(float));
+	hreturns = (double *) malloc(2*sizeof(double));
 	hreturns[0] = hreturns[1] = 0.0;
 
 	/* Get values for ndel and ndop, and the overflow parameters o2, m2, om */
-	c2s_deldop_init_krnl32<<<BLKfrm,THD64>>>(ddat, s, ndel, ndop, o2, m2, om,
+	c2s_deldop_init_krnl64<<<BLKfrm,THD64>>>(ddat, s, ndel, ndop, o2, m2, om,
 			weight, nframes);
 	checkErrorAfterKernelLaunch("c2s_deldop_init_krnl");
 	gpuErrchk(cudaMemcpy(&hndel, ndel, sizeof(int)*nframes, cudaMemcpyDeviceToHost));
@@ -1563,11 +1563,14 @@ __host__ double chi2_deldop_gpu32(
 	/* Add contributions from power within limits of data frame. This kernel
 	 * also takes care of the frame's calibration factor and  computes chi2
 	 * for this frame */
-	for (f=0; f<nframes; f++) {
-		c2s_deldop_add_o2_krnl32<<<BLK[f],THD,0,c2s_stream[f]>>>(dpar,
-				ddat, o2, m2, om, ndel, ndop, nThreads[f], s, f);
-	}
-	checkErrorAfterKernelLaunch("c2s_deldop_add_o2_krnl32");
+//	for (f=0; f<nframes; f++) {
+//		c2s_deldop_add_o2_krnl32<<<BLK[f],THD,0,c2s_stream[f]>>>(dpar,
+//				ddat, o2, m2, om, ndel, ndop, nThreads[f], s, f);
+//	}
+//	checkErrorAfterKernelLaunch("c2s_deldop_add_o2_krnl32");
+
+	sum_o2m2om_gpu32(ddat, o2, m2, om, nframes, hndel[0]*hndop[0], s, c2s_stream);
+
 
 	c2s_add_deldop_contributions_krnl32<<<BLKfrm,THD64>>>(dpar, ddat, o2, m2,
 			om, weight, ndel, ndop, chi2_deldop_frame, s, nframes);
@@ -1590,7 +1593,7 @@ __host__ double chi2_deldop_gpu32(
 					ddat, s, f, ndel, ndop, nThreads[f], returns, o2_fit0_dof_fit0);
 			checkErrorAfterKernelLaunch("deldop_wrt_chi2fit0_krnl32");
 		}
-		gpuErrchk(cudaMemcpy(hreturns, returns, sizeof(float) * 2,
+		gpuErrchk(cudaMemcpy(hreturns, returns, sizeof(double) * 2,
 				cudaMemcpyDeviceToHost));
 		*chi2_fit0_deldop = (double)hreturns[0];
 		*dof_fit0_deldop = (double)hreturns[1];
