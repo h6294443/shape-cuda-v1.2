@@ -194,6 +194,7 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
 
   /*  Initialize other variables  */
   static double fit_overflow[MAXOVERFLOW][MAXOVERFLOW];
+
   any_overflow = 0;
 
   frame = &deldop->frame[frm];
@@ -358,6 +359,7 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
         	in_bounds = 0;
           if (!any_overflow) {
             any_overflow = 1;
+//            printf("overflow in set %i frame %i\n", set, frm);
             for (i=0; i<MAXOVERFLOW; i++)
               for (j=0; j<MAXOVERFLOW; j++)
                 fit_overflow[i][j] = 0.0;
@@ -585,6 +587,7 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
    *
    *  Also compute the summed cross section and the mean delay and Doppler
    *  bins for the overflow region, for use with the "delcorinit" action    */
+//  double sum =0.0;
 
   frame->overflow_o2 = 0.0;
   frame->overflow_m2 = 0.0;
@@ -604,6 +607,8 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
         if (fit_overflow[i][j] != 0.0) {
           if (par->speckle)
             variance = sdev_sq + lookfact*fit_overflow[i][j]*fit_overflow[i][j];
+//          sum += fit_overflow[i][j];
+//          printf("set %i frame %i fit_overflow[%i][%i], %3.8g\n", set, frm, i, j, fit_overflow[i][j]);
           frame->overflow_o2 += 1.0;
           frame->overflow_m2 += fit_overflow[i][j]*fit_overflow[i][j]/variance;
           frame->overflow_xsec += fit_overflow[i][j];
@@ -611,6 +616,7 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
           frame->overflow_dopmean += (j - idop0)*fit_overflow[i][j];
         }
       }
+//    printf("set %i frame %i sum of fit_overflow elements !=0, %3.8g\n", set, frm, sum);
     if (frame->overflow_xsec != 0.0) {
       frame->overflow_delmean /= frame->overflow_xsec;
       frame->overflow_dopmean /= frame->overflow_xsec;

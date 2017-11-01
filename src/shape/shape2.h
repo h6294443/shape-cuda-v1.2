@@ -1170,6 +1170,7 @@ struct deldop_t {
   double sum_deldop_zmax_weights;     /* weight sum for the vary_delcor0 parameter */
   double sum_rad_xsec_weights;        /* weight sum for the vary_radalb parameter */
   double sum_cos_subradarlat_weights; /* weight sum for the vary_dopscale parameter */
+  double fit_overflow[MAXOVERFLOW][MAXOVERFLOW]; /* Overflow buffer for host multi-threaded mode.  Each set gets its own */
 };
 
 /* Structure dopview_t describes a single view that contributes to a smeared Doppler frame. */
@@ -1243,6 +1244,7 @@ struct doppler_t {
   double dof;                   /* degrees of freedom */
   double sum_rad_xsec_weights;        /* weight sum for the vary_radalb parameter */
   double sum_cos_subradarlat_weights; /* weight sum for the vary_dopscale parameter */
+  double fit_overflow[MAXOVERFLOW];	/* This is intended for host-multithreaded application.  Each set gets its own overflow buffer */
 };
 
 /* Structure posetview_t describes a single view that contributes to a smeared POS frame. */

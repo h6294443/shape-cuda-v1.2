@@ -140,7 +140,7 @@ void *vary_params_hmt_sub(void *ptr) {
 
 
 //						dbg_print_pos_z_host(pos, "HMT_host_z");
-						pos2deldop(data->parameter, &data->model->photo, 0.0, 0.0, 0.0, deldop, 0, s, f, 0);
+						pos2deldop_hmt(data->parameter, &data->model->photo, 0.0, 0.0, 0.0, deldop, 0, s, f, 0);
 
 						/*  Compute distance toward Earth of the subradar point  */
 
@@ -209,7 +209,7 @@ void *vary_params_hmt_sub(void *ptr) {
 						 * spectrum by mapping power from the plane of the sky to Doppler space.      */
 						clrvect( doppler->frame[f].fit, 1, doppler->frame[f].ndop);
 
-						pos2doppler(data->parameter, &data->model->photo, 0.0,
+						pos2doppler_hmt(data->parameter, &data->model->photo, 0.0,
 								0.0, 0.0, doppler, 0, s, f, 0);
 
 						/* Compute cross section  */

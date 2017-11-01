@@ -339,7 +339,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 //	int debug = 1;
 //	if (debug)
 //		return(0);
-//
+
 
 	/* Display the region within each delay-Doppler or Doppler frame that, ac-
 	 * cording to initial model, has nonzero power. A warning is displayed if
@@ -385,7 +385,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 		cntr = first_fitpar % par->npar_update;
 //		p = first_fitpar;
 //		p = 1;
-		for (p=first_fitpar; p<10/*par->nfpar*/; p++) {
+		for (p=first_fitpar; p<5/*par->nfpar*/; p++) {
 
 			/*  Adjust only parameter p on this try  */
 			hotparam = par->fpntr[p];
@@ -437,14 +437,14 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			check_badposet = 0;
 			check_badradar = 0;
 
-			printf("ax, %3.8g\n", ax);
-			printf("bx, %3.8g\n", bx);
-			printf("cx, %3.8g\n", cx);
-			printf("obja, %3.8g\n", obja);
-			printf("objb, %3.8g\n", objb);
-			printf("objc, %3.8g\n", objc);
-			printf("hfpartol[%i], %3.8g\n", p, par->fpartol[p]);
-			printf("hfparabstol[%i], %3.8g\n",p, par->fparabstol[p]);
+//			printf("ax, %3.8g\n", ax);
+//			printf("bx, %3.8g\n", bx);
+//			printf("cx, %3.8g\n", cx);
+//			printf("obja, %3.8g\n", obja);
+//			printf("objb, %3.8g\n", objb);
+//			printf("objc, %3.8g\n", objc);
+//			printf("hfpartol[%i], %3.8g\n", p, par->fpartol[p]);
+//			printf("hfparabstol[%i], %3.8g\n",p, par->fparabstol[p]);
 
 
 			/* Now use Numerical Recipes function brent to find local minimum -
@@ -460,7 +460,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 					par->fpartol[p], par->fparabstol[p], &xmin);
 
 
-			printf("xmin, %3.8g\n", xmin);
+//			printf("xmin, %3.8g\n", xmin);
 
 			/* Realize whichever part(s) of the model has changed.
 			 *

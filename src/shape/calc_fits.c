@@ -460,6 +460,9 @@ void calc_deldop( struct par_t *par, struct mod_t *mod, struct deldop_t *deldop,
 	struct deldopview_t *view0;
 	struct pos_t *pos;
 
+	overflow_o2_store = overflow_m2_store = overflow_xsec_store
+	= overflow_delmean_store = overflow_dopmean_store = 0.0;
+
 	for (f=0; f<deldop->nframes; f++) {
 
 		frame = &deldop->frame[f];
@@ -474,8 +477,8 @@ void calc_deldop( struct par_t *par, struct mod_t *mod, struct deldop_t *deldop,
 			for (i=1; i<=frame->ndel; i++)
 				for (j=1; j<=frame->ndop; j++)
 					fit_store[i][j] = 0.0;
-			overflow_o2_store = overflow_m2_store = overflow_xsec_store
-					= overflow_delmean_store = overflow_dopmean_store = 0.0;
+//			overflow_o2_store = overflow_m2_store = overflow_xsec_store
+//					= overflow_delmean_store = overflow_dopmean_store = 0.0;
 		}
 
 		/*  Loop over all views for this (smeared) frame, going in an order that
@@ -509,7 +512,8 @@ void calc_deldop( struct par_t *par, struct mod_t *mod, struct deldop_t *deldop,
 					par->posbnd_logfactor += frame->dof * pos->posbnd_logfactor;
 				}
 
-//			dbg_print_pos_arrays_full_host(pos);
+//			if (s==0)
+//				dbg_print_pos_arrays_full_host(pos);
 
 			/*  Go through all POS pixels which are visible with sufficiently low
           scattering angle, and mark the facets which project onto their
@@ -532,13 +536,23 @@ void calc_deldop( struct par_t *par, struct mod_t *mod, struct deldop_t *deldop,
           the sky to delay-Doppler space.                             */
 
 			clrmat( frame->fit, 1, frame->ndel, 1, frame->ndop);
-			if (pos2deldop( par, &mod->photo, 0.0, 0.0, 0.0, deldop, 0, s, f, v)) {
-				par->badradar = 1;
-				par->badradar_logfactor += frame->dof * frame->badradar_logfactor
-						/ deldop->nviews;
+			if (HMT) {
+				if (pos2deldop_hmt( par, &mod->photo, 0.0, 0.0, 0.0, deldop, 0, s, f, v)) {
+					par->badradar = 1;
+					par->badradar_logfactor += frame->dof * frame->badradar_logfactor
+							/ deldop->nviews;
+				}
+			}
+			else {
+				if (pos2deldop( par, &mod->photo, 0.0, 0.0, 0.0, deldop, 0, s, f, v)) {
+					par->badradar = 1;
+					par->badradar_logfactor += frame->dof * frame->badradar_logfactor
+							/ deldop->nviews;
+				}
 			}
 
-//			dbg_print_deldop_fit_host2(frame, "CPU_deldop_fit.csv");
+//			if (s==0)
+//				dbg_print_deldop_fit_host2(frame, "deldop_fit.csv");
 
 			/*  If smearing is being modeled, include the delay-Doppler
           calculations from this view in the summed results for this frame  */
@@ -554,6 +568,14 @@ void calc_deldop( struct par_t *par, struct mod_t *mod, struct deldop_t *deldop,
 				overflow_dopmean_store += frame->overflow_dopmean;
 			}
 
+//			if (s==0) {
+//				printf("deldop->nviews, %i\n", deldop->nviews);
+//				printf("overflow_o2_store, %3.8g\n", overflow_o2_store);
+//				printf("overflow_m2_store, %3.8g\n", overflow_m2_store);
+//				printf("overflow_xsec_store, %3.8g\n", overflow_xsec_store);
+//				printf("overflow_delmean_store, %3.8g\n", overflow_delmean_store);
+//				printf("overflow_dopmean_store, %3.8g\n", overflow_dopmean_store);
+//			}
 		}
 
 		/*  If smearing is being modeled, compute mean values over all views
@@ -895,10 +917,20 @@ void calc_doppler( struct par_t *par, struct mod_t *mod, struct doppler_t *doppl
           plane of the sky to Doppler space.                        */
 
 			clrvect( frame->fit, 1, frame->ndop);
-			if (pos2doppler( par, &mod->photo, 0.0, 0.0, 0.0, doppler, 0, s, f, v)) {
-				par->badradar = 1;
-				par->badradar_logfactor += frame->dof * frame->badradar_logfactor
-						/ doppler->nviews;
+
+			if (HMT) {
+				if (pos2doppler_hmt( par, &mod->photo, 0.0, 0.0, 0.0, doppler, 0, s, f, v)) {
+					par->badradar = 1;
+					par->badradar_logfactor += frame->dof * frame->badradar_logfactor
+							/ doppler->nviews;
+				}
+			}
+			else {
+				if (pos2doppler( par, &mod->photo, 0.0, 0.0, 0.0, doppler, 0, s, f, v)) {
+					par->badradar = 1;
+					par->badradar_logfactor += frame->dof * frame->badradar_logfactor
+							/ doppler->nviews;
+				}
 			}
 
 			/*  If smearing is being modeled, include the Doppler
