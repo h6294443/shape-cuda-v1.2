@@ -551,9 +551,9 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	fflush(stdout);
 
 
-//	int debug = 1;
-//	if (debug)
-//		return(0);
+	int debug = 1;
+	if (debug)
+		return(0);
 	/* Display the region within each delay-Doppler or Doppler frame that, ac-
 	 * cording to initial model, has nonzero power. A warning is displayed if
 	 * any region extends beyond the data limits: the vignetting is too tight,
@@ -696,15 +696,15 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			 * a modified version of brent that has an absolute fitting tole-
 			 * rance as one of its arguments, in addition to the existing
 			 * fractional tolerance.                                      */
-
-			printf("ax, %3.8g\n", ax);
-			printf("bx, %3.8g\n", bx);
-			printf("cx, %3.8g\n", cx);
-			printf("obja, %3.8g\n", obja);
-			printf("objb, %3.8g\n", objb);
-			printf("objc, %3.8g\n", objc);
-			printf("hfpartol[%i], %3.8g\n", p, hfpartol[p]);
-			printf("hfparabstol[%i], %3.8g\n",p, hfparabstol[p]);
+//
+//			printf("ax, %3.8g\n", ax);
+//			printf("bx, %3.8g\n", bx);
+//			printf("cx, %3.8g\n", cx);
+//			printf("obja, %3.8g\n", obja);
+//			printf("objb, %3.8g\n", objb);
+//			printf("objc, %3.8g\n", objc);
+//			printf("hfpartol[%i], %3.8g\n", p, hfpartol[p]);
+//			printf("hfparabstol[%i], %3.8g\n",p, hfparabstol[p]);
 
 			enderr = brent_abs_gpu(ax, bx, cx, objective_gpu, hfpartol[p],
 					hfparabstol[p], &xmin, verts, htype, dtype, nframes, nviews, lc_n,
@@ -728,7 +728,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			checkErrorAfterKernelLaunch("bf_set_hotparam_val_krnl");
 			gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
 					sizeof(double),	0, cudaMemcpyDeviceToHost));
-			printf("xmin, %3.8g\n", xmin);
+//			printf("xmin, %3.8g\n", xmin);
 
 			if (newsize || newshape)
 				realize_mod_gpu(dpar, dmod, type, nf, bf_stream);

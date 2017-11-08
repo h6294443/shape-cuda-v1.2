@@ -336,9 +336,9 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	printf("\n");
 	fflush(stdout);
 
-//	int debug = 1;
-//	if (debug)
-//		return(0);
+	int debug = 1;
+	if (debug)
+		return(0);
 
 
 	/* Display the region within each delay-Doppler or Doppler frame that, ac-
@@ -385,7 +385,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 		cntr = first_fitpar % par->npar_update;
 //		p = first_fitpar;
 //		p = 1;
-		for (p=first_fitpar; p<5/*par->nfpar*/; p++) {
+		for (p=first_fitpar; p<10/*par->nfpar*/; p++) {
 
 			/*  Adjust only parameter p on this try  */
 			hotparam = par->fpntr[p];
@@ -801,6 +801,7 @@ double objective( double x)
 	pens = penalties( spar, smod, sdat);
 //	printf("pens: %3.9g\n", pens);
 //	printf("%3.8g, %3.8g, %3.8g\n", x, err, pens);
+//	printf("%3.8g, %3.8g\n", err, pens);
 	err += pens;
 
 	/* Double the objective function if there's an ellipsoid component with tiny

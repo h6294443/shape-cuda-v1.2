@@ -459,6 +459,10 @@ __global__ void c2s_add_deldop_contributions_krnl32(
 		chi2_deldop_frame[f] = 0.0;
 		int off, i, j;
 
+		o2[f] += ddat->set[s].desc.deldop.frame[f].overflow_o2;
+		m2[f] += ddat->set[s].desc.deldop.frame[f].overflow_m2;
+		printf("set %i deldop->frame[%i].overflow_o2 = %3.3g\n", s, f, ddat->set[s].desc.deldop.frame[f].overflow_o2);
+
 		/* If this frame's calibration factor is allowed to float, set it to
 		 * minimize chi-square, the sum over all pixels of
 		 * 		        { (obs - calfact*fit)^2 / variance }              */
@@ -518,6 +522,10 @@ __global__ void c2s_add_deldop_contributions_krnl64(
 		chi2_deldop_frame[f] = 0.0;
 		int off, i, j;
 
+		o2[f] += ddat->set[s].desc.deldop.frame[f].overflow_o2;
+		m2[f] += ddat->set[s].desc.deldop.frame[f].overflow_m2;
+		printf("set %i deldop->frame[%i].overflow_o2 = %3.3g\n", s, f, ddat->set[s].desc.deldop.frame[f].overflow_o2);
+//		printf("set %i deldop->frame[%i].overflow_m2 = %3.3g\n", s, f, ddat->set[s].desc.deldop.frame[f].overflow_m2);
 		/* If this frame's calibration factor is allowed to float, set it to
 		 * minimize chi-square, the sum over all pixels of
 		 * 		        { (obs - calfact*fit)^2 / variance }              */
@@ -533,6 +541,10 @@ __global__ void c2s_add_deldop_contributions_krnl64(
 		ddat->set[s].desc.deldop.frame[f].chi2 = err;
 		chi2_deldop_frame[f] += err;
 		//atomicAdd(&c2s_chi2_all_deldop, chi2_deldop_frame[f]);
+
+//		printf("set %i o2=%3.8g\n", s, o2[f]);
+//		printf("set %i m2=%3.8g\n", s, m2[f]);
+//		printf("set %i om=%3.8g\n", s, om[f]);
 
 		/* Compute chi-square contributions and deg. of freedom due to pixels
 		 * whose model signal is less than or equal to 'chi2fit0_thresh'
@@ -1104,7 +1116,7 @@ __host__ double chi2_gpu(
 						hnframes[s], c2s_stream);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl");
-//			printf("chi2_set[%i] (Deldop), %3.8g\n", s, chi2);
+			printf("chi2_set[%i] (Deldop), %3.8g\n", s, chi2);
 			break;
 		case DOPPLER:
 			if (FP64)
@@ -1570,7 +1582,6 @@ __host__ double chi2_deldop_gpu32(
 //	checkErrorAfterKernelLaunch("c2s_deldop_add_o2_krnl32");
 
 	sum_o2m2om_gpu32(ddat, o2, m2, om, nframes, hndel[0]*hndop[0], s, c2s_stream);
-
 
 	c2s_add_deldop_contributions_krnl32<<<BLKfrm,THD64>>>(dpar, ddat, o2, m2,
 			om, weight, ndel, ndop, chi2_deldop_frame, s, nframes);

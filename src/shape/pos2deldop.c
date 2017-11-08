@@ -189,6 +189,8 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
   struct deldopfrm_t *frame;
   struct pos_t *pos;
 
+  int dbg_cntr = 0;
+
    /*  Initialize variables to avoid compilation warnings  */
   idel0 = idop0 = 0;
 
@@ -357,9 +359,10 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
         	in_bounds = 1;
         else {
         	in_bounds = 0;
+
           if (!any_overflow) {
+
             any_overflow = 1;
-//            printf("overflow in set %i frame %i\n", set, frm);
             for (i=0; i<MAXOVERFLOW; i++)
               for (j=0; j<MAXOVERFLOW; j++)
                 fit_overflow[i][j] = 0.0;
@@ -537,8 +540,7 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
               }
 
         } else {
-
-            /*  Add the cross-section contributions to the "overflow" image  */
+        	/*  Add the cross-section contributions to the "overflow" image  */
             if (par->action == MAP && par->map_mode != MAPMODE_DELDOP)
               if (frame->map_pos[x][y] > 0.0)
                 par->map_overflow = 1;
@@ -602,13 +604,14 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
     i2 = MIN( frame->idellim[1] + idel0, MAXOVERFLOW - 1);
     j1 = MAX( frame->idoplim[0] + idop0, 0);
     j2 = MIN( frame->idoplim[1] + idop0, MAXOVERFLOW - 1);
+
     for (i=i1; i<=i2; i++)
       for (j=j1; j<=j2; j++) {
+
         if (fit_overflow[i][j] != 0.0) {
+dbg_cntr++;
           if (par->speckle)
             variance = sdev_sq + lookfact*fit_overflow[i][j]*fit_overflow[i][j];
-//          sum += fit_overflow[i][j];
-//          printf("set %i frame %i fit_overflow[%i][%i], %3.8g\n", set, frm, i, j, fit_overflow[i][j]);
           frame->overflow_o2 += 1.0;
           frame->overflow_m2 += fit_overflow[i][j]*fit_overflow[i][j]/variance;
           frame->overflow_xsec += fit_overflow[i][j];
@@ -616,7 +619,7 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
           frame->overflow_dopmean += (j - idop0)*fit_overflow[i][j];
         }
       }
-//    printf("set %i frame %i sum of fit_overflow elements !=0, %3.8g\n", set, frm, sum);
+
     if (frame->overflow_xsec != 0.0) {
       frame->overflow_delmean /= frame->overflow_xsec;
       frame->overflow_dopmean /= frame->overflow_xsec;
@@ -646,6 +649,6 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
       }
     }
   }
-
+  printf("set %i dbg_cntr=%i\n", set, dbg_cntr);
   return badradar;
 }

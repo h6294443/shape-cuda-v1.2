@@ -273,7 +273,7 @@ double chi2( struct par_t *par, struct dat_t *dat, int list_breakdown)
 			dat->set[s].chi2 = chi2_deldop( par, &dat->set[s].desc.deldop,
 					list_breakdown, s, &chi2_all_deldop,
 					&chi2_fit0_deldop, &dof_fit0_deldop);
-//			printf("chi2_set[%i] (Deldop), %3.8g\n", s, dat->set[s].chi2);
+			printf("chi2_set[%i] (Deldop), %3.8g\n", s, dat->set[s].chi2);
 			break;
 		case DOPPLER:
 			dat->set[s].chi2 = chi2_doppler( par, &dat->set[s].desc.doppler,
@@ -406,16 +406,14 @@ double chi2_deldop( struct par_t *par, struct deldop_t *deldop, int list_breakdo
 	double **obs, **fit, **res, **oneovervar, **resamp_fit, **resamp_obs,
 	**resamp_res;
 
-	/*  Initialize variables to avoid compilation warnings  */
-
+	/* Initialize variables to avoid compilation warnings  */
 	n = 0;
 	del0 = ddel = dop0 = ddop = 0.0;
 
-	/*  Initialize chi-square for dataset  */
-
+	/* Initialize chi-square for dataset  */
 	chi2_set = 0.0;
 
-	/*  Loop through all frames for this dataset  */
+	/* Loop through all frames for this dataset  */
 
 	for (f=0; f<deldop->nframes; f++) {
 		ndel = deldop->frame[f].ndel;
@@ -426,17 +424,15 @@ double chi2_deldop( struct par_t *par, struct deldop_t *deldop, int list_breakdo
 		weight = deldop->frame[f].weight;
 		dof = deldop->frame[f].dof;
 
-		/*  Initialize contributions to chi-square to values
-        that account for overflow (if any) beyond the
-        limits of the data frame.  These contributions
-        were computed by routine pos2deldop.               */
-
+		/* Initialize contributions to chi-square to values that account for
+		 * overflow (if any) beyond the limits of the data frame.  These
+		 * contributions were computed by routine pos2deldop.              */
 		o2 = deldop->frame[f].overflow_o2;
 		m2 = deldop->frame[f].overflow_m2;
 		om = 0.0;
 
-//		if (s==0)
-//			printf("set %i overflow_o2, %3.8g\n", s, o2);
+		printf("set %i deldop->frame[%i].overflow_o2 = %3.3g\n", s, f, deldop->frame[f].overflow_o2);
+//		printf("set %i deldop->frame[%i].overflow_m2 = %3.3g\n", s, f, deldop->frame[f].overflow_m2);
 
 		/*  Now add the contributions from power
         within the limits of the data frame.  */
@@ -445,10 +441,7 @@ double chi2_deldop( struct par_t *par, struct deldop_t *deldop, int list_breakdo
 				o2 += obs[i][j]*obs[i][j]*oneovervar[i][j];
 				m2 += fit[i][j]*fit[i][j]*oneovervar[i][j];
 				om += fit[i][j]*obs[i][j]*oneovervar[i][j];
-//				if (s==0)
-//					printf("set %i obs[%i][%i], %3.8g\n", s, i, j, obs[i][j]);
 			}
-
 
 		/*  If this frame's calibration factor is allowed to float,
         set it to minimize chi-square, the sum over all pixels of
@@ -469,8 +462,6 @@ double chi2_deldop( struct par_t *par, struct deldop_t *deldop, int list_breakdo
 		calval = deldop->frame[f].cal.val;
 		err = weight*(o2 - 2*calval*om + calval*calval*m2);
 		deldop->frame[f].chi2 = err;
-
-//		printf("chi2.c frame %i chi2: %g\n", f, deldop->frame[f].chi2);
 
 		chi2_set += err;
 		if (list_breakdown)
@@ -496,12 +487,6 @@ double chi2_deldop( struct par_t *par, struct deldop_t *deldop, int list_breakdo
 			*chi2_fit0_deldop += err_fit0;
 			*dof_fit0_deldop += dof_fit0;
 		}
-
-//		printf("set %i o2, %3.8g\n", s, o2);
-//		printf("set %i m2, %3.8g\n", s, m2);
-//		printf("set %i om, %3.8g\n", s, om);
-//		printf("set %i calval, %3.8g\n", s, calval);
-//		printf("set %i err, %3.8g\n", s, err);
 
 		/*  For the "write" and "orbit" actions, display chi-square
         and create files for the data, fits, and residuals; some

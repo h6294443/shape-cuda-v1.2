@@ -176,9 +176,12 @@ __device__ int /*p2ds_any_overflow, */p2ds_codemethod, p2ds_spb,
 p2ds_stride, p2ds_spb_sq, p2ds_dopfftlen, p2ds_spb_over_stride, p2ds_nsinc2_sq;
 __device__ double p2ds_const1, p2ds_const2, p2ds_one_over_spb, p2ds_delfact,
 p2ds_dopfact;
+
+__device__ int dbg_cntr=0;
+
 //__device__ float p2ds_const1f, p2ds_const2f, p2ds_one_over_spbf, p2ds_delfactf, p2ds_dopfactf;
 
-__device__ static float atomicMinf(float* address, float val)
+ __device__ static float atomicMinf(float* address, float val)
 {
 	int* address_as_i = (int*) address;
 	int old = *address_as_i, assumed;
@@ -240,7 +243,6 @@ __global__ void pos2deldop_init_krnl(
 	if (f < size) {
 		/*  Initialize variables to avoid compilation warnings  */
 		idel0[f] = idop0[f] = /*p2ds_any_overflow = */0;
-
 		frame[f] = &ddat->set[set].desc.deldop.frame[f];
 		frame[f]->idellim[0] = ndel[f] + 999999;
 		frame[f]->idellim[1] = frame[f]->idoplim[1] = -999999;
@@ -253,6 +255,8 @@ __global__ void pos2deldop_init_krnl(
 		badradararr[f] = 0;
 		any_overflow[f] = 0;
 		frame[f]->badradar_logfactor = 0.0;
+
+		dbg_cntr = 0;
 	}
 }
 
@@ -790,7 +794,7 @@ __global__ void pos2deldop_pixel_krnl64(
 		int *any_overflow) {
 	/* nThreads-threaded kernel */
 
-	/*  Loop through all POS pixels within the rectangular plane-of-sky region spanned by the
+	/* Loop through all POS pixels within the rectangular plane-of-sky region spanned by the
 	 *  model; for each such pixel which isn't blank sky, compute the cross-section contributions
 	 *  to pixels in the model delay-Doppler frame. Note that functions posclr and posvis flag
 	 *  blank-sky pixels by assigning "cose" = cos(scattering angle) = 0.
@@ -860,14 +864,16 @@ __global__ void pos2deldop_pixel_krnl64(
 				in_bounds = 1;
 			else {
 				in_bounds = 0;
+
 				if (!any_overflow[f]) {
+
 					atomicExch(&any_overflow[f], 1);
 
 					/* Center the COM in the overflow image:
 					 * pixel [idel][idop] in the fit frame corresponds to
 					 * pixel [idel+idel0][idop+idop0] in the fit_overflow frame*/
-					idel0[f] =MAXOVERFLOW/2-(int)floor(deldopshift[f].x+0.5);
-					idop0[f] =MAXOVERFLOW/2-(int)floor(deldopshift[f].y+0.5);
+					atomicExch(&idel0[f],(MAXOVERFLOW/2-(int)floor(deldopshift[f].x+0.5)));
+					atomicExch(&idop0[f],(MAXOVERFLOW/2-(int)floor(deldopshift[f].y+0.5)));
 				}
 			}
 
@@ -985,6 +991,44 @@ __global__ void pos2deldop_pixel_krnl64(
 			    		   * pos[f]->km_per_pixel * pos[f]->km_per_pixel
 			    		   * codefactor / sumweights;
 
+//			/* Only add this POS pixel's power contributions to model delay-
+//			 * Doppler frame if NONE of those contributions fall outside
+//			 * the frame limits.                                   */
+//
+//			if (in_bounds) {
+//
+//				/*  Add the cross-section contributions to the model frame  */
+//				for (idel=idel_min; idel<=idel_max; idel++)
+//					for (idop=idop_min; idop<=idop_max; idop++) {
+//						k = MIN( idop - idop_min, MAXBINS);
+//						fit_contribution = amp * del_contribution[idel-idel_min]
+//						                                          * dop_contribution[k];
+//						atomicAdd(&frame[f]->fit[idel][idop], fit_contribution);
+//					}
+//			} else {
+//
+//				/* Add the cross-section contributions to the "overflow" image */
+//				idel1 = MAX( idel_min, -idel0[f]);
+//				idel2 = MIN( idel_max, -idel0[f] + MAXOVERFLOW - 1);
+//				idop1 = MAX( idop_min, -idop0[f]);
+//				idop2 = MIN( idop_max, -idop0[f] + MAXOVERFLOW - 1);
+//				for (idel=idel1; idel<=idel2; idel++)
+//					for (idop=idop1; idop<=idop2; idop++) {
+//						atomicAdd(&dbg_cntr, 1);
+//
+//						k = MIN( idop - idop_min, MAXBINS);
+//						fit_contribution = amp * del_contribution[idel-idel_min]
+//						                                          * dop_contribution[k];
+//						frame[f]->fit_overflow64[idel+idel0[f]][idop+idop0[f]] += fit_contribution;
+//					}
+//			}
+		}
+	}
+
+	__syncthreads();
+
+	if (offset<nThreads) {
+		if (pos[f]->cose[x][y] > 0.0 && pos[f]->body[x][y] == body) {
 			/* Only add this POS pixel's power contributions to model delay-
 			 * Doppler frame if NONE of those contributions fall outside
 			 * the frame limits.                                   */
@@ -997,7 +1041,6 @@ __global__ void pos2deldop_pixel_krnl64(
 						k = MIN( idop - idop_min, MAXBINS);
 						fit_contribution = amp * del_contribution[idel-idel_min]
 						                                          * dop_contribution[k];
-
 						atomicAdd(&frame[f]->fit[idel][idop], fit_contribution);
 					}
 			} else {
@@ -1012,9 +1055,10 @@ __global__ void pos2deldop_pixel_krnl64(
 						k = MIN( idop - idop_min, MAXBINS);
 						fit_contribution = amp * del_contribution[idel-idel_min]
 						                                          * dop_contribution[k];
-						frame[f]->fit_overflow64[idel+idel0[f]][idop+idop0[f]] += fit_contribution;\
+						atomicAdd(&frame[f]->fit_overflow64[idel+idel0[f]][idop+idop0[f]], fit_contribution);
 					}
 			}
+
 		}
 	}
 }
@@ -1102,7 +1146,7 @@ __global__ void pos2deldop_overflow_krnl32(
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
 	int i, i1, i2, j, j1, j2, idell0, idopp0;
 	double lookfact, sdev_sq, variance,dopfactor, delfactor, fo;
-	double o2=0.0, m2=0.0, xsec=0.0, delmean=0.0, dopmean=0.0;
+	double o2 = 0.0, m2 = 0.0, xsec = 0.0, delmean = 0.0, dopmean = 0.0;
 
 	if (f < size) {
 
@@ -1111,7 +1155,6 @@ __global__ void pos2deldop_overflow_krnl32(
 		 *
 		 *  Also compute the summed cross section and the mean delay and Doppler
 		 *  bins for the overflow region, for use with the "delcorinit" action    */
-
 		frame[f]->overflow_o2 = 0.0;
 		frame[f]->overflow_m2 = 0.0;
 		frame[f]->overflow_xsec = 0.0;
@@ -1120,7 +1163,6 @@ __global__ void pos2deldop_overflow_krnl32(
 		sdev_sq = frame[f]->sdev*frame[f]->sdev;
 		variance = sdev_sq;
 		lookfact = (frame[f]->nlooks > 0.0) ? 1.0/frame[f]->nlooks : 0.0;
-
 
 		if (any_overflow[f]) {
 			idell0 = idel0[f];
@@ -1177,6 +1219,7 @@ __global__ void pos2deldop_overflow_krnl32(
 			frame[f]->overflow_xsec = xsec;
 			frame[f]->overflow_delmean = delmean;
 			frame[f]->overflow_dopmean = dopmean;
+
 		}
 	}
 }
@@ -1195,7 +1238,7 @@ __global__ void pos2deldop_overflow_krnl64(
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
 	int i, i1, i2, j, j1, j2, idell0, idopp0;
 	double lookfact, sdev_sq, variance,dopfactor, delfactor, fo;
-	double o2=0.0, m2=0.0, xsec=0.0, delmean=0.0, dopmean=0.0;
+	double o2 = 0.0, m2 = 0.0, xsec = 0.0, delmean = 0.0, dopmean = 0.0;
 
 	if (f < size) {
 
@@ -1204,7 +1247,6 @@ __global__ void pos2deldop_overflow_krnl64(
 		 *
 		 *  Also compute the summed cross section and the mean delay and Doppler
 		 *  bins for the overflow region, for use with the "delcorinit" action    */
-
 		frame[f]->overflow_o2 = 0.0;
 		frame[f]->overflow_m2 = 0.0;
 		frame[f]->overflow_xsec = 0.0;
@@ -1226,6 +1268,8 @@ __global__ void pos2deldop_overflow_krnl64(
 			for (i=i1; i<=i2; i++)
 				for (j=j1; j<=j2; j++) {
 					fo = frame[f]->fit_overflow64[i][j];
+
+
 					if (fo != 0.0) {
 						if (dpar->speckle)
 							variance = sdev_sq + lookfact *	fo * fo;
@@ -1234,6 +1278,7 @@ __global__ void pos2deldop_overflow_krnl64(
 						xsec += fo;
 						delmean += (i-idell0) * fo;
 						dopmean += (j-idopp0) * fo;
+						atomicAdd(&dbg_cntr, 1);
 					}
 				}
 
@@ -1270,7 +1315,9 @@ __global__ void pos2deldop_overflow_krnl64(
 			frame[f]->overflow_xsec = xsec;
 			frame[f]->overflow_delmean = delmean;
 			frame[f]->overflow_dopmean = dopmean;
+
 		}
+		printf("set %i dbg_cntr=%i\n", set, dbg_cntr);
 	}
 }
 

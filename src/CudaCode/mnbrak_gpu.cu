@@ -39,6 +39,90 @@ __host__ void mnbrak_gpu(
 {
 	double ulim,u,r,q,fu,dum;
 
+	*fa = (*func)(*ax, verts, htype, dtype, nframes, nviews, lc_n, nsets, nf, bf_stream);
+	*fb = (*func)(*bx, verts, htype, dtype, nframes, nviews, lc_n, nsets, nf, bf_stream);
+	if (*fb > *fa) {
+		SHFT(dum,*ax,*bx,dum)
+		SHFT(dum,*fb,*fa,dum)
+	}
+
+	*cx = (*bx)+GOLD*(*bx-*ax);
+	*fc = (*func)(*cx, verts, htype, dtype, nframes, nviews, lc_n, nsets, nf, bf_stream);
+
+	while (*fb > *fc) {
+
+		r = (*bx-*ax) * (*fb-*fc);
+		q = (*bx-*cx) * (*fb-*fa);
+		u = (*bx) - ((*bx-*cx)*q - (*bx-*ax)*r)/
+				(2.0 * SIGN( MAX( fabs(q-r),TINY), q-r));
+		ulim = (*bx) + GLIMIT * (*cx-*bx);
+
+		if ((*bx-u)*(u-*cx) > 0.0) {
+			fu=(*func)(u, verts, htype, dtype, nframes, nviews, lc_n, nsets, nf, bf_stream);
+
+			if (fu < *fc) {
+				*ax=(*bx);
+				*bx=u;
+				*fa=(*fb);
+				*fb=fu;
+				return;
+			} else if (fu > *fb) {
+				*cx = u;
+				*fc = fu;
+				return;
+			}
+			u = (*cx) + GOLD * (*cx-*bx);
+			fu = (*func)(u, verts, htype, dtype, nframes, nviews, lc_n, nsets, nf, bf_stream);
+
+		} else if ((*cx-u) * (u-ulim) > 0.0) {
+			fu = (*func)(u, verts, htype, dtype, nframes, nviews, lc_n, nsets, nf, bf_stream);
+
+			if (fu < *fc) {
+				SHFT(*bx,*cx,u,*cx+GOLD*(*cx-*bx))
+				SHFT(*fb,*fc,fu,(*func)(u, verts, htype, dtype, nframes, nviews, lc_n, nsets, nf, bf_stream))
+			}
+		} else if ((u-ulim)*(ulim-*cx) >= 0.0) {
+			u = ulim;
+			fu = (*func)(u, verts, htype, dtype, nframes, nviews, lc_n, nsets, nf, bf_stream);
+		} else {
+			u = (*cx)+GOLD*(*cx-*bx);
+			fu = (*func)(u, verts, htype, dtype, nframes, nviews, lc_n, nsets, nf, bf_stream);
+		}
+		SHFT(*ax,*bx,*cx,u)
+		SHFT(*fa,*fb,*fc,fu)
+	}
+}
+
+__host__ void mnbrak_gpu_dbg(
+		double *ax,
+		double *bx,
+		double *cx,
+		double *fa,
+		double *fb,
+		double *fc,
+		double (*func)
+		(double,
+				struct vertices_t**,
+				unsigned char*,
+				unsigned char*,
+				int*,
+				int*,
+				int*,
+				int,
+				int,
+				cudaStream_t*),
+				struct vertices_t **verts,
+				unsigned char *htype,
+				unsigned char *dtype,
+				int *nframes,
+				int *nviews,
+				int *lc_n,
+				int nsets,
+				int nf,
+				cudaStream_t *bf_stream )
+{
+	double ulim,u,r,q,fu,dum;
+
 	int dbg=0;
 	printf("mnbrak start\n");
 
@@ -48,7 +132,8 @@ __host__ void mnbrak_gpu(
 		printf("if (*fb > *fa), 1\n");
 		SHFT(dum,*ax,*bx,dum)
 		SHFT(dum,*fb,*fa,dum)
-	} else	printf("if (*fb > *fa), 0\n");
+	}
+	else	printf("if (*fb > *fa), 0\n");
 
 	*cx = (*bx)+GOLD*(*bx-*ax);
 	*fc = (*func)(*cx, verts, htype, dtype, nframes, nviews, lc_n, nsets, nf, bf_stream);
@@ -129,7 +214,8 @@ __host__ void mnbrak_gpu(
 
 				SHFT(*bx,*cx,u,*cx+GOLD*(*cx-*bx))
 				SHFT(*fb,*fc,fu,(*func)(u, verts, htype, dtype, nframes, nviews, lc_n, nsets, nf, bf_stream))
-			} else printf("if (fu < *fc), 0\n");
+			}
+			else printf("if (fu < *fc), 0\n");
 
 		} else if ((u-ulim)*(ulim-*cx) >= 0.0) {
 
@@ -156,7 +242,6 @@ __host__ void mnbrak_gpu(
 	}
 	printf("loops in mnbrak_gpu, %i\n", dbg);
 }
-
 #undef GOLD
 #undef GLIMIT
 #undef TINY
