@@ -546,16 +546,8 @@ __global__ void pos2doppler_pixel_krnl32(
 				pds_in_bounds = 1;
 			else {
 				pds_in_bounds = 0;
-				if (!pds_any_overflow) {
+				if (!pds_any_overflow)
 					pds_any_overflow = 1;
-					for (j=0; j<MAXOVERFLOW; j++)
-						frame[f]->fit_overflow[j] = 0.0;  // To-Do:  This might need attention.
-
-					/* Center the COM in the overflow spectrum: bin [idop] in
-					 * the fit frame corresponds to bin [idop+idop0] in the
-					 * fit_overflow frame.  */
-					idop0[f] = MAXOVERFLOW/2 - (int) floor(dopshift[f] + 0.5);
-				}
 			}
 
 			/* Compute the sinc^2 factors for Doppler mismatching: Take the
@@ -620,16 +612,6 @@ __global__ void pos2doppler_pixel_krnl32(
 					fit_contribution = amp * dop_contribution[k];
 
 					atomicAdd(&frame[f]->fit_s[idop], fit_contribution);
-				}
-			} else {
-
-				/* Add the cross-section contributions to the "overflow" spectrum  */
-				idop1 = MAX( idop_min, -idop0[f]);
-				idop2 = MIN( idop_max, -idop0[f] + MAXOVERFLOW - 1);
-				for (idop=idop1; idop<=idop2; idop++) {
-					k = MIN(idop - idop_min, MAXBINS);
-					fit_contribution = amp * dop_contribution[k];
-					frame[f]->fit_overflow[idop+idop0[f]] += fit_contribution;  // might need atomics
 				}
 			}
 		}  /* if cos(scattering angle) > 0 and POS pixel projects onto the right body */
@@ -724,16 +706,8 @@ __global__ void pos2doppler_pixel_krnl64(
 				pds_in_bounds = 1;
 			else {
 				pds_in_bounds = 0;
-				if (!pds_any_overflow) {
+				if (!pds_any_overflow)
 					pds_any_overflow = 1;
-					for (j=0; j<MAXOVERFLOW; j++)
-						frame[f]->fit_overflow[j] = 0.0;  // To-Do:  This might need attention.
-
-					/* Center the COM in the overflow spectrum: bin [idop] in
-					 * the fit frame corresponds to bin [idop+idop0] in the
-					 * fit_overflow frame.  */
-					idop0[f] = MAXOVERFLOW/2 - (int) floor(dopshift[f] + 0.5);
-				}
 			}
 
 			/* Compute the sinc^2 factors for Doppler mismatching: Take the
@@ -799,16 +773,6 @@ __global__ void pos2doppler_pixel_krnl64(
 
 					atomicAdd(&frame[f]->fit[idop], fit_contribution);
 				}
-			} else {
-
-				/* Add the cross-section contributions to the "overflow" spectrum  */
-				idop1 = MAX( idop_min, -idop0[f]);
-				idop2 = MIN( idop_max, -idop0[f] + MAXOVERFLOW - 1);
-				for (idop=idop1; idop<=idop2; idop++) {
-					k = MIN(idop - idop_min, MAXBINS);
-					fit_contribution = amp * dop_contribution[k];
-					frame[f]->fit_overflow[idop+idop0[f]] += fit_contribution;  // might need atomics
-				}
 			}
 		}  /* if cos(scattering angle) > 0 and POS pixel projects onto the right body */
 	}
@@ -857,42 +821,22 @@ __global__ void pos2doppler_finish_krnl32(
 		variance = sdev_sq;
 		lookfact = (frame[f]->nlooks > 0.0) ? 1.0/frame[f]->nlooks : 0.0;
 		if (pds_any_overflow) {
-			j1 = MAX(frame[f]->idoplim[0] + idop0[f], 0);
-			j2 = MIN(frame[f]->idoplim[1] + idop0[f], MAXOVERFLOW - 1);
-			for (j=j1; j<=j2; j++) {
-				if (frame[f]->fit_overflow[j] != 0.0) {
-					if (dpar->speckle)
-						variance = sdev_sq + lookfact*frame[f]->fit_overflow[j]*
-								frame[f]->fit_overflow[j];
-					frame[f]->overflow_o2 += 1.0;
-					frame[f]->overflow_m2 += frame[f]->fit_overflow[j]*
-							frame[f]->fit_overflow[j]/variance;
-					frame[f]->overflow_xsec += frame[f]->fit_overflow[j];
-					frame[f]->overflow_dopmean += (j - idop0[f])*frame[f]->fit_overflow[j];
-				}
-			}
-			if (frame[f]->overflow_xsec != 0.0)
-				frame[f]->overflow_dopmean /= frame[f]->overflow_xsec;
-
-			/* Print a warning if the model extends even beyond the overflow spectrum  */
-			if (((frame[f]->idoplim[0] + idop0[f]) < 0) ||
-					((frame[f]->idoplim[1] + idop0[f]) >= MAXOVERFLOW) ) {
-				badradararr[f] = 1;
-				dopfactor = (MAX(frame[f]->idoplim[1] + idop0[f], MAXOVERFLOW)
+			badradararr[f] = 1;
+			dopfactor = (MAX(frame[f]->idoplim[1] + idop0[f], MAXOVERFLOW)
 					- MIN(frame[f]->idoplim[0]+idop0[f],0))/(1.0*MAXOVERFLOW);
-				frame[f]->badradar_logfactor += log(dopfactor);
-				if (dpar->warn_badradar) {
-					printf("\nWARNING in pos2doppler.c for set %2d frame %2d:\n", set, f);
-					printf("        model Doppler spectrum extends too far beyond the data spectrum\n");
-					printf("             data:  bins %2d to %2d\n", 1, ndop[f]);
-					printf("            model:  bins %2d to %2d\n",
-							frame[f]->idoplim[0], frame[f]->idoplim[1]);
-				}
+			frame[f]->badradar_logfactor += log(dopfactor);
+			if (dpar->warn_badradar) {
+				printf("\nWARNING in pos2doppler.c for set %2d frame %2d:\n", set, f);
+				printf("        model Doppler spectrum extends too far beyond the data spectrum\n");
+				printf("             data:  bins %2d to %2d\n", 1, ndop[f]);
+				printf("            model:  bins %2d to %2d\n",
+						frame[f]->idoplim[0], frame[f]->idoplim[1]);
 			}
 		}
-		if (badradararr[f]) pds_badradar_global = 0;
 	}
+	if (badradararr[f]) pds_badradar_global = 0;
 }
+
 
 __global__ void pos2doppler_finish_krnl64(
 		struct par_t *dpar,
@@ -936,42 +880,23 @@ __global__ void pos2doppler_finish_krnl64(
 		variance = sdev_sq;
 		lookfact = (frame[f]->nlooks > 0.0) ? 1.0/frame[f]->nlooks : 0.0;
 		if (pds_any_overflow) {
-			j1 = MAX(frame[f]->idoplim[0] + idop0[f], 0);
-			j2 = MIN(frame[f]->idoplim[1] + idop0[f], MAXOVERFLOW - 1);
-			for (j=j1; j<=j2; j++) {
-				if (frame[f]->fit_overflow[j] != 0.0) {
-					if (dpar->speckle)
-						variance = sdev_sq + lookfact*frame[f]->fit_overflow[j]*
-								frame[f]->fit_overflow[j];
-					frame[f]->overflow_o2 += 1.0;
-					frame[f]->overflow_m2 += frame[f]->fit_overflow[j]*
-							frame[f]->fit_overflow[j]/variance;
-					frame[f]->overflow_xsec += frame[f]->fit_overflow[j];
-					frame[f]->overflow_dopmean += (j - idop0[f])*frame[f]->fit_overflow[j];
-				}
-			}
-			if (frame[f]->overflow_xsec != 0.0)
-				frame[f]->overflow_dopmean /= frame[f]->overflow_xsec;
 
-			/* Print a warning if the model extends even beyond the overflow spectrum  */
-			if (((frame[f]->idoplim[0] + idop0[f]) < 0) ||
-					((frame[f]->idoplim[1] + idop0[f]) >= MAXOVERFLOW) ) {
-				badradararr[f] = 1;
-				dopfactor = (MAX(frame[f]->idoplim[1] + idop0[f], MAXOVERFLOW)
+			badradararr[f] = 1;
+			dopfactor = (MAX(frame[f]->idoplim[1] + idop0[f], MAXOVERFLOW)
 					- MIN(frame[f]->idoplim[0]+idop0[f],0))/(1.0*MAXOVERFLOW);
-				frame[f]->badradar_logfactor += log(dopfactor);
-				if (dpar->warn_badradar) {
-					printf("\nWARNING in pos2doppler.c for set %2d frame %2d:\n", set, f);
-					printf("        model Doppler spectrum extends too far beyond the data spectrum\n");
-					printf("             data:  bins %2d to %2d\n", 1, ndop[f]);
-					printf("            model:  bins %2d to %2d\n",
-							frame[f]->idoplim[0], frame[f]->idoplim[1]);
-				}
+			frame[f]->badradar_logfactor += log(dopfactor);
+			if (dpar->warn_badradar) {
+				printf("\nWARNING in pos2doppler.c for set %2d frame %2d:\n", set, f);
+				printf("        model Doppler spectrum extends too far beyond the data spectrum\n");
+				printf("             data:  bins %2d to %2d\n", 1, ndop[f]);
+				printf("            model:  bins %2d to %2d\n",
+						frame[f]->idoplim[0], frame[f]->idoplim[1]);
 			}
 		}
-		if (badradararr[f]) pds_badradar_global = 0;
 	}
+	if (badradararr[f]) pds_badradar_global = 0;
 }
+
 
 __host__ int pos2doppler_gpu32(
 		struct par_t *dpar,

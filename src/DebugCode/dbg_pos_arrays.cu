@@ -19,17 +19,18 @@ __global__ void dbg_copy_pos_arrays_full_krnl32(struct pos_t **pos, int f,
 	}
 }
 __global__ void dbg_copy_pos_arrays_full_krnl64(struct pos_t **pos, int f,
-		int npixels, double *b, double *cosi, double *cose, double *zz) {
+		int npixels, double *b, double *cosi, double *cose, double *zz, int *fac) {
 	/* npixels-threaded debug kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
 	int n = pos[f]->n;
 	int i = offset % (2*n+1) - n;
 	int j = offset / (2*n+1) - n;
 	if (offset < npixels) {
-		b[offset] = pos[f]->b[i][j];
+		//b[offset] = pos[f]->b[i][j];
 		cosi[offset] = pos[f]->cosi[i][j];
 		cose[offset] = pos[f]->cose[i][j];
 		zz[offset] = pos[f]->z[i][j];
+		fac[offset] = pos[f]->f[i][j];
 	}
 }
 
@@ -204,18 +205,19 @@ __host__ void dbg_print_pos_arrays_full64(struct pos_t **pos, int f,
 	 *
 	 *  all of length nPixels in the lghtcrv specified by 'set' in 'ddat' */
 	double *b, *cosi, *cose, *zz;
-	FILE *fp_b, *fp_cosi, *fp_cose, *fp_z;
+	FILE *fp_b, *fp_cosi, *fp_cose, *fp_z, *fp_f;
 	dim3 BLK,THD;
 	const char *filename;
-	int i, j, pxa, thd = 256;
+	int i, j, pxa, thd = 256, *fac;
 
 	cudaCalloc1((void**)&b, sizeof(double), npixels);
 	cudaCalloc1((void**)&cosi, sizeof(double), npixels);
 	cudaCalloc1((void**)&cose, sizeof(double), npixels);
 	cudaCalloc1((void**)&zz, sizeof(double), npixels);
+	cudaCalloc1((void**)&fac, sizeof(int), npixels);
 
 	BLK.x = floor((thd-1+npixels)/thd);	THD.x = thd;
-	dbg_copy_pos_arrays_full_krnl64<<<BLK,THD>>>(pos, f, npixels, b, cosi, cose, zz);
+	dbg_copy_pos_arrays_full_krnl64<<<BLK,THD>>>(pos, f, npixels, b, cosi, cose, zz, fac);
 	checkErrorAfterKernelLaunch("dbg_copy_pos_arrays_full_krnl");
 	deviceSyncAfterKernelLaunch("dbg_copy_pos_arrays_full_krnl");
 
@@ -227,12 +229,15 @@ __host__ void dbg_print_pos_arrays_full64(struct pos_t **pos, int f,
 	fp_cose = fopen(filename, "w+");
 	filename = "1080Ti_z64.csv";
 	fp_z = fopen(filename, "w+");
+	filename = "1080Ti_fac64.csv";
+	fp_f = fopen(filename, "w+");
 
 	/* Print top corner set label */
 	fprintf(fp_cosi,"i%i , ", f);
 	fprintf(fp_cose,"i%i , ", f);
 	fprintf(fp_b, 	"i%i , ", f);
 	fprintf(fp_z,   "i%i , ", f);
+	fprintf(fp_f,   "i%i , ", f);
 
 	/* Print i values along top of table */
 	for (i=-n; i<=n; i++) {
@@ -240,17 +245,20 @@ __host__ void dbg_print_pos_arrays_full64(struct pos_t **pos, int f,
 		fprintf(fp_cose, "%i, ", i);
 		fprintf(fp_b, "%i, ", i);
 		fprintf(fp_z, "%i, ", i);
+		fprintf(fp_f, "%i, ", i);
 	}
 	fprintf(fp_cosi, "\n");
 	fprintf(fp_cose, "\n");
 	fprintf(fp_b, "\n");
 	fprintf(fp_z, "\n");
+	fprintf(fp_f, "\n");
 
 	for (j=-n; j<=n; j++) {
 		fprintf(fp_b, "%i, ", j);	/* j-entry on far left */
 		fprintf(fp_cosi, "%i, ", j);
 		fprintf(fp_cose, "%i, ", j);
 		fprintf(fp_z, "%i, ", j);
+		fprintf(fp_f, "%i, ", j);
 
 		for (i=-n; i<=n; i++) {
 			pxa = (j+n)*(2*n+1) + (i+n);
@@ -258,21 +266,25 @@ __host__ void dbg_print_pos_arrays_full64(struct pos_t **pos, int f,
 			fprintf(fp_cosi, "%g, ", cosi[pxa]);
 			fprintf(fp_cose, "%g, ", cose[pxa]);
 			fprintf(fp_z, "%g, ", zz[pxa]);
+			fprintf(fp_f, "%i, ", fac[pxa]);
 		}
 		fprintf(fp_b, "\n");
 		fprintf(fp_cosi, "\n");
 		fprintf(fp_cose, "\n");
 		fprintf(fp_z, "\n");
+		fprintf(fp_f, "\n");
 	}
 
 	fclose(fp_b);
 	fclose(fp_cosi);
 	fclose(fp_cose);
 	fclose(fp_z);
+	fclose(fp_f);
 	cudaFree(zz);
 	cudaFree(cosi);
 	cudaFree(cose);
 	cudaFree(b);
+	cudaFree(fac);
 }
 
 __host__ void dbg_print_pos_arrays_full_host(struct pos_t *pos) {
@@ -283,7 +295,7 @@ __host__ void dbg_print_pos_arrays_full_host(struct pos_t *pos) {
 	 *
 	 *  all of length nPixels in the lghtcrv specified by 'set' in 'ddat' */
 	int i, j, n;
-	FILE *fp_cosi, *fp_cose, *fp_b, *fp_z;
+	FILE *fp_cosi, *fp_cose, *fp_b, *fp_z, *fp_f;
 	const char *fn;
 	n = pos->n;
 
@@ -295,12 +307,15 @@ __host__ void dbg_print_pos_arrays_full_host(struct pos_t *pos) {
 	fp_b = fopen(fn, "w+");
 	fn = "CPU_pos-z.csv";
 	fp_z = fopen(fn, "w+");
+	fn = "CPU_pos-fac.csv";
+	fp_f = fopen(fn, "w+");
 
 	/* Print top corner set label */
 	fprintf(fp_cosi, "set , ");
 	fprintf(fp_cose, "set , ");
 	fprintf(fp_b, "set , ");
 	fprintf(fp_z, "set , ");
+	fprintf(fp_f, "set , ");
 
 	/* Print i values along top of table */
 	for (i=-n; i<=n; i++) {
@@ -308,32 +323,38 @@ __host__ void dbg_print_pos_arrays_full_host(struct pos_t *pos) {
 		fprintf(fp_cose, "%i, ", i);
 		fprintf(fp_b, "%i, ", i);
 		fprintf(fp_z, "%i, ", i);
+		fprintf(fp_f, "%i, ", i);
 	}
 	fprintf(fp_cosi, "\n");
 	fprintf(fp_cose, "\n");
 	fprintf(fp_b, "\n");
 	fprintf(fp_z, "\n");
+	fprintf(fp_f, "\n");
 
 	for (j=-n; j<=n; j++) {
 		fprintf(fp_b, "%i, ", j);	/* j-entry on far left */
 		fprintf(fp_cosi, "%i, ", j);
 		fprintf(fp_cose, "%i, ", j);
 		fprintf(fp_z, "%i, ", j);
+		fprintf(fp_f, "%i, ", j);
 
 		for (i=-n; i<=n; i++) {
 			fprintf(fp_b, "%g, ", pos->b[i][j]);
 			fprintf(fp_z, "%g, ", pos->z[i][j]);
 			fprintf(fp_cosi, "%g, ", pos->cosi[i][j]);
 			fprintf(fp_cose, "%g, ", pos->cose[i][j]);
+			fprintf(fp_f, "%i, ", pos->f[i][j]);
 		}
 		fprintf(fp_b, "\n");
 		fprintf(fp_z, "\n");
 		fprintf(fp_cosi, "\n");
 		fprintf(fp_cose, "\n");
+		fprintf(fp_f, "\n");
 	}
 
 	fclose(fp_b);
 	fclose(fp_z);
 	fclose(fp_cosi);
 	fclose(fp_cose);
+	fclose(fp_f);
 }

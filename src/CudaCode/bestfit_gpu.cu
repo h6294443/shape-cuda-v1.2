@@ -601,7 +601,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % npar_update;
 //		p = first_fitpar;// = 1;
-		for (p=first_fitpar; p<10/*nfpar*/; p++) {
+		for (p=first_fitpar; p<nfpar; p++) {
 
 			/*  Adjust only parameter p on this try  */
 			bf_set_hotparam_pntr_krnl<<<1,1>>>(fpntr, fpartype, p);

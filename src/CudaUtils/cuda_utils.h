@@ -65,4 +65,3 @@ __device__ int dev_vp_iroundf(float x);
 __device__ void dev_jacobi(double a[3][3], int n, double d[3], double v[3][3], int *nrot);
 __device__ double dev_distance(double x[3], double y[3]);
 __device__ double dev_vecnorm( double x[3]);
-__host__ void zero_fit_overflow(struct deldop_t *deldop, int f);

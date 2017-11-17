@@ -177,7 +177,7 @@ p2ds_stride, p2ds_spb_sq, p2ds_dopfftlen, p2ds_spb_over_stride, p2ds_nsinc2_sq;
 __device__ double p2ds_const1, p2ds_const2, p2ds_one_over_spb, p2ds_delfact,
 p2ds_dopfact;
 
-__device__ int dbg_cntr=0;
+__device__ int dbg_cntr1=0;
 
 //__device__ float p2ds_const1f, p2ds_const2f, p2ds_one_over_spbf, p2ds_delfactf, p2ds_dopfactf;
 
@@ -256,7 +256,7 @@ __global__ void pos2deldop_init_krnl(
 		any_overflow[f] = 0;
 		frame[f]->badradar_logfactor = 0.0;
 
-		dbg_cntr = 0;
+		dbg_cntr1 = 0;
 	}
 }
 
@@ -560,6 +560,8 @@ __global__ void pos2deldop_pixel_krnl32(
 		zaddr = (y + n) * (2*n + 1) + (x + n);
 		if (pos[f]->cose_s[zaddr] > 0.0 && pos[f]->body[x][y] == body) {
 
+			atomicAdd(&dbg_cntr1, 1);
+
 			/* Get the (floating-point) delay and Doppler bin of the POS pixel
 			 * center: delPOS and dopPOS. Also get the minimum and maximum
 			 * (integer) delay and Doppler bins to which this pixel contributes
@@ -750,20 +752,6 @@ __global__ void pos2deldop_pixel_krnl32(
 						atomicAdd(&frame[f]->fit_s[(idop-1)*ndel[f]+(idel-1)],
 								(float)fit_contribution);
 					}
-			} else {
-
-				/* Add the cross-section contributions to the "overflow" image */
-				idel1 = MAX( idel_min, -idel0[f]);
-				idel2 = MIN( idel_max, -idel0[f] + MAXOVERFLOW - 1);
-				idop1 = MAX( idop_min, -idop0[f]);
-				idop2 = MIN( idop_max, -idop0[f] + MAXOVERFLOW - 1);
-				for (idel=idel1; idel<=idel2; idel++)
-					for (idop=idop1; idop<=idop2; idop++) {
-						k = MIN( idop - idop_min, MAXBINS);
-						fit_contribution = amp * del_contribution[idel-idel_min]
-						                                          * dop_contribution[k];
-						frame[f]->fit_overflow32[idel+idel0[f]][idop+idop0[f]] += fit_contribution;
-					}
 			}
 		}
 	}
@@ -817,6 +805,8 @@ __global__ void pos2deldop_pixel_krnl64(
 		zaddr = (y + n) * (2*n + 1) + (x + n);
 		if (pos[f]->cose[x][y] > 0.0 && pos[f]->body[x][y] == body) {
 
+			atomicAdd(&dbg_cntr1, 1);
+
 			/* Get the (floating-point) delay and Doppler bin of the POS pixel
 			 * center: delPOS and dopPOS. Also get the minimum and maximum
 			 * (integer) delay and Doppler bins to which this pixel contributes
@@ -864,17 +854,8 @@ __global__ void pos2deldop_pixel_krnl64(
 				in_bounds = 1;
 			else {
 				in_bounds = 0;
-
-				if (!any_overflow[f]) {
-
+				if (!any_overflow[f])
 					atomicExch(&any_overflow[f], 1);
-
-					/* Center the COM in the overflow image:
-					 * pixel [idel][idop] in the fit frame corresponds to
-					 * pixel [idel+idel0][idop+idop0] in the fit_overflow frame*/
-					atomicExch(&idel0[f],(MAXOVERFLOW/2-(int)floor(deldopshift[f].x+0.5)));
-					atomicExch(&idop0[f],(MAXOVERFLOW/2-(int)floor(deldopshift[f].y+0.5)));
-				}
 			}
 
 			/* Loop thru all delay bins this POS pixel contributes power (cross
@@ -991,44 +972,6 @@ __global__ void pos2deldop_pixel_krnl64(
 			    		   * pos[f]->km_per_pixel * pos[f]->km_per_pixel
 			    		   * codefactor / sumweights;
 
-//			/* Only add this POS pixel's power contributions to model delay-
-//			 * Doppler frame if NONE of those contributions fall outside
-//			 * the frame limits.                                   */
-//
-//			if (in_bounds) {
-//
-//				/*  Add the cross-section contributions to the model frame  */
-//				for (idel=idel_min; idel<=idel_max; idel++)
-//					for (idop=idop_min; idop<=idop_max; idop++) {
-//						k = MIN( idop - idop_min, MAXBINS);
-//						fit_contribution = amp * del_contribution[idel-idel_min]
-//						                                          * dop_contribution[k];
-//						atomicAdd(&frame[f]->fit[idel][idop], fit_contribution);
-//					}
-//			} else {
-//
-//				/* Add the cross-section contributions to the "overflow" image */
-//				idel1 = MAX( idel_min, -idel0[f]);
-//				idel2 = MIN( idel_max, -idel0[f] + MAXOVERFLOW - 1);
-//				idop1 = MAX( idop_min, -idop0[f]);
-//				idop2 = MIN( idop_max, -idop0[f] + MAXOVERFLOW - 1);
-//				for (idel=idel1; idel<=idel2; idel++)
-//					for (idop=idop1; idop<=idop2; idop++) {
-//						atomicAdd(&dbg_cntr, 1);
-//
-//						k = MIN( idop - idop_min, MAXBINS);
-//						fit_contribution = amp * del_contribution[idel-idel_min]
-//						                                          * dop_contribution[k];
-//						frame[f]->fit_overflow64[idel+idel0[f]][idop+idop0[f]] += fit_contribution;
-//					}
-//			}
-		}
-	}
-
-	__syncthreads();
-
-	if (offset<nThreads) {
-		if (pos[f]->cose[x][y] > 0.0 && pos[f]->body[x][y] == body) {
 			/* Only add this POS pixel's power contributions to model delay-
 			 * Doppler frame if NONE of those contributions fall outside
 			 * the frame limits.                                   */
@@ -1043,22 +986,7 @@ __global__ void pos2deldop_pixel_krnl64(
 						                                          * dop_contribution[k];
 						atomicAdd(&frame[f]->fit[idel][idop], fit_contribution);
 					}
-			} else {
-
-				/* Add the cross-section contributions to the "overflow" image */
-				idel1 = MAX( idel_min, -idel0[f]);
-				idel2 = MIN( idel_max, -idel0[f] + MAXOVERFLOW - 1);
-				idop1 = MAX( idop_min, -idop0[f]);
-				idop2 = MIN( idop_max, -idop0[f] + MAXOVERFLOW - 1);
-				for (idel=idel1; idel<=idel2; idel++)
-					for (idop=idop1; idop<=idop2; idop++) {
-						k = MIN( idop - idop_min, MAXBINS);
-						fit_contribution = amp * del_contribution[idel-idel_min]
-						                                          * dop_contribution[k];
-						atomicAdd(&frame[f]->fit_overflow64[idel+idel0[f]][idop+idop0[f]], fit_contribution);
-					}
 			}
-
 		}
 	}
 }
@@ -1160,67 +1088,27 @@ __global__ void pos2deldop_overflow_krnl32(
 		frame[f]->overflow_xsec = 0.0;
 		frame[f]->overflow_delmean = 0.0;
 		frame[f]->overflow_dopmean = 0.0;
-		sdev_sq = frame[f]->sdev*frame[f]->sdev;
-		variance = sdev_sq;
-		lookfact = (frame[f]->nlooks > 0.0) ? 1.0/frame[f]->nlooks : 0.0;
+		printf("dbg_cntr in pos2deldop_gpu32 = %i\n", dbg_cntr1);
 
 		if (any_overflow[f]) {
-			idell0 = idel0[f];
-			idopp0 = idop0[f];
-			i1 = MAX( frame[f]->idellim[0] + idell0, 0);
-			i2 = MIN( frame[f]->idellim[1] + idell0, MAXOVERFLOW - 1);
-			j1 = MAX( frame[f]->idoplim[0] + idopp0, 0);
-			j2 = MIN( frame[f]->idoplim[1] + idopp0, MAXOVERFLOW - 1);
-
-			for (i=i1; i<=i2; i++)
-				for (j=j1; j<=j2; j++) {
-					fo = frame[f]->fit_overflow32[i][j];
-					if (fo != 0.0) {
-						if (dpar->speckle)
-							variance = sdev_sq + lookfact *	fo * fo;
-						o2 += 1.0; /* o2 */
-						m2 += fo * fo / variance;
-						xsec += fo;
-						delmean += (i-idell0) * fo;
-						dopmean += (j-idopp0) * fo;
-					}
-				}
-
-			if (xsec != 0.0) {
-				delmean /= xsec;
-				dopmean /= xsec;
-			}
-
-			/* Print a warning if the model extends even beyond the overflow image  */
-			if (((frame[f]->idellim[0] + idel0[f]) < 0)            ||
-					((frame[f]->idellim[1] + idel0[f]) >= MAXOVERFLOW) ||
-					((frame[f]->idoplim[0] + idop0[f]) < 0)            ||
-					((frame[f]->idoplim[1] + idop0[f]) >= MAXOVERFLOW)    ) {
-				//p2ds_badradar = 1;
-				badradararr[f] = 1;
-				delfactor = (MAX(frame[f]->idellim[1] + idel0[f], MAXOVERFLOW)
-						- MIN(frame[f]->idellim[0] + idel0[f], 0)         )
-		                						  / (1.0*MAXOVERFLOW);
-				dopfactor = (MAX(frame[f]->idoplim[1] + idop0[f], MAXOVERFLOW)
-						- MIN(frame[f]->idoplim[0] + idop0[f], 0)         )
-		                						  / (1.0*MAXOVERFLOW);
-				frame[f]->badradar_logfactor += log(delfactor*dopfactor);
-				if (dpar->warn_badradar) {
-					printf("\nWARNING in pos2deldop_cuda_streams.c for set %2d frame %2d:\n", set, f);
-					printf("        model delay-Doppler image extends too far beyond the data image\n");
-					printf("             data:  rows %2d to %2d , cols %2d to %2d\n", 1, ndel[f], 1, ndop[f]);
-					printf("            model:  rows %2d to %2d , cols %2d to %2d\n",
-							frame[f]->idellim[0], frame[f]->idellim[1],
-							frame[f]->idoplim[0], frame[f]->idoplim[1]);
-				}
-			}
-			frame[f]->overflow_o2 = o2;
-			frame[f]->overflow_m2 = m2;
-			frame[f]->overflow_xsec = xsec;
-			frame[f]->overflow_delmean = delmean;
-			frame[f]->overflow_dopmean = dopmean;
-
+//			badradararr[f] = 1;
+//			delfactor = (MAX(frame[f]->idellim[1] + idel0[f], MAXOVERFLOW)
+//					- MIN(frame[f]->idellim[0] + idel0[f], 0)         )
+//		                								  / (1.0*MAXOVERFLOW);
+//			dopfactor = (MAX(frame[f]->idoplim[1] + idop0[f], MAXOVERFLOW)
+//					- MIN(frame[f]->idoplim[0] + idop0[f], 0)         )
+//		                								  / (1.0*MAXOVERFLOW);
+//			frame[f]->badradar_logfactor += log(delfactor*dopfactor);
+//			if (dpar->warn_badradar) {
+//				printf("\nWARNING in pos2deldop_cuda_streams.c for set %2d frame %2d:\n", set, f);
+//				printf("        model delay-Doppler image extends too far beyond the data image\n");
+//				printf("             data:  rows %2d to %2d , cols %2d to %2d\n", 1, ndel[f], 1, ndop[f]);
+//				printf("            model:  rows %2d to %2d , cols %2d to %2d\n",
+//						frame[f]->idellim[0], frame[f]->idellim[1],
+//						frame[f]->idoplim[0], frame[f]->idoplim[1]);
+//			}
 		}
+
 	}
 }
 __global__ void pos2deldop_overflow_krnl64(
@@ -1252,72 +1140,29 @@ __global__ void pos2deldop_overflow_krnl64(
 		frame[f]->overflow_xsec = 0.0;
 		frame[f]->overflow_delmean = 0.0;
 		frame[f]->overflow_dopmean = 0.0;
-		sdev_sq = frame[f]->sdev*frame[f]->sdev;
-		variance = sdev_sq;
-		lookfact = (frame[f]->nlooks > 0.0) ? 1.0/frame[f]->nlooks : 0.0;
 
+		printf("dbg_cntr in pos2deldop_gpu64 = %i\n", dbg_cntr1);
 
 		if (any_overflow[f]) {
-			idell0 = idel0[f];
-			idopp0 = idop0[f];
-			i1 = MAX( frame[f]->idellim[0] + idell0, 0);
-			i2 = MIN( frame[f]->idellim[1] + idell0, MAXOVERFLOW - 1);
-			j1 = MAX( frame[f]->idoplim[0] + idopp0, 0);
-			j2 = MIN( frame[f]->idoplim[1] + idopp0, MAXOVERFLOW - 1);
 
-			for (i=i1; i<=i2; i++)
-				for (j=j1; j<=j2; j++) {
-					fo = frame[f]->fit_overflow64[i][j];
-
-
-					if (fo != 0.0) {
-						if (dpar->speckle)
-							variance = sdev_sq + lookfact *	fo * fo;
-						o2 += 1.0; /* o2 */
-						m2 += fo * fo / variance;
-						xsec += fo;
-						delmean += (i-idell0) * fo;
-						dopmean += (j-idopp0) * fo;
-						atomicAdd(&dbg_cntr, 1);
-					}
-				}
-
-			if (xsec != 0.0) {
-				delmean /= xsec;
-				dopmean /= xsec;
-			}
-
-			/* Print a warning if the model extends even beyond the overflow image  */
-			if (((frame[f]->idellim[0] + idel0[f]) < 0)            ||
-					((frame[f]->idellim[1] + idel0[f]) >= MAXOVERFLOW) ||
-					((frame[f]->idoplim[0] + idop0[f]) < 0)            ||
-					((frame[f]->idoplim[1] + idop0[f]) >= MAXOVERFLOW)    ) {
-				//p2ds_badradar = 1;
-				badradararr[f] = 1;
-				delfactor = (MAX(frame[f]->idellim[1] + idel0[f], MAXOVERFLOW)
-						- MIN(frame[f]->idellim[0] + idel0[f], 0)         )
-		                						  / (1.0*MAXOVERFLOW);
-				dopfactor = (MAX(frame[f]->idoplim[1] + idop0[f], MAXOVERFLOW)
-						- MIN(frame[f]->idoplim[0] + idop0[f], 0)         )
-		                						  / (1.0*MAXOVERFLOW);
-				frame[f]->badradar_logfactor += log(delfactor*dopfactor);
-				if (dpar->warn_badradar) {
-					printf("\nWARNING in pos2deldop_cuda_streams.c for set %2d frame %2d:\n", set, f);
-					printf("        model delay-Doppler image extends too far beyond the data image\n");
-					printf("             data:  rows %2d to %2d , cols %2d to %2d\n", 1, ndel[f], 1, ndop[f]);
-					printf("            model:  rows %2d to %2d , cols %2d to %2d\n",
-							frame[f]->idellim[0], frame[f]->idellim[1],
-							frame[f]->idoplim[0], frame[f]->idoplim[1]);
-				}
-			}
-			frame[f]->overflow_o2 = o2;
-			frame[f]->overflow_m2 = m2;
-			frame[f]->overflow_xsec = xsec;
-			frame[f]->overflow_delmean = delmean;
-			frame[f]->overflow_dopmean = dopmean;
-
+//			badradararr[f] = 1;
+//			delfactor = (MAX(frame[f]->idellim[1] + idel0[f], MAXOVERFLOW)
+//					- MIN(frame[f]->idellim[0] + idel0[f], 0)         )
+//		                								  / (1.0*MAXOVERFLOW);
+//			dopfactor = (MAX(frame[f]->idoplim[1] + idop0[f], MAXOVERFLOW)
+//					- MIN(frame[f]->idoplim[0] + idop0[f], 0)         )
+//		                								  / (1.0*MAXOVERFLOW);
+//			frame[f]->badradar_logfactor += log(delfactor*dopfactor);
+//			if (dpar->warn_badradar) {
+//				printf("\nWARNING in pos2deldop_cuda_streams.c for set %2d frame %2d:\n", set, f);
+//				printf("        model delay-Doppler image extends too far beyond the data image\n");
+//				printf("             data:  rows %2d to %2d , cols %2d to %2d\n", 1, ndel[f], 1, ndop[f]);
+//				printf("            model:  rows %2d to %2d , cols %2d to %2d\n",
+//						frame[f]->idellim[0], frame[f]->idellim[1],
+//						frame[f]->idoplim[0], frame[f]->idoplim[1]);
+//			}
 		}
-		printf("set %i dbg_cntr=%i\n", set, dbg_cntr);
+
 	}
 }
 

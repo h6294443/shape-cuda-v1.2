@@ -1566,8 +1566,8 @@ __host__ void calc_deldop_gpu64(struct par_t *dpar, struct mod_t *dmod,
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
 			cudaMemcpyDeviceToHost));
 //
-//	f=0;
-//	dbg_print_pos_arrays_full64(pos, f, nThreadspx[f], hposn[f]);
+	f=0;
+	dbg_print_pos_arrays_full64(pos, f, nThreadspx[f], hposn[f]);
 
 
 	for (f=0; f<nframes; f++)
@@ -1618,7 +1618,7 @@ __host__ void calc_deldop_gpu64(struct par_t *dpar, struct mod_t *dmod,
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
 			cudaMemcpyDeviceToHost));
 
-//	dbg_print_deldop_fit(ddat, 0, 0, "1080Ti_deldop_fit.csv");
+//dbg_print_deldop_fit(ddat, 0, 0, "1080Ti_deldop_fit.csv");
 
 
 	for (f=0; f<nframes; f++) {

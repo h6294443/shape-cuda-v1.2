@@ -431,9 +431,6 @@ double chi2_deldop( struct par_t *par, struct deldop_t *deldop, int list_breakdo
 		m2 = deldop->frame[f].overflow_m2;
 		om = 0.0;
 
-		printf("set %i deldop->frame[%i].overflow_o2 = %3.3g\n", s, f, deldop->frame[f].overflow_o2);
-//		printf("set %i deldop->frame[%i].overflow_m2 = %3.3g\n", s, f, deldop->frame[f].overflow_m2);
-
 		/*  Now add the contributions from power
         within the limits of the data frame.  */
 		for (i=1; i<=ndel; i++)

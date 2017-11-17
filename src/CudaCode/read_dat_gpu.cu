@@ -606,23 +606,6 @@ __host__ int read_deldop_gpu( FILE *fp, struct par_t *par, struct deldop_t *deld
 
 	/* Loop through the frames*/
 	for (i=0; i<deldop->nframes; i++) {
-		/* Allocate and set all overflow entries for each deldop frame to zero if this is
-		 * a GPU run 		 */
-		if (FP64) {
-			cudaCalloc((void**)&deldop->frame[i].fit_overflow64, sizeof(double*), MAXOVERFLOW);
-						for (int x=0; x<MAXOVERFLOW; x++)
-							cudaCalloc1((void**)&deldop->frame[i].fit_overflow64[x], sizeof(double*),
-									MAXOVERFLOW);
-		}
-		else {
-			cudaCalloc((void**)&deldop->frame[i].fit_overflow32, sizeof(float*), MAXOVERFLOW);
-			for (int x=0; x<MAXOVERFLOW; x++)
-				cudaCalloc1((void**)&deldop->frame[i].fit_overflow32[x], sizeof(float*),
-						MAXOVERFLOW);
-		}
-
-			zero_fit_overflow(deldop, i);
-		gpuErrchk(cudaDeviceSynchronize());
 
 		gettstr( fp, deldop->frame[i].name); // name of data file
 		sprintf( fullname, "%s/%s", deldop->dir, deldop->frame[i].name);
@@ -1904,24 +1887,7 @@ __host__ int read_deldop_mgpu( FILE *fp, struct par_t *par, struct deldop_t *del
 
 	/* Loop through the frames*/
 	for (i=0; i<deldop->nframes; i++) {
-		/* Allocate and set all overflow entries for each deldop frame to zero if this is
-		 * a GPU run 		 */
-		if (FULL){// && (s==1 || s==2 || s==8 || s==13)){
-			if (FP64) {
-			cudaCalloc1((void**)&deldop->frame[i].fit_overflow64, sizeof(double*), MAXOVERFLOW);
-			for (int x=0; x<MAXOVERFLOW; x++)
-				cudaCalloc1((void**)&deldop->frame[i].fit_overflow64[x], sizeof(double*),
-						MAXOVERFLOW);
-			}
-			else {
-				cudaCalloc1((void**)&deldop->frame[i].fit_overflow32, sizeof(float*), MAXOVERFLOW);
-				for (int x=0; x<MAXOVERFLOW; x++)
-					cudaCalloc1((void**)&deldop->frame[i].fit_overflow32[x], sizeof(float*),
-							MAXOVERFLOW);
-			}
-			zero_fit_overflow(deldop, i);
-			gpuErrchk(cudaDeviceSynchronize());
-		}
+
 
 		gettstr( fp, deldop->frame[i].name); // name of data file
 		sprintf( fullname, "%s/%s", deldop->dir, deldop->frame[i].name);
