@@ -273,7 +273,7 @@ double chi2( struct par_t *par, struct dat_t *dat, int list_breakdown)
 			dat->set[s].chi2 = chi2_deldop( par, &dat->set[s].desc.deldop,
 					list_breakdown, s, &chi2_all_deldop,
 					&chi2_fit0_deldop, &dof_fit0_deldop);
-			printf("chi2_set[%i] (Deldop), %3.8g\n", s, dat->set[s].chi2);
+//			printf("chi2_set[%i] (Deldop), %3.8g\n", s, dat->set[s].chi2);
 			break;
 		case DOPPLER:
 			dat->set[s].chi2 = chi2_doppler( par, &dat->set[s].desc.doppler,
@@ -1142,7 +1142,7 @@ double chi2_lghtcrv( struct par_t *par, struct lghtcrv_t *lghtcrv, int list_brea
 		m2 += lghtcrv->fit[i] * lghtcrv->fit[i] * lghtcrv->oneovervar[i];
 		om += lghtcrv->fit[i] * lghtcrv->obs[i] * lghtcrv->oneovervar[i];
 //		printf("%i, %3.8g, %3.8g, %3.8g\n", i, lghtcrv->fit[i], lghtcrv->fit[i], lghtcrv->oneovervar[i]);
-//		printf("%i, %3.8g\n", i, lghtcrv->fit[i]);
+//		printf("fit[%i], %3.8g\n", i, lghtcrv->fit[i]);
 	}
 	/* If this lightcurve's calibration factor is allowed to float,
       set it to minimize chi-square, the sum over all points of

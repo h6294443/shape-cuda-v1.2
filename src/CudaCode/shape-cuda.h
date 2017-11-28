@@ -34,6 +34,8 @@ extern int TIMING;			/* Time execution of certain kernels 			*/
 extern int FP64;			/* Uses doubles throughout the entire CUDA code (CC>6.0) */
 extern int MGPU;			/* Switch for dual-gpu mode */
 extern int PIN;				/* Use pinned host memory instead of GPU memory */
+extern int EXP;				/* Experimental flag - currently used for the a
+							 * tiled, shared memory posvis implementation */
 
 /* Structures */
 extern struct par_t *dev_par;
@@ -257,6 +259,12 @@ __host__ void vary_params_gpu64(struct par_t *dpar, struct mod_t *dmod, struct
 		*opt_brightness, double *cos_subradarlat, int *hnframes, int *hlc_n,
 		int *nviews, struct vertices_t **verts, unsigned char *htype, unsigned
 		char *dtype, int nf, int nsets, cudaStream_t *vp_stream, int max_frames);
+
+__host__ int posvis_tiled_gpu64(struct par_t *dpar, struct mod_t *dmod, struct
+		dat_t *ddat, struct pos_t **pos, struct vertices_t **verts,	double3
+		orbit_offset, int *posn, int *outbndarr, int set, int nfrm_alloc,
+		int src, int nf, int body, int comp, unsigned char type, cudaStream_t
+		*pv_stream,	int src_override);
 
 __host__ void vary_params_pthreads(struct par_t *dpar0, struct par_t *dpar1,
 		struct mod_t *dmod0, struct mod_t *dmod1, struct dat_t *ddat0, struct

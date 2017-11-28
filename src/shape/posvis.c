@@ -153,7 +153,7 @@ int posvis( struct vertices_t *verts, double orbit_offset[3], struct pos_t *pos,
 		/* Consider this facet further only if its normal points somewhat
 		 * towards the observer rather than away         */
 		if (n[2] > 0.0) {
-
+			dbg_cntr++;
 			/* Convert the three sets of vertex coordinates from body to ob-
 			 * server coordinates; orbit_offset is the center-of-mass offset
 			 * (in observer coordinates) for this model at this frame's epoch
@@ -220,15 +220,14 @@ int posvis( struct vertices_t *verts, double orbit_offset[3], struct pos_t *pos,
 						s = ((x[0]-v0[0])*(v2[1]-v1[1]) - (v2[0]-v1[0])*(x[1]-v0[1]))
            					* (den = 1/( (v1[0]-v0[0])*(v2[1]-v1[1]) - (v2[0]-v1[0])*
            											(v1[1]-v0[1]) ));
-						if (f==39978) printf("facet %i (%i, %i) s = %3.8g \n", f, i, j, s);
 						if ( (s >= -SMALLVAL) && (s <= 1.0+SMALLVAL) ) {
 							t = ((v1[0]-v0[0])*(x[1]-v0[1]) -
 									(x[0]-v0[0])*(v1[1]-v0[1])) * den;
-dbg_cntr++;							if ( (t >= -SMALLVAL) && (t <= s+SMALLVAL) ) {
-	if (f==39978) printf("facet %i (%i, %i) s = %3.8g and t = %3.8g\n", f, i, j, s, t);
+							if ( (t >= -SMALLVAL) && (t <= s+SMALLVAL) ) {
 								/* Compute z-coordinate of pixel center: its
 								 * distance measured from the origin towards
 								 * Earth.    */
+
 								z = v0[2] + s*(v1[2] - v0[2]) + t*(v2[2] - v1[2]);
 
 								/* If fac[i][j] is >= 0, pixel [i][j] was al-
@@ -238,29 +237,28 @@ dbg_cntr++;							if ( (t >= -SMALLVAL) && (t <= s+SMALLVAL) ) {
 								 * is blocking our view of (i.e., is closer to
 								 * us than) the previous one.   */
 								if ( (z > zz[i][j]) || (fac[i][j] < 0) ) {
-/*if (fac[i][j]<0)*/
 									/* Next line assigns distance of POS pixel
 									 * center from COM towards Earth; that is,
 									 * by changing zz,it changes pos->z or
 									 * pos->zill                */
 									zz[i][j] = z;
 
-//									if (smooth) {
-//										/* Get smoothed version of facet unit
-//										 * normal: Take the linear combination
-//										 * of the three vertex normals; trans-
-//										 * form from body to observer coordina-
-//										 * tes; and make sure that it points
-//										 * somewhat in our direction.         */
-//										for (k=0; k<=2; k++)
-//											n[k] = verts->v[verts->f[f].v[0]].n[k]
-//										    + s*(  verts->v[verts->f[f].v[1]].n[k]
-//										    - verts->v[verts->f[f].v[0]].n[k])
-//										    + t*(  verts->v[verts->f[f].v[2]].n[k]
-//										    - verts->v[verts->f[f].v[1]].n[k]);
-//										cotrans( n, oa, n, 1);
-//										normalize( n);
-//									}
+									if (smooth) {
+										/* Get smoothed version of facet unit
+										 * normal: Take the linear combination
+										 * of the three vertex normals; trans-
+										 * form from body to observer coordina-
+										 * tes; and make sure that it points
+										 * somewhat in our direction.         */
+										for (k=0; k<=2; k++)
+											n[k] = verts->v[verts->f[f].v[0]].n[k]
+										    + s*(  verts->v[verts->f[f].v[1]].n[k]
+										    - verts->v[verts->f[f].v[0]].n[k])
+										    + t*(  verts->v[verts->f[f].v[2]].n[k]
+										    - verts->v[verts->f[f].v[1]].n[k]);
+										cotrans( n, oa, n, 1);
+										normalize( n);
+									}
 
 									/* Determine scattering and/or incidence
 									 * angles. Next lines change pos->cose/
@@ -314,6 +312,10 @@ dbg_cntr++;							if ( (t >= -SMALLVAL) && (t <= s+SMALLVAL) ) {
 //	dbg_print_facet_normals_dbl3(dbg_hn, verts->nf, "CPU_nrmls.csv");
 //	dbg_print_facet_normals_dbl3(dbg_hn, nf, "FP64_nrmls.csv");
 	printf("dbg_cntr in posvis (CPU) = %i\n", dbg_cntr);
+	printf("xlim[0] = %i\n", pos->xlim[0]);
+	printf("xlim[0] = %i\n", pos->xlim[1]);
+	printf("ylim[1] = %i\n", pos->ylim[0]);
+	printf("ylim[1] = %i\n", pos->ylim[1]);
 	return outbnd;
 }
 

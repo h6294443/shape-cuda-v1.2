@@ -551,9 +551,9 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	fflush(stdout);
 
 
-	int debug = 1;
-	if (debug)
-		return(0);
+//	int debug = 1;
+//	if (debug)
+//		return(0);
 	/* Display the region within each delay-Doppler or Doppler frame that, ac-
 	 * cording to initial model, has nonzero power. A warning is displayed if
 	 * any region extends beyond the data limits: the vignetting is too tight,
@@ -574,7 +574,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	 * tive function at each step. Stop when fractional decrease in the objec-
 	 * tive function from one iteration to the next is less than term_prec.   */
 
-//	do {
+	do {
 		showvals = 1;        /* show reduced chi-square and penalties at beginning */
 		beginerr = enderr;
 		printf("# iteration %d %f", ++iter, beginerr);
@@ -837,7 +837,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			gpuErrchk(cudaMemcpy(hflags, flags, sizeof(int)*7,
 					cudaMemcpyDeviceToHost));
 			/* Display the objective function after each parameter adjustment.  */
-			printf("%4d %8.6f %d", p, enderr, iround(par->fpartype[p]));
+			printf("%4d, %8.6f, %d", p, enderr, iround(par->fpartype[p]));
 			if (hflags[0]==1)		printf("  (BAD DIAMS)");
 			if (hflags[1]==1)		printf("  (BAD PHOTO)");
 			if (hflags[2]==1)		printf("  (BAD POS)");
@@ -859,7 +859,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			 * parameters (i.e. delay correction polynomial coefficients) do.  */
 			if (++cntr >= npar_update) {
 				cntr = 0;
-				showvals = 1;
+//				showvals = 1;
 				calc_fits_gpu(dpar, dmod, ddat, verts, nviews,
 						nframes, lc_n, htype, nsets, nf, bf_stream, max_frames);
 				chi2_gpu(dpar, ddat, htype, dtype, nframes,
@@ -925,7 +925,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			keep_iterating = ((beginerr - enderr)/enderr >= term_prec);
 		}
 
-//	} while (keep_iterating);
+	} while (keep_iterating);
 
 		/* Show final values of reduced chi-square, individual penalty functions,
 		 * and the objective function  */

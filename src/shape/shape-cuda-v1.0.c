@@ -19,6 +19,7 @@ int PIN    = 0;
 int maxThreadsPerBlock = 0;
 int HMT	= 0;
 int HMT_threads = 4;
+int EXP = 0;
 
 int main(int argc, char *argv[])
 {

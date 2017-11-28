@@ -338,7 +338,6 @@ __global__ void posvis_facet_krnl32(
 							t = ((v1.x - v0.x) * (x.y - v0.y)
 							    - (x.x- v0.x) * (v1.y- v0.y)) * den;atomicAdd(&dbg_cntr, 1);
 							if ((t >= -SMALLVAL) && (t <= s + SMALLVAL)) {
-if (f==39994) printf("facet %i s = %3.8g and t = %3.8g\n", f, s, t);
 								/* Compute z-coordinate of pixel center: its
 								 * distance measured from the origin towards
 								 * Earth.    */
@@ -440,6 +439,252 @@ if (f==39994) printf("facet %i s = %3.8g and t = %3.8g\n", f, s, t);
 	} /* end if (f < nf) */
 }
 
+__global__ void posvis_facet_krnl32mod(
+		struct pos_t **pos,
+		struct vertices_t **verts,
+		float4 *ijminmax_overall,
+		float3 orbit_offs,
+		float3 *oa,
+		float3 *usrc,
+		int src,
+		int body,
+		int comp,
+		int nfacets,
+		int frm,
+		int smooth,
+		int *outbndarr,
+		int set) {
+	/* (nf * nframes)-threaded kernel.  This version eliminates as much double
+	 * math as possible */
+
+	int f = blockIdx.x * blockDim.x + threadIdx.x;
+	int pxa, i, i1, i2, j, j1, j2, imin, imax, jmin, jmax, pn, span;
+	float imin_dbl, imax_dbl, jmin_dbl, jmax_dbl, old, s, t, z, den, kmpxl;
+	int3 fidx;
+	float3 n, n1n0, v0, v1, v2, tv0, tv1, tv2, x;
+
+	if (f < nfacets) {
+		pn = pos[frm]->n;
+		span = 2*pn+1;
+		kmpxl = __double2float_rn(pos[frm]->km_per_pixel);
+		/* The following section transfers vertex coordinates from double[3]
+		 * storage to float3		 */
+		fidx.x = verts[0]->f[f].v[0];
+		fidx.y = verts[0]->f[f].v[1];
+		fidx.z = verts[0]->f[f].v[2];
+		tv0.x = __double2float_rn( verts[0]->v[fidx.x].x[0]);
+		tv0.y = __double2float_rn(verts[0]->v[fidx.x].x[1]);
+		tv0.z = __double2float_rn(verts[0]->v[fidx.x].x[2]);
+		tv1.x = __double2float_rn(verts[0]->v[fidx.y].x[0]);
+		tv1.y = __double2float_rn(verts[0]->v[fidx.y].x[1]);
+		tv1.z = __double2float_rn(verts[0]->v[fidx.y].x[2]);
+		tv2.x = __double2float_rn(verts[0]->v[fidx.z].x[0]);
+		tv2.y = __double2float_rn(verts[0]->v[fidx.z].x[1]);
+		tv2.z = __double2float_rn(verts[0]->v[fidx.z].x[2]);
+		v0.x = v0.y = v0.z = v1.x = v1.y = v1.z = v2.x = v2.y = v2.z = 0.0;
+
+		/* Get the normal to this facet in body-fixed (asteroid) coordinates
+		 * and convert it to observer coordinates     */
+		n.x = __double2float_rn(verts[0]->f[f].n[0]);
+		n.y = __double2float_rn(verts[0]->f[f].n[1]);
+		n.z = __double2float_rn(verts[0]->f[f].n[2]);
+
+		dev_cotrans8(&n, oa, n, 1, frm);
+
+		/* Consider this facet further only if its normal points somewhat
+		 * towards the observer rather than away         */
+		if (n.z > 0.0) {
+			/* Convert the three sets of vertex coordinates from body to ob-
+			 * server coordinates; orbit_offset is the center-of-mass offset
+			 * (in observer coordinates) for this model at this frame's epoch
+			 * due to orbital motion, in case the model is half of a binary
+			 * system.  */
+			dev_cotrans8(&v0, oa, tv0, 1, frm);
+			dev_cotrans8(&v1, oa, tv1, 1, frm);
+			dev_cotrans8(&v2, oa, tv2, 1, frm);
+
+			v0.x += orbit_offs.x;	v0.y += orbit_offs.x;	v0.z += orbit_offs.x;
+			v1.x += orbit_offs.y;	v1.y += orbit_offs.y;	v1.z += orbit_offs.y;
+			v2.x += orbit_offs.z;	v2.y += orbit_offs.z;	v2.z += orbit_offs.z;
+
+			/* Find rectangular region (in POS pixels) containing the projected
+			 * facet - use floats in case model has illegal parameters and the
+			 * pixel numbers exceed the limits for valid integers                         */
+			imin_dbl = floor(MIN(v0.x,MIN(v1.x,v2.x)) / kmpxl - SMALLVAL + 0.5);
+			imax_dbl = floor(MAX(v0.x,MAX(v1.x,v2.x)) / kmpxl + SMALLVAL + 0.5);
+			jmin_dbl = floor(MIN(v0.y,MIN(v1.y,v2.y)) / kmpxl - SMALLVAL + 0.5);
+			jmax_dbl = floor(MAX(v0.y,MAX(v1.y,v2.y)) / kmpxl + SMALLVAL + 0.5);
+
+			imin = (imin_dbl < INT_MIN) ? INT_MIN : (int) imin_dbl;
+			imax = (imax_dbl > INT_MAX) ? INT_MAX : (int) imax_dbl;
+			jmin = (jmin_dbl < INT_MIN) ? INT_MIN : (int) jmin_dbl;
+			jmax = (jmax_dbl > INT_MAX) ? INT_MAX : (int) jmax_dbl;
+
+			/*  Set the outbnd flag if the facet extends beyond the POS window  */
+			if ((imin < (-pn)) || (imax > pn) || (jmin < (-pn))	|| (jmax > pn)) {
+				posvis_streams_outbnd = 1;
+				atomicExch(&outbndarr[frm], 1);
+			}
+
+			/* Figure out if facet projects at least partly within POS window;
+			 * if it does, look at each "contained" POS pixel and get the
+			 * z-coordinate and cos(scattering angle)           */
+			i1 = MAX(imin, -pn);		j1 = MAX(jmin, -pn);
+			i2 = MIN(imax,  pn);		j2 = MIN(jmax,  pn);
+
+			if (i1 > pn || i2 < -pn || j1 > pn || j2 < -pn) {
+
+				/* Facet is entirely outside the POS frame: just keep track of
+				 * changed POS region     */
+				dev_POSrect_gpu32(pos, src, imin_dbl, imax_dbl, jmin_dbl, jmax_dbl,
+						ijminmax_overall, frm);
+
+			} else {
+
+//				dev_POSrect_gpu32(pos, src, (float)i1, (float)i2, (float)j1,
+//						(float)j2, ijminmax_overall, frm);
+
+				/* Assign vertex normals if smoothing is enabled */
+				if (pvst_smooth) {
+					/* Assign temp. normal components as float3 */
+					tv0.x = verts[0]->v[fidx.x].n[0];	tv0.y = verts[0]->v[fidx.x].n[1];
+					tv0.z = verts[0]->v[fidx.x].n[2];	tv1.x = verts[0]->v[fidx.y].n[0];
+					tv1.y = verts[0]->v[fidx.y].n[1];	tv1.z = verts[0]->v[fidx.y].n[2];
+					tv2.x = verts[0]->v[fidx.z].n[0];	tv2.y = verts[0]->v[fidx.z].n[1];
+					tv2.z = verts[0]->v[fidx.z].n[2];
+					n1n0.x = tv1.x - tv0.x;	n1n0.y = tv1.y - tv0.y;	n1n0.z = tv1.z - tv0.z;
+					tv2.x -= tv1.x;	tv2.y -= tv1.y; tv2.z -= tv1.z;
+				}
+
+				/* Precalculate s and t components */
+				float a, b, c, d, e, h, ti, tj, si, sj, si0, sj0, ti0, tj0, sz, tz;
+				a = i1*kmpxl - v0.x;
+				b = v2.y - v1.y;
+				c = v2.x - v1.x;
+				d = j1*kmpxl - v0.y;
+				e = v1.x - v0.x;
+				h = v1.y - v0.y;
+				den = e*b - c*h;
+				ti = -h*kmpxl/den;
+				tj = e*kmpxl/den;
+				si = b*kmpxl/den;
+				sj = -c*kmpxl/den;
+				si0 = (a*b - c*d)/den;
+				ti0 = (e*d -a*h)/den;
+				sz = v1.z - v0.z;
+				tz = v2.z - v1.z;
+
+				/* Facet is at least partly within POS frame: find all POS
+				 * pixels whose centers project onto this facet  */
+				for (i=i1; i<=i2; i++) {
+
+					sj0 = si0;	/* Initialize this loop's base sj0, tj0 */
+					tj0 = ti0;
+
+					for (j=j1; j<=j2; j++) {
+						/* Calculate the pixel address for 1D arrays */
+						pxa = (j+pn) * span + (i+pn);
+						s = sj0;
+						t = tj0;
+
+						if ((s >= -SMALLVAL) && (s <= 1.0 + SMALLVAL)) {// &&
+							if(	(t >= -SMALLVAL) && (t <= s + SMALLVAL))	{
+
+								/* Compute z-coordinate of pixel center: its
+								 * distance measured from the origin towards
+								 * Earth.    */
+								z = v0.z + s*sz + t*tz;
+//								if (src)	fac = pos[frm]->fill[i][j];
+//								if (!src)	fac = pos[frm]->f[i][j];
+
+								/* Following line replaces the previous if check
+								 * for z > zz[i][j]
+								 * atomicMaxf returns the value that was sitting
+								 * at zzf[pxa] at time of call.  So if that value
+								 * matches the z we compared to*/
+								if (src)	old = atomicMaxf(&pos[frm]->zill_s[pxa], z);
+								else		old = atomicMaxf(&pos[frm]->z_s[pxa], z);
+
+								if (old < z){
+									/* Next line assigns distance of POS pixel
+									 * center from COM towards Earth; that is,
+									 * by changing zz,it changes pos->z or
+									 * pos->zill                */
+									/* following line is a first time z calc
+									 * for this pixel  */
+//									if (fac < 0){
+									//										atomicAdd(&dbg_cntr, 1);
+									//										if (src)
+									//											atomicExch((unsigned long long int*)&pos[frm]->zill[i][j], __double_as_longlong(z));
+									//
+									//										else
+									//											atomicExch((unsigned long long int*)&pos[frm]->z[i][j], __double_as_longlong(z));
+									//									}
+									//
+									if (pvst_smooth) {
+
+										/* Get pvs_smoothed version of facet unit
+										 * normal: Take the linear combination
+										 * of the three vertex normals; trans-
+										 * form from body to observer coordina-
+										 * tes; and make sure that it points
+										 * somewhat in our direction.         */
+										n.x = tv0.x + s * n1n0.x + t * tv2.x;
+										n.y = tv0.y + s * n1n0.y + t * tv2.y;
+										n.z = tv0.z + s * n1n0.z + t * tv2.z;
+										dev_cotrans8(&n, oa, n, 1, frm);
+										dev_normalize2(&n);
+									}
+
+									/* Determine scattering and/or incidence
+									 * angles. Next lines change pos->cose/
+									 * cosill. If bistatic (lightcurves), where
+									 * we are viewing from Earth (src = 0),
+									 * pos->cosi is also changed.                 */
+									if (n.z > 0.0) {
+
+										if (src)
+											atomicExch(&pos[frm]->cosill_s[pxa], n.z);
+										else
+											atomicExch(&pos[frm]->cose_s[pxa], n.z);
+										if ((!src) && (pos[frm]->bistatic)) {
+											float temp = dev_dot_f3(n,usrc[frm]);
+											atomicExch(&pos[frm]->cosi_s[pxa], temp);
+											if (pos[frm]->cosi_s[pxa] <= 0.0)
+												pos[frm]->cose_s[pxa] = 0.0;
+										}
+									}
+									dev_POSrect_gpu32(pos, src, (float)i, (float)i, (float)j,
+											(float)j, ijminmax_overall, frm);
+									/* Next lines change pos->body/bodyill,
+									 * pos->comp/compill, pos->f/fill          */
+									if (src) {
+										pos[frm]->bodyill[i][j] = body;
+										pos[frm]->compill[i][j] = comp;
+										pos[frm]->fill[i][j] = f;
+									} else {
+										pos[frm]->body[i][j] = body;
+										pos[frm]->comp[i][j] = comp;
+										atomicExch(&pos[frm]->f[i][j], f);
+									}
+
+								} /* end if (no other facet yet blocks this facet from view) */
+							} /* end if 0 <= t <= s (facet center is "in" this POS pixel) */
+						} /* end if 0 <= s <= 1 */
+
+						sj0 += sj;
+						tj0 += tj;
+					} /* end j-loop over POS rows */
+					/* Modify s and t step-wise for the next i-iteration of the pixel loop */
+					si0 += si;
+					ti0 += ti;
+
+				} /* end i-loop over POS columns */
+			} /* end else of if (i1 > pos->n || i2 < -pos->n || j1 > pos->n || j2 < -pos->n) */
+		} /* End if (n[2] > 0.0) */
+	} /* end if (f < nf) */
+}
+
 __global__ void posvis_facet_krnl64(
 		struct pos_t **pos,
 		struct vertices_t **verts,
@@ -457,14 +702,15 @@ __global__ void posvis_facet_krnl64(
 		int set) {
 
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	int i, i1, i2, j, j1, j2, imin, imax, jmin, jmax, pn, fac;
+	int i, i1, i2, j, j1, j2, imin, imax, jmin, jmax, pn, fac, span;
 	double imin_dbl, imax_dbl, jmin_dbl, jmax_dbl, old, s, t, z, den, kmpxl;
 	int3 fidx;
-	double3 n, v0, v1, v2, tv0, tv1, tv2, x;
+	double3 n, v0, v1, v2, tv0, tv1, tv2, x, n1n0;
 
 	if (f < nfacets) {
 		pn = pos[frm]->n;
 		kmpxl = pos[frm]->km_per_pixel;
+		span = 2*pn + 1;
 
 /* The following section transfers vertex coordinates from double[3]
 		 * storage to float3		 */
@@ -543,7 +789,19 @@ __global__ void posvis_facet_krnl64(
 //				dev_POSrect_gpu64(pos, src, (double)i1, (double)i2, (double)j1,
 //						(double)j2, ijminmax_overall, frm);
 
-			/* Facet is at least partly within POS frame: find all POS
+				/* Assign vertex normals if smoothing is enabled */
+				if (pvst_smooth) {
+					/* Assign temp. normal components as float3 */
+					tv0.x = verts[0]->v[fidx.x].n[0];	tv0.y = verts[0]->v[fidx.x].n[1];
+					tv0.z = verts[0]->v[fidx.x].n[2];	tv1.x = verts[0]->v[fidx.y].n[0];
+					tv1.y = verts[0]->v[fidx.y].n[1];	tv1.z = verts[0]->v[fidx.y].n[2];
+					tv2.x = verts[0]->v[fidx.z].n[0];	tv2.y = verts[0]->v[fidx.z].n[1];
+					tv2.z = verts[0]->v[fidx.z].n[2];
+					n1n0.x = tv1.x - tv0.x;	n1n0.y = tv1.y - tv0.y;	n1n0.z = tv1.z - tv0.z;
+					tv2.x -= tv1.x;	tv2.y -= tv1.y; tv2.z -= tv1.z;
+				}
+
+				/* Facet is at least partly within POS frame: find all POS
 				 * pixels whose centers project onto this facet  */
 				for (i = i1; i <= i2; i++) {
 					x.x = i * kmpxl;
@@ -701,14 +959,15 @@ __global__ void posvis_facet_krnl64mod(
 		int set) {
 
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
-	int i, i1, i2, j, j1, j2, imin, imax, jmin, jmax, pn, fac;
+	int i, i1, i2, j, j1, j2, imin, imax, jmin, jmax, pn, span;
 	double imin_dbl, imax_dbl, jmin_dbl, jmax_dbl, old, s, t, z, den, kmpxl;
 	int3 fidx;
-	double3 n, v0, v1, v2, tv0, tv1, tv2, x;
+	double3 n, v0, v1, v2, tv0, tv1, tv2, n1n0;
 
 	if (f < nfacets) {
 		pn = pos[frm]->n;
 		kmpxl = pos[frm]->km_per_pixel;
+		span = 2*pn + 1;
 
 /* The following section transfers vertex coordinates from double[3]
 		 * storage to float3		 */
@@ -787,6 +1046,18 @@ __global__ void posvis_facet_krnl64mod(
 //				dev_POSrect_gpu64(pos, src, (double)i1, (double)i2, (double)j1,
 //						(double)j2, ijminmax_overall, frm);
 
+				/* Assign vertex normals if smoothing is enabled */
+				if (pvst_smooth) {
+					/* Assign temp. normal components as float3 */
+					tv0.x = verts[0]->v[fidx.x].n[0];	tv0.y = verts[0]->v[fidx.x].n[1];
+					tv0.z = verts[0]->v[fidx.x].n[2];	tv1.x = verts[0]->v[fidx.y].n[0];
+					tv1.y = verts[0]->v[fidx.y].n[1];	tv1.z = verts[0]->v[fidx.y].n[2];
+					tv2.x = verts[0]->v[fidx.z].n[0];	tv2.y = verts[0]->v[fidx.z].n[1];
+					tv2.z = verts[0]->v[fidx.z].n[2];
+					n1n0.x = tv1.x - tv0.x;	n1n0.y = tv1.y - tv0.y;	n1n0.z = tv1.z - tv0.z;
+					tv2.x -= tv1.x;	tv2.y -= tv1.y; tv2.z -= tv1.z;
+				}
+
 				/* Precalculate s and t components */
 				double a, b, c, d, e, h, ti, tj, si, sj, si0, sj0, ti0, tj0, sz, tz;
 				a = i1*kmpxl - v0.x;
@@ -816,29 +1087,25 @@ __global__ void posvis_facet_krnl64mod(
 
 						s = sj0;
 						t = tj0;
-						if (f==39978) printf("facet %i (%i, %i) s = %3.8g and t = %3.8g\n", f, i,j, s, t);
+
 						if ((s >= -SMALLVAL) && (s <= 1.0 + SMALLVAL)) {// &&
-atomicAdd(&dbg_cntr, 1);
 							if(	(t >= -SMALLVAL) && (t <= s + SMALLVAL))	{
-
-
 
 							/* Compute z-coordinate of pixel center: its
 							 * distance measured from the origin towards
 							 * Earth.    */
 							z = v0.z + s*sz + t*tz;
-							if (src)	fac = pos[frm]->fill[i][j];
-							if (!src)	fac = pos[frm]->f[i][j];
+//							if (src)	fac = pos[frm]->fill[i][j];
+//							if (!src)	fac = pos[frm]->f[i][j];
 
 							/* Following line replaces the previous if check
 							 * for z > zz[i][j]
 							 * atomicMaxf returns the value that was sitting
 							 * at zzf[pxa] at time of call.  So if that value
 							 * matches the z we compared to*/
-							old = atomicMax64(&pos[frm]->z[i][j], z);
-
+							if (src)	old = atomicMax64(&pos[frm]->zill[i][j], z);
+							if (!src)	old = atomicMax64(&pos[frm]->z[i][j], z);
 							if (old < z){
-//									atomicAdd(&dbg_cntr, 1);
 								/* Next line assigns distance of POS pixel
 								 * center from COM towards Earth; that is,
 								 * by changing zz,it changes pos->z or
@@ -854,31 +1121,20 @@ atomicAdd(&dbg_cntr, 1);
 //											atomicExch((unsigned long long int*)&pos[frm]->z[i][j], __double_as_longlong(z));
 //									}
 //
-//									if (pvst_smooth) {
-//										/* Assign temp. normal components as float3 */
-//										tv0.x = verts[0]->v[fidx.x].n[0];
-//										tv0.y = verts[0]->v[fidx.x].n[1];
-//										tv0.z = verts[0]->v[fidx.x].n[2];
-//										tv1.x = verts[0]->v[fidx.y].n[0];
-//										tv1.y = verts[0]->v[fidx.y].n[1];
-//										tv1.z = verts[0]->v[fidx.y].n[2];
-//										tv2.x = verts[0]->v[fidx.z].n[0];
-//										tv2.y = verts[0]->v[fidx.z].n[1];
-//										tv2.z = verts[0]->v[fidx.z].n[2];
-//
-//										/* Get pvs_smoothed version of facet unit
-//										 * normal: Take the linear combination
-//										 * of the three vertex normals; trans-
-//										 * form from body to observer coordina-
-//										 * tes; and make sure that it points
-//										 * somewhat in our direction.         */
-//										n.x = tv0.x + s * (tv1.x - tv0.x) + t * (tv2.x - tv1.x);
-//										n.y = tv0.y + s * (tv1.y - tv0.y) + t * (tv2.y - tv1.y);
-//										n.z = tv0.z + s * (tv1.z - tv0.z) + t * (tv2.z - tv1.z);
-//
-//										dev_cotrans3(&n, oa, n, 1, frm);
-//										dev_normalize3(&n);
-//									}
+								if (pvst_smooth) {
+
+									/* Get pvs_smoothed version of facet unit
+									 * normal: Take the linear combination
+									 * of the three vertex normals; trans-
+									 * form from body to observer coordina-
+									 * tes; and make sure that it points
+									 * somewhat in our direction.         */
+									n.x = tv0.x + s * n1n0.x + t * tv2.x;
+									n.y = tv0.y + s * n1n0.y + t * tv2.y;
+									n.z = tv0.z + s * n1n0.z + t * tv2.z;
+									dev_cotrans3(&n, oa, n, 1, frm);
+									dev_normalize3(&n);
+								}
 
 								/* Determine scattering and/or incidence
 								 * angles. Next lines change pos->cose/
@@ -902,8 +1158,8 @@ atomicAdd(&dbg_cntr, 1);
 											pos[frm]->cose[i][j] = 0.0;
 									}
 								}
-								dev_POSrect_gpu64(pos, src, (double)i1, (double)i2, (double)j1,
-										(double)j2, ijminmax_overall, frm);
+								dev_POSrect_gpu64(pos, src, (double)i, (double)i, (double)j,
+										(double)j, ijminmax_overall, frm);
 								/* Next lines change pos->body/bodyill,
 								 * pos->comp/compill, pos->f/fill          */
 								if (src) {
@@ -917,27 +1173,15 @@ atomicAdd(&dbg_cntr, 1);
 								}
 
 							} /* end if (no other facet yet blocks this facet from view) */
-														} /* end if 0 <= t <= s (facet center is "in" this POS pixel) */
+							} /* end if 0 <= t <= s (facet center is "in" this POS pixel) */
 						} /* end if 0 <= s <= 1 */
 
-						if (j<0){		/* Now adjust s and t */
-							sj0 -= si;
-							tj0 -= tj;
-						}
-						if (j>=0) {
-							sj0 += sj;
-							tj0 += tj;
-						}
+						sj0 += sj;
+						tj0 += tj;
 					} /* end j-loop over POS rows */
 					/* Modify s and t step-wise for the next i-iteration of the pixel loop */
-					if (i<0) {
-						si0 -= si;
-						ti0 -= ti;
-					}
-					if (i>=0) {
-						si0 += si;
-						ti0 += ti;
-					}
+					si0 += si;
+					ti0 += ti;
 
 				} /* end i-loop over POS columns */
 			} /* end else of if (i1 > pos->n || i2 < -pos->n || j1 > pos->n || j2 < -pos->n) */
@@ -952,8 +1196,7 @@ __global__ void posvis_outbnd_krnl32(struct pos_t **pos,
 	double xfactor, yfactor;
 	if (f <size) {
 
-		printf("dbg_cntr in posvis_gpu32 = %i\n", dbg_cntr);
-
+//		printf("dbg_cntr in posvis_gpu32 = %i\n", dbg_cntr);
 
 		if (outbndarr[f]) {
 			/* ijminmax_overall.w = imin_overall
@@ -977,7 +1220,7 @@ __global__ void posvis_outbnd_krnl64(struct pos_t **pos,
 	double xfactor, yfactor;
 	if (f <size) {
 
-		printf("dbg_cntr in posvis_gpu64 = %i\n", dbg_cntr);
+//		printf("dbg_cntr in posvis_gpu64 = %i\n", dbg_cntr);
 
 		if (outbndarr[f]) {
 			/* ijminmax_overall.w = imin_overall
@@ -1036,7 +1279,7 @@ __host__ int posvis_gpu32(
 
 	for (f=start; f<nfrm_alloc; f++) {
 		/* Now the main facet kernel */
-		posvis_facet_krnl32<<<BLK,THD, 0, pv_stream[f-start]>>>(pos, verts,
+		posvis_facet_krnl32mod<<<BLK,THD, 0, pv_stream[f-start]>>>(pos, verts,
 				ijminmax_overall, orbit_offset, oa, usrc,	src, body, comp,
 				nf, f, smooth, outbndarr, set);
 	}

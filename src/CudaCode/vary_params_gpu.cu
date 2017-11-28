@@ -1054,7 +1054,8 @@ __host__ void vary_params_gpu64(
 	gpuErrchk(cudaMalloc((void**)&compute_brightness, sizeof(int)*nsets));
 	gpuErrchk(cudaMalloc((void**)&compute_zmax, sizeof(int)*nsets));
 	gpuErrchk(cudaMalloc((void**)&compute_cosdelta, sizeof(int)*nsets));
-	gpuErrchk(cudaMalloc((void**)&pos, 		   sizeof(struct pos_t*) * nfrm_alloc_max));
+//	gpuErrchk(cudaMalloc((void**)&pos, 		   sizeof(struct pos_t*) * nfrm_alloc_max));
+	cudaCalloc1((void**)&pos, sizeof(struct pos_t*), nfrm_alloc_max);
 	gpuErrchk(cudaMalloc((void**)&posn, 	   sizeof(int) * nfrm_alloc_max));
 	gpuErrchk(cudaMalloc((void**)&ndel, 	   sizeof(int) * nfrm_alloc_max));
 	gpuErrchk(cudaMalloc((void**)&ndop, 	   sizeof(int) * nfrm_alloc_max));
@@ -1131,9 +1132,12 @@ __host__ void vary_params_gpu64(
 
 			/* Determine which POS pixels cover the target, and get distance
 			 * toward Earth of each POS pixel. Pass the frame streams, too. */
-			posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_offset,
-					hposn, outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s],
-					vp_stream, 0);
+//			posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_offset,
+//					hposn, outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s],
+//					vp_stream, 0);
+
+			posvis_tiled_gpu64(dpar, dmod, ddat, pos, verts, orbit_offset, hposn,
+					outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s], vp_stream, 0);
 
 			for (f=0; f<nfrm_alloc; f++) {
 				if (hcomp_zmax[s] || hcomp_xsec[f]) {
@@ -1201,9 +1205,12 @@ __host__ void vary_params_gpu64(
 
 			/* Determine which POS pixels cover the target, and get distance
 			 * toward Earth of each POS pixel. Pass the frame streams, too. */
-			posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_offset,
-					hposn, outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s],
-					vp_stream, 0);
+//			posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_offset,
+//					hposn, outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s],
+//					vp_stream, 0);
+
+			posvis_tiled_gpu64(dpar, dmod, ddat, pos, verts, orbit_offset, hposn,
+					outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s], vp_stream, 0);
 
 			for (f=0; f<nfrm_alloc; f++) {
 				if (hcomp_xsec[f]) {

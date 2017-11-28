@@ -1001,7 +1001,7 @@ __host__ void apply_photo_gpu48(struct mod_t *dmod,	struct dat_t *ddat,
 //		break;
 	case KAASALAINEN:
 		/* Launch single-thread kernel to init Kaas */
-		gpuErrchk(cudaMalloc((void**)&phasefunc, sizeof(float)*(nframes+1)));
+		gpuErrchk(cudaMalloc((void**)&phasefunc, sizeof(double)*(nframes+1)));
 		ap_kaas_init_krnl64<<<BLK,THD, 0, ap_stream[0]>>>(dmod, phasefunc, phase,
 				scale_lommsee, scale_lambert, nframes);
 		checkErrorAfterKernelLaunch("ap_kaas_init_krnl64");

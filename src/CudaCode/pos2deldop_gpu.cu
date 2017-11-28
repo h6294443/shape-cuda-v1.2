@@ -177,7 +177,7 @@ p2ds_stride, p2ds_spb_sq, p2ds_dopfftlen, p2ds_spb_over_stride, p2ds_nsinc2_sq;
 __device__ double p2ds_const1, p2ds_const2, p2ds_one_over_spb, p2ds_delfact,
 p2ds_dopfact;
 
-__device__ int dbg_cntr1=0;
+//__device__ int dbg_cntr1=0;
 
 //__device__ float p2ds_const1f, p2ds_const2f, p2ds_one_over_spbf, p2ds_delfactf, p2ds_dopfactf;
 
@@ -256,7 +256,7 @@ __global__ void pos2deldop_init_krnl(
 		any_overflow[f] = 0;
 		frame[f]->badradar_logfactor = 0.0;
 
-		dbg_cntr1 = 0;
+//		dbg_cntr1 = 0;
 	}
 }
 
@@ -560,7 +560,7 @@ __global__ void pos2deldop_pixel_krnl32(
 		zaddr = (y + n) * (2*n + 1) + (x + n);
 		if (pos[f]->cose_s[zaddr] > 0.0 && pos[f]->body[x][y] == body) {
 
-			atomicAdd(&dbg_cntr1, 1);
+//			atomicAdd(&dbg_cntr1, 1);
 
 			/* Get the (floating-point) delay and Doppler bin of the POS pixel
 			 * center: delPOS and dopPOS. Also get the minimum and maximum
@@ -805,7 +805,7 @@ __global__ void pos2deldop_pixel_krnl64(
 		zaddr = (y + n) * (2*n + 1) + (x + n);
 		if (pos[f]->cose[x][y] > 0.0 && pos[f]->body[x][y] == body) {
 
-			atomicAdd(&dbg_cntr1, 1);
+//			atomicAdd(&dbg_cntr1, 1);
 
 			/* Get the (floating-point) delay and Doppler bin of the POS pixel
 			 * center: delPOS and dopPOS. Also get the minimum and maximum
@@ -1088,7 +1088,7 @@ __global__ void pos2deldop_overflow_krnl32(
 		frame[f]->overflow_xsec = 0.0;
 		frame[f]->overflow_delmean = 0.0;
 		frame[f]->overflow_dopmean = 0.0;
-		printf("dbg_cntr in pos2deldop_gpu32 = %i\n", dbg_cntr1);
+//		printf("dbg_cntr in pos2deldop_gpu32 = %i\n", dbg_cntr1);
 
 		if (any_overflow[f]) {
 //			badradararr[f] = 1;
@@ -1141,7 +1141,7 @@ __global__ void pos2deldop_overflow_krnl64(
 		frame[f]->overflow_delmean = 0.0;
 		frame[f]->overflow_dopmean = 0.0;
 
-		printf("dbg_cntr in pos2deldop_gpu64 = %i\n", dbg_cntr1);
+//		printf("dbg_cntr in pos2deldop_gpu64 = %i\n", dbg_cntr1);
 
 		if (any_overflow[f]) {
 

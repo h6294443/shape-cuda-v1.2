@@ -336,9 +336,9 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	printf("\n");
 	fflush(stdout);
 
-	int debug = 1;
-	if (debug)
-		return(0);
+//	int debug = 1;
+//	if (debug)
+//		return(0);
 
 
 	/* Display the region within each delay-Doppler or Doppler frame that, ac-
@@ -360,7 +360,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	 * tive function at each step. Stop when fractional decrease in the objec-
 	 * tive function from one iteration to the next is less than term_prec.   */
 
-//	do {
+	do {
 		showvals = 1;        /* show reduced chi-square and penalties at beginning */
 		beginerr = enderr;
 		printf("# iteration %d %f", ++iter, beginerr);
@@ -385,7 +385,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 		cntr = first_fitpar % par->npar_update;
 //		p = first_fitpar;
 //		p = 1;
-		for (p=first_fitpar; p<10/*par->nfpar*/; p++) {
+		for (p=first_fitpar; p<par->nfpar; p++) {
 
 			/*  Adjust only parameter p on this try  */
 			hotparam = par->fpntr[p];
@@ -644,7 +644,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			keep_iterating = ((beginerr - enderr)/enderr >= par->term_prec);
 		}
 
-//	} while (keep_iterating);
+	} while (keep_iterating);
 
 	/* Show final values of reduced chi-square, individual penalty functions,
 	 * and the objective function  */
@@ -690,7 +690,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			final_chi2, dofstring, final_redchi2);
 	printf("#\n");
 	printf("\nIterations total: %i\n", iter);
-	printf("CPU fit enderr: %g\n", enderr);
+	printf("CPU fit enderr: %3.8g\n", enderr);
 	fflush(stdout);
 
 	return enderr;

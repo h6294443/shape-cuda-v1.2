@@ -12,7 +12,7 @@ __global__ void dbg_copy_pos_arrays_full_krnl32(struct pos_t **pos, int f,
 	int j = offset / (2*n+1) - n;
 
 	if (offset < npixels) {
-//		b[offset] = pos[f]->b[i][j];
+		b[offset] = pos[f]->b[i][j];
 		cosi[offset] = pos[f]->cosi_s[offset];
 		cose[offset] = pos[f]->cose_s[offset];
 		zz[offset] = pos[f]->z_s[offset];
@@ -26,7 +26,7 @@ __global__ void dbg_copy_pos_arrays_full_krnl64(struct pos_t **pos, int f,
 	int i = offset % (2*n+1) - n;
 	int j = offset / (2*n+1) - n;
 	if (offset < npixels) {
-		//b[offset] = pos[f]->b[i][j];
+		b[offset] = pos[f]->b[i][j];
 		cosi[offset] = pos[f]->cosi[i][j];
 		cose[offset] = pos[f]->cose[i][j];
 		zz[offset] = pos[f]->z[i][j];

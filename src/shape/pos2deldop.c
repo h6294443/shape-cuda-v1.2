@@ -306,7 +306,7 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
 		for (y=pos->ylim[0]; y<=pos->ylim[1]; y++) {
 			if (pos->cose[x][y] > 0.0 && pos->body[x][y] == body && pos->z[x][y]!= -1e20) {
 
-				dbg_cntr++;
+//				dbg_cntr++;
 
 				/*  Get the (floating-point) delay and Doppler bin of the POS pixel center: delPOS and dopPOS.
 				 *  Also get the minimum and maximum (integer) delay and Doppler bins to which this pixel
@@ -576,6 +576,6 @@ int pos2deldop( struct par_t *par, struct photo_t *photo,
 //			fflush(stdout);
 //		}
 //	}
-	printf("dbg_cntr in pos2deldop (CPU) = %i\n", dbg_cntr);
+//	printf("dbg_cntr in pos2deldop (CPU) = %i\n", dbg_cntr);
 	return badradar;
 }

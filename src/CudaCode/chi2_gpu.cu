@@ -814,7 +814,7 @@ __global__ void c2s_lghtcrv_serial_krnl(struct dat_t *ddat, int s, double *dof_c
 			oneovervar = ddat->set[s].desc.lghtcrv.oneovervar[i];
 
 //			printf("%i, %3.8g, %3.8g, %3.8g\n", i, fit, fit, oneovervar);
-
+//			printf("fit[%i], %3.8g\n", i, fit);
 			o2m2om[0].x += obs * obs * oneovervar;
 			o2m2om[0].y += fit * fit * oneovervar;
 			o2m2om[0].z += fit * obs * oneovervar;
@@ -1109,7 +1109,7 @@ __host__ double chi2_gpu(
 						hnframes[s], c2s_stream);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl");
-			printf("chi2_set[%i] (Deldop), %3.8g\n", s, chi2);
+//			printf("chi2_set[%i] (Deldop), %3.8g\n", s, chi2);
 			break;
 		case DOPPLER:
 			if (FP64)
@@ -1965,7 +1965,7 @@ __host__ double chi2_lghtcrv_gpu(
 
 //	printf("o2=%3.6g\n", h_o2m2om[0].x);
 //	printf("m2=%3.6g\n", h_o2m2om[0].y);
-//	printf("om=%3.6g\g", h_o2m2om[0].z);
+//	printf("om=%3.6g\n", h_o2m2om[0].z);
 
 	if (list_breakdown)
 		*chi2_all_lghtcrv += h_dof_chi2set[1];

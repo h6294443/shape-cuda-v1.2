@@ -410,6 +410,7 @@ Modified 2003 April 3 by CM:
 
 #include <stdio.h>
 #include "const.h"
+#include <cuda_runtime_api.h>
 /*****************************************************************************************
                                 DEFINITION OF struct par_t
 *****************************************************************************************/
@@ -746,6 +747,9 @@ struct facet_t {
   double phi;                   /* azimuth (radians) */
   double area;                  /* surface area */
   double x[3];                  /* mean coordinates of corner vertices */
+  double3 nt;					/* Observer-transformed facet normal */
+  int2 ilim;					/* The facet's i and j projection limits i1, 	*/
+  int2 jlim;					/* i2, j1, j2 */
 };
 
 /* Structure side_t defines a single facet side. */
