@@ -750,6 +750,8 @@ struct facet_t {
   double3 nt;					/* Observer-transformed facet normal */
   int2 ilim;					/* The facet's i and j projection limits i1, 	*/
   int2 jlim;					/* i2, j1, j2 */
+  int bin[4];					/* Used for bucket rasterization's facet binning */
+  double3 v0t, v1t, v2t;		/* Transformed facet vertices for bucket rasterization */
 };
 
 /* Structure side_t defines a single facet side. */

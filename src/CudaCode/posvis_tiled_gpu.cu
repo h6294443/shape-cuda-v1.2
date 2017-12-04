@@ -79,6 +79,28 @@ __device__ int posvis_tiled_outbnd, posvis_tiled_smooth;
 
 /* Note that the following custom atomic functions must be declared in each
  * file it is needed (consequence of being a static device function) */
+__device__ static float atomicMaxf(float* address, float val) {
+	int* address_as_i = (int*) address;
+	int old = *address_as_i, assumed;
+	do {
+		assumed = old;
+		old = ::atomicCAS(address_as_i, assumed,
+				__float_as_int(::fmaxf(val, __int_as_float(assumed))));
+	} while (assumed != old);
+	return __int_as_float(old);
+}
+__device__ static float atomicMax64(double* address, double val)
+{
+	unsigned long long* address_as_i = (unsigned long long*) address;
+	unsigned long long old = *address_as_i, assumed;
+	do {
+		assumed = old;
+		old = ::atomicCAS(address_as_i, assumed,
+				__double_as_longlong(::fmaxf(val, __longlong_as_double(assumed))));
+	} while (assumed != old);
+	return __longlong_as_double(old);
+}
+
 __global__ void posvis_tiled_init_krnl64(
 		struct par_t *dpar,
 		struct pos_t **pos,
@@ -234,6 +256,9 @@ __global__ void transform_facet_normals_krnl64(
 			verts[0]->f[f].jlim.x = j1;
 			verts[0]->f[f].ilim.y = i2;
 			verts[0]->f[f].jlim.y = j2;
+			verts[0]->f[f].v0t = v0;
+			verts[0]->f[f].v1t = v1;
+			verts[0]->f[f].v2t = v2;
 
 			/* Now keep track of the global region */
 			if (i1 > pn || i2 < -pn || j1 > pn || j2 < -pn) {
@@ -248,10 +273,257 @@ __global__ void transform_facet_normals_krnl64(
 						(double)j1, (double)j2, ijminmax_overall, frm);
 			}
 		}
+		else {
+			/* The following makes a check in the bin_facets_krnl64 kernel easier */
+			verts[0]->f[f].nt.x = -1.0;
+			verts[0]->f[f].nt.y = -1.0;
+			verts[0]->f[f].nt.z = -1.0;
+		}
+
 
 	}
 }
 
+__global__ void bin_facets_krnl64(struct pos_t **pos,
+		struct vertices_t **verts,
+		int ***facet_index,
+		int **entries,
+		int nf,
+		int frm,
+		int *n_tiles,
+		int *n_tiles_x,
+		int	*n_tiles_y,
+		int tile_size)
+{
+	/* This kernel is responsible for binning visible model facets according to
+	 * which screen tile they appear on. Each facet can belong to 1, 2, or 4
+	 * different facets.  (If the size of individual triangles should exceed
+	 * the tile size, this is no longer true.)
+	 * The kernel has nf threads.
+	 */
+	int f = blockDim.x * blockIdx.x + threadIdx.x;
+	int current_i, next_i, current_j, next_j, i1, i2, j1, j2, bi;
+	int2 xlim, ylim; /* These are the global pos limits */
+	xlim.x = pos[frm]->xlim[0];
+	xlim.y = pos[frm]->xlim[1];
+	ylim.x = pos[frm]->ylim[0];
+	ylim.y = pos[frm]->ylim[1];
+
+
+	/* Check that the thread/facet number is smaller than the # of facets
+	 * and that it's a visible facet  */
+
+	if (f < nf) {
+		/* Weed out any facets not visible to observer */
+		if (verts[0]->f[f].nt.z != -1.0) {
+			bi = 0;	/* Bin index */
+			/* Copy facet limits into register memory for faster access */
+			i1 = verts[0]->f[f].ilim.x;
+			i2 = verts[0]->f[f].ilim.y;
+			j1 = verts[0]->f[f].jlim.x;
+			j2 = verts[0]->f[f].jlim.y;
+
+			/* Now check where the current facet lies, stepping through each
+			 * tile */
+			for (int k=0; k<n_tiles_y[frm]; k++) {
+				current_j = ylim.x + k * tile_size;
+				next_j = current_j + tile_size;
+				for (int n=0; n<n_tiles_x[frm]; n++) {
+					current_i = xlim.x + n * tile_size;
+
+					/* If i1 or i2 AND j1 or j2 fall into this tile, register it */
+					if (((i1>=current_i && i1<next_i)  || (i2>=current_i && i2<next_i)) &&
+						((j1>=current_j && j1<next_j)  || (j2>=current_j && j2<next_j)) ) {
+
+						verts[0]->f[f].bin[bi++] = k*n_tiles_x[frm] + n;
+						atomicAdd(&entries[frm][k*n_tiles_x[frm] + n], 1);
+
+
+					}
+				}
+			}
+
+		}
+	}
+
+
+
+}
+
+__global__ void radar_raster_krnl64(struct pos_t **pos,
+		struct vertices_t **verts,
+		int ***facet_index,
+		int **entries,
+		int nf,
+		int frm,
+		int *n_tiles,
+		int *n_tiles_x,
+		int	*n_tiles_y,
+		int tile_size) {
+
+	/* This kernel performs the rasterization tile by tile.  Each thread block
+	 * is responsible for one tile. */
+
+	/* Declare the shared memory arrays and initialize with block-stride loop,
+	 * then synchronize all threads in the current thread block */
+	__shared__ double pos_z[55][55];	/* One per thread block */
+	__shared__ double pos_cose[55][55];	/* One per thread block */
+	int i, j, ig, jg, i1, i2, j1, j2;	/* ig,jg are global indices */
+	int tile_i1, tile_i2, tile_j1, tile_j2, fct_indx;
+	double3 v0, v1, v2, n;
+
+	for (int index=threadIdx.x; index<tile_size; index+=blockDim.x) {
+		i = index % 55;
+		j = index / 55;
+		pos_z[i][j] = -1e20;
+		pos_cose[i][j] = 0.0;
+	}
+	__syncthreads();
+
+
+	/* Determine which tile this thread block is responsible for and
+	 * which element of the thread block this thread is. 	 */
+	int bin = blockIdx.x;
+	int index = threadIdx.x;
+	int2 bn; bn.x = bin % n_tiles_x[frm]; bn.y = bin / n_tiles_x[frm];
+	__shared__ int xlim, ylim;
+	__shared__ double kmpxl;
+
+	/* Load the pos limits to shared memory for faster access */
+	if (threadIdx.x==0) {
+		xlim = pos[frm]->xlim[0];
+		ylim = pos[frm]->ylim[0];
+		kmpxl = pos[frm]->km_per_pixel;
+	}
+
+	/* Check that we are within bounds on both bin counter and # of entries in
+	 * that bin	*/
+	if (bin < n_tiles[frm]) {
+		if (index < entries[frm][bin]) {
+
+			/* Load facet index into registers */
+			fct_indx = facet_index[frm][bin][index];
+
+			/* Load transformed facet vertices into registers */
+			v0 = verts[0]->f[fct_indx].v0t;
+			v1 = verts[0]->f[fct_indx].v1t;
+			v2 = verts[0]->f[fct_indx].v2t;
+			n  = verts[0]->f[fct_indx].nt;
+
+			/* Calculate and store the boundaries of this tile */
+			tile_i1 = xlim + bn.x * 55;
+			tile_i2 = tile_i1 + 55;
+			tile_j1 = ylim + bn.y * 55;
+			tile_j2 = tile_j1 + 55;
+
+			/* Load this facet's boundaries and clamp them if needed, then
+			 * convert to local shared memory array addressing  */
+			i1 = max(verts[0]->f[fct_indx].ilim.x, tile_i1);
+			i2 = min(verts[0]->f[fct_indx].ilim.y, tile_i2);
+			j1 = max(verts[0]->f[fct_indx].jlim.x, tile_j1);
+			j2 = min(verts[0]->f[fct_indx].jlim.y, tile_j2);
+
+			/* Precalculate s and t components for the pixel loop */
+			double a, b, c, d, e, h, ti, tj, si, sj, si0, sj0, ti0, tj0, sz, tz, den, s, t, z, old;
+//			int pxa;
+			a = i1*kmpxl - v0.x;
+			b = v2.y - v1.y;
+			c = v2.x - v1.x;
+			d = j1*kmpxl - v0.y;
+			e = v1.x - v0.x;
+			h = v1.y - v0.y;
+			den = e*b - c*h;
+			ti = -h*kmpxl/den;
+			tj = e*kmpxl/den;
+			si = b*kmpxl/den;
+			sj = -c*kmpxl/den;
+			si0 = (a*b - c*d)/den;
+			ti0 = (e*d -a*h)/den;
+			sz = v1.z - v0.z;
+			tz = v2.z - v1.z;
+
+			/* Now convert i1, i2, j1, j2 to shared-memory tile coordinates */
+			i1 -= (xlim + 55 * bn.x);
+			i2 -= (xlim + 55 * bn.x);
+			j1 -= (ylim + 55 * bn.y);
+			j2 -= (ylim + 55 * bn.y);
+
+			/* Facet is at least partly within POS frame: find all POS
+			 * pixels whose centers project onto this facet  */
+			for (i=i1; i<=i2; i++) {
+
+				sj0 = si0;	/* Initialize this loop's base sj0, tj0 */
+				tj0 = ti0;
+
+				for (j=j1; j<=j2; j++) {
+
+					/* Calculate local pixel address for shared memory arrays */
+					//pxa = (j+pn) * span + (i+pn);
+					s = sj0;
+					t = tj0;
+
+					if ((s >= -SMALLVAL) && (s <= 1.0 + SMALLVAL)) {// &&
+						if(	(t >= -SMALLVAL) && (t <= s + SMALLVAL))	{
+
+							/* Compute z-coordinate of pixel center: its
+							 * distance measured from the origin towards
+							 * Earth.    */
+							z = v0.z + s*sz + t*tz;
+
+							/* Compare calculated z to stored shared memory z
+							 * array at this address and store the bigger value */
+							old = atomicMax64(&pos_z[i][j], z);
+
+							if (old < z){
+
+//								if (pvst_smooth) {
+//
+//									/* Get pvs_smoothed version of facet unit
+//									 * normal: Take the linear combination
+//									 * of the three vertex normals; trans-
+//									 * form from body to observer coordina-
+//									 * tes; and make sure that it points
+//									 * somewhat in our direction.         */
+//									n.x = tv0.x + s * n1n0.x + t * tv2.x;
+//									n.y = tv0.y + s * n1n0.y + t * tv2.y;
+//									n.z = tv0.z + s * n1n0.z + t * tv2.z;
+//									dev_cotrans8(&n, oa, n, 1, frm);
+//									dev_normalize2(&n);
+//								}
+//
+								/* Determine scattering angles.   */
+								if (n.z > 0.0)
+									atomicExch((unsigned long long int*)&pos_cose[i][j],
+											__double_as_longlong(n.z));
+
+								/* Keeping track of facets may not be required.  */
+//								atomicExch(&pos[frm]->f[i][j], f);
+
+							} /* end if (no other facet yet blocks this facet from view) */
+						} /* end if 0 <= t <= s (facet center is "in" this POS pixel) */
+					} /* end if 0 <= s <= 1 */
+
+					sj0 += sj;
+					tj0 += tj;
+				} /* end j-loop over POS rows */
+				/* Modify s and t step-wise for the next i-iteration of the pixel loop */
+				si0 += si;
+				ti0 += ti;
+
+			} /* end i-loop over POS columns */
+		}
+	}
+	__syncthreads();
+
+	/* Now write the shared memory array tiles into the global memory z buffer
+	 * and cosine array, again with a block-stride loop */
+	for (int index=threadIdx.x; index<tile_size; index+=blockDim.x) {
+		i = index % 55;			j = index / 55;
+		ig = i + xlim + 55 * bn.x;	jg = j + ylim + 55 * bn.y;
+		pos[frm]->z[ig][jg] = pos_z[i][j];
+		pos[frm]->cose[ig][jg] = pos_cose[i][j];
+	}
+}
 
 __host__ int posvis_tiled_gpu64(
 		struct par_t *dpar,
@@ -269,19 +541,26 @@ __host__ int posvis_tiled_gpu64(
 		int body, int comp, unsigned char type, cudaStream_t *pv_stream,
 		int src_override) {
 
-	int f, outbnd, smooth, start, overlap, specific_span;
-	dim3 BLK,THD, BLKfrm, THD64;
+	int f, outbnd, smooth, start, overlap, specific_span, bin;
+	dim3 BLK,THD, BLKfrm, THD64, BLKtile[nfrm_alloc], THDtile[nfrm_alloc];
 	double4 *ijminmax_overall;
 	double3 *oa, *usrc;
-	int *nvf, *xspan, *yspan, *n_tiles_x, *n_tiles_y, *n_tiles;
+	int *nvf, *xspan, *yspan, *n_tiles_x, *n_tiles_y, *n_tiles, **entries;
 	int oasize = nfrm_alloc*3;
+	int maxentries[nfrm_alloc];
+
+	/* The following triple pointer is used to store model facet indices. They
+	 * are organized by tiles/bins and frames. This is essential for the shared
+	 * memory bucket rasterization	 */
+	int ***facet_index;	/* will be addressed facet_index[frame][bin][index]
 
 	/* To-Do:  Calculate these spans at program launch from max shared memory
 	 * per thread block	 */
 	int span_r64 = 55;		/* These four spans are the specific maximum tile */
 	int span_r32 = 78;		/* sides depending on FP32/FP64 mode and data     */
 	int span_lc64 = 45;		/* type - lightcurves need one more pos array     */
-	int span_lc32 = 64;		/* than radar.									  */
+	int span_lc32 = 63;		/* than radar.									  */
+	int tile_size = span_r64*span_r64;
 
 
 	/* Launch parameters for the facet_streams kernel */
@@ -309,45 +588,80 @@ __host__ int posvis_tiled_gpu64(
 	cudaCalloc1((void**)&n_tiles, 			sizeof(int), 	 nfrm_alloc);
 	cudaCalloc1((void**)&n_tiles_x, 		sizeof(int), 	 nfrm_alloc);
 	cudaCalloc1((void**)&n_tiles_y, 		sizeof(int), 	 nfrm_alloc);
+	/* Allocate the frame portion of the facet index triple pointer and
+	 * the bin entries counter */
+	cudaCalloc1((void**)&facet_index,		sizeof(int**),	 nfrm_alloc);
+	cudaCalloc1((void**)&entries, 			sizeof(int), 	 nfrm_alloc);
 
 	/* Initialize/pre-calculate values for rasterization */
 	posvis_tiled_init_krnl64<<<BLKfrm,THD64>>>(dpar, pos, ijminmax_overall, oa, usrc,
 			outbndarr, comp, start, src, nfrm_alloc, set, src_override);
 	checkErrorAfterKernelLaunch("posvis_tiled_init_krnl64");
 
-	/* Transform facet normals and determine bounding for facets and pos */
-	for (f=start; f<nfrm_alloc; f++) {
+	/* Transform facet normals and determine bounding for facets and pos.  */
+	for (f=start; f<nfrm_alloc; f++)
 		/* Now the main facet kernel */
-		transform_facet_normals_krnl64<<<BLK,THD,0,pv_stream[1]>>>(dmod, pos,
+		transform_facet_normals_krnl64<<<BLK,THD,0,pv_stream[f]>>>(dmod, pos,
 				verts, ijminmax_overall, orbit_offset, oa, usrc, outbndarr, nf,
 				nvf, f, src);
-	}
-	checkErrorAfterKernelLaunch("posvis_facet_krnl64");
+
+	checkErrorAfterKernelLaunch("transform_facet_normals_krnl64");
 	cudaDeviceSynchronize();
-	for (f=start; f<nfrm_alloc; f++) {
-		printf("set[%i] frame[%i] xlim[0] = %i\n", set, f, pos[f]->xlim[0]);
-		printf("set[%i] frame[%i] xlim[0] = %i\n", set, f, pos[f]->xlim[1]);
-		printf("set[%i] frame[%i] ylim[1] = %i\n", set, f, pos[f]->ylim[0]);
-		printf("set[%i] frame[%i] ylim[1] = %i\n", set, f, pos[f]->ylim[1]);
-		printf("set[%i] frame[%i] # of visible facets = %i\n", set, f, nvf[f]);
-	}
+//	for (f=start; f<nfrm_alloc; f++) {
+//		printf("set[%i] frame[%i] xlim[0] = %i\n", set, f, pos[f]->xlim[0]);
+//		printf("set[%i] frame[%i] xlim[0] = %i\n", set, f, pos[f]->xlim[1]);
+//		printf("set[%i] frame[%i] ylim[1] = %i\n", set, f, pos[f]->ylim[0]);
+//		printf("set[%i] frame[%i] ylim[1] = %i\n", set, f, pos[f]->ylim[1]);
+//		printf("set[%i] frame[%i] # of visible facets = %i\n", set, f, nvf[f]);
+//	}
 
 	/* Now calculate the tiling parameters to cover the POS view */
 	for (f=start; f<nfrm_alloc; f++) {
+		maxentries[f] = 0;
 		xspan[f] = pos[f]->xlim[1] - pos[f]->xlim[0] + 1;
 		yspan[f] = pos[f]->ylim[1] - pos[f]->ylim[0] + 1;
 		n_tiles_x[f] = (xspan[f]/specific_span) + 1;
 		n_tiles_y[f] = (yspan[f]/specific_span) + 1;
 		n_tiles[f] = n_tiles_x[f] * n_tiles_y[f];
+		BLKtile[f].x = n_tiles[f];
 
-		printf("xspan[%i] = %i\n", f, xspan[f]);
-		printf("yspan[%i] = %i\n", f, yspan[f]);
-		printf("n_tiles[%i] = %i\n", f, n_tiles[f]);
-		printf("n_tiles_x[%i] = %i\n", f, n_tiles_x[f]);
-		printf("n_tiles_y[%i] = %i\n", f, n_tiles_y[f]);
-
+		/* Now allocate the tiles section of the facet index and then step
+		 * through each tile section to allocate enough space for 1024
+		 * facet indices.  This is the maximum number of entries allowable
+		 * per thread block		 */
+		/* Allocate the entries array to keep track of how many facets each bin holds */
+		cudaCalloc((void**)&entries[f], sizeof(int), n_tiles[f]);
+		cudaCalloc1((void**)&facet_index[f], sizeof(int*), n_tiles[f]);
+		for (int ti=0; ti<n_tiles[f]; ti++)
+			cudaCalloc((void**)&facet_index, sizeof(int), 1024);
 	}
 
+	/* Now we bin the triangles into the tiles */
+	for (f=start; f<nfrm_alloc; f++) {
+		bin_facets_krnl64<<<BLK,THD,0,pv_stream[f]>>>(pos, verts, facet_index,
+				entries, nf, f, n_tiles, n_tiles_x, n_tiles_y, specific_span);
+	}
+	checkErrorAfterKernelLaunch("bin_facets_krnl64");
+
+	/* Now check that there are not more than 1024 facet entries per bin.
+	 * Warning only for now.
+	 * Also determine the maximum number of facets in any bin in a frame */
+	for (f=start; f<nfrm_alloc; f++) {
+		for (bin=0; bin<n_tiles[f]; bin++) {
+			maxentries[f] = max(entries[f][bin], maxentries[f]);
+			if (entries[f][bin] > 1024)
+				printf("Error.  %i facets in bin %i in set[%i] frame[%i]\n", entries[f][bin], bin, set, f);
+		}
+		THDtile[f].x = maxentries[f];
+	}
+
+	/* Now the main rasterization kernel.  */
+	for (f=start; f<nfrm_alloc; f++) {
+		radar_raster_krnl64<<<BLKtile[f],THDtile[f],0,pv_stream[f]>>>(pos,
+				verts, facet_index, entries, nf, f, n_tiles, n_tiles_x,
+				n_tiles_y, tile_size);
+	}
+	checkErrorAfterKernelLaunch("radar_raster_krnl_64");
 
 //	posvis_facet_krnl64<<<BLK,THD, 0, pv_stream[1]>>>(pos, verts,
 //					ijminmax_overall, orbit_offset, oa, usrc,	src, body, comp,
@@ -373,6 +687,9 @@ __host__ int posvis_tiled_gpu64(
 //	cudaFree(ijminmax_overall);
 //	cudaFree(oa);
 //	cudaFree(usrc);
+
+	cudaFree(facet_index);
+	cudaFree(entries);
 
 	return outbnd;
 }

@@ -919,7 +919,7 @@ __global__ void posvis_facet_krnl64(
 										}
 									}
 									dev_POSrect_gpu64(pos, src, (double)i1, (double)i2, (double)j1,
-															(double)j2, ijminmax_overall, frm);
+											(double)j2, ijminmax_overall, frm);
 									/* Next lines change pos->body/bodyill,
 									 * pos->comp/compill, pos->f/fill          */
 									if (src) {
