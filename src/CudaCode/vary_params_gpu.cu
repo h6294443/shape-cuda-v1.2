@@ -1138,37 +1138,37 @@ __host__ void vary_params_gpu64(
 
 			posvis_tiled_gpu64(dpar, dmod, ddat, pos, verts, orbit_offset, hposn,
 					outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s], vp_stream, 0);
-
-			for (f=0; f<nfrm_alloc; f++) {
-				if (hcomp_zmax[s] || hcomp_xsec[f]) {
-					/* Zero out the fit delay-Doppler image and call pos2deldop
-					 * to create the fit image by mapping power from the plane
-					 * of sky to delay-Doppler space.    				  */
-					clrvect_krnl<<<ddBLK[f],THD, 0, vp_stream[f]>>>(ddat,
-							ddsize[f], s, f, FP64);
-				}/* End frames loop again to call pos2deldop streams version */
-			} checkErrorAfterKernelLaunch("clrvect_krnl");
-
-			/* Call the CUDA pos2deldop function */
-			pos2deldop_gpu64(dpar, dmod, ddat, pos, ddframe, xylim, ndel, ndop,
-					0.0, 0.0, 0.0, 0, s, nfrm_alloc, 0, outbndarr, vp_stream);
-
-			/* Calculate zmax for all frames (assumption: all pos in this set
-			 * have the same pixel dimensions) */
-			if (hcomp_zmax[s]) {
-				zmax = compute_zmax_gpu64(ddat, pos, nfrm_alloc, npxls[0], s, vp_stream);
-				zmax_final_krnl64<<<1,1>>>(zmax);
-				checkErrorAfterKernelLaunch("zmax_final_krnl64");
-			}
-
-			/* Calculate radar cross section for each frame in set */
-			xsec[0] = compute_deldop_xsec_gpu64(ddat, hnframes[s], ddsize[0], s, vp_stream);
-			xsec_deldop_krnl64<<<1,1>>>(xsec[0]);
-			checkErrorAfterKernelLaunch("xsec_deldop_krnl64");
-
-			if (hcomp_cosdelta[s])
-				cosdelta_krnl<<<BLKfrm,THD64>>>(ddat, s, f, FP64);
-			checkErrorAfterKernelLaunch("cosdelta_krnl");
+//
+//			for (f=0; f<nfrm_alloc; f++) {
+//				if (hcomp_zmax[s] || hcomp_xsec[f]) {
+//					/* Zero out the fit delay-Doppler image and call pos2deldop
+//					 * to create the fit image by mapping power from the plane
+//					 * of sky to delay-Doppler space.    				  */
+//					clrvect_krnl<<<ddBLK[f],THD, 0, vp_stream[f]>>>(ddat,
+//							ddsize[f], s, f, FP64);
+//				}/* End frames loop again to call pos2deldop streams version */
+//			} checkErrorAfterKernelLaunch("clrvect_krnl");
+//
+//			/* Call the CUDA pos2deldop function */
+//			pos2deldop_gpu64(dpar, dmod, ddat, pos, ddframe, xylim, ndel, ndop,
+//					0.0, 0.0, 0.0, 0, s, nfrm_alloc, 0, outbndarr, vp_stream);
+//
+//			/* Calculate zmax for all frames (assumption: all pos in this set
+//			 * have the same pixel dimensions) */
+//			if (hcomp_zmax[s]) {
+//				zmax = compute_zmax_gpu64(ddat, pos, nfrm_alloc, npxls[0], s, vp_stream);
+//				zmax_final_krnl64<<<1,1>>>(zmax);
+//				checkErrorAfterKernelLaunch("zmax_final_krnl64");
+//			}
+//
+//			/* Calculate radar cross section for each frame in set */
+//			xsec[0] = compute_deldop_xsec_gpu64(ddat, hnframes[s], ddsize[0], s, vp_stream);
+//			xsec_deldop_krnl64<<<1,1>>>(xsec[0]);
+//			checkErrorAfterKernelLaunch("xsec_deldop_krnl64");
+//
+//			if (hcomp_cosdelta[s])
+//				cosdelta_krnl<<<BLKfrm,THD64>>>(ddat, s, f, FP64);
+//			checkErrorAfterKernelLaunch("cosdelta_krnl");
 
 			break;
 		case DOPPLER:
@@ -1212,35 +1212,35 @@ __host__ void vary_params_gpu64(
 			posvis_tiled_gpu64(dpar, dmod, ddat, pos, verts, orbit_offset, hposn,
 					outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s], vp_stream, 0);
 
-			for (f=0; f<nfrm_alloc; f++) {
-				if (hcomp_xsec[f]) {
-					/* Zero out the fit delay-Doppler image and call pos2deldop
-					 * to create the fit image by mapping power from the plane
-					 * of sky to delay-Doppler space.    				      */
-					clrvect_krnl<<<ddBLK[f],THD, 0, vp_stream[f]>>>(ddat,
-							hndop[f], s, f, FP64);
-					/* End frames loop again to call pos2deldop streams version */
-				}
-			} checkErrorAfterKernelLaunch("clrvect_krnl");
-
-			pos2doppler_gpu64(dpar, dmod, ddat, pos, dframe, xylim, 0.0,
-					0.0, 0.0, ndop, 0, s, hnframes[s], 0, outbndarr, vp_stream);
-
-			/* Calculate the Doppler cross-section if applicable */
-			for (f=0; f<nfrm_alloc; f++) {
-				if (hcomp_xsec[f]) {
-					/* Compute cross section */
-					xsec[f]=0.0;
-					xsec[f] = compute_doppler_xsec64(ddat, hndop[f], s, f);
-				}
-			}
-			/* Finalize the xsec calculations and calculate cosdelta if specified */
-			for (f=0; f<nfrm_alloc; f++) {
-				if (hcomp_xsec[f])
-					xsec_doppler_krnl64<<<1,1,0,vp_stream[f]>>>(ddat, xsec[f], s, f);
-			}
-			if (compute_cosdelta)
-				cosdelta_krnl<<<BLKfrm,THD64,0,vp_stream[0]>>>(ddat, s, nfrm_alloc, FP64);
+//			for (f=0; f<nfrm_alloc; f++) {
+//				if (hcomp_xsec[f]) {
+//					/* Zero out the fit delay-Doppler image and call pos2deldop
+//					 * to create the fit image by mapping power from the plane
+//					 * of sky to delay-Doppler space.    				      */
+//					clrvect_krnl<<<ddBLK[f],THD, 0, vp_stream[f]>>>(ddat,
+//							hndop[f], s, f, FP64);
+//					/* End frames loop again to call pos2deldop streams version */
+//				}
+//			} checkErrorAfterKernelLaunch("clrvect_krnl");
+//
+//			pos2doppler_gpu64(dpar, dmod, ddat, pos, dframe, xylim, 0.0,
+//					0.0, 0.0, ndop, 0, s, hnframes[s], 0, outbndarr, vp_stream);
+//
+//			/* Calculate the Doppler cross-section if applicable */
+//			for (f=0; f<nfrm_alloc; f++) {
+//				if (hcomp_xsec[f]) {
+//					/* Compute cross section */
+//					xsec[f]=0.0;
+//					xsec[f] = compute_doppler_xsec64(ddat, hndop[f], s, f);
+//				}
+//			}
+//			/* Finalize the xsec calculations and calculate cosdelta if specified */
+//			for (f=0; f<nfrm_alloc; f++) {
+//				if (hcomp_xsec[f])
+//					xsec_doppler_krnl64<<<1,1,0,vp_stream[f]>>>(ddat, xsec[f], s, f);
+//			}
+//			if (compute_cosdelta)
+//				cosdelta_krnl<<<BLKfrm,THD64,0,vp_stream[0]>>>(ddat, s, nfrm_alloc, FP64);
 
 			break;
 		case POS:

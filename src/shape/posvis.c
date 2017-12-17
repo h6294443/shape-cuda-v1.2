@@ -308,7 +308,7 @@ int posvis( struct vertices_t *verts, double orbit_offset[3], struct pos_t *pos,
             														  / (2*pos->n + 1);
 		pos->posbnd_logfactor = log(xfactor*yfactor);
 	}
-//	dbg_print_pos_arrays_full_host(pos);
+	dbg_print_pos_arrays_full_host(pos);
 //	dbg_print_facet_normals_dbl3(dbg_hn, verts->nf, "CPU_nrmls.csv");
 //	dbg_print_facet_normals_dbl3(dbg_hn, nf, "FP64_nrmls.csv");
 	printf("dbg_cntr in posvis (CPU) = %i\n", dbg_cntr);
