@@ -93,7 +93,6 @@ void posmask( struct pos_t *pos, double tol)
             from those seen in the POS, calculate the distance from the
             mask pixel to the source and compare it to the distance from
             the POS pixel to the source.                                  */
-
         if (fabs(i0_dbl) < n && fabs(j0_dbl) < n
                   && (*pos).zill[im][jm] > -bignum
                   && ((*pos).f[i][j]    != (*pos).fill[im][jm]    ||

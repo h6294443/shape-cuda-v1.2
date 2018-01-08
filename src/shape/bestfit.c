@@ -303,7 +303,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 
 	/* Compute deldop_zmax_save, cos_subradarlat_save, rad_xsec_save, and
 	 * opt_brightness_save for the initial model  */
-	call_vary_params = 1;
+//	call_vary_params = 1;
 	if (call_vary_params)
 	{
 		realize_mod( par, mod);
@@ -323,6 +323,10 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	 * the initial model, calculate the fits, return initial model's objective
 	 * function as enderr.                          */
 	hotparam = &dummyval;
+
+//	printf("objective(0.0) call\n");
+
+
 	enderr = objective(0.0);
 	printf("#\n# searching for best fit ...\n");
 	printf("%4d %8.6f to begin", 0, enderr);
@@ -360,7 +364,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	 * tive function at each step. Stop when fractional decrease in the objec-
 	 * tive function from one iteration to the next is less than term_prec.   */
 
-	do {
+//	do {
 		showvals = 1;        /* show reduced chi-square and penalties at beginning */
 		beginerr = enderr;
 		printf("# iteration %d %f", ++iter, beginerr);
@@ -385,7 +389,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 		cntr = first_fitpar % par->npar_update;
 //		p = first_fitpar;
 //		p = 1;
-		for (p=first_fitpar; p<par->nfpar; p++) {
+		for (p=first_fitpar; p<1/*par->nfpar*/; p++) {
 
 			/*  Adjust only parameter p on this try  */
 			hotparam = par->fpntr[p];
@@ -425,10 +429,11 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			 * objb is less than obja and objc.  Hence there is at least one
 			 * local minimum (but not necessarily *any* global minimum)
 			 * somewhere between ax and cx.          */
+			printf("mnbrak start\n");
 			ax = *hotparam;
 			bx = ax + par->fparstep[p];
 			mnbrak( &ax, &bx, &cx, &obja, &objb, &objc, objective);
-
+//			printf("mnbrak, over\n");
 			/* Before homing in on local minimum, initialize flags that will
 			 * tell us if model extended beyond POS frame (sky rendering) for
 			 * any trial parameter value(s), if it extended beyond any POS ima-
@@ -456,11 +461,13 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			 * a modified version of brent that has an absolute fitting tole-
 			 * rance as one of its arguments, in addition to the existing
 			 * fractional tolerance.                                      */
+
+			printf("brent_abs start \n");
 			enderr = brent_abs( ax, bx, cx, objective,
 					par->fpartol[p], par->fparabstol[p], &xmin);
 
 
-//			printf("xmin, %3.8g\n", xmin);
+			printf("xmin, %3.8g\n", xmin);
 
 			/* Realize whichever part(s) of the model has changed.
 			 *
@@ -644,7 +651,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			keep_iterating = ((beginerr - enderr)/enderr >= par->term_prec);
 		}
 
-	} while (keep_iterating);
+//	} while (keep_iterating);
 
 	/* Show final values of reduced chi-square, individual penalty functions,
 	 * and the objective function  */

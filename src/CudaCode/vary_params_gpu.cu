@@ -403,9 +403,9 @@ __global__ void finalize_pthreads_krnl(struct dat_t *ddat, double sum_deldop_zma
 
 __global__ void delay_params_krnl(struct par_t *dpar, struct dat_t *ddat,
 		struct pos_t **pos, struct deldopfrm_t **frame, int *compute_xsec,
-		int *posn, int *ndel, int *ndop, int s, int size) {
+		int *posn, int *ndel, int *ndop, int s, int size, int4 *xylim) {
 	/* nframes-threaded kernel */
-	int f = blockIdx.x * blockDim.x + threadIdx.x;
+	int f = threadIdx.x;
 
 	if (f < size) {
 		compute_xsec[f] = (dpar->vary_radalb != VARY_NONE
@@ -416,14 +416,18 @@ __global__ void delay_params_krnl(struct par_t *dpar, struct dat_t *ddat,
 		ndel[f] = ddat->set[s].desc.deldop.frame[f].ndel;
 		ndop[f] = ddat->set[s].desc.deldop.frame[f].ndop;
 		frame[f] = &ddat->set[s].desc.deldop.frame[f];
+		xylim[f].w = pos[f]->xlim[0];
+		xylim[f].x = pos[f]->xlim[1];
+		xylim[f].y = pos[f]->ylim[0];
+		xylim[f].z = pos[f]->ylim[1];
 	}
 }
 
 __global__ void dop_params_krnl(struct par_t *dpar, struct dat_t *ddat,
 		struct pos_t **pos, struct dopfrm_t **frame, int *compute_xsec,
-		int *posn, int *ndop, int s, int size) {
+		int *posn, int *ndop, int s, int size, int4 *xylim) {
 	/* nframes-threaded kernel */
-	int f = blockIdx.x * blockDim.x + threadIdx.x;
+	int f = threadIdx.x;
 
 	if (f < size) {
 		compute_xsec[f] = (dpar->vary_radalb != VARY_NONE &&
@@ -432,11 +436,16 @@ __global__ void dop_params_krnl(struct par_t *dpar, struct dat_t *ddat,
 		posn[f] = pos[f]->n;
 		ndop[f] = ddat->set[s].desc.doppler.frame[f].ndop;
 		frame[f] = &ddat->set[s].desc.doppler.frame[f];
+		xylim[f].w = pos[f]->xlim[0];
+		xylim[f].x = pos[f]->xlim[1];
+		xylim[f].y = pos[f]->ylim[0];
+		xylim[f].z = pos[f]->ylim[1];
 	}
 }
 
 __global__ void lghtcrv_params_krnl(struct par_t *dpar, struct dat_t *ddat,
-		struct pos_t **pos, int *posn, int *bistatic, int s, int size) {
+		struct pos_t **pos, int *posn, int *bistatic, int s, int size,
+		int4 *xylim) {
 	/* nframes-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x + 1;
 
@@ -444,6 +453,10 @@ __global__ void lghtcrv_params_krnl(struct par_t *dpar, struct dat_t *ddat,
 		pos[f] = &ddat->set[s].desc.lghtcrv.rend[f].pos;
 		posn[f] = pos[f]->n;
 		bistatic[f] = pos[f]->bistatic;
+		xylim[f].w = pos[f]->xlim[0];
+		xylim[f].x = pos[f]->xlim[1];
+		xylim[f].y = pos[f]->ylim[0];
+		xylim[f].z = pos[f]->ylim[1];
 	}
 }
 
@@ -539,8 +552,11 @@ __global__ void posclr_krnl(struct pos_t **pos, int *posn, int f, int dblflg, in
 				pos[f]->cosill[i][j] = 0.0;
 				pos[f]->zill[i][j] = -HUGENUMBER;
 
-				pos[f]->xlim2[0] = pos[f]->ylim2[0] =  n;
-				pos[f]->xlim2[1] = pos[f]->ylim2[1] = -n;
+				if (offset==0) {
+					pos[f]->xlim2[0] = pos[f]->ylim2[0] =  n;
+					pos[f]->xlim2[1] = pos[f]->ylim2[1] = -n;
+				}
+
 			}
 		}
 		else {
@@ -553,28 +569,393 @@ __global__ void posclr_krnl(struct pos_t **pos, int *posn, int f, int dblflg, in
 				pos[f]->cosill_s[offset] = 0.0;
 				pos[f]->zill_s[offset] = -HUGENUMBER;
 
-				pos[f]->xlim2[0] = pos[f]->ylim2[0] =  n;
-				pos[f]->xlim2[1] = pos[f]->ylim2[1] = -n;
+				if (offset==0) {
+					pos[f]->xlim2[0] = pos[f]->ylim2[0] =  n;
+					pos[f]->xlim2[1] = pos[f]->ylim2[1] = -n;
+				}
 			}
 		}
 
 		/* In the x direction, reset the model's leftmost and rightmost
 		 * pixel number to dummy values, and similarly for the y direction   */
+		if (offset==0) {
+			pos[f]->xlim[0] = pos[f]->ylim[0] =  n;
+			pos[f]->xlim[1] = pos[f]->ylim[1] = -n;
+		}
+
+	}
+}
+__global__ void posclr_fast_krnl(struct pos_t **pos, int *posn, int dblflg, int lcflg)
+{
+	/* This kernel launches nframes blocks of threads */
+	int index, i, j;
+	int f = blockIdx.x;
+	__shared__ int n, nx, npixels, bistatic;
+
+	if (threadIdx.x==0) {
+		n = posn[f];
+		nx = 2*n+1;
+		npixels = nx*nx;
+		bistatic = pos[f]->bistatic;
 		pos[f]->xlim[0] = pos[f]->ylim[0] =  n;
 		pos[f]->xlim[1] = pos[f]->ylim[1] = -n;
+
+		if (bistatic) {
+			pos[f]->xlim2[0] = pos[f]->ylim2[0] =  n;
+			pos[f]->xlim2[1] = pos[f]->ylim2[1] = -n;
+		}
+	}
+	__syncthreads();
+
+
+	/* This is set up for a grid-stride loop. One can still launch this kernel
+	 * with npixels threads - the loop will make just one iteration. 	 */
+	for (index=threadIdx.x; index<npixels; index+=blockDim.x) {
+		i = (index % nx) - n;
+		j = (index / nx) - n;
+
+		/* For each POS pixel, zero out the optical brightness (b) and
+		 * cos(scattering angle), reset the z coordinate (distance from COM towards
+		 * Earth) to a dummy value, and reset the body, component, and facet onto
+		 * which the pixel center projects to  dummy values                  */
+//		pos[f]->body[i][j] = pos[f]->comp[i][j] = pos[f]->f[i][j] = -1;
+		if (lcflg)
+			pos[f]->b[i][j] = 0.0;
+
+		if (dblflg) {
+			pos[f]->cose[i][j] = 0.0;
+			if (lcflg)
+				pos[f]->cosi[i][j] = 0.0;
+			pos[f]->z[i][j] = -HUGENUMBER;
+
+			/* For a bistatic situation (lightcurve or plane-of-sky dataset), zero out
+			 * cos(incidence angle) and reset the distance towards the sun, the body,
+			 * component, and facet numbers as viewed from the sun, and the model's
+			 * maximum projected extent as viewed from the sun to dummy values    */
+			if (bistatic) {
+//				pos[f]->bodyill[i][j] = pos[f]->compill[i][j] = pos[f]->fill[i][j] = -1;
+				pos[f]->cosill[i][j] = 0.0;
+				pos[f]->zill[i][j] = -HUGENUMBER;
+			}
+		}
+		else {
+			pos[f]->cose_s[index] = pos[f]->cosi_s[index] = 0.0;
+			pos[f]->z_s[index] = -HUGENUMBER;
+			if (bistatic) {
+//				pos[f]->bodyill[i][j] = pos[f]->compill[i][j] = pos[f]->fill[i][j] = -1;
+				pos[f]->cosill_s[index] = 0.0;
+				pos[f]->zill_s[index] = -HUGENUMBER;
+			}
+		}
+	}
+}
+__global__ void posclr_radar_krnl64(struct pos_t **pos, int *posn, int f)
+{
+	/* This kernel launches as many blocks as needed for one frame.  Each thread handles
+	 * just one pixel.  Frames are streamed. */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int i, j;
+
+	__shared__ int n, nx, npixels;
+
+	if (threadIdx.x==0) {
+		n = posn[f];
+		nx = 2*n+1;
+		npixels = nx*nx;
+
+		if (offset==0) {
+			pos[f]->xlim[0] = pos[f]->ylim[0] =  n;
+			pos[f]->xlim[1] = pos[f]->ylim[1] = -n;
+		}
+	}
+	__syncthreads();
+
+	if (offset < npixels) {
+		i = (offset % nx) - n;
+		j = (offset / nx) - n;
+		/* For each POS pixel, zero out the optical brightness (b) and
+		 * cos(scattering angle), reset the z coordinate (distance from COM towards
+		 * Earth) to a dummy value, and reset the body, component, and facet onto
+		 * which the pixel center projects to  dummy values                  */
+		if (pos[f]->z[i][j] != -HUGENUMBER) {
+			pos[f]->cose[i][j] = 0.0;
+			pos[f]->z[i][j] = -HUGENUMBER;
+		}
+	}
+}
+__global__ void posclr_radar_krnl64mod(struct pos_t **pos, int *posn, int f,
+		int xspan, int4 *xylim, int npixels)
+{
+	/* This kernel launches as many blocks as needed for one frame.  Each thread handles
+	 * just one pixel.  Frames are streamed. */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int i, j;
+
+	if (offset < npixels) {
+		i = (offset % xspan) + xylim[f].w;
+		j = (offset / xspan) + xylim[f].y;
+		/* For each POS pixel, zero out the optical brightness (b) and
+		 * cos(scattering angle), reset the z coordinate (distance from COM towards
+		 * Earth) to a dummy value, and reset the body, component, and facet onto
+		 * which the pixel center projects to  dummy values                  */
+//		if (pos[f]->z[i][j] != -HUGENUMBER) {
+		pos[f]->cose[i][j] = 0.0;
+		pos[f]->z[i][j] = -HUGENUMBER;
+//		}
+	}
+
+	if (offset==0) {
+		pos[f]->xlim[0] = pos[f]->ylim[0] =  pos[f]->n;
+		pos[f]->xlim[1] = pos[f]->ylim[1] = -pos[f]->n;
+	}
+}
+__global__ void posclr_radar_krnl64af(struct pos_t **pos, int *posn,
+		int *xspan, int4 *xylim, int *npixels, int factor)
+{
+	/* This kernel launches as many blocks as needed for one frame.  Each thread handles
+	 * just one pixel.  All frames in one set are done with this kernel and assigned by
+	 * block ID (so each thread block is responsible for one frame).  Each block will
+	 * do a grid-stride loop through the frame's POS bounding box pixels */
+	int offset, i, j, f = blockIdx.x/factor;
+	__shared__ int n, fr, xlim, ylim, xspan_sh;
+
+	if (threadIdx.x==0) {
+		n = posn[f];
+		pos[f]->xlim[0] = pos[f]->ylim[0] =  n;
+		pos[f]->xlim[1] = pos[f]->ylim[1] = -n;
+		fr = (blockIdx.x%factor) * blockDim.x;
+		xlim = xylim[f].w;
+		ylim = xylim[f].y;
+		xspan_sh = xspan[f];
+	}
+	__syncthreads();
+
+	for (offset=threadIdx.x+fr; offset<npixels[f]; offset+=(factor*blockDim.x)) {
+		i = (offset % xspan_sh) + xlim;
+		j = (offset / xspan_sh) + ylim;
+		/* For each POS pixel, zero out the optical brightness (b) and
+		 * cos(scattering angle), reset the z coordinate (distance from COM towards
+		 * Earth) to a dummy value, and reset the body, component, and facet onto
+		 * which the pixel center projects to  dummy values                  */
+		if (pos[f]->z[i][j] != -HUGENUMBER) {
+			pos[f]->cose[i][j] = 0.0;
+			pos[f]->z[i][j] = -HUGENUMBER;
+		}
 	}
 }
 
-__global__ void opt_brightness_krnl(struct dat_t *ddat, int s, int n, int dblflg) {
+__global__ void posclr_lc_krnl64(struct pos_t **pos, int *posn, int f)
+{
+	/* This kernel launches as many blocks as needed for one frame.  Each thread handles
+	 * just one pixel.  Frames are streamed. */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int i, j;
+
+	__shared__ int n, nx, npixels, bistatic;
+
+	if (threadIdx.x==0) {
+		n = posn[f];
+		nx = 2*n+1;
+		npixels = nx*nx;
+		bistatic = pos[f]->bistatic;
+
+		if (offset==0) {
+			pos[f]->xlim[0] = pos[f]->ylim[0] =  n;
+			pos[f]->xlim[1] = pos[f]->ylim[1] = -n;
+
+			if (bistatic) {
+				pos[f]->xlim2[0] = pos[f]->ylim2[0] =  n;
+				pos[f]->xlim2[1] = pos[f]->ylim2[1] = -n;
+			}
+		}
+	}
+	__syncthreads();
+
+	if (offset < npixels) {
+		i = (offset % nx) - n;
+		j = (offset / nx) - n;
+
+		/* For each POS pixel, zero out the optical brightness (b) and
+		 * cos(scattering angle), reset the z coordinate (distance from COM towards
+		 * Earth) to a dummy value, and reset the body, component, and facet onto
+		 * which the pixel center projects to  dummy values                  */
+		if (pos[f]->z[i][j]!=-HUGENUMBER) {
+			pos[f]->b[i][j] = 0.0;
+			pos[f]->cose[i][j] = 0.0;
+			pos[f]->cosi[i][j] = 0.0;
+			pos[f]->z[i][j] = -HUGENUMBER;
+
+			/* For a bistatic situation (lightcurve or plane-of-sky dataset), zero out
+			 * cos(incidence angle) and reset the distance towards the sun, the body,
+			 * component, and facet numbers as viewed from the sun, and the model's
+			 * maximum projected extent as viewed from the sun to dummy values    */
+			if (bistatic) {
+				pos[f]->cosill[i][j] = 0.0;
+				pos[f]->zill[i][j] = -HUGENUMBER;
+			}
+		}
+	}
+}
+__global__ void posclr_lc_krnl64af(struct pos_t **pos, int *posn, int *xspan, int4 *xylim, int *npixels, int blocks)
+{
+	/* This kernel launches as many blocks as needed for one frame.  Each thread handles
+	 * just one pixel.  All frames in one set are done with this kernel and assigned by
+	 * block ID (so each thread block is responsible for one frame).  Each block will
+	 * do a grid-stride loop through the frame's POS bounding box pixels */
+	int offset, i, j, f = blockIdx.x/blocks + 1;
+	__shared__ int n, fr, xlim, ylim, xspan_sh, bistatic;
+
+	if (threadIdx.x==0) {
+		n = posn[f];
+		pos[f]->xlim[0] = pos[f]->ylim[0] =  n;
+		pos[f]->xlim[1] = pos[f]->ylim[1] = -n;
+		fr = (blockIdx.x%blocks) * blockDim.x;
+		xlim = xylim[f].w;
+		ylim = xylim[f].y;
+		xspan_sh = xspan[f];
+		bistatic = pos[f]->bistatic;
+
+		if (bistatic) {
+			pos[f]->xlim2[0] = pos[f]->ylim2[0] =  n;
+			pos[f]->xlim2[1] = pos[f]->ylim2[1] = -n;
+		}
+	}
+	__syncthreads();
+
+	for (offset=threadIdx.x+fr; offset<npixels[f]; offset+=(blocks*blockDim.x)) {
+		i = (offset % xspan_sh) + xlim;
+		j = (offset / xspan_sh) + ylim;
+		/* For each POS pixel, zero out the optical brightness (b) and
+		 * cos(scattering angle), reset the z coordinate (distance from COM towards
+		 * Earth) to a dummy value, and reset the body, component, and facet onto
+		 * which the pixel center projects to  dummy values                  */
+//		if (pos[f]->z[i][j] != -HUGENUMBER) {
+		pos[f]->cosi[i][j] = 0.0;
+		pos[f]->cose[i][j] = 0.0;
+		pos[f]->b[i][j] = 0.0;
+		pos[f]->z[i][j] = -HUGENUMBER;
+//		}
+		if (bistatic/* && pos[f]->zill[i][j] != -HUGENUMBER*/) {
+			pos[f]->cosill[i][j] = 0.0;
+			pos[f]->zill[i][j] = -HUGENUMBER;
+		}
+	}
+}
+__global__ void calcfits_posclr_lc_krnl64(struct pos_t **pos, int *posn, int f)
+{
+	/* This kernel launches as many blocks as needed for one frame.  Each thread handles
+	 * just one pixel.  Frames are streamed. */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int i, j;
+
+	__shared__ int n, nx, npixels, bistatic;
+
+	if (threadIdx.x==0) {
+		n = posn[f];
+		nx = 2*n+1;
+		npixels = nx*nx;
+		bistatic = pos[f]->bistatic;
+
+		if (offset==0) {
+			pos[f]->xlim[0] = pos[f]->ylim[0] =  n;
+			pos[f]->xlim[1] = pos[f]->ylim[1] = -n;
+
+			if (bistatic) {
+				pos[f]->xlim2[0] = pos[f]->ylim2[0] =  n;
+				pos[f]->xlim2[1] = pos[f]->ylim2[1] = -n;
+			}
+		}
+	}
+	__syncthreads();
+
+	if (offset < npixels) {
+		i = (offset % nx) - n;
+		j = (offset / nx) - n;
+
+		/* For each POS pixel, zero out the optical brightness (b) and
+		 * cos(scattering angle), reset the z coordinate (distance from COM towards
+		 * Earth) to a dummy value, and reset the body, component, and facet onto
+		 * which the pixel center projects to  dummy values                  */
+	//	if (pos[f]->z[i][j]!=-HUGENUMBER) //{
+//			pos[f]->b[i][j] = 0.0;
+		pos[f]->cose[i][j] = 0.0;
+		pos[f]->cosi[i][j] = 0.0;
+		pos[f]->z[i][j] = -HUGENUMBER;
+
+		/* For a bistatic situation (lightcurve or plane-of-sky dataset), zero out
+		 * cos(incidence angle) and reset the distance towards the sun, the body,
+		 * component, and facet numbers as viewed from the sun, and the model's
+		 * maximum projected extent as viewed from the sun to dummy values    */
+		if (bistatic) {
+			pos[f]->cosill[i][j] = 0.0;
+			pos[f]->zill[i][j] = -HUGENUMBER;
+		}
+		//}
+	}
+}
+__global__ void calcfits_posclr_lc_krnl64mod(struct pos_t **pos, int *posn, int f,
+		int xspan, int4 *xylim, int npixels)
+{
+	/* This kernel launches as many blocks as needed for one frame (bounding box
+	 * defined by xlim/ylim only - not whole POS). Each thread handles
+	 * just one pixel.  Frames are streamed. */
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+	int i, j;
+
+	__shared__ int n, bistatic;
+
+	if (threadIdx.x==0) {
+		n = posn[f];
+		bistatic = pos[f]->bistatic;
+
+		if (offset==0) {
+			pos[f]->xlim[0] = pos[f]->ylim[0] =  n;
+			pos[f]->xlim[1] = pos[f]->ylim[1] = -n;
+
+			if (bistatic) {
+				pos[f]->xlim2[0] = pos[f]->ylim2[0] =  n;
+				pos[f]->xlim2[1] = pos[f]->ylim2[1] = -n;
+			}
+		}
+	}
+	__syncthreads();
+
+	if (offset < npixels) {
+		i = (offset % xspan) + xylim[f].w;
+		j = (offset / xspan) + xylim[f].y;
+
+		/* For each POS pixel, zero out the optical brightness (b) and
+		 * cos(scattering angle), reset the z coordinate (distance from COM towards
+		 * Earth) to a dummy value, and reset the body, component, and facet onto
+		 * which the pixel center projects to  dummy values                  */
+		if (pos[f]->z[i][j]!=-HUGENUMBER) {
+			pos[f]->b[i][j] = 0.0;
+			pos[f]->cose[i][j] = 0.0;
+			pos[f]->cosi[i][j] = 0.0;
+			pos[f]->z[i][j] = -HUGENUMBER;
+		}
+
+		/* For a bistatic situation (lightcurve or plane-of-sky dataset), zero out
+		 * cos(incidence angle) and reset the distance towards the sun, the body,
+		 * component, and facet numbers as viewed from the sun, and the model's
+		 * maximum projected extent as viewed from the sun to dummy values    */
+		if (bistatic && pos[f]->zill[i][j]!=-HUGENUMBER) {
+			pos[f]->cosill[i][j] = 0.0;
+			pos[f]->zill[i][j] = -HUGENUMBER;
+		}
+	}
+}
+
+__global__ void opt_brightness_krnl(struct dat_t *ddat, int s, int n/*, int dblflg*/) {
 
 	if (threadIdx.x == 0) {
 		for (int i=1; i<=n; i++) {
-			if (dblflg)
+//			if (dblflg)
 			gpu_sum_opt_brightness64 += ddat->set[s].desc.lghtcrv.fit[i] *
-				ddat->set[s].desc.lghtcrv.weight;
-			else
-				gpu_sum_opt_brightness64 += ddat->set[s].desc.lghtcrv.fit[i] *
-								ddat->set[s].desc.lghtcrv.weight;
+					ddat->set[s].desc.lghtcrv.weight;
+//			else
+//				gpu_sum_opt_brightness64 += ddat->set[s].desc.lghtcrv.fit[i] *
+//				ddat->set[s].desc.lghtcrv.weight;
 		}
 	}
 }
@@ -689,7 +1070,7 @@ __host__ void vary_params_gpu32(
 
 			/* Launch nframes-threaded kernel to get all relevant parameters */
 			delay_params_krnl<<<BLK[0],THD>>>(dpar, ddat, pos, ddframe,
-					compute_xsec, posn, ndel, ndop, s, nfrm_alloc);
+					compute_xsec, posn, ndel, ndop, s, nfrm_alloc, xylim);
 			checkErrorAfterKernelLaunch("delay_params_krnl");
 			gpuErrchk(cudaMemcpy(&hposn, posn, sizeof(int)*nfrm_alloc,
 					cudaMemcpyDeviceToHost));
@@ -763,7 +1144,7 @@ __host__ void vary_params_gpu32(
 
 			/* Launch nframes-threaded kernel to get all relevant parameters */
 			dop_params_krnl<<<BLK[0],THD>>>(dpar, ddat, pos, dframe,
-					compute_xsec, posn, ndop, s, nfrm_alloc);
+					compute_xsec, posn, ndop, s, nfrm_alloc, xylim);
 			checkErrorAfterKernelLaunch("dop_params_krnl");
 			gpuErrchk(cudaMemcpy(&hposn, posn, sizeof(int)*nfrm_alloc,
 					cudaMemcpyDeviceToHost));
@@ -835,7 +1216,7 @@ __host__ void vary_params_gpu32(
 			if (hcomp_brightness[s]) {
 				/* Launch nframes-threaded kernel to get all relevant parameters */
 				lghtcrv_params_krnl<<<BLK[0],THD>>>(dpar, ddat, pos,
-						posn, bistatic, s, nfrm_alloc);
+						posn, bistatic, s, nfrm_alloc, xylim);
 				checkErrorAfterKernelLaunch("vpst_lghtcrv_params_krnl");
 				gpuErrchk(cudaMemcpy(&hposn, posn, sizeof(int)*nfrm_alloc,
 						cudaMemcpyDeviceToHost));
@@ -944,7 +1325,7 @@ __host__ void vary_params_gpu32(
 				checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
 
 				/* Finalize the optical brightness calculation */
-				opt_brightness_krnl<<<1,1>>>(ddat, s, hlc_n[s], FP64);
+				opt_brightness_krnl<<<1,1>>>(ddat, s, hlc_n[s]);
 				checkErrorAfterKernelLaunch("opt_brightness_krnl");
 			}
 			break;
@@ -1023,14 +1404,16 @@ __host__ void vary_params_gpu64(
 	 */
 
 	int c=0, f, s, *compute_brightness, *compute_zmax, *bistatic, bistatic_all,
-		*compute_cosdelta, *compute_xsec, /*n, ncalc, nx, lghtcrv_bistatic,*/
-		nfrm_alloc, nfrm_alloc_max, /*nThreads, */*posn, *ndel, *ndop/*, compute_zmax_flag*/;
+		*compute_cosdelta, *compute_xsec, nfrm_alloc, nfrm_alloc_max, *posn,
+		*ndel, *ndop, blocks;
 	nfrm_alloc_max = max_frames + 1;
-	int hcomp_xsec[nfrm_alloc_max], npxls[nfrm_alloc_max], ddsize[nfrm_alloc_max],
+	int hcomp_xsec[nfrm_alloc_max], npxls_full[nfrm_alloc_max],
 		hndop[nfrm_alloc_max], hndel[nfrm_alloc_max], lc_xspan[nfrm_alloc_max],
 		*outbndarr,	hposn[nfrm_alloc_max], hbistatic[nfrm_alloc_max],
 		nThreadspx1[nfrm_alloc_max], hcomp_cosdelta[nsets], hcomp_zmax[nsets],
 		hcomp_brightness[nsets];
+
+	int *dxspan, *hxspan, *ddeldopsize, *hdeldopsize, *dnpxls_bbox, *hnpxls_bbox;
 	int2 span[nfrm_alloc_max];
 	int4 *xylim, hxylim[nfrm_alloc_max];
 	double *u, zmax, *pixels_per_km, xsec[nfrm_alloc_max];
@@ -1044,6 +1427,8 @@ __host__ void vary_params_gpu64(
 
 	dim3 BLKfrm, pxBLK,THD,BLKncalc,THD9,THD64, BLKpx1, BLK[nfrm_alloc_max], ddBLK[nfrm_alloc_max];
 	THD.x = maxThreadsPerBlock;	THD9.x = 9; THD64.x = 64;
+
+	dim3 THDaf, BLKaf;
 
 	/* Initialize */
 	orbit_offset.x = orbit_offset.y = orbit_offset.z = 0.0;
@@ -1068,6 +1453,13 @@ __host__ void vary_params_gpu64(
 	gpuErrchk(cudaMalloc((void**)&dframe, sizeof(struct dopfrm_t*)*nfrm_alloc_max));
 	gpuErrchk(cudaMalloc((void**)&ddframe, sizeof(struct deldopfrm_t*)*nfrm_alloc_max));
 	gpuErrchk(cudaMalloc((void**)&bistatic, sizeof(int)*nfrm_alloc_max));
+	gpuErrchk(cudaMalloc((void**)&dxspan, sizeof(int)*nfrm_alloc_max));
+	gpuErrchk(cudaMalloc((void**)&dnpxls_bbox, sizeof(int)*nfrm_alloc_max));
+	gpuErrchk(cudaMalloc((void**)&ddeldopsize, sizeof(int)*nfrm_alloc_max));
+	hnpxls_bbox = (int *) malloc(nfrm_alloc_max*sizeof(int));
+	hxspan = (int *) malloc(nfrm_alloc_max*sizeof(int));
+	hdeldopsize = (int *) malloc(nfrm_alloc_max*sizeof(int));
+
 
 	/* Initialize the device file-scope variables */
 	init_krnl<<<1,1>>>(dpar, ddat, compute_zmax, compute_cosdelta,
@@ -1085,20 +1477,21 @@ __host__ void vary_params_gpu64(
 		/* Get the allocation right as the indices for lghtcrv start with 1
 		 * instead of 0 everywhere else. To not run into problems at the end
 		 * or start of the array, we allocate one more than strictly needed */
-
 		if (htype[s]==LGHTCRV)	nfrm_alloc = hnframes[s] + 1;
 		else					nfrm_alloc = hnframes[s];
 
-		/* Set up initial kernel launch parameter */
-		BLK[0].x = floor((THD.x - 1 + nfrm_alloc) / THD.x);
+		/* Set up set-specific kernel launch parameters */
 		BLKfrm = floor((THD64.x - 1 + nfrm_alloc) / THD64.x);
+		THDaf.x = 1024;
+		blocks = 3;
+		BLKaf.x = nfrm_alloc * blocks;
 
 		switch (htype[s]) {
 		case DELAY:
 
 			/* Launch nframes-threaded kernel to get all relevant parameters */
-			delay_params_krnl<<<BLK[0],THD>>>(dpar, ddat, pos, ddframe,
-					compute_xsec, posn, ndel, ndop, s, nfrm_alloc);
+			delay_params_krnl<<<BLKfrm,THD64>>>(dpar, ddat, pos, ddframe,
+					compute_xsec, posn, ndel, ndop, s, nfrm_alloc, xylim);
 			checkErrorAfterKernelLaunch("delay_params_krnl");
 			gpuErrchk(cudaMemcpy(&hposn, posn, sizeof(int)*nfrm_alloc,
 					cudaMemcpyDeviceToHost));
@@ -1108,14 +1501,22 @@ __host__ void vary_params_gpu64(
 					cudaMemcpyDeviceToHost));
 			gpuErrchk(cudaMemcpy(&hndel, ndel, sizeof(int)*nfrm_alloc,
 					cudaMemcpyDeviceToHost));
+			gpuErrchk(cudaMemcpy(&hxylim, xylim, sizeof(int4)*nfrm_alloc,
+					cudaMemcpyDeviceToHost));
 
-			/* Create streams and calculate parameters*/
+			/* Calculate launch parameters for kernels */
 			for (f=0; f<nfrm_alloc; f++) {
-				npxls[f] = (2*hposn[f] + 1)*(2*hposn[f] + 1);
-				BLK[f].x = floor((THD.x - 1 + npxls[f]) / THD.x);
-				ddsize[f]= hndel[f] * hndop[f];
-				ddBLK[f] = floor((THD.x -1 + ddsize[f]) / THD.x);
+				npxls_full[f] = (2*hposn[f] + 1)*(2*hposn[f] + 1);
+				hxspan[f] = hxylim[f].x - hxylim[f].w + 1;
+				hnpxls_bbox[f] = (hxylim[f].z - hxylim[f].y + 1) * hxspan[f];
+				BLK[f].x = floor((THD.x - 1 + npxls_full[f]) / THD.x);
+				hdeldopsize[f]= hndel[f] * hndop[f];
+				ddBLK[f] = floor((THD.x -1 + hdeldopsize[f]) / THD.x);
 			}
+
+			gpuErrchk(cudaMemcpy(dnpxls_bbox, hnpxls_bbox, sizeof(int)*nfrm_alloc,cudaMemcpyHostToDevice));
+			gpuErrchk(cudaMemcpy(dxspan, hxspan, sizeof(int)*nfrm_alloc,cudaMemcpyHostToDevice));
+			gpuErrchk(cudaMemcpy(ddeldopsize, hdeldopsize, sizeof(int)*nfrm_alloc, cudaMemcpyHostToDevice));
 
 			/* Assign ae and oe matrices (all frames at once) */
 			if (hcomp_zmax[s])
@@ -1123,59 +1524,55 @@ __host__ void vary_params_gpu64(
 			checkErrorAfterKernelLaunch("set_ae_oe_krnl");
 
 			/* Launch posclr_streams_krnl to initialize POS view */
-			for (f=0; f<nfrm_alloc; f++) {
-				/* Start the if block for computing zmax and/or cross-section */
-				if (hcomp_zmax[s] || hcomp_xsec[f]) {
-					posclr_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,FP64, 0);
-				}
-			} checkErrorAfterKernelLaunch("posclr_krnl");
+			posclr_radar_krnl64af<<<BLKaf,THDaf>>>(pos, posn, dxspan, xylim, dnpxls_bbox,
+					blocks);
+			checkErrorAfterKernelLaunch("posclr_radar_krnl64af ");
 
 			/* Determine which POS pixels cover the target, and get distance
 			 * toward Earth of each POS pixel. Pass the frame streams, too. */
-//			posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_offset,
-//					hposn, outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s],
-//					vp_stream, 0);
+			posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_offset,
+					hposn, outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s],
+					vp_stream, 0);
 
-			posvis_tiled_gpu64(dpar, dmod, ddat, pos, verts, orbit_offset, hposn,
-					outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s], vp_stream, 0);
-//
 //			for (f=0; f<nfrm_alloc; f++) {
 //				if (hcomp_zmax[s] || hcomp_xsec[f]) {
 //					/* Zero out the fit delay-Doppler image and call pos2deldop
 //					 * to create the fit image by mapping power from the plane
 //					 * of sky to delay-Doppler space.    				  */
 //					clrvect_krnl<<<ddBLK[f],THD, 0, vp_stream[f]>>>(ddat,
-//							ddsize[f], s, f, FP64);
+//							hdeldopsize[f], s, f, FP64);
 //				}/* End frames loop again to call pos2deldop streams version */
 //			} checkErrorAfterKernelLaunch("clrvect_krnl");
-//
-//			/* Call the CUDA pos2deldop function */
-//			pos2deldop_gpu64(dpar, dmod, ddat, pos, ddframe, xylim, ndel, ndop,
-//					0.0, 0.0, 0.0, 0, s, nfrm_alloc, 0, outbndarr, vp_stream);
-//
-//			/* Calculate zmax for all frames (assumption: all pos in this set
-//			 * have the same pixel dimensions) */
-//			if (hcomp_zmax[s]) {
-//				zmax = compute_zmax_gpu64(ddat, pos, nfrm_alloc, npxls[0], s, vp_stream);
-//				zmax_final_krnl64<<<1,1>>>(zmax);
-//				checkErrorAfterKernelLaunch("zmax_final_krnl64");
-//			}
-//
-//			/* Calculate radar cross section for each frame in set */
-//			xsec[0] = compute_deldop_xsec_gpu64(ddat, hnframes[s], ddsize[0], s, vp_stream);
-//			xsec_deldop_krnl64<<<1,1>>>(xsec[0]);
-//			checkErrorAfterKernelLaunch("xsec_deldop_krnl64");
-//
-//			if (hcomp_cosdelta[s])
-//				cosdelta_krnl<<<BLKfrm,THD64>>>(ddat, s, f, FP64);
-//			checkErrorAfterKernelLaunch("cosdelta_krnl");
+
+			clrvect_krnl64af<<<BLKaf,THDaf>>>(ddat, ddeldopsize, s, blocks);
+			checkErrorAfterKernelLaunch("clrvect_krnl");
+
+			/* Call the CUDA pos2deldop function */
+			pos2deldop_gpu64(dpar, dmod, ddat, pos, ddframe, xylim, ndel, ndop,
+					0.0, 0.0, 0.0, 0, s, nfrm_alloc, 0, outbndarr, vp_stream);
+
+			/* Calculate zmax for all frames (assumption: all pos in this set
+			 * have the same pixel dimensions) */
+			if (hcomp_zmax[s]) {
+				zmax = compute_zmax_gpu64(ddat, pos, nfrm_alloc, npxls_full[0], s, vp_stream);
+				zmax_final_krnl64<<<1,1>>>(zmax);
+				checkErrorAfterKernelLaunch("zmax_final_krnl64");
+			}
+
+			/* Calculate radar cross section for each frame in set */
+			xsec[0] = compute_deldop_xsec_gpu64(ddat, hnframes[s], hdeldopsize[0], s, vp_stream);
+			xsec_deldop_krnl64<<<1,1>>>(xsec[0]);
+			checkErrorAfterKernelLaunch("xsec_deldop_krnl64");
+
+			if (hcomp_cosdelta[s])
+				cosdelta_krnl<<<BLKfrm,THD64>>>(ddat, s, f, FP64);
+			checkErrorAfterKernelLaunch("cosdelta_krnl");
 
 			break;
 		case DOPPLER:
-
 			/* Launch nframes-threaded kernel to get all relevant parameters */
 			dop_params_krnl<<<BLK[0],THD>>>(dpar, ddat, pos, dframe,
-					compute_xsec, posn, ndop, s, nfrm_alloc);
+					compute_xsec, posn, ndop, s, nfrm_alloc, xylim);
 			checkErrorAfterKernelLaunch("dop_params_krnl");
 			gpuErrchk(cudaMemcpy(&hposn, posn, sizeof(int)*nfrm_alloc,
 					cudaMemcpyDeviceToHost));
@@ -1183,64 +1580,64 @@ __host__ void vary_params_gpu64(
 					sizeof(int)*nfrm_alloc, cudaMemcpyDeviceToHost));
 			gpuErrchk(cudaMemcpy(&hndop, ndop, sizeof(int)*nfrm_alloc,
 					cudaMemcpyDeviceToHost));
+			gpuErrchk(cudaMemcpy(&hxylim, xylim, sizeof(int4)*nfrm_alloc,
+					cudaMemcpyDeviceToHost));
 
-			/* Calculate launch parameters and create streams */
+			/* Calculate launch parameters*/
 			for (f=0; f<nfrm_alloc; f++) {
-				npxls[f] = (2*hposn[f] + 1)*(2*hposn[f] + 1);
-				BLK[f].x = floor((THD.x - 1 + npxls[f]) / THD.x);
+				npxls_full[f] = (2*hposn[f] + 1)*(2*hposn[f] + 1);
+				hxspan[f] = hxylim[f].x - hxylim[f].w + 1;
+				hnpxls_bbox[f] = (hxylim[f].z - hxylim[f].y + 1) * hxspan[f];
+				BLK[f].x = floor((THD.x - 1 + npxls_full[f]) / THD.x);
 				ddBLK[f] = floor((THD.x -1 + hndop[f]) / THD.x);
 			}
+			gpuErrchk(cudaMemcpy(dnpxls_bbox, hnpxls_bbox, sizeof(int)*nfrm_alloc,cudaMemcpyHostToDevice));
+			gpuErrchk(cudaMemcpy(dxspan, hxspan, sizeof(int)*nfrm_alloc,cudaMemcpyHostToDevice));
 
 			/* Assign ae and oe matrices (all frames at once) */
 			set_ae_oe_krnl<<<BLKfrm,THD64,0,vp_stream[0]>>>(ddat, pos, htype[s], s, nfrm_alloc);
 			checkErrorAfterKernelLaunch("set_ae_oe_krnl");
 
-			/* Launch posclr_streams_krnl to initialize POS view */
-			for (f=0; f<nfrm_alloc; f++) {
-				/* Start the if block for computing zmax and/or cross-section */
-				if (hcomp_xsec[f]) {
-					posclr_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,FP64, 0);
-				}
-			} checkErrorAfterKernelLaunch("posclr_krnl");
+			/* Initialize POS view by resetting all relevant pos arrays for
+			 * every frame in this set */
+			posclr_radar_krnl64af<<<BLKaf,THDaf>>>(pos, posn, dxspan, xylim, dnpxls_bbox,
+					blocks);
+			checkErrorAfterKernelLaunch("posclr_radar_krnl64af ");
 
 			/* Determine which POS pixels cover the target, and get distance
 			 * toward Earth of each POS pixel. Pass the frame streams, too. */
-//			posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_offset,
-//					hposn, outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s],
-//					vp_stream, 0);
-
-			posvis_tiled_gpu64(dpar, dmod, ddat, pos, verts, orbit_offset, hposn,
+			posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_offset, hposn,
 					outbndarr, s, nfrm_alloc, 0, nf, 0, c, htype[s], vp_stream, 0);
 
-//			for (f=0; f<nfrm_alloc; f++) {
-//				if (hcomp_xsec[f]) {
-//					/* Zero out the fit delay-Doppler image and call pos2deldop
-//					 * to create the fit image by mapping power from the plane
-//					 * of sky to delay-Doppler space.    				      */
-//					clrvect_krnl<<<ddBLK[f],THD, 0, vp_stream[f]>>>(ddat,
-//							hndop[f], s, f, FP64);
-//					/* End frames loop again to call pos2deldop streams version */
-//				}
-//			} checkErrorAfterKernelLaunch("clrvect_krnl");
-//
-//			pos2doppler_gpu64(dpar, dmod, ddat, pos, dframe, xylim, 0.0,
-//					0.0, 0.0, ndop, 0, s, hnframes[s], 0, outbndarr, vp_stream);
-//
-//			/* Calculate the Doppler cross-section if applicable */
-//			for (f=0; f<nfrm_alloc; f++) {
-//				if (hcomp_xsec[f]) {
-//					/* Compute cross section */
-//					xsec[f]=0.0;
-//					xsec[f] = compute_doppler_xsec64(ddat, hndop[f], s, f);
-//				}
-//			}
-//			/* Finalize the xsec calculations and calculate cosdelta if specified */
-//			for (f=0; f<nfrm_alloc; f++) {
-//				if (hcomp_xsec[f])
-//					xsec_doppler_krnl64<<<1,1,0,vp_stream[f]>>>(ddat, xsec[f], s, f);
-//			}
-//			if (compute_cosdelta)
-//				cosdelta_krnl<<<BLKfrm,THD64,0,vp_stream[0]>>>(ddat, s, nfrm_alloc, FP64);
+			for (f=0; f<nfrm_alloc; f++) {
+				if (hcomp_xsec[f]) {
+					/* Zero out the fit delay-Doppler image and call pos2deldop
+					 * to create the fit image by mapping power from the plane
+					 * of sky to delay-Doppler space.    				      */
+					clrvect_krnl<<<ddBLK[f],THD, 0, vp_stream[f]>>>(ddat,
+							hndop[f], s, f, FP64);
+					/* End frames loop again to call pos2deldop streams version */
+				}
+			} checkErrorAfterKernelLaunch("clrvect_krnl");
+
+			pos2doppler_gpu64(dpar, dmod, ddat, pos, dframe, xylim, 0.0,
+					0.0, 0.0, ndop, 0, s, hnframes[s], 0, outbndarr, vp_stream);
+
+			/* Calculate the Doppler cross-section if applicable */
+			for (f=0; f<nfrm_alloc; f++) {
+				if (hcomp_xsec[f]) {
+					/* Compute cross section */
+					xsec[f]=0.0;
+					xsec[f] = compute_doppler_xsec64(ddat, hndop[f], s, f);
+				}
+			}
+			/* Finalize the xsec calculations and calculate cosdelta if specified */
+			for (f=0; f<nfrm_alloc; f++) {
+				if (hcomp_xsec[f])
+					xsec_doppler_krnl64<<<1,1,0,vp_stream[f]>>>(ddat, xsec[f], s, f);
+			}
+			if (compute_cosdelta)
+				cosdelta_krnl<<<BLKfrm,THD64,0,vp_stream[0]>>>(ddat, s, nfrm_alloc, FP64);
 
 			break;
 		case POS:
@@ -1250,18 +1647,20 @@ __host__ void vary_params_gpu64(
 			if (hcomp_brightness[s]) {
 				/* Launch nframes-threaded kernel to get all relevant parameters */
 				lghtcrv_params_krnl<<<BLK[0],THD>>>(dpar, ddat, pos,
-						posn, bistatic, s, nfrm_alloc);
+						posn, bistatic, s, nfrm_alloc, xylim);
 				checkErrorAfterKernelLaunch("lghtcrv_params_krnl");
 				gpuErrchk(cudaMemcpy(&hposn, posn, sizeof(int)*nfrm_alloc,
 						cudaMemcpyDeviceToHost));
 				gpuErrchk(cudaMemcpy(&hbistatic, bistatic, sizeof(int)*nfrm_alloc,
 						cudaMemcpyDeviceToHost));
+				gpuErrchk(cudaMemcpy(&hxylim, xylim, sizeof(int4)*nfrm_alloc,
+						cudaMemcpyDeviceToHost));
 
 				/* Calculate launch parameters and create streams */
 				for (f=1; f<nfrm_alloc; f++) {
 					lc_xspan[f] = 2*posn[f] + 1;
-					npxls[f] = (2*posn[f]+1)*(2*posn[f]+1);
-					BLK[f].x = floor((THD.x - 1 + npxls[f]) / THD.x);
+					npxls_full[f] = (2*posn[f]+1)*(2*posn[f]+1);
+					BLK[f].x = floor((THD.x - 1 + npxls_full[f]) / THD.x);
 				}
 
 				/* Assign ae and oe matrices (all frames at once) */
@@ -1272,7 +1671,9 @@ __host__ void vary_params_gpu64(
 				for (f=1; f<nfrm_alloc; f++) {
 					/* Start the if block for computing zmax and/or cross-section */
 					if (hcomp_xsec[f]) {
-						posclr_krnl<<<BLK[f],THD, 0, vp_stream[f]>>>(pos,posn,f,FP64, 1);
+//						posclr_krnl<<<BLK[f],THD,0,vp_stream[f]>>>(pos, posn, f, FP64, 1);
+//						posclr_fast_krnl2<<<BLK[f],THD,0,vp_stream[f]>>>(pos, posn, f, FP64, 1);
+						posclr_lc_krnl64<<<BLK[f],THD,0,vp_stream[f-1]>>>(pos, posn, f);
 					}
 				} checkErrorAfterKernelLaunch("posclr_krnl");
 
@@ -1301,7 +1702,7 @@ __host__ void vary_params_gpu64(
 						/* Now call posmask kernel for this stream, then loop
 						 * to next stream and repeat 	 */
 						posmask_krnl64<<<BLK[f],THD,0,vp_stream[f-1]>>>(
-								dpar, pos, so, pixels_per_km, posn, npxls[f],
+								dpar, pos, so, pixels_per_km, posn, npxls_full[f],
 								lc_xspan[f], f);
 					} checkErrorAfterKernelLaunch("posmask_krnl64");
 				}
@@ -1335,7 +1736,7 @@ __host__ void vary_params_gpu64(
 				/* lghtcrv->y[ncalc]: calculated points for interpolation,
 				 * ncalc-points total 					 */
 				apply_photo_gpu64(dmod, ddat, pos, xylim, span, BLK, nThreadspx1,
-							0, s, hnframes[s], npxls, maxthds, maxxylim, vp_stream);
+							0, s, hnframes[s], maxthds, maxxylim, vp_stream);
 
 				/* Now that we have calculated the model lightcurve brightnesses
 				 * y at each of the epochs x, we use cubic spline interpolation
@@ -1359,7 +1760,7 @@ __host__ void vary_params_gpu64(
 				checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
 
 				/* Finalize the optical brightness calculation */
-				opt_brightness_krnl<<<1,1>>>(ddat, s, hlc_n[s], FP64);
+				opt_brightness_krnl<<<1,1>>>(ddat, s, hlc_n[s]);
 				checkErrorAfterKernelLaunch("opt_brightness_krnl");
 			}
 			break;
@@ -1402,6 +1803,13 @@ __host__ void vary_params_gpu64(
 	cudaFree(compute_cosdelta);
 	cudaFree(dframe);
 	cudaFree(ddframe);
+
+	cudaFree(dnpxls_bbox);
+	cudaFree(ddeldopsize);
+	cudaFree(dxspan);
+	free(hnpxls_bbox);
+	free(hdeldopsize);
+	free(hxspan);
 }
 
 __host__ void vary_params_pthreads(
@@ -1627,7 +2035,7 @@ void *vary_params_pthread_sub(void *ptr) {
 			case DELAY:
 				/* Launch nframes-threaded kernel to get all relevant parameters */
 				delay_params_krnl<<<BLK[0],THD>>>(data->parameter, data->data, pos,
-						ddframe, compute_xsec, posn, ndel, ndop, s, nfrm_alloc);
+						ddframe, compute_xsec, posn, ndel, ndop, s, nfrm_alloc, xylim);
 				checkErrorAfterKernelLaunch("delay_params_krnl");
 				gpuErrchk(cudaMemcpy(&hposn, posn, sizeof(int)*nfrm_alloc,
 						cudaMemcpyDeviceToHost));
@@ -1704,7 +2112,7 @@ void *vary_params_pthread_sub(void *ptr) {
 
 			/* Launch nframes-threaded kernel to get all relevant parameters */
 			dop_params_krnl<<<BLK[0],THD>>>(data->parameter, data->data, pos,
-					dframe, compute_xsec, posn, ndop, s, nfrm_alloc);
+					dframe, compute_xsec, posn, ndop, s, nfrm_alloc, xylim);
 			checkErrorAfterKernelLaunch("dop_params_krnl");
 			gpuErrchk(cudaMemcpy(&hposn, posn, sizeof(int)*nfrm_alloc,
 					cudaMemcpyDeviceToHost));
@@ -1790,7 +2198,7 @@ void *vary_params_pthread_sub(void *ptr) {
 			if (data->brightness_flag[s]) {
 				/* Launch nframes-threaded kernel to get all relevant parameters */
 				lghtcrv_params_krnl<<<BLK[0],THD>>>(data->parameter, data->data,
-						pos, posn, bistatic, s, nfrm_alloc);
+						pos, posn, bistatic, s, nfrm_alloc, xylim);
 				checkErrorAfterKernelLaunch("lghtcrv_params_krnl");
 				gpuErrchk(cudaMemcpy(&hposn, posn, sizeof(int)*nfrm_alloc,
 						cudaMemcpyDeviceToHost));
@@ -1906,7 +2314,7 @@ void *vary_params_pthread_sub(void *ptr) {
 				checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
 
 				/* Finalize the optical brightness calculation */
-				opt_brightness_krnl<<<1,1>>>(data->data, s, data->hlc_n[s], FP64);
+				opt_brightness_krnl<<<1,1>>>(data->data, s, data->hlc_n[s]);
 				checkErrorAfterKernelLaunch("opt_brightness_krnl");
 				gpuErrchk(cudaMemcpyFromSymbol(&temp, gpu_sum_opt_brightness32,
 						sizeof(float), 0,	cudaMemcpyDeviceToHost));

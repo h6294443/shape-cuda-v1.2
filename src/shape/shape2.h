@@ -747,12 +747,23 @@ struct facet_t {
   double phi;                   /* azimuth (radians) */
   double area;                  /* surface area */
   double x[3];                  /* mean coordinates of corner vertices */
-  double3 nt;					/* Observer-transformed facet normal */
-  int2 ilim;					/* The facet's i and j projection limits i1, 	*/
-  int2 jlim;					/* i2, j1, j2 */
-  int bin[4];					/* Used for bucket rasterization's facet binning */
-  double3 v0t, v1t, v2t;		/* Transformed facet vertices for bucket rasterization */
+//  double3 nt;					/* Observer-transformed facet normal */
+//  int2 ilim;					/* The facet's i and j projection limits i1, 	*/
+//  int2 jlim;					/* i2, j1, j2 */
+//  int bin[4];					/* Used for bucket rasterization's facet binning */
+//  double3 v0t, v1t, v2t;		/* Transformed facet vertices for bucket rasterization */
 };
+
+/* Structure posfacet_t defines a single surface facet for each pos (used for tiled
+ * CUDA posvis ) */
+//struct pos_facet_t {
+//  double3 nt;					/* Observer-transformed facet normal */
+//  int2 ilim;					/* The facet's i and j projection limits i1, 	*/
+//  int2 jlim;					/* i2, j1, j2 */
+//  int bin[4];					/* Used for bucket rasterization's facet binning */
+//  double3 v0t, v1t, v2t;		/* Transformed facet vertices for bucket rasterization */
+//};
+
 
 /* Structure side_t defines a single facet side. */
 struct side_t {
@@ -1078,6 +1089,8 @@ struct pos_t {
   double oe[3][3];              /* ecliptic to observer transformation */
   double se[3][3];              /* ecliptic to source transformation */
   double posbnd_logfactor;      /* multiples obj. fcn. if POS image exceeds window */
+  int nf;                       /* # of facets */
+  struct pos_facet_t *facet;        /* facets */
 };
 
 /* Structure deldopview_t describes a single view that contributes to a smeared delay-Doppler frame. */

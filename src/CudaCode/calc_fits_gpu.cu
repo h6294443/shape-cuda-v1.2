@@ -901,6 +901,45 @@ __global__ void cfs_set_deldop_shortcuts_krnl64(struct dat_t *ddat,
 		overflow[4] = 0.0;
 	}
 }
+__global__ void cfs_set_deldop_shortcuts_krnl64mod(struct dat_t *ddat,
+		struct deldopfrm_t **frame, struct pos_t **pos,
+		struct deldopview_t **view0, int *ndop, int *ndel, double *overflow,
+		int *posn, int s, int size, int4 *xylim) {
+	/* nfrm_alloc-threaded kernel */
+	/* 	overflow[0] - overflow_o2_store
+	 * 	overflow[1] - overflow_m2_store
+	 * 	overflow[2] - overflow_xsec_store
+	 * 	overflow[3] - overflow_dopmean_store
+	 * 	overflow[4] - overflow_delmean_store
+	 */
+	/* This mod version adds xylim as an argument. This kernel will copy out
+	 * the POS bounding box limits pos[f]->xlim/ylim so that the posclr kernel
+	 * has the lesser workload of clearing out only the pixels inside the
+	 * bounding box	 */
+	int f = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (f < size) {
+		frame[f] 	  = &ddat->set[s].desc.deldop.frame[f];
+		ndop[f]  	  = frame[f]->ndop;
+		ndel[f]	 	  = frame[f]->ndel;
+		view0[f] 	  = &frame[f]->view[ddat->set[s].desc.deldop.v0];
+		pos[f]		  = &frame[f]->pos;
+		posn[f]		  = pos[f]->n;
+		xylim[f].w	  = pos[f]->xlim[0];
+		xylim[f].x	  = pos[f]->xlim[1];
+		xylim[f].y	  = pos[f]->ylim[0];
+		xylim[f].z	  = pos[f]->ylim[1];
+	}
+	__syncthreads();
+	if (f==0) {
+		cfs_v0_index  = ddat->set[s].desc.deldop.v0;
+		overflow[0] = 0.0;
+		overflow[1] = 0.0;
+		overflow[2] = 0.0;
+		overflow[3] = 0.0;
+		overflow[4] = 0.0;
+	}
+}
 __global__ void cfs_set_doppler_shortcuts_krnl32(struct dat_t *ddat,
 		struct dopfrm_t **frame, struct pos_t **pos, struct dopview_t **view0,
 		float *overflow, int *ndop, int *posn, int s, int size) {
@@ -951,6 +990,39 @@ __global__ void cfs_set_doppler_shortcuts_krnl64(struct dat_t *ddat,
 		overflow[4] = 0.0;
 	}
 }
+__global__ void cfs_set_doppler_shortcuts_krnl64mod(struct dat_t *ddat,
+		struct dopfrm_t **frame, struct pos_t **pos, struct dopview_t **view0,
+		double *overflow, int *ndop, int *posn, int s, int size, int4 *xylim) {
+	/* nframes-threaded kernel */
+	/* This mod version adds xylim as an argument. This kernel will copy out
+	 * the POS bounding box limits pos[f]->xlim/ylim so that the posclr kernel
+	 * has the lesser workload of clearing out only the pixels inside the
+	 * bounding box	 */
+	int f = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (f < size) {
+
+		frame[f] = &ddat->set[s].desc.doppler.frame[f];
+		view0[f] = &frame[f]->view[ddat->set[s].desc.doppler.v0];
+		ndop[f]	 = frame[f]->ndop;
+		pos[f]	 = &frame[f]->pos;
+		posn[f]	= pos[f]->n;
+		xylim[f].w	  = pos[f]->xlim[0];
+		xylim[f].x	  = pos[f]->xlim[1];
+		xylim[f].y	  = pos[f]->ylim[0];
+		xylim[f].z	  = pos[f]->ylim[1];
+	}
+	__syncthreads();
+
+	if (f==0) {
+		cfs_v0_index  = ddat->set[s].desc.doppler.v0;
+		overflow[0] = 0.0;
+		overflow[1] = 0.0;
+		overflow[2] = 0.0;
+		overflow[3] = 0.0;
+		overflow[4] = 0.0;
+	}
+}
 __global__ void cfs_set_lghtcrv_shortcuts_krnl32(struct dat_t *ddat,
 		struct crvrend_t **rend, struct pos_t **pos, float *overflow,
 		int *posn, int s, int size) {
@@ -976,17 +1048,51 @@ __global__ void cfs_set_lghtcrv_shortcuts_krnl64(struct dat_t *ddat,
 	/* nfrm_alloc-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x + 1;
 	if (f <= size) {
-		posn[0] = 0;
 		rend[f] = &ddat->set[s].desc.lghtcrv.rend[f];//&cfs_lghtcrv->rend[f];
 		pos[f] = &rend[f]->pos;
 		posn[f] = pos[f]->n;
 		outbndarr[0] = 0;
 		if (f==1) {
+			posn[0] = 0;
 			overflow[0] = 0.0;
 			overflow[1] = 0.0;
 			overflow[2] = 0.0;
 			overflow[3] = 0.0;
 			overflow[4] = 0.0;
+		}
+	}
+}
+__global__ void cfs_set_lghtcrv_shortcuts_krnl64mod(struct dat_t *ddat,
+		struct crvrend_t **rend, struct pos_t **pos, double *overflow,
+		int *posn, int s, int size, int *outbndarr, int4 *xylim, int4 *xylim2) {
+	/* nfrm_alloc-threaded kernel */
+	/* This mod version adds xylim as an argument. This kernel will copy out
+	 * the POS bounding box limits pos[f]->xlim/ylim so that the posclr kernel
+	 * has the lesser workload of clearing out only the pixels inside the
+	 * bounding box	 */
+	int f = blockIdx.x * blockDim.x + threadIdx.x + 1;
+	if (f <= size) {
+		rend[f] = &ddat->set[s].desc.lghtcrv.rend[f];//&cfs_lghtcrv->rend[f];
+		pos[f] = &rend[f]->pos;
+		posn[f] = pos[f]->n;
+		outbndarr[0] = 0;
+		xylim[f].w	  = pos[f]->xlim[0];
+		xylim[f].x	  = pos[f]->xlim[1];
+		xylim[f].y	  = pos[f]->ylim[0];
+		xylim[f].z	  = pos[f]->ylim[1];
+		xylim2[f].w   = pos[f]->xlim2[0];
+		xylim2[f].x   = pos[f]->xlim2[1];
+		xylim2[f].y   = pos[f]->ylim2[0];
+		xylim2[f].z   = pos[f]->ylim2[1];
+		if (f==1) {
+			posn[0] = 0;
+			overflow[0] = 0.0;
+			overflow[1] = 0.0;
+			overflow[2] = 0.0;
+			overflow[3] = 0.0;
+			overflow[4] = 0.0;
+			xylim[0].w = xylim[0].x = xylim[0].y = xylim[0].z = 0;
+			xylim2[0].w = xylim2[0].x = xylim2[0].y = xylim[0].z = 0;
 		}
 	}
 }
@@ -1125,6 +1231,8 @@ __global__ void cf_mark_pixels_seen_krnl64(struct par_t *dpar,
 		struct mod_t *dmod, struct pos_t **pos, int4 *xylim, int npixels,
 		int xspan, int f) {
 	/* Multi-threaded kernel */
+	/* This kernel doesn't currently work as I removed the pixel facet assignments
+	 * in posvis_gpu64	 */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
 	int k = (offset % xspan) + xylim[f].w;
 	int l = (offset / xspan) + xylim[f].y;
@@ -1509,30 +1617,52 @@ __host__ void calc_deldop_gpu64(struct par_t *dpar, struct mod_t *dmod,
 {
 	double3 orbit_off3;
 	orbit_off3.x = orbit_off3.y = orbit_off3.z = 0.0;
-	int v0_index, exclude_seen, f, v2, c=0, yspan;
-	dim3 BLKdd[nframes], BLKpx[nframes], THD, THD9, BLKfrm,THD64;
-	THD.x = maxThreadsPerBlock; THD9.x = 9;	THD64.x = 64;
+
+	int v0_index, exclude_seen, f, v2, c=0, yspan, hndop[nframes], hndel[nframes],
+			hposn[nframes], houtbndarr[nframes], nThreadsdd[nframes], v[nviews+1],
+			*dxspan, *hxspan, *dnpixels, *hnpixels, *ddeldopsize, *hdeldopsize,
+			blocks;
 	int4 hxylim[nframes];
-	int hndop[nframes], hndel[nframes], hposn[nframes],
-		houtbndarr[nframes], xspan[nframes], nThreadspx[nframes], nThreadsdd[nframes],
-		nThreadspx1[nframes], v[nviews+1];
+	dim3 BLKdd[nframes], BLKpx[nframes], THD, THD9, BLKfrm,THD64, THDaf, BLKaf;
+	THD.x = maxThreadsPerBlock; THD9.x = 9;	THD64.x = 64;
 	BLKfrm = floor((THD64.x - 1 + nframes)/THD64.x);
 
+	/* Used only for timing kernels */
+	cudaEvent_t start1, stop1;
+	float milliseconds;
+
+	/* The following variables are the launch parameters for the posclr_radar_krnl64af
+	 * kernel, which clears all frames simultaneously with a configurable number of
+	 * blocks per frame (set via "blocks").  Each block/set of blocks will perform
+	 * a grid-stride loop through the pos bounding box for each frame 	 */
+	THDaf.x = 1024;		blocks = 3; 	BLKaf.x = nframes*blocks;
+
+	cudaCalloc1((void**)&dnpixels, sizeof(int), nframes);
+	cudaCalloc1((void**)&dxspan, sizeof(int), nframes);
+	cudaCalloc1((void**)&ddeldopsize, sizeof(int), nframes);
+	hnpixels = (int *) malloc(nframes*sizeof(int));
+	hxspan = (int *) malloc(nframes*sizeof(int));
+	hdeldopsize = (int *) malloc(nframes*sizeof(int));
+
 	/* Set deldop, frame, view0, and pos in nframes streamed kernels */
-	cfs_set_deldop_shortcuts_krnl64<<<BLKfrm,THD64>>>(ddat, frame, pos,
-			view0, ndop, ndel, overflow, posn, s, nframes);
+	cfs_set_deldop_shortcuts_krnl64mod<<<BLKfrm,THD64>>>(ddat, frame, pos,
+			view0, ndop, ndel, overflow, posn, s, nframes, xylim);
 	checkErrorAfterKernelLaunch("cfs_set_deldop_shortcuts_krnl");
-	gpuErrchk(cudaMemcpy(&hndel, ndel, sizeof(int)*nframes, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpy(&hndop, ndop, sizeof(int)*nframes, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpy(&hposn, posn, sizeof(int)*nframes, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(&hndel, ndel, 	sizeof(int)*nframes, 	cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(&hndop, ndop, 	sizeof(int)*nframes, 	cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(&hposn, posn, 	sizeof(int)*nframes, 	cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(&hxylim, xylim,sizeof(int4)*nframes, 	cudaMemcpyDeviceToHost));
 	gpuErrchk(cudaMemcpyFromSymbol(&v0_index, cfs_v0_index, sizeof(int),
 				0, cudaMemcpyDeviceToHost));
 
 	for (f=0; f<nframes; f++) {
 		nThreadsdd[f] = hndel[f]*hndop[f];
-		BLKdd[f].x = floor((THD.x - 1 + nThreadsdd[f]) /	THD.x);
-		nThreadspx[f] = (2 * hposn[f] + 1) * (2 * hposn[f] + 1);
-		BLKpx[f].x = floor((THD.x -1 + nThreadspx[f]) / THD.x);
+		hdeldopsize[f] = hndel[f]*hndop[f];
+		BLKdd[f].x = floor((THD.x - 1 + hdeldopsize[f]) / THD.x);
+		hxspan[f] = hxylim[f].x - hxylim[f].w + 1;
+		yspan = hxylim[f].z - hxylim[f].y + 1;
+		hnpixels[f] = hxspan[f] * yspan;
+		BLKpx[f].x = (THD.x -1 + hnpixels[f]) / THD.x;
 
 		/* If smearing is being modeled, initialize variables that
 		 * will be used to sum results calculated for individual views.  */
@@ -1541,6 +1671,11 @@ __host__ void calc_deldop_gpu64(struct par_t *dpar, struct mod_t *dmod,
 			 * pointer. This also initializes the entire array to zero. */
 			gpuErrchk(cudaMalloc((void**)&fit_store[f], sizeof(double) * nThreadsdd[f]));
 	}
+
+	gpuErrchk(cudaMemcpy(dnpixels, hnpixels, sizeof(int)*nframes,cudaMemcpyHostToDevice));
+	gpuErrchk(cudaMemcpy(dxspan, hxspan, sizeof(int)*nframes,cudaMemcpyHostToDevice));
+	gpuErrchk(cudaMemcpy(ddeldopsize, hdeldopsize, sizeof(int)*nframes, cudaMemcpyHostToDevice));
+
 	/*  Loop over all views for this (smeared) frame, going in an order that
         ends with the view corresponding to the epoch listed for this frame
         in the obs file; this way we can use the calculated information for
@@ -1551,26 +1686,42 @@ __host__ void calc_deldop_gpu64(struct par_t *dpar, struct mod_t *dmod,
 		cfs_set_pos_ae_krnl<<<BLKfrm,THD64>>>(ddat, pos, s, nframes,
 				type, v[v2], 0);
 	}
-	for (f=0; f<nframes; f++)
-		/* Launch posclr_krnl to initialize POS view */
-		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f, FP64, 0);
-	checkErrorAfterKernelLaunch("posclr_krnl");
+
+
+	//	cudaEventCreate(&start1);
+//	cudaEventCreate(&stop1);
+//	cudaEventRecord(start1);
+//
+//	for (f=0; f<nframes; f++)
+//		/* Launch posclr_krnl to initialize POS view */
+//		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f, FP64, 0);
+//		posclr_fast_krnl2<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f, FP64, 0);
+//		posclr_radar_krnl64<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f);
+//		posclr_radar_krnl64mod<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f,
+//				xspan[f], xylim, nThreadspx1[f]);
+//	checkErrorAfterKernelLaunch("posclr_krnl");
+
+	posclr_radar_krnl64af<<<BLKaf,THDaf>>>(pos, posn, dxspan, xylim, dnpixels,
+			blocks);
+	checkErrorAfterKernelLaunch("posclr_radar_krnl64af ");
+
+//	cudaEventRecord(stop1);
+//	cudaEventSynchronize(stop1);
+//	cudaEventElapsedTime(&milliseconds, start1, stop1);
+//	printf("calc_deldop64, %3.8g\n", (milliseconds/(nframes-1)));
+
 
 	/* Call posvis to get facet number, scattering angle, distance
 	 * toward Earth at center of each POS pixel; set flag posbnd if any model
 	 * portion extends beyond POS frame limits.
 	 * NOTE: Limited to single component for now */
 	for (v2=v0_index+1; v2<=v0_index+nviews; v2++)
-		posvis_tiled_gpu64(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
+		posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
 				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream, 0);
-
-
-//		posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
-//				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream, 0);
 
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
 			cudaMemcpyDeviceToHost));
-//
+
 //	f=0;
 //	dbg_print_pos_arrays_full64(pos, f, nThreadspx[f], hposn[f]);
 
@@ -1594,11 +1745,15 @@ __host__ void calc_deldop_gpu64(struct par_t *dpar, struct mod_t *dmod,
 
 	/* Calculate launch parameters for all frames */
 	for (f=0; f<nframes; f++) {
-		xspan[f] = hxylim[f].x - hxylim[f].w + 1;
+		hxspan[f] = hxylim[f].x - hxylim[f].w + 1;
 		yspan = hxylim[f].z - hxylim[f].y + 1;
-		nThreadspx1[f] = xspan[f] * yspan;
-		BLKpx[f].x = (THD.x -1 + nThreadspx1[f]) / THD.x;
+		hnpixels[f] = hxspan[f] * yspan;
+		BLKpx[f].x = (THD.x -1 + hnpixels[f]) / THD.x;
 	}
+
+	/* It's not entirely clear to me whether this is needed at all.  Currently
+	 * (12/31/2017) it doesn't work because I removed the pos->f[x][y] assignment
+	 * in posvis_gpu64	 */
 	for (f=0; f<nframes; f++) {
 		for (v2=v0_index+1; v2<=v0_index+nviews; v2++) {
 			/* Go through all POS pixels which are visible with low enough
@@ -1606,14 +1761,16 @@ __host__ void calc_deldop_gpu64(struct par_t *dpar, struct mod_t *dmod,
 			 * centers as having been "seen" at least once                   */
 			if (s != exclude_seen && v[v2] == v0_index)
 				cf_mark_pixels_seen_krnl64<<<BLKpx[f],THD,0,cf_stream[f]>>>(
-						dpar, dmod, pos, xylim, nThreadspx1[f], xspan[f], f);
+						dpar, dmod, pos, xylim, hnpixels[f], hxspan[f], f);
 
 			/* Zero out the fit delay-Doppler image, then call pos2deldop to
 			 * create the fit image by mapping power from the plane of the sky
 			 * to delay-Doppler space.                             */
-			clrvect_krnl<<<BLKdd[f],THD,0,cf_stream[f]>>>(ddat, nThreadsdd[f], s, f, FP64);
 		} checkErrorAfterKernelLaunch("clrvect_krnl and cf_mark_pixels_seen_streams_krnl");
 	}
+
+	clrvect_krnl64af<<<BLKaf,THDaf>>>(ddat, ddeldopsize, s, blocks);
+	checkErrorAfterKernelLaunch("clrvect_krnl and cf_mark_pixels_seen_streams_krnl");
 
 	for (v2=v0_index+1; v2<=v0_index+nviews; v2++)
 		pos2deldop_gpu64(dpar, dmod, ddat, pos, frame, xylim, ndel, ndop,
@@ -1622,9 +1779,6 @@ __host__ void calc_deldop_gpu64(struct par_t *dpar, struct mod_t *dmod,
 	/* Copy the badradar flag returns for all frames to a host copy */
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
 			cudaMemcpyDeviceToHost));
-
-//dbg_print_deldop_fit(ddat, 0, 0, "1080Ti_deldop_fit.csv");
-
 
 	for (f=0; f<nframes; f++) {
 		for (v2=v0_index+1; v2<=v0_index+nviews; v2++) {
@@ -1647,13 +1801,13 @@ __host__ void calc_deldop_gpu64(struct par_t *dpar, struct mod_t *dmod,
 		}
 	} checkErrorAfterKernelLaunch("cf_add_fit_store_streams_krnl1 and 2");
 
+
 	/* If smearing is being modeled, compute mean values over all views for
 	 * this frame and store them in the standard frame structure.  This kernel
 	 * also carries out the gamma transformation on the fit image if the
 	 * par->dd_gamma flag is not set  */
 	if (nviews > 1) {
 		for (f=0; f<nframes; f++) {
-
 			cf_finish_fit_store_krnl64<<<BLKdd[f],THD,0,cf_stream[f]>>>(
 					ddat, fit_store, s, f, nThreadsdd[f], type, ndel);
 
@@ -1667,7 +1821,12 @@ __host__ void calc_deldop_gpu64(struct par_t *dpar, struct mod_t *dmod,
 				nThreadsdd[f], type, ndel, FP64);
 	} checkErrorAfterKernelLaunch("cf_gamma_trans_krnl");
 
-
+	cudaFree(dxspan);
+	cudaFree(dnpixels);
+	cudaFree(ddeldopsize);
+	free(hxspan);
+	free(hnpixels);
+	free(hdeldopsize);
 }
 
 __host__ void calc_doppler_gpu32(struct par_t *dpar, struct mod_t *dmod,
@@ -1843,28 +2002,44 @@ __host__ void calc_doppler_gpu64(struct par_t *dpar, struct mod_t *dmod,
 {
 	double3 orbit_off3;
 	orbit_off3.x = orbit_off3.y = orbit_off3.z = 0.0;
-	int v0_index, exclude_seen, f, v2, c=0, yspan;
-	dim3 BLKd[nframes], BLKpx[nframes],THD,THD9,THD64,BLKfrm;
-	THD.x = maxThreadsPerBlock; THD9.x = 9; THD64.x = 64;
+
 	int4 hxylim[nframes];
-	int hndop[nframes], hposn[nframes], houtbndarr[nframes],
-		xspan[nframes], nThreadspx[nframes], nThreadspx1[nframes], v[nviews+1];
+	int v0_index, exclude_seen, f, v2, c=0, yspan, blocks, hndop[nframes],
+			hposn[nframes], houtbndarr[nframes], v[nviews+1], *dnpixels,
+			*hnpixels, *dxspan, *hxspan;
+
+	dim3 BLKd[nframes], BLKpx[nframes],THD,THD9,THD64,BLKfrm, THDaf, BLKaf;
+	THD.x = maxThreadsPerBlock; THD9.x = 9; THD64.x = 64;
 	BLKfrm = floor((THD64.x - 1 + nframes)/THD64.x);
+	blocks = 3;
+	THDaf.x = 1024;
+	BLKaf.x = blocks*nframes;
+
+	cudaEvent_t start1, stop1;
+	float milliseconds;
+
+	cudaCalloc1((void**)&dnpixels, sizeof(int), nframes);
+	cudaCalloc1((void**)&dxspan, sizeof(int), nframes);
+	hnpixels = (int *) malloc(nframes*sizeof(int));
+	hxspan = (int *) malloc(nframes*sizeof(int));
 
 	/* Set doppler, frame, view0, and pos in nframes-threaded kernels */
-	cfs_set_doppler_shortcuts_krnl64<<<BLKfrm,THD64>>>(ddat, frame,
-			pos, view0, overflow, ndop, posn, s, nframes);
+	cfs_set_doppler_shortcuts_krnl64mod<<<BLKfrm,THD64>>>(ddat, frame,
+			pos, view0, overflow, ndop, posn, s, nframes, xylim);
 	checkErrorAfterKernelLaunch("cfs_set_doppler_shortcuts_krnl64");
-	gpuErrchk(cudaMemcpy(&hndop, ndop, sizeof(int)*nframes, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpy(&hposn, posn, sizeof(int)*nframes, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(&hndop, ndop, 	sizeof(int)*nframes,	cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(&hposn, posn, 	sizeof(int)*nframes,	cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(&hxylim, xylim,sizeof(int4)*nframes, 	cudaMemcpyDeviceToHost));
 	gpuErrchk(cudaMemcpyFromSymbol(&v0_index, cfs_v0_index, sizeof(int), 0,
 			cudaMemcpyDeviceToHost));
 
 	for (f=0; f<nframes; f++) {
 		/* Calculate launch parameters needed later */
 		BLKd[f] = floor((THD.x - 1 + hndop[f]) / THD.x);
-		nThreadspx[f] = (2 * hposn[f] + 1) * (2 * hposn[f] + 1);
-		BLKpx[f] = floor((THD.x - 1 + nThreadspx[f]) / THD.x);
+		hxspan[f] = hxylim[f].x - hxylim[f].w + 1;
+		yspan = hxylim[f].z - hxylim[f].y + 1;
+		hnpixels[f] = hxspan[f] * yspan;
+		BLKpx[f].x = (THD.x -1 + hnpixels[f]) / THD.x;
 
 		/* If smearing is being modeled, initialize variables that
 		 * will be used to sum results calculated for individual views.  */
@@ -1873,6 +2048,9 @@ __host__ void calc_doppler_gpu64(struct par_t *dpar, struct mod_t *dmod,
 			 * pointer. This also initializes the entire array to zero. */
 			gpuErrchk(cudaMalloc((void**)&fit_store[f], sizeof(double)*ndop[f]));
 	}
+	/* Now copy back the bounding box information (# of pixels and widths, for each frame) */
+	gpuErrchk(cudaMemcpy(dnpixels, hnpixels, sizeof(int)*nframes,cudaMemcpyHostToDevice));
+	gpuErrchk(cudaMemcpy(dxspan, hxspan, sizeof(int)*nframes,cudaMemcpyHostToDevice));
 
 	/* Loop over all views for this (smeared) frame, going in an order that
 	 * ends with the view corresponding to the epoch listed for this frame
@@ -1885,20 +2063,17 @@ __host__ void calc_doppler_gpu64(struct par_t *dpar, struct mod_t *dmod,
 				type, v[v2], 0);
 	} checkErrorAfterKernelLaunch("cfs_set_pos_ae_krnl");
 
-	for (f=0; f<nframes; f++)
-		/* Launch posclr_krnl to initialize POS view */
-		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f, FP64, 0);
-	checkErrorAfterKernelLaunch("posclr_krnl ");
+	posclr_radar_krnl64af<<<BLKaf,THDaf>>>(pos, posn, dxspan, xylim, dnpixels,
+			blocks);
+	checkErrorAfterKernelLaunch("posclr_radar_krnl64af ");
 
 	/* Call posvis_cuda_2 to get facet number, scattering angle, distance
 	 * toward Earth at center of each POS pixel; set flag posbnd if any model
 	 * portion extends beyond POS frame limits.*/
 	/* NOTE: Limited to single component for now */
 	for (v2=v0_index+1; v2<=v0_index+nviews; v2++)
-		posvis_tiled_gpu64(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
+		posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
 				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream, 0);
-//		posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
-//				outbndarr, s, nframes, 0, nf, 0, c, type, cf_stream, 0);
 
 	/* Copy the posbnd flag returns for all frames to a host copy */
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nframes,
@@ -1924,10 +2099,10 @@ __host__ void calc_doppler_gpu64(struct par_t *dpar, struct mod_t *dmod,
 
 	/* Calculate launch parameters for all frames */
 	for (f=0; f<nframes; f++) {
-		xspan[f] = hxylim[f].x - hxylim[f].w + 1;
+		hxspan[f] = hxylim[f].x - hxylim[f].w + 1;
 		yspan = hxylim[f].z - hxylim[f].y + 1;
-		nThreadspx1[f] = xspan[f] * yspan;
-		BLKpx[f].x = (THD.x -1 + nThreadspx1[f]) / THD.x;
+		hnpixels[f] = hxspan[f] * yspan;
+		BLKpx[f].x = (THD.x -1 + hnpixels[f]) / THD.x;
 	}
 
 	for (f=0; f<nframes; f++) {
@@ -1937,7 +2112,7 @@ __host__ void calc_doppler_gpu64(struct par_t *dpar, struct mod_t *dmod,
 			 * their centers as having been "seen" at least once           */
 			if (s != exclude_seen && v[v2] == v0_index)
 				cf_mark_pixels_seen_krnl64<<<BLKpx[f],THD,0,cf_stream[f]>>>(
-						dpar, dmod, pos, xylim, nThreadspx1[f], xspan[f], f);
+						dpar, dmod, pos, xylim, hnpixels[f], hxspan[f], f);
 
 			/* Zero out the fit delay-Doppler image, then call pos2deldop to
 			 * create the fit image by mapping power from the plane of the sky
@@ -1945,7 +2120,6 @@ __host__ void calc_doppler_gpu64(struct par_t *dpar, struct mod_t *dmod,
 			clrvect_krnl<<<BLKd[f],THD,0,cf_stream[f]>>>(ddat, hndop[f], s, f, FP64);
 		} checkErrorAfterKernelLaunch("clrvect_krnl and cf_mark_pixels_seen_krnl");
 	}
-
 
 	/* Call pos2deldop to calculate the Doppler radar fit image */
 	for (v2=v0_index+1; v2<=v0_index+nviews; v2++) {
@@ -1998,6 +2172,11 @@ __host__ void calc_doppler_gpu64(struct par_t *dpar, struct mod_t *dmod,
 				"cf_gamma_trans_krnl");
 		cudaFree(fit_store);
 	}
+
+	cudaFree(dnpixels);
+	cudaFree(dxspan);
+	free(hnpixels);
+	free(hxspan);
 }
 
 ////void calc_poset( struct par_t *par, struct mod_t *mod, struct poset_t *poset,
@@ -2402,48 +2581,114 @@ __host__ void calc_lghtcrv_gpu64(
 		double *u,
 		cudaStream_t *cf_stream)
 {
-	int ncalc, c=0, n, nThreads, exclude_seen, f;//, bistatic_all=0;
+	int ncalc, c=0, n, nThreads, exclude_seen, f, *dnpixels_bbox,
+			*hnpixels_full, *hnpixels_bbox, *dnpixels_bistatic,
+			*hnpixels_bistatic,	*dxspan, *hxspan, blocks, *dxspan_bistatic,
+			*hxspan_bistatic, *dnpixels_combined, *hnpixels_combined,
+			*dxspan_combined, *hxspan_combined;
 	int nfplus = nframes+1; /* This is to accomodate the +1 start in lghtcrv */
+	int houtbndarr[nfplus],
+		hposn[nfplus];
+
 	double3 orbit_off3;
 	orbit_off3.x = orbit_off3.y = orbit_off3.z = 0.0;
-	dim3 BLKpx[nfplus],THD,THD9,THD64,BLKfrm;
-	THD.x = maxThreadsPerBlock; THD9.x = 9; THD64.x = 64;
-	BLKfrm = floor((THD64.x - 1 + nframes)/THD64.x);
-	ncalc = nframes;
-	n = lc_n;
-	int /*hbistatic[nfplus], */houtbndarr[nfplus],
-		nThreadspx[nfplus], nThreadspx1[nfplus], hposn[nfplus];
-	int4 hxylim[nfplus];
+
+	int4 hxylim[nfplus], hxylim2[nfplus], hxylim_combined[nfplus], *xylim2, *xylim_combined;
 	int2 span[nfplus];
 
+	dim3 BLKpx_full[nfplus], BLKpx_bbox[nfplus], THD, THD9, THD64, BLKfrm, BLKaf, THDaf;
+	THD.x = maxThreadsPerBlock; THD9.x = 9; THD64.x = 64;
+	BLKfrm = floor((THD64.x - 1 + nframes)/THD64.x);
+
+	/* Used only for timing kernels */
+	cudaEvent_t start1, stop1;
+	float milliseconds;
+
+	ncalc = nframes;
+	n = lc_n;
+
+	/* The following variables are the launch parameters for the posclr_radar_krnl64af
+	 * kernel, which clears all frames simultaneously with a configurable number of
+	 * blocks per frame (set via "blocks").  Each block/set of blocks will perform
+	 * a grid-stride loop through the pos bounding box for each frame 	 */
+	THDaf.x = 1024;		blocks = 3; 	BLKaf.x = nframes*blocks;
+
+	cudaCalloc1((void**)&dnpixels_bbox, sizeof(int), nfplus);
+	cudaCalloc1((void**)&dnpixels_bistatic, sizeof(int), nfplus);
+	cudaCalloc1((void**)&dnpixels_combined, sizeof(int), nfplus);
+	cudaCalloc1((void**)&dxspan, sizeof(int), nfplus);
+	cudaCalloc1((void**)&dxspan_bistatic, sizeof(int), nfplus);
+	cudaCalloc1((void**)&dxspan_combined, sizeof(int), nfplus);
+	cudaCalloc1((void**)&xylim2, sizeof(int4), nfplus);
+	cudaCalloc1((void**)&xylim_combined, sizeof(int4), nfplus);
+	hnpixels_full = (int *) malloc(nfplus*sizeof(int));
+	hnpixels_bbox = (int *) malloc(nfplus*sizeof(int));
+	hnpixels_bistatic = (int *) malloc(nfplus*sizeof(int));
+	hnpixels_combined = (int *) malloc(nfplus*sizeof(int));
+	hxspan = (int *) malloc(nfplus*sizeof(int));
+	hxspan_bistatic = (int *) malloc(nfplus*sizeof(int));
+	hxspan_combined = (int *) malloc(nfplus*sizeof(int));
+
+
 	/* Set shortcuts and copy pos->n back for all frames */
-	cfs_set_lghtcrv_shortcuts_krnl64<<<BLKfrm,THD64>>>(ddat, rend, pos, overflow,
-			posn, s, nframes, outbndarr);
-	checkErrorAfterKernelLaunch("cfs_set_lghtcrv_shortcuts_krnl32");
+	cfs_set_lghtcrv_shortcuts_krnl64mod<<<BLKfrm,THD64>>>(ddat, rend, pos, overflow,
+			posn, s, nframes, outbndarr, xylim, xylim2);
+	checkErrorAfterKernelLaunch("cfs_set_lghtcrv_shortcuts_krnl64mod");
+	gpuErrchk(cudaMemcpy(&hxylim, xylim, sizeof(int4)*nfplus, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(&hxylim2, xylim2, sizeof(int4)*nfplus, cudaMemcpyDeviceToHost));
 	gpuErrchk(cudaMemcpy(&hposn, posn, sizeof(int)* nfplus,
 			cudaMemcpyDeviceToHost));
 
 	/* Calculate launch parameters for later */
 	for (f=1; f<=nframes; f++) {
+		hxspan[f] = hxylim[f].x - hxylim[f].w + 1;
+		hnpixels_bbox[f] = (hxylim[f].z - hxylim[f].y +1) * hxspan[f];
+		hxspan_bistatic[f] = hxylim2[f].x - hxylim2[f].w + 1;
+		hnpixels_bistatic[f] = (hxylim2[f].z - hxylim2[f].y + 1) * hxspan_bistatic[f];
+		hxylim_combined[f].w = min(hxylim[f].w, hxylim2[f].w);
+		hxylim_combined[f].x = max(hxylim[f].x, hxylim2[f].x);
+		hxylim_combined[f].y = min(hxylim[f].y, hxylim2[f].y);
+		hxylim_combined[f].z = max(hxylim[f].z, hxylim2[f].z);
+		hxspan_combined[f] = hxylim_combined[f].x - hxylim_combined[f].w + 1;
+		hnpixels_combined[f] = (hxylim_combined[f].z - hxylim_combined[f].y + 1) * hxspan_combined[f];
 		span[f].x = (2 * hposn[f] + 1);
-		nThreadspx[f] =  span[f].x * span[f].x;
-		BLKpx[f] = floor((THD.x - 1 + nThreadspx[f]) / THD.x);
+		hnpixels_full[f] =  span[f].x * span[f].x;
+		BLKpx_full[f] = floor((THD.x - 1 + hnpixels_full[f]) / THD.x);
 	}
+	gpuErrchk(cudaMemcpy(dxspan, hxspan, sizeof(int)*nfplus, cudaMemcpyHostToDevice));
+	gpuErrchk(cudaMemcpy(dnpixels_bbox, hnpixels_bbox, sizeof(int)*nfplus, cudaMemcpyHostToDevice));
+	gpuErrchk(cudaMemcpy(dxspan_bistatic, hxspan_bistatic, sizeof(int)*nfplus, cudaMemcpyHostToDevice));
+	gpuErrchk(cudaMemcpy(dnpixels_bistatic, hnpixels_bistatic, sizeof(int)*nfplus, cudaMemcpyHostToDevice));
+	gpuErrchk(cudaMemcpy(dxspan_combined, hxspan_combined, sizeof(int)*nfplus, cudaMemcpyHostToDevice));
+	gpuErrchk(cudaMemcpy(dnpixels_combined, hnpixels_combined, sizeof(int)*nfplus, cudaMemcpyHostToDevice));
+	gpuErrchk(cudaMemcpy(xylim_combined, hxylim_combined, sizeof(int4)*nfplus, cudaMemcpyHostToDevice));
+
 	/* Calculate model lightcurve values at each user-specified epochs x[i],
 	 * with i=1,2,...,ncalc; these may/may not be the same as epochs t[i]
 	 * (i=1,2,...,n) at which actual lightcurve observations were made.  */
 	cfs_set_pos_ae_krnl<<<BLKfrm,THD64>>>(ddat, pos, s, nframes,type, 0, 1);
 
-	for (f=1; f<=ncalc; f++) {
-		/* Clear the POS-view to initialize */
-		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn, f, FP64, 1);
-	} checkErrorAfterKernelLaunch("cfs_set_pos_ae and posclr_krnl");
+//	for (f=1; f<=ncalc; f++) {
+//		/* Clear the POS-view to initialize */
+//		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn, f, FP64, 1);
+//		posclr_fast_krnl2<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn, f, FP64, 1);
+//		calcfits_posclr_lc_krnl64<<<BLKpx_full[f],THD,0,cf_stream[f-1]>>>(pos, posn, f);
+//		calcfits_posclr_lc_krnl64mod<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn,
+//				f, span[f].x, xylim, hnpixels_bbox[f]);
+//	} checkErrorAfterKernelLaunch("cfs_set_pos_ae and posclr_krnl");
+
+	posclr_lc_krnl64af<<<BLKaf,THDaf>>>(pos, posn, dxspan_combined, xylim_combined, dnpixels_combined, blocks);
+	checkErrorAfterKernelLaunch("posclr_lc_krnl64af");
 
 	/* Call routine posvis to get  facet number, scattering & incidence
 	 * angle, distance toward Earth at center of each POS pixel; set posbnd
 	 * parameter = 1 if any model portion extends beyond POS frame limits*/
 	posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_off3, hposn, outbndarr,
 			s, (nframes+1), 0, nf, 0, c, type, cf_stream, 0);
+
+	int frm=17, debug=0;
+	if (debug)
+		dbg_print_lc_pos_arrays_full64(pos, frm, hnpixels_full[frm], hposn[frm]);
 
 	/* Copy the posbnd flag returns for all frames to a host copy */
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*(nfplus),
@@ -2458,13 +2703,16 @@ __host__ void calc_lghtcrv_gpu64(
 		}
 	}
 
-	/* Now view model from source (sun) and get facet number and distance
+/* Now view model from source (sun) and get facet number and distance
 	 * toward source of each pixel in this projected view; use this
 	 * information to determine which POS pixels are shadowed       */
 	/* Because posvis_gpu processes all frames at the same time, if
 	 * any of the frames are bistatic, all of them get calculated again  */
 	posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_off3, hposn,
 			outbndarr, s, (nframes+1), 1, nf, 0, c, type, cf_stream, 1);
+
+	if (debug)
+		dbg_print_lc_pos_arrays_full64(pos, frm, hnpixels_full[frm], hposn[frm]);
 
 	/* Copy the posbnd flag returns for all frames to a host copy */
 	gpuErrchk(cudaMemcpy(&houtbndarr, outbndarr, sizeof(int)*nfplus,
@@ -2477,15 +2725,19 @@ __host__ void calc_lghtcrv_gpu64(
 			cfs_set_posbnd_krnl<<<1,1,0,cf_stream[f-1]>>>(dpar, ddat, pos, s, f, type);
 		}
 	}
+
 	/* Initialize this stream for the posmask kernel to follow */
 	posmask_init_krnl64<<<BLKfrm,THD64>>>(pos, so, pxlpkm, nframes);
 
 	for (f=1; f<=nframes; f++) {
 			/* Now call posmask kernel for this stream, then loop
 			 * to next stream and repeat 	 */
-			posmask_krnl64<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(
-					dpar, pos, so, pxlpkm, posn, nThreadspx[f],	span[f].x, f);
+			posmask_krnl64<<<BLKpx_full[f],THD,0,cf_stream[f-1]>>>(
+					dpar, pos, so, pxlpkm, posn, hnpixels_full[f], span[f].x, f);
 	} checkErrorAfterKernelLaunch("posmask_krnl64");
+
+	if (debug)
+		dbg_print_lc_pos_arrays_full64(pos, frm, hnpixels_full[frm], hposn[frm]);
 
 	/* Go through all visible and unshadowed POS pixels with low enough
 	 * scattering and incidence angles, and mark facets which project onto
@@ -2507,8 +2759,8 @@ __host__ void calc_lghtcrv_gpu64(
 	for (f=1; f<=nframes; f++) {
 		span[f].x = hxylim[f].x - hxylim[f].w + 1;
 		span[f].y = hxylim[f].z - hxylim[f].y + 1;
-		nThreadspx1[f] = span[f].x * span[f].y;
-		BLKpx[f].x = floor ((THD.x -1 + nThreadspx1[f]) / THD.x);
+		hnpixels_bbox[f] = span[f].x * span[f].y;
+		BLKpx_bbox[f].x = floor ((THD.x -1 + hnpixels_bbox[f]) / THD.x);
 		maxxylim.w = min(maxxylim.w, hxylim[f].w);
 		maxxylim.x = max(maxxylim.x, hxylim[f].x);
 		maxxylim.y = min(maxxylim.y, hxylim[f].y);
@@ -2519,22 +2771,25 @@ __host__ void calc_lghtcrv_gpu64(
 	yspan_max = maxxylim.z - maxxylim.y + 1;
 	maxthds = xspan_max * yspan_max;
 
+	/* It's not entirely clear to me what this does for the fit action. As of
+	 * now (12/31/2017) it doesn't work because I have (temporarily?) removed
+	 * the pos->f[][] pixel assignments from the posvis_gpu64 routine 	 */
 	for (f=1; f<=nframes; f++) {
 		/* Go through all POS pixels which are visible with low enough
 		 * scattering angle and mark the facets which project onto
 		 * their centers as having been "seen" at least once           */
 		if (s != exclude_seen)
-			cf_mark_pixels_seen_krnl64<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(
-					dpar, dmod, pos, xylim, nThreadspx1[f], span[f].x, f);
+			cf_mark_pixels_seen_krnl64<<<BLKpx_bbox[f],THD,0,cf_stream[f-1]>>>(
+					dpar, dmod, pos, xylim, hnpixels_bbox[f], span[f].x, f);
 	} checkErrorAfterKernelLaunch("cf_mark_pixels_krnl");
 
-//	int frm=1;
-//	dbg_print_pos_arrays_full64(pos, frm, nThreadspx[frm], hposn[frm]);
-
 	/* Compute model brightness for this lightcurve point then copy to device  */
-	apply_photo_gpu64(dmod, ddat, pos, xylim, span, BLKpx, nThreadspx,
-			0, s, nframes, nThreadspx1, maxthds, maxxylim, cf_stream);
-//	dbg_print_pos_arrays_full64(pos, 1, nThreadspx[1], hposn[1]);
+	apply_photo_gpu64(dmod, ddat, pos, xylim, span, BLKpx_bbox, hnpixels_bbox,
+			0, s, nframes, maxthds, maxxylim, cf_stream);
+	if (debug)
+		dbg_print_lc_pos_arrays_full64(pos, frm, hnpixels_full[frm], hposn[frm]);
+
+//	dbg_print_lc_pos_arrays_full64(pos, 1, hnpixels_full[1], hposn[1]);
 	/* Now that we have calculated the model lightcurve brightnesses y at each
 	 * of the epochs x, we use cubic spline interpolation (Numerical Recipes
 	 * routines spline and splint) to get model lightcurve brightness fit[i] at
@@ -2553,12 +2808,28 @@ __host__ void calc_lghtcrv_gpu64(
 	nThreads = nframes;
 	THD.x = maxThreadsPerBlock;
 	gpuErrchk(cudaMemset(u, 0, sizeof(double)*nfplus));
-	BLKpx[0].x = floor((THD.x - 1 + nThreads)/THD.x);
+	BLKpx_full[0].x = floor((THD.x - 1 + nThreads)/THD.x);
 	lghtcrv_spline_krnl<<<1,1>>>(ddat, s, 2.0e30, 2.0e30, u, nframes);
 	checkErrorAfterKernelLaunch("lghtcrv_spline_krnl");
 
 	/* Change launch parameters from ncalc threads to n threads */
-	BLKpx[0].x = floor((THD.x - 1 + n) / THD.x);
+	BLKpx_full[0].x = floor((THD.x - 1 + n) / THD.x);
 	lghtcrv_splint_krnl<<<1,1>>>(ddat, s, n, nframes);
 	checkErrorAfterKernelLaunch("lghtcrv_splint_krnl");
+
+	free(hxspan);
+	free(hnpixels_full);
+	free(hnpixels_bbox);
+	free(hnpixels_bistatic);
+	free(hnpixels_combined);
+	free(hxspan_bistatic);
+	free(hxspan_combined);
+	cudaFree(xylim2);
+	cudaFree(xylim_combined);
+	cudaFree(dxspan);
+	cudaFree(dxspan_bistatic);
+	cudaFree(dxspan_combined);
+	cudaFree(dnpixels_bbox);
+	cudaFree(dnpixels_bistatic);
+	cudaFree(dnpixels_combined);
 }

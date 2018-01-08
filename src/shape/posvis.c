@@ -93,9 +93,6 @@ int posvis( struct vertices_t *verts, double orbit_offset[3], struct pos_t *pos,
 
 	int dbg_cntr=0;
 
-//	double3 *dbg_hn;
-//	dbg_hn = (double3 *) malloc(verts->nf*sizeof(double3));
-//	int dbg_occ = 0;
 	/*  Initialize variables  */
 	outbnd = 0;
 	pos->posbnd_logfactor = 0.0;
@@ -308,14 +305,14 @@ int posvis( struct vertices_t *verts, double orbit_offset[3], struct pos_t *pos,
             														  / (2*pos->n + 1);
 		pos->posbnd_logfactor = log(xfactor*yfactor);
 	}
-	dbg_print_pos_arrays_full_host(pos);
+//	dbg_print_pos_arrays_full_host(pos);
 //	dbg_print_facet_normals_dbl3(dbg_hn, verts->nf, "CPU_nrmls.csv");
 //	dbg_print_facet_normals_dbl3(dbg_hn, nf, "FP64_nrmls.csv");
-	printf("dbg_cntr in posvis (CPU) = %i\n", dbg_cntr);
-	printf("xlim[0] = %i\n", pos->xlim[0]);
-	printf("xlim[0] = %i\n", pos->xlim[1]);
-	printf("ylim[1] = %i\n", pos->ylim[0]);
-	printf("ylim[1] = %i\n", pos->ylim[1]);
+//	printf("dbg_cntr in posvis (CPU) = %i\n", dbg_cntr);
+//	printf("xlim[0] = %i\n", pos->xlim[0]);
+//	printf("xlim[0] = %i\n", pos->xlim[1]);
+//	printf("ylim[1] = %i\n", pos->ylim[0]);
+//	printf("ylim[1] = %i\n", pos->ylim[1]);
 	return outbnd;
 }
 

@@ -57,6 +57,8 @@ __device__ void dev_odeint( double ystart[13], double x1, double x2, double eps,
 			*,double *,double *,void (*)(double,double *,double *)));
 __device__ double dev_plgndr(int l,int m,double x);
 __device__ double dev_radlaw( struct photo_t *photo, int ilaw, double cosinc, int c, int f);
+__device__ double dev_radlaw_mod( struct photo_t *photo, int ilaw, double cosinc);
+__device__ double dev_radlaw_cosine(double cosinc, double RCRval, double RCCval);
 __device__ void dev_realize_impulse(struct spin_t spin, double t,double t_integrate[], double impulse[][3], int *n_integrate, int s, int f, int k);
 __device__ void dev_rzextr( int iest, double xest, double *yest, double *yz, double *dy);
 

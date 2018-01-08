@@ -595,7 +595,7 @@ __global__ void ap_kaas_krnl48(struct mod_t *dmod, struct pos_t **pos,
 	}
 }
 __global__ void ap_kaas_krnl64(struct mod_t *dmod, struct pos_t **pos,
-		int nThreads, int body,	int4 *xylim, int2 span,
+		int nThreads_bbox, int body,	int4 *xylim, int2 span,
         double *intensity_factor, double *phase,	double *phasefunc,
         double *scale_lommsee, double *scale_lambert, int frm, int nframes) {
 			/* Multi-threaded kernel */
@@ -603,9 +603,9 @@ __global__ void ap_kaas_krnl64(struct mod_t *dmod, struct pos_t **pos,
 			int i = offset % span.x + xylim[frm].w;
 			int j = offset / span.x + xylim[frm].y;
 
-            if (offset < nThreads) {
-				if (pos[frm]->cose[i][j] > 0.0 && pos[frm]->cosi[i][j] > 0.0
-						&& pos[frm]->body[i][j] == body) {
+            if (offset < nThreads_bbox) {
+				if (pos[frm]->cose[i][j] > 0.0 && pos[frm]->cosi[i][j] > 0.0/*
+						&& pos[frm]->body[i][j] == body*/) {
 
 					pos[frm]->b[i][j] = intensity_factor[frm] * pos[frm]->cosi[i][j]
 			       *(scale_lommsee[frm] / (pos[frm]->cosi[i][j] + pos[frm]->cose[i][j])
@@ -1056,12 +1056,11 @@ __host__ void apply_photo_gpu64(
 		struct pos_t **pos,
 		int4 *xylim,
 		int2 *span,
-		dim3 *BLKpx,
-		int *nThreads,
+		dim3 *BLKpx_bbox,
+		int *nThreads_bbox,
 		int body,
 		int set,
 		int nframes,
-		int *nThreadspx,
 		int maxthds,
 		int4 maxxylim,
 		cudaStream_t *ap_stream)
@@ -1096,74 +1095,74 @@ __host__ void apply_photo_gpu64(
 	case LAMBERTLAW:
 		/* Launch Lambert Law kernel */
 		for (f=1; f<=nframes; f++)
-			ap_lambertlaw_krnl64<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,pos,
-					intensity_factor, xylim, nThreads[f], body, span[f], f);
+			ap_lambertlaw_krnl64<<<BLKpx_bbox[f],THD,0,ap_stream[f-1]>>>(dmod,pos,
+					intensity_factor, xylim, nThreads_bbox[f], body, span[f], f);
 		checkErrorAfterKernelLaunch("ap_lambertlaw_krnl64");
 		break;
 	case HARMLAMBERT:
 		/* Launch the HarmLambert kernel */
 		for (f=1; f<=nframes; f++)
-			ap_harmlambert_krnl64<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(
-					dmod, pos, nThreads[f], body, xylim, span[f],
+			ap_harmlambert_krnl64<<<BLKpx_bbox[f],THD,0,ap_stream[f-1]>>>(
+					dmod, pos, nThreads_bbox[f], body, xylim, span[f],
 					intensity_factor, f);
 		checkErrorAfterKernelLaunch("ap_harmlambert_krnl64");
 		break;
 	case INHOLAMBERT:
 		/* Launch the Inhomogeneous Lambert kernel */
 		for (f=1; f<=nframes; f++)
-			ap_inholambert_krnl64<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
-					pos, nThreads[f], body, xylim, span[f], intensity_factor,f);
+			ap_inholambert_krnl64<<<BLKpx_bbox[f],THD,0,ap_stream[f-1]>>>(dmod,
+					pos, nThreads_bbox[f], body, xylim, span[f], intensity_factor,f);
 		checkErrorAfterKernelLaunch("ap_inholambert_krnl64");
 		break;
 	case LOMMEL:
 		/* Launch the Lommel kernel */
 		for (f=1; f<=nframes; f++)
-			ap_lommel_krnl64<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
-					nThreads[f], body, xylim, span[f], intensity_factor, f);
+			ap_lommel_krnl64<<<BLKpx_bbox[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
+					nThreads_bbox[f], body, xylim, span[f], intensity_factor, f);
 		checkErrorAfterKernelLaunch("ap_lommel_krnl64");
 		break;
 	case HARMLOMMEL:
 		/* Launch the HarmLommel kernel */
 		for (f=1; f<=nframes; f++)
-			ap_harmlommel_krnl64<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
-					pos, nThreads[f], body, xylim, span[f], intensity_factor, f);
+			ap_harmlommel_krnl64<<<BLKpx_bbox[f],THD,0,ap_stream[f-1]>>>(dmod,
+					pos, nThreads_bbox[f], body, xylim, span[f], intensity_factor, f);
 		checkErrorAfterKernelLaunch("ap_harmlommel_krnl64");
 		break;
 	case INHOLOMMEL:
 		/* Launch the Inhomogeneous Lommel kernel */
 		for (f=1; f<=nframes; f++)
-			ap_inholommel_krnl64<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
-					pos, nThreads[f], body, xylim, span[f], intensity_factor, f);
+			ap_inholommel_krnl64<<<BLKpx_bbox[f],THD,0,ap_stream[f-1]>>>(dmod,
+					pos, nThreads_bbox[f], body, xylim, span[f], intensity_factor, f);
 		checkErrorAfterKernelLaunch("ap_inholommel_krnl64");
 		break;
 	case GEOMETRICAL:
 		/* Launch the Geometrical law kernel */
 		for (f=1; f<=nframes; f++)
-			ap_geometrical_krnl64<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
-					pos, nThreads[f], body, xylim, span[f], intensity_factor, f);
+			ap_geometrical_krnl64<<<BLKpx_bbox[f],THD,0,ap_stream[f-1]>>>(dmod,
+					pos, nThreads_bbox[f], body, xylim, span[f], intensity_factor, f);
 		checkErrorAfterKernelLaunch("ap_geometrical_krnl64");
 		break;
 	case HAPKE:
 		/* Launch the Hapke kernel */
 		for (f=1; f<=nframes; f++)
-			ap_hapke_krnl64<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
-					nThreads[f], body, xylim, span[f], intensity_factor,
+			ap_hapke_krnl64<<<BLKpx_bbox[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
+					nThreads_bbox[f], body, xylim, span[f], intensity_factor,
 					phase, f);
 		checkErrorAfterKernelLaunch("ap_hapke_krnl64");
 		break;
 	case HARMHAPKE:
 		/* Launch the HarmHapke kernel */
 		for (f=1; f<=nframes; f++)
-			ap_harmhapke_krnl64<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
-					pos, nThreads[f], body, xylim, span[f],	intensity_factor,
+			ap_harmhapke_krnl64<<<BLKpx_bbox[f],THD,0,ap_stream[f-1]>>>(dmod,
+					pos, nThreads_bbox[f], body, xylim, span[f],	intensity_factor,
 					phase, f);
 		checkErrorAfterKernelLaunch("ap_harmhapke_krnl64");
 		break;
 	case INHOHAPKE:
 		/* Launch the Inhomogeneous Hapke kernel */
 		for (f=1; f<=nframes; f++)
-			ap_inhohapke_krnl64<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
-					pos, nThreads[f], body, xylim, span[f], intensity_factor,
+			ap_inhohapke_krnl64<<<BLKpx_bbox[f],THD,0,ap_stream[f-1]>>>(dmod,
+					pos, nThreads_bbox[f], body, xylim, span[f], intensity_factor,
 					phase, f);
 		checkErrorAfterKernelLaunch("ap_inhohapke_krnl64");
 		break;
@@ -1176,8 +1175,8 @@ __host__ void apply_photo_gpu64(
 
 		/* Launch the main Kaasalainen kernel */
 		for (f=1; f<=nframes; f++){
-			ap_kaas_krnl64<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
-					nThreadspx[f], body, xylim, span[f], intensity_factor,
+			ap_kaas_krnl64<<<BLKpx_bbox[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
+					nThreads_bbox[f], body, xylim, span[f], intensity_factor,
 					phase, phasefunc, scale_lommsee, scale_lambert, f, nframes);
 		}
 		checkErrorAfterKernelLaunch("ap_kaas_krnl64");
@@ -1186,15 +1185,15 @@ __host__ void apply_photo_gpu64(
 	case HARMKAAS:
 		/* Launch the HarmKaas kernel */
 		for (f=1; f<=nframes; f++)
-			ap_harmkaas_krnl64<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
-					nThreads[f], body, xylim, span[f], intensity_factor, phase, f);
+			ap_harmkaas_krnl64<<<BLKpx_bbox[f],THD,0,ap_stream[f-1]>>>(dmod, pos,
+					nThreads_bbox[f], body, xylim, span[f], intensity_factor, phase, f);
 		checkErrorAfterKernelLaunch("ap_harmkaas_krnl64");
 		break;
 	case INHOKAAS:
 		/* Launch the HarmKaas kernel */
 		for (f=1; f<=nframes; f++)
-			ap_inhokaas_krnl64<<<BLKpx[f],THD,0,ap_stream[f-1]>>>(dmod,
-					pos, nThreads[f], body, xylim, span[f], intensity_factor,
+			ap_inhokaas_krnl64<<<BLKpx_bbox[f],THD,0,ap_stream[f-1]>>>(dmod,
+					pos, nThreads_bbox[f], body, xylim, span[f], intensity_factor,
 					phase, f);
 		checkErrorAfterKernelLaunch("ap_inhokaas_krnl64");
 		break;

@@ -503,7 +503,7 @@ __global__ void pos2doppler_pixel_krnl32(
 		 * right body, in case this is the "orbit" action (for which this
 		 * routine is called twice, once for each of the 2 orbiting bodies).*/
 
-		if (pos[f]->cose_s[zaddr] > 0.0 && pos[f]->body[x][y] == body) {
+		if (pos[f]->cose_s[zaddr] > 0.0 ) {// && pos[f]->body[x][y] == body) {
 
 			/* Get the fp Doppler bin of POS pixel center: dopPOS. Also get the
 			 * min and max int Doppler bins to which this pixel contributes
@@ -663,7 +663,7 @@ __global__ void pos2doppler_pixel_krnl64(
 		 * right body, in case this is the "orbit" action (for which this
 		 * routine is called twice, once for each of the 2 orbiting bodies).*/
 
-		if (pos[f]->cose[x][y] > 0.0 && pos[f]->body[x][y] == body) {
+		if (pos[f]->cose[x][y] > 0.0 ) {// && pos[f]->body[x][y] == body) {
 
 			/* Get the fp Doppler bin of POS pixel center: dopPOS. Also get the
 			 * min and max int Doppler bins to which this pixel contributes
@@ -893,8 +893,8 @@ __global__ void pos2doppler_finish_krnl64(
 						frame[f]->idoplim[0], frame[f]->idoplim[1]);
 			}
 		}
+		if (badradararr[f]) pds_badradar_global = 0;
 	}
-	if (badradararr[f]) pds_badradar_global = 0;
 }
 
 

@@ -13,7 +13,11 @@ void mnbrak(double *ax,double *bx,double *cx,double *fa,double *fb,
 	double ulim,u,r,q,fu,dum;
 
 	*fa=(*func)(*ax);
+//	printf("mnbrak ax, %g\n", *ax);
+//	printf("mnbrak fa, %g\n", *fa);
 	*fb=(*func)(*bx);
+//	printf("mnbrak bx, %g\n", *bx);
+//	printf("mnbrak fb, %g\n", *fb);
 	if (*fb > *fa) {
 		SHFT(dum,*ax,*bx,dum)
 		SHFT(dum,*fb,*fa,dum)

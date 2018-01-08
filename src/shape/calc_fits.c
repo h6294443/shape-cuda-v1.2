@@ -1658,6 +1658,13 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 					posbnd_logfactor += pos->posbnd_logfactor;
 			}
 
+		int debug = 0;
+		if (i==17)
+			if (debug==1) {
+				dbg_print_lc_pos_arrays_full_host(pos);
+			}
+
+
 		/*  Now view the model from the source (sun) and get the facet number
         and distance toward the source of each pixel in this projected view;
         use this information to determine which POS pixels are shadowed       */
@@ -1671,9 +1678,19 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 				}
 
 			/*  Identify and mask out shadowed POS pixels  */
-
 			posmask( pos, par->mask_tol);
+
+			if (i==17)
+				if (debug==1) {
+					dbg_print_lc_pos_arrays_full_host(pos);
+				}
 		}
+
+		if (i==17)
+			if (debug==1) {
+				dbg_print_lc_pos_arrays_full_host(pos);
+			}
+
 
 		/*  Go through all POS pixels which are visible and unshadowed with
         sufficiently low scattering and incidence angles, and mark the facets
@@ -1692,18 +1709,16 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 				}
 		}
 
-//		if (s==9 && i==5) {
-//			int debug = 0;
-//			if (debug)
-//				dbg_print_pos_arrays_full_host(pos);
-//		}
 
 		/*  Compute the model brightness for this model lightcurve point  */
 		intensityfactor = pow( pos->km_per_pixel/AU, 2.0);
 		lghtcrv->y[i] = apply_photo( mod, lghtcrv->ioptlaw, lghtcrv->solar_phase[i],
 				intensityfactor, pos, 0, s, i);
 
-
+		if (i==17) {
+			if (debug)
+				dbg_print_lc_pos_arrays_full_host(pos);
+		}
 
 
 		/*  Carry out screen and disk output for the write action  */

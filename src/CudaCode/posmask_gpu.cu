@@ -161,18 +161,23 @@ __global__ void posmask_krnl64(
 {
 	/* multi-threaded kernel */
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
-	int n = posn[f];
-	int i = offset % xspan - n;
-	int j = offset / xspan - n;
-	double tol = dpar->mask_tol;
-	double kmpxl = (float)pos[f]->km_per_pixel;
-	int im, jm, i1, j1, i2, j2, i_sign, j_sign;
+	int i, j, im, jm, i1, j1, i2, j2, i_sign, j_sign;
 	double3 xk;
-	double i0_dbl, j0_dbl, zill, t, u, bignum;
-	bignum = 0.99*HUGENUMBER;  /* z = -HUGENUMBER for blank-sky pixels */
+	double i0_dbl, j0_dbl, zill, t, u;
+	__shared__ int n;
+	__shared__ double kmpxl, tol, bignum;
 
+	if (threadIdx.x==0) {
+		n = posn[f];
+		kmpxl = pos[f]->km_per_pixel;
+		tol = dpar->mask_tol;
+		bignum = 0.99*HUGENUMBER;
+	}
+	__syncthreads();
 	/*  Loop through all POS pixels  */
 	if (offset < nThreads) {
+		i = offset % xspan - n;
+		j = offset / xspan - n;
 
 		if (pos[f]->cose[i][j] != 0.0) {     /* if there's something there */
 			xk.x = i*kmpxl;     /* calculate 3D position */
@@ -196,9 +201,9 @@ __global__ void posmask_krnl64(
 			 * distance from POS pixel to source.                             */
 			if (fabs(i0_dbl) < n && fabs(j0_dbl) < n
 					&& pos[f]->zill[im][jm] > -bignum
-					&&(pos[f]->f[i][j]    != pos[f]->fill[im][jm]    ||
+					&&(pos[f]->f[i][j]    != pos[f]->fill[im][jm]) /*   ||
 							pos[f]->comp[i][j] != pos[f]->compill[im][jm] ||
-							pos[f]->body[i][j] != pos[f]->bodyill[im][jm]    )) {
+							pos[f]->body[i][j] != pos[f]->bodyill[im][jm]    )*/) {
 
 				/* Rather than using distance towards source of CENTER of mask
 				 * pixel, use bilinear interpolation to get distance towards

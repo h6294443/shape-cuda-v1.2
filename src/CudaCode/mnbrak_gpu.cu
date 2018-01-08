@@ -40,7 +40,11 @@ __host__ void mnbrak_gpu(
 	double ulim,u,r,q,fu,dum;
 
 	*fa = (*func)(*ax, verts, htype, dtype, nframes, nviews, lc_n, nsets, nf, bf_stream);
+//	printf("mnbrak ax, %g\n", *ax);
+//	printf("mnbrak fa, %g\n", *fa);
 	*fb = (*func)(*bx, verts, htype, dtype, nframes, nviews, lc_n, nsets, nf, bf_stream);
+//	printf("mnbrak bx, %g\n", *bx);
+//	printf("mnbrak fb, %g\n", *fb);
 	if (*fb > *fa) {
 		SHFT(dum,*ax,*bx,dum)
 		SHFT(dum,*fb,*fa,dum)

@@ -7,9 +7,6 @@
 // includes, cuda
 #include <cuda.h>
 #include <cuda_runtime_api.h>
-//#include "cuda_runtime.h"
-//#include "device_launch_parameters.h"
-//#include <math.h>
 
 /*  Define macros */
 #define gpuErrchk(ans) do{ gpuAssert((ans), __FILE__, __LINE__); }while(0)
@@ -67,8 +64,8 @@ __host__ void apply_photo_gpu48(struct mod_t *dmod,	struct dat_t *ddat,
 		int4 maxxylim, cudaStream_t *ap_stream);
 
 __host__ void apply_photo_gpu64(struct mod_t *dmod, struct dat_t *ddat,
-		struct pos_t **pos, int4 *xylim, int2 *span, dim3 *BLKpx, int *nThreads,
-		int body, int set, int nframes, int *nThreadsPx, int maxthds,
+		struct pos_t **pos, int4 *xylim, int2 *span, dim3 *BLKpx_bbox,
+		int *nThreads, int body, int set, int nframes, int maxthds,
 		int4 maxxylim,cudaStream_t *ap_stream);
 
 __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod, struct
@@ -297,6 +294,27 @@ __global__ void cf_set_final_pars_krnl(struct par_t *dpar, struct
 
 __global__ void posclr_krnl(struct pos_t **pos, int *posn, int f, int dblflg, int lcflg);
 
+__global__ void posclr_fast_krnl(struct pos_t **pos, int *posn, int dblflg, int lcflg);
+
+__global__ void posclr_radar_krnl64(struct pos_t **pos, int *posn, int f);
+
+__global__ void posclr_radar_krnl64mod(struct pos_t **pos, int *posn, int f,
+		int xspan, int4 *xylim, int npixels);
+
+__global__ void posclr_radar_krnl64af(struct pos_t **pos, int *posn,
+		int *xspan, int4 *xylim, int *npixels, int factor);
+
+__global__ void posclr_lc_krnl64(struct pos_t **pos, int *posn, int f);
+
+__global__ void posclr_lc_krnl64af(struct pos_t **pos, int *posn, int *xspan, int4 *xylim, int *npixels, int blocks);
+
+__global__ void calcfits_posclr_lc_krnl64(struct pos_t **pos, int *posn, int f);
+
+__global__ void calcfits_posclr_lc_krnl64mod(struct pos_t **pos, int *posn, int f,
+		int xspan, int4 *xylim, int npixels);
+
+__global__ void clrvect_krnl64af(struct dat_t *ddat, int *size, int s, int blocks);
+
 __global__ void posclr_mgpu_krnl(struct pos_t **pos, int *posn, int f, int hf,
 		int bdflag);
 
@@ -321,6 +339,7 @@ __global__ void posmask_init_krnl32(struct pos_t **pos, double3 *so,
 __global__ void posmask_init_krnl64(struct pos_t **pos, double3 *so,
 		double *pixels_per_km, int size);
 
+
 __device__ void dev_POSrect_gpu32(struct pos_t **pos, int src, float imin_dbl,
 		float imax_dbl,	float jmin_dbl,	float jmax_dbl,	float4
 		*ijminmax_overall, int frm);
@@ -329,6 +348,12 @@ __device__ void dev_POSrect_gpu64(struct pos_t **pos, int src, double imin_dbl,
 		double imax_dbl, double jmin_dbl, double jmax_dbl, double4
 		*ijminmax_overall, int frm);
 
+__device__ void dev_POSrect_gpu64_short(double imin_dbl, double imax_dbl, double
+		jmin_dbl, double jmax_dbl, double4 *ijminmax_overall, int frm);
+
+__device__ void dev_POSrect_gpu64_shared(double	imin_dbl, double imax_dbl,
+		double jmin_dbl, double jmax_dbl, double4 *ijminmax_overall_sh, int n);
+
 __device__ void dev_realize_impulse(struct spin_t spin, double t,
 		double t_integrate[], double impulse[][3], int *n_integrate, int s, int f, int k);
 
@@ -336,4 +361,4 @@ __device__ void dev_splint_cfs(double *xa,double *ya,double *y2a,int n,double x,
 
 __host__ void set_up_pos_pinned(struct par_t *par, struct dat_t *dat);
 __host__ void set_up_pos_mgpu(struct par_t *par, struct dat_t *dat, int gpuid);
-__host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat);
+__host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat, int nf);

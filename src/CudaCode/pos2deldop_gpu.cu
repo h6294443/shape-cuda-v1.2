@@ -255,8 +255,6 @@ __global__ void pos2deldop_init_krnl(
 		badradararr[f] = 0;
 		any_overflow[f] = 0;
 		frame[f]->badradar_logfactor = 0.0;
-
-//		dbg_cntr1 = 0;
 	}
 }
 
@@ -803,9 +801,7 @@ __global__ void pos2deldop_pixel_krnl64(
 	if (offset < nThreads) {
 		/* zaddr is the unrolled 1D pos->z_s[] array address  */
 		zaddr = (y + n) * (2*n + 1) + (x + n);
-		if (pos[f]->cose[x][y] > 0.0 && pos[f]->body[x][y] == body) {
-
-//			atomicAdd(&dbg_cntr1, 1);
+		if (pos[f]->cose[x][y] > 0.0 ) {//&& pos[f]->body[x][y] == body) {
 
 			/* Get the (floating-point) delay and Doppler bin of the POS pixel
 			 * center: delPOS and dopPOS. Also get the minimum and maximum
@@ -991,6 +987,546 @@ __global__ void pos2deldop_pixel_krnl64(
 	}
 }
 
+__global__ void pos2deldop_pixel_krnl64moda(
+		struct par_t *dpar,
+		struct mod_t *dmod,
+		struct dat_t *ddat,
+		struct pos_t **pos,
+		struct deldopfrm_t **frame,
+		double4 *deldoplim,
+		double4 *dop,
+		double2 *deldopshift,
+		double2 *axay,
+		double2 *xyincr,
+		int *idel0,
+		int *idop0,
+		int *ndel,
+		int *ndop,
+		int xspan,
+		int nThreads,
+		double orbit_xoff,
+		double orbit_yoff,
+		int set,
+		int f,
+		int *any_overflow) {
+	/* nThreads-threaded kernel */
+	/* This kernel version uses shared memory for many variables that are used by every
+	 * thread.  radlaw has been shortened to exclude body and facets.  The floating point
+	 * and integer delay and doppler limits are calculated in shared memory first and then
+	 * consolidated at the end of the kernel back into global memory.
+	 */
+	/* Loop through all POS pixels within the rectangular plane-of-sky region spanned by the
+	 *  model; for each such pixel which isn't blank sky, compute the cross-section contributions
+	 *  to pixels in the model delay-Doppler frame. Note that functions posclr and posvis flag
+	 *  blank-sky pixels by assigning "cose" = cos(scattering angle) = 0.
+	 *  Only compute contributions from POS pixels that project onto the right body, in case this
+	 *  is the "orbit" action (for which this routine is called twice, once for each of the two
+	 *  orbiting bodies). */
+
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+
+	int x, y, i, j, k, idel, idel_min, idel_max, idop_min, idop_max,
+	idop, m, m_min, m_max, in_bounds;
+	double delPOS, dopPOS, codefactor, tmp, arg_sample, amp, arg_left,
+	sinc2arg, sinc2_mean, arg_bl, sumweights, fit_contribution, cose;
+	double del_contribution[MAXBINS], dop_contribution[MAXBINS];
+
+	__shared__ int xlim0, ylim0, nsinc2, sinc2width, idellim[2], idoplim[2];
+	__shared__ double km_per_pixel;
+	__shared__ double xincr, yincr;
+	__shared__ double4 deldoplim_sh;
+
+	/* Load variables that are used by every thread into shared memory */
+	if (threadIdx.x==0) {
+		xincr = xyincr[f].x;
+		yincr = xyincr[f].y;
+		xlim0 = pos[f]->xlim[0];
+		ylim0 = pos[f]->ylim[0];
+		nsinc2 = dpar->nsinc2;
+		sinc2width = dpar->sinc2width;
+		km_per_pixel = pos[f]->km_per_pixel;
+
+		deldoplim_sh.w = deldoplim_sh.y = idellim[0] = idoplim[0] =  999999;
+		deldoplim_sh.x = deldoplim_sh.z = idellim[1] = idoplim[1] = -999999;
+	}
+	__syncthreads();
+
+	if (offset < nThreads) {
+		/* Calculate x and y position index in delxdop grid */
+		x = offset % xspan + xlim0;
+		y = offset / xspan + ylim0;
+
+		/* Load current pixel's cose value into register memory */
+		cose = pos[f]->cose[x][y];
+
+		if (cose > 0.0 ) {
+
+			/* Get the (floating-point) delay and Doppler bin of the POS pixel
+			 * center: delPOS and dopPOS. Also get the minimum and maximum
+			 * (integer) delay and Doppler bins to which this pixel contributes
+			 * power: idel_min and idel_max, idop_min and idop_max. Each POS
+			 * pixel contributes power to *all* Doppler columns, but here we're
+			 * zeroing out the sinc^2 response function beyond the nearest
+			 * sinc2width columns. Actually, if nsinc2 > 1, we'll distribute
+			 * power to *at least* sinc2width Doppler bins: For pixels which
+			 * span multiple bins we'll err on the side of computing more
+			 * contributions rather          than fewer.       */
+			delPOS = pos[f]->z[x][y] * p2ds_delfact + deldopshift[f].x;
+			idel_min = (int) floor(delPOS - p2ds_const1) + 1;
+			idel_max = (int) ceil(delPOS + p2ds_const1) - 1;
+			dopPOS = axay[f].x*(x - orbit_xoff) + axay[f].y*
+					(y - orbit_yoff) + deldopshift[f].y;
+			idop_min = (int) floor(dopPOS - dop[f].x + 1 - sinc2width/2.0);
+			idop_max = (int) floor(dopPOS + dop[f].x + sinc2width/2.0);
+
+			/*  For the short code, sensitivity drops as we move away from DC. (This variation is slow,
+			 *  so we can just evaluate the response at the center of the POS pixel.)
+			 *  Note that the SINC2 macro multiplies its argument by pi.        */
+			codefactor = (p2ds_codemethod == SHORT) ? SINC2( (dopPOS-dop[f].y)/p2ds_dopfftlen ) : 1.0;
+
+			/*  Update rectangular delay-Doppler region (row/column numbers) with !0 power according to model  */
+			atomicMin(&idellim[0], idel_min);
+			atomicMax(&idellim[1], idel_max);
+			atomicMin(&idoplim[0], idop_min);
+			atomicMax(&idoplim[1], idop_max);
+
+			/*  Update the model's floating-point delay-Doppler limits, as determined prior to convolution
+			 *  with the delay and Doppler response functions. At this point in the code, dellim and doplim
+			 *  are pairs of floating-point row and column numbers which apply to POS pixel centers; when
+			 *  the loop over POS pixels is finished we will convert them to usec and Hz, and will widen
+			 *  the Doppler limits to account for nonzero POS pixel width.     */
+			atomicMin64(&deldoplim_sh.w, delPOS);
+			atomicMax64(&deldoplim_sh.x, delPOS);
+			atomicMin64(&deldoplim_sh.y, dopPOS);
+			atomicMax64(&deldoplim_sh.z, dopPOS);
+
+			/*  Check whether or not all delay-Doppler pixels which will receive power from this POS pixel
+			 *  fall within the data frame; if not, initialize the "overflow" image if necessary.         */
+			if ((idel_min>=1) && (idel_max<=ndel[f]) && (idop_min>=1) &&
+					(idop_max<=ndop[f]))
+				in_bounds = 1;
+			else {
+				in_bounds = 0;
+				if (!any_overflow[f])
+					atomicExch(&any_overflow[f], 1);
+			}
+
+			/* Loop thru all delay bins this POS pixel contributes power (cross
+			 * section), and compute delay response function for each bin       */
+			for (idel=idel_min; idel<=idel_max; idel++) {
+				if (p2ds_codemethod != LONG_ORIG) {
+					/* Get the delay response function for image row idel:
+					 * sum the triangle-function contributions from each
+					 * sample per baud, then divide the sum by spb and square.
+					 * The triangle function for sample m  (0 <= m <= spb-1)
+					 * has unit height and a half-width of spb/stride image
+					 * rows,and is centered [-const2 + m/stride] rows later
+					 * than the row center (idel).
+					 * In the code block below, the arguments to macros TRI
+					 * and TRI2 have been divided by half-width spb/stride,
+					 * since those two macros are defined to give nonzero
+					 * values for arguments between -1 and 1.  Each argument,
+					 * then, is just (delPOS - [triangle-function center]) /
+					 * half-width.
+					 * Do the two most common cases (spb = 1 or 2) without
+					 * loops in order to gain a bit of speed.  For the other
+					 * cases, set m_min and m_max so as not to waste time
+					 * computing contributions that are zero.             */
+					switch (p2ds_spb) {
+					case 1:
+						del_contribution[idel-idel_min] = TRI2( delPOS - idel );
+						break;
+					case 2:
+						arg_sample = (delPOS - (idel - p2ds_const2)) /
+						p2ds_spb_over_stride;
+						del_contribution[idel-idel_min] = TRI( arg_sample )
+			                      						+ TRI( arg_sample - 0.5 );
+						del_contribution[idel-idel_min] *= del_contribution[idel-idel_min]/4;
+						break;
+					default:
+						del_contribution[idel-idel_min] = 0.0;
+						m_min = MAX( (int) floor((delPOS - idel - p2ds_const2)
+								* p2ds_stride) , 0 );
+						m_max = MIN( (int) ceil((delPOS - idel + p2ds_const1)
+								* p2ds_stride) , p2ds_spb ) - 1;
+						arg_sample = (delPOS - (idel - p2ds_const2)) /
+								p2ds_spb_over_stride - m_min*p2ds_one_over_spb;
+						for (m=m_min; m<=m_max; m++) {
+							del_contribution[idel-idel_min] += TRI( arg_sample );
+							arg_sample -= p2ds_one_over_spb;
+						}
+						del_contribution[idel-idel_min] *=
+								del_contribution[idel-idel_min]/p2ds_spb_sq;
+						break;
+					}
+				} else {
+
+					/*  Long code with original (Harmon) reduction method: data for
+					 *  each sample per baud are reduced separately,as if datataking
+					 *  were just one sample per baud; then the image rows for spb/
+					 *  stride samples are interleaved.  */
+					del_contribution[idel-idel_min] = TRI2( (delPOS - idel) /
+							p2ds_spb_over_stride );
+				}
+			}
+
+			/*  Next include the sinc^2 factor for Doppler mismatching: Take the
+			 *  mean of nsinc2^2 points interior to the POS pixel. Do the two most
+			 *  common cases (nsinc2 = 1 or 2) without loops in order to gain a bit
+			 *  of speed. Note that the SINC2 macro multiplies its argument by pi*/
+			for (idop=idop_min; idop<=idop_max; idop++) {
+				switch (nsinc2) {
+				case 1:
+					sinc2_mean = SINC2( dopPOS - idop );
+					break;
+				case 2:
+					arg_bl = dopPOS + dop[f].w - idop;   /* bl = bottom left */
+					sinc2_mean = ( SINC2( arg_bl ) + SINC2( arg_bl+xincr) +
+							SINC2( arg_bl+yincr) + SINC2( arg_bl+xincr+yincr) ) / 4;
+					break;
+				default:
+					arg_left = dopPOS + dop[f].w - idop;
+					sinc2_mean = 0.0;
+					for (i=0; i<nsinc2; i++) {
+						sinc2arg = arg_left;
+						for (j=0; j<nsinc2; j++) {
+							sinc2_mean += SINC2( sinc2arg );
+							sinc2arg += xincr;
+						}
+						arg_left += yincr;
+					}
+					sinc2_mean /= p2ds_nsinc2_sq;
+					break;
+				}
+				k = MIN( idop - idop_min, MAXBINS);
+				dop_contribution[k] = sinc2_mean;
+			}
+
+			/*  Compute the sum of delay-Doppler weighting factors  */
+			sumweights = 0.0;
+			for (idel=idel_min; idel<=idel_max; idel++)
+				for (idop=idop_min; idop<=idop_max; idop++) {
+					k = MIN( idop - idop_min, MAXBINS);
+					sumweights += del_contribution[idel-idel_min]*dop_contribution[k];
+				}
+
+			/* The radar cross section within this plane-of-sky pixel is
+			 * [differential radar scattering law]*[POS pixel area in km^2]
+			 * The differential radar scattering law (function radlaw
+			 * = d[cross section]/d[area] ) includes a sec(theta) factor to
+			 * account for the fact that the POS pixel area is projected area
+			 * rather than physical area on the target surface.      */
+			amp = dev_radlaw_mod( &dmod->photo, ddat->set[set].desc.deldop.iradlaw,
+					cose) * km_per_pixel * km_per_pixel * codefactor / sumweights;
+
+			/* Only add this POS pixel's power contributions to model delay-
+			 * Doppler frame if NONE of those contributions fall outside
+			 * the frame limits.                                   */
+			if (in_bounds) {
+				/*  Add the cross-section contributions to the model frame  */
+				for (idel=idel_min; idel<=idel_max; idel++)
+					for (idop=idop_min; idop<=idop_max; idop++) {
+						k = MIN( idop - idop_min, MAXBINS);
+						fit_contribution = amp * del_contribution[idel-idel_min]
+	                                          * dop_contribution[k];
+						atomicAdd(&frame[f]->fit[idel][idop], fit_contribution);
+					}
+			}
+		}
+	}
+	__syncthreads();
+
+	/* Now consolidate the idellim/idoplim and dellim/doplim shared memory
+	 * variables back into global memory	 */
+	if (threadIdx.x==0)	{	/* So thread 0 for every block */
+		/*  Update rectangular delay-Doppler region (row/column numbers) with !0 power according to model  */
+		atomicMin(&frame[f]->idellim[0], idellim[0]);
+		atomicMax(&frame[f]->idellim[1], idellim[1]);
+		atomicMin(&frame[f]->idoplim[0], idoplim[0]);
+		atomicMax(&frame[f]->idoplim[1], idoplim[1]);
+
+		atomicMin64(&deldoplim[f].w, deldoplim_sh.w);
+		atomicMax64(&deldoplim[f].x, deldoplim_sh.x);
+		atomicMin64(&deldoplim[f].y, deldoplim_sh.y);
+		atomicMax64(&deldoplim[f].z, deldoplim_sh.z);
+	}
+}
+
+__global__ void pos2deldop_pixel_krnl64modb(
+		struct par_t *dpar,
+		struct mod_t *dmod,
+		struct dat_t *ddat,
+		struct pos_t **pos,
+		struct deldopfrm_t **frame,
+		double4 *deldoplim,
+		double4 *dop,
+		double2 *deldopshift,
+		double2 *axay,
+		double2 *xyincr,
+		int *idel0,
+		int *idop0,
+		int *ndel,
+		int *ndop,
+		int xspan,
+		int nThreads,
+		double orbit_xoff,
+		double orbit_yoff,
+		int set,
+		int f,
+		int *any_overflow) {
+	/* nThreads-threaded kernel */
+	/* This kernel version uses shared memory for many variables that are used by every
+	 * thread.  radlaw has been shortened to exclude body and facets.  The floating point
+	 * and integer delay and doppler limits are calculated in shared memory first and then
+	 * consolidated at the end of the kernel back into global memory.
+	 * Additionally, this kernel uses a prototype dev_radlaw function that is intended for
+	 * just one radlaw (cosine) and uses shared variables for that calculation.
+	 */
+	/* Loop through all POS pixels within the rectangular plane-of-sky region spanned by the
+	 *  model; for each such pixel which isn't blank sky, compute the cross-section contributions
+	 *  to pixels in the model delay-Doppler frame. Note that functions posclr and posvis flag
+	 *  blank-sky pixels by assigning "cose" = cos(scattering angle) = 0.
+	 *  Only compute contributions from POS pixels that project onto the right body, in case this
+	 *  is the "orbit" action (for which this routine is called twice, once for each of the two
+	 *  orbiting bodies). */
+
+	int offset = blockIdx.x * blockDim.x + threadIdx.x;
+
+	int x, y, i, j, k, idel, idel_min, idel_max, idop_min, idop_max,
+	idop, m, m_min, m_max, in_bounds;
+	double delPOS, dopPOS, codefactor, tmp, arg_sample, amp, arg_left,
+	sinc2arg, sinc2_mean, arg_bl, sumweights, fit_contribution, cose;
+	double del_contribution[MAXBINS], dop_contribution[MAXBINS];
+
+	__shared__ int xlim0, ylim0, nsinc2, sinc2width, idellim[2], idoplim[2], ilaw;
+	__shared__ double km_per_pixel, km_per_pixel_sq, xincr, yincr, RCRval, RCCval;
+	__shared__ double4 deldoplim_sh;
+
+	/* Load variables that are used by every thread into shared memory */
+	if (threadIdx.x==0) {
+		xincr = xyincr[f].x;
+		yincr = xyincr[f].y;
+		xlim0 = pos[f]->xlim[0];
+		ylim0 = pos[f]->ylim[0];
+		nsinc2 = dpar->nsinc2;
+		sinc2width = dpar->sinc2width;
+		km_per_pixel = pos[f]->km_per_pixel;
+		km_per_pixel_sq = km_per_pixel * km_per_pixel;
+
+		deldoplim_sh.w = deldoplim_sh.y = idellim[0] = idoplim[0] =  999999;
+		deldoplim_sh.x = deldoplim_sh.z = idellim[1] = idoplim[1] = -999999;
+		ilaw = ddat->set[set].desc.deldop.iradlaw;
+		if (dmod->photo.radtype[ilaw]==COSINELAW_DIFF) {
+			RCRval = dmod->photo.radar[ilaw].RC.R.val;
+			RCCval = dmod->photo.radar[ilaw].RC.C.val;
+		}
+	}
+	__syncthreads();
+
+	if (offset < nThreads) {
+		/* Calculate x and y position index in delxdop grid */
+		x = offset % xspan + xlim0;
+		y = offset / xspan + ylim0;
+
+		/* Load current pixel's cose value into register memory */
+		cose = pos[f]->cose[x][y];
+
+		if (cose > 0.0 ) {
+
+			/* Get the (floating-point) delay and Doppler bin of the POS pixel
+			 * center: delPOS and dopPOS. Also get the minimum and maximum
+			 * (integer) delay and Doppler bins to which this pixel contributes
+			 * power: idel_min and idel_max, idop_min and idop_max. Each POS
+			 * pixel contributes power to *all* Doppler columns, but here we're
+			 * zeroing out the sinc^2 response function beyond the nearest
+			 * sinc2width columns. Actually, if nsinc2 > 1, we'll distribute
+			 * power to *at least* sinc2width Doppler bins: For pixels which
+			 * span multiple bins we'll err on the side of computing more
+			 * contributions rather          than fewer.       */
+			delPOS = pos[f]->z[x][y] * p2ds_delfact + deldopshift[f].x;
+			idel_min = (int) floor(delPOS - p2ds_const1) + 1;
+			idel_max = (int) ceil(delPOS + p2ds_const1) - 1;
+			dopPOS = axay[f].x*(x - orbit_xoff) + axay[f].y*
+					(y - orbit_yoff) + deldopshift[f].y;
+			idop_min = (int) floor(dopPOS - dop[f].x + 1 - sinc2width/2.0);
+			idop_max = (int) floor(dopPOS + dop[f].x + sinc2width/2.0);
+
+			/*  For the short code, sensitivity drops as we move away from DC. (This variation is slow,
+			 *  so we can just evaluate the response at the center of the POS pixel.)
+			 *  Note that the SINC2 macro multiplies its argument by pi.        */
+			codefactor = (p2ds_codemethod == SHORT) ? SINC2( (dopPOS-dop[f].y)/p2ds_dopfftlen ) : 1.0;
+
+			/*  Update rectangular delay-Doppler region (row/column numbers) with !0 power according to model  */
+			atomicMin(&idellim[0], idel_min);
+			atomicMax(&idellim[1], idel_max);
+			atomicMin(&idoplim[0], idop_min);
+			atomicMax(&idoplim[1], idop_max);
+
+			/*  Update the model's floating-point delay-Doppler limits, as determined prior to convolution
+			 *  with the delay and Doppler response functions. At this point in the code, dellim and doplim
+			 *  are pairs of floating-point row and column numbers which apply to POS pixel centers; when
+			 *  the loop over POS pixels is finished we will convert them to usec and Hz, and will widen
+			 *  the Doppler limits to account for nonzero POS pixel width.     */
+			atomicMin64(&deldoplim_sh.w, delPOS);
+			atomicMax64(&deldoplim_sh.x, delPOS);
+			atomicMin64(&deldoplim_sh.y, dopPOS);
+			atomicMax64(&deldoplim_sh.z, dopPOS);
+
+			/*  Check whether or not all delay-Doppler pixels which will receive power from this POS pixel
+			 *  fall within the data frame; if not, initialize the "overflow" image if necessary.         */
+			if ((idel_min>=1) && (idel_max<=ndel[f]) && (idop_min>=1) &&
+					(idop_max<=ndop[f]))
+				in_bounds = 1;
+			else {
+				in_bounds = 0;
+				if (!any_overflow[f])
+					atomicExch(&any_overflow[f], 1);
+			}
+
+			/* Loop thru all delay bins this POS pixel contributes power (cross
+			 * section), and compute delay response function for each bin       */
+			for (idel=idel_min; idel<=idel_max; idel++) {
+				if (p2ds_codemethod != LONG_ORIG) {
+					/* Get the delay response function for image row idel:
+					 * sum the triangle-function contributions from each
+					 * sample per baud, then divide the sum by spb and square.
+					 * The triangle function for sample m  (0 <= m <= spb-1)
+					 * has unit height and a half-width of spb/stride image
+					 * rows,and is centered [-const2 + m/stride] rows later
+					 * than the row center (idel).
+					 * In the code block below, the arguments to macros TRI
+					 * and TRI2 have been divided by half-width spb/stride,
+					 * since those two macros are defined to give nonzero
+					 * values for arguments between -1 and 1.  Each argument,
+					 * then, is just (delPOS - [triangle-function center]) /
+					 * half-width.
+					 * Do the two most common cases (spb = 1 or 2) without
+					 * loops in order to gain a bit of speed.  For the other
+					 * cases, set m_min and m_max so as not to waste time
+					 * computing contributions that are zero.             */
+					switch (p2ds_spb) {
+					case 1:
+						del_contribution[idel-idel_min] = TRI2( delPOS - idel );
+						break;
+					case 2:
+						arg_sample = (delPOS - (idel - p2ds_const2)) /
+						p2ds_spb_over_stride;
+						del_contribution[idel-idel_min] = TRI( arg_sample )
+			                      						+ TRI( arg_sample - 0.5 );
+						del_contribution[idel-idel_min] *= del_contribution[idel-idel_min]/4;
+						break;
+					default:
+						del_contribution[idel-idel_min] = 0.0;
+						m_min = MAX( (int) floor((delPOS - idel - p2ds_const2)
+								* p2ds_stride) , 0 );
+						m_max = MIN( (int) ceil((delPOS - idel + p2ds_const1)
+								* p2ds_stride) , p2ds_spb ) - 1;
+						arg_sample = (delPOS - (idel - p2ds_const2)) /
+								p2ds_spb_over_stride - m_min*p2ds_one_over_spb;
+						for (m=m_min; m<=m_max; m++) {
+							del_contribution[idel-idel_min] += TRI( arg_sample );
+							arg_sample -= p2ds_one_over_spb;
+						}
+						del_contribution[idel-idel_min] *=
+								del_contribution[idel-idel_min]/p2ds_spb_sq;
+						break;
+					}
+				} else {
+
+					/*  Long code with original (Harmon) reduction method: data for
+					 *  each sample per baud are reduced separately,as if datataking
+					 *  were just one sample per baud; then the image rows for spb/
+					 *  stride samples are interleaved.  */
+					del_contribution[idel-idel_min] = TRI2( (delPOS - idel) /
+							p2ds_spb_over_stride );
+				}
+			}
+
+			/*  Next include the sinc^2 factor for Doppler mismatching: Take the
+			 *  mean of nsinc2^2 points interior to the POS pixel. Do the two most
+			 *  common cases (nsinc2 = 1 or 2) without loops in order to gain a bit
+			 *  of speed. Note that the SINC2 macro multiplies its argument by pi*/
+			for (idop=idop_min; idop<=idop_max; idop++) {
+				switch (nsinc2) {
+				case 1:
+					sinc2_mean = SINC2( dopPOS - idop );
+					break;
+				case 2:
+					arg_bl = dopPOS + dop[f].w - idop;   /* bl = bottom left */
+					sinc2_mean = ( SINC2( arg_bl ) + SINC2( arg_bl+xincr) +
+							SINC2( arg_bl+yincr) + SINC2( arg_bl+xincr+yincr) ) / 4;
+					break;
+				default:
+					arg_left = dopPOS + dop[f].w - idop;
+					sinc2_mean = 0.0;
+					for (i=0; i<nsinc2; i++) {
+						sinc2arg = arg_left;
+						for (j=0; j<nsinc2; j++) {
+							sinc2_mean += SINC2( sinc2arg );
+							sinc2arg += xincr;
+						}
+						arg_left += yincr;
+					}
+					sinc2_mean /= p2ds_nsinc2_sq;
+					break;
+				}
+				k = MIN( idop - idop_min, MAXBINS);
+				dop_contribution[k] = sinc2_mean;
+			}
+
+			/*  Compute the sum of delay-Doppler weighting factors  */
+			sumweights = 0.0;
+			for (idel=idel_min; idel<=idel_max; idel++)
+				for (idop=idop_min; idop<=idop_max; idop++) {
+					k = MIN( idop - idop_min, MAXBINS);
+					sumweights += del_contribution[idel-idel_min]*dop_contribution[k];
+				}
+
+			/* The radar cross section within this plane-of-sky pixel is
+			 * [differential radar scattering law]*[POS pixel area in km^2]
+			 * The differential radar scattering law (function radlaw
+			 * = d[cross section]/d[area] ) includes a sec(theta) factor to
+			 * account for the fact that the POS pixel area is projected area
+			 * rather than physical area on the target surface.      */
+//			amp = dev_radlaw_mod( &dmod->photo, ddat->set[set].desc.deldop.iradlaw,
+//					cose) * km_per_pixel * km_per_pixel * codefactor / sumweights;
+
+			if (dmod->photo.radtype[ilaw]==COSINELAW_DIFF)
+				amp = dev_radlaw_cosine(cose, RCRval, RCCval) * km_per_pixel_sq * codefactor /sumweights;
+
+			/* Only add this POS pixel's power contributions to model delay-
+			 * Doppler frame if NONE of those contributions fall outside
+			 * the frame limits.                                   */
+			if (in_bounds) {
+				/*  Add the cross-section contributions to the model frame  */
+				for (idel=idel_min; idel<=idel_max; idel++)
+					for (idop=idop_min; idop<=idop_max; idop++) {
+						k = MIN( idop - idop_min, MAXBINS);
+						fit_contribution = amp * del_contribution[idel-idel_min]
+	                                          * dop_contribution[k];
+						atomicAdd(&frame[f]->fit[idel][idop], fit_contribution);
+					}
+			}
+		}
+	}
+	__syncthreads();
+
+	/* Now consolidate the idellim/idoplim and dellim/doplim shared memory
+	 * variables back into global memory	 */
+	if (threadIdx.x==0)	{	/* So thread 0 for every block */
+		/*  Update rectangular delay-Doppler region (row/column numbers) with !0 power according to model  */
+		atomicMin(&frame[f]->idellim[0], idellim[0]);
+		atomicMax(&frame[f]->idellim[1], idellim[1]);
+		atomicMin(&frame[f]->idoplim[0], idoplim[0]);
+		atomicMax(&frame[f]->idoplim[1], idoplim[1]);
+
+		atomicMin64(&deldoplim[f].w, deldoplim_sh.w);
+		atomicMax64(&deldoplim[f].x, deldoplim_sh.x);
+		atomicMin64(&deldoplim[f].y, deldoplim_sh.y);
+		atomicMax64(&deldoplim[f].z, deldoplim_sh.z);
+	}
+}
+
 __global__ void pos2deldop_deldoplim_krnl32(
 		struct dat_t *ddat,
 		struct deldopfrm_t **frame,
@@ -1141,8 +1677,6 @@ __global__ void pos2deldop_overflow_krnl64(
 		frame[f]->overflow_delmean = 0.0;
 		frame[f]->overflow_dopmean = 0.0;
 
-//		printf("dbg_cntr in pos2deldop_gpu64 = %i\n", dbg_cntr1);
-
 		if (any_overflow[f]) {
 
 //			badradararr[f] = 1;
@@ -1282,6 +1816,9 @@ __host__ void pos2deldop_gpu64(
 	THD.x = maxThreadsPerBlock;	THD64.x = 64;
 	BLKfrm.x = floor((THD64.x - 1 + nfrm_alloc)/THD64.x);
 
+	cudaEvent_t start1, stop1;
+	float milliseconds;
+
 	gpuErrchk(cudaMalloc((void**)&idop0, sizeof(int)*nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&idel0, sizeof(int)*nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&any_overflow, sizeof(int)*nfrm_alloc));
@@ -1311,13 +1848,32 @@ __host__ void pos2deldop_gpu64(
 		BLK[f].x = floor((THD.x -1 + nThreads[f]) / THD.x);
 	}
 
+//
+//	cudaEventCreate(&start1);
+//	cudaEventCreate(&stop1);
+//	cudaEventRecord(start1);
+
+
+
 	/* Assign 1 stream to each frame's iteration each of the three kernels */
 	for (int f=0; f<nfrm_alloc; f++) {
-		pos2deldop_pixel_krnl64<<<BLK[f],THD,0,p2d_stream[f]>>>(dpar, dmod, ddat, pos,
+//		pos2deldop_pixel_krnl64<<<BLK[f],THD,0,p2d_stream[f]>>>(dpar, dmod, ddat, pos,
+//				frame, deldoplim, dop, deldopshift, axay, xyincr, idel0, idop0,
+//				ndel, ndop, xspan[f], nThreads[f], body, orbit_xoff, orbit_yoff,
+//				set, f, any_overflow);
+		pos2deldop_pixel_krnl64moda<<<BLK[f],THD,0,p2d_stream[f]>>>(dpar, dmod, ddat, pos,
 				frame, deldoplim, dop, deldopshift, axay, xyincr, idel0, idop0,
-				ndel, ndop, xspan[f], nThreads[f], body, orbit_xoff, orbit_yoff,
+				ndel, ndop, xspan[f], nThreads[f], orbit_xoff, orbit_yoff,
 				set, f, any_overflow);
 	} checkErrorAfterKernelLaunch("pos2deldop_pixel_krnl64");
+
+
+//	cudaEventRecord(stop1);
+//	cudaEventSynchronize(stop1);
+//
+//	cudaEventElapsedTime(&milliseconds, start1, stop1);
+//	printf("time for pos2deldop_pixel_krnl: %3.8g\n", milliseconds);
+
 
 	/* Launch kernel to copy the deldop limits back to original doubles in
 	 * the frame structures.	 */

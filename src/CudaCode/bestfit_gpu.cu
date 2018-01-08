@@ -440,7 +440,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	hfpartype 	 = (int *) 	  malloc(nfpar*sizeof(int));
 	hflags 		 = (int *) malloc(7*sizeof(int));
 
-	for (i=0; i<nfpar; i++)
+	for (i=0; i<1/*nfpar*/; i++)
 		cudaCalloc1((void**)&fpntr[i], sizeof(double), 1);
 
 	/* Set vertices shortcut and also set max_frames (the maximum number of
@@ -514,15 +514,17 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	}
 	printf("rad_xsec: %f\n", rad_xsec_save);
 	printf("deldop_zmax: %f\n", deldop_zmax_save);
-	int debug = 1;
-	if (debug)
-		return(0);
+//	int debug = 1;
+//	if (debug)
+//		return(0);
 	/* Point hotparam to a dummy variable (dummyval) rather than to a model pa-
 	 * rameter; then call objective(0.0) to set dummy variable = 0.0, realize
 	 * the initial model, calculate the fits, return initial model's objective
 	 * function as enderr.                          */
 	bf_set_hotparam_initial_krnl<<<1,1>>>();
 	checkErrorAfterKernelLaunch("bf_set_hotparam_initial_krnl");
+
+//	printf("objective(0.0) call \n");
 
 	enderr = objective_gpu(0.0, verts, htype, dtype, nframes,
 				nviews, lc_n, nsets, nf, bf_stream);
@@ -574,7 +576,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	 * tive function at each step. Stop when fractional decrease in the objec-
 	 * tive function from one iteration to the next is less than term_prec.   */
 
-	do {
+//	do {
 		showvals = 1;        /* show reduced chi-square and penalties at beginning */
 		beginerr = enderr;
 		printf("# iteration %d %f", ++iter, beginerr);
@@ -601,7 +603,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % npar_update;
 //		p = first_fitpar;// = 1;
-		for (p=first_fitpar; p<nfpar; p++) {
+		for (p=first_fitpar; p<1/*nfpar*/; p++) {
 
 			/*  Adjust only parameter p on this try  */
 			bf_set_hotparam_pntr_krnl<<<1,1>>>(fpntr, fpartype, p);
@@ -675,10 +677,13 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			ax = hotparamval;
 			bx = ax + hfparstep[p]; /* par usage us fine here */
 
+//			printf("ax, %g\n", ax);
+//			printf("bx, %g\n", bx);
+			printf("mnbrak start\n");
 			mnbrak_gpu(&ax, &bx, &cx, &obja, &objb, &objc,
 					objective_gpu, verts, htype, dtype, nframes,
 					nviews, lc_n, nsets, nf, bf_stream);
-
+//			printf("mnbrak, over\n");
 			/* Before homing in on local minimum, initialize flags that will
 			 * tell us if model extended beyond POS frame (sky rendering) for
 			 * any trial parameter value(s), if it extended beyond any POS ima-
@@ -696,7 +701,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			 * a modified version of brent that has an absolute fitting tole-
 			 * rance as one of its arguments, in addition to the existing
 			 * fractional tolerance.                                      */
-//
+
 //			printf("ax, %3.8g\n", ax);
 //			printf("bx, %3.8g\n", bx);
 //			printf("cx, %3.8g\n", cx);
@@ -706,6 +711,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 //			printf("hfpartol[%i], %3.8g\n", p, hfpartol[p]);
 //			printf("hfparabstol[%i], %3.8g\n",p, hfparabstol[p]);
 
+			printf("brent_abs start\n");
 			enderr = brent_abs_gpu(ax, bx, cx, objective_gpu, hfpartol[p],
 					hfparabstol[p], &xmin, verts, htype, dtype, nframes, nviews, lc_n,
 					nsets, nf, bf_stream);
@@ -728,7 +734,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			checkErrorAfterKernelLaunch("bf_set_hotparam_val_krnl");
 			gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
 					sizeof(double),	0, cudaMemcpyDeviceToHost));
-//			printf("xmin, %3.8g\n", xmin);
+			printf("xmin, %3.8g\n", xmin);
 
 			if (newsize || newshape)
 				realize_mod_gpu(dpar, dmod, type, nf, bf_stream);
@@ -925,7 +931,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			keep_iterating = ((beginerr - enderr)/enderr >= term_prec);
 		}
 
-	} while (keep_iterating);
+//	} while (keep_iterating);
 
 		/* Show final values of reduced chi-square, individual penalty functions,
 		 * and the objective function  */
@@ -1286,7 +1292,7 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct par_t *dpar1,
 	 * tive function at each step. Stop when fractional decrease in the objec-
 	 * tive function from one iteration to the next is less than term_prec.   */
 
-	do {
+//	do {
 		showvals = 1;        /* show reduced chi-square and penalties at beginning */
 		beginerr = enderr;
 		printf("# iteration %d %f", ++iter, beginerr);
@@ -1313,8 +1319,8 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct par_t *dpar1,
 
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % npar_update;
-		p = first_fitpar = 1;
-		for (p=first_fitpar; p<nfpar; p++) {
+//		p = first_fitpar = 1;
+		for (p=4/*first_fitpar*/; p<5/*nfpar*/; p++) {
 			/*  Adjust only parameter p on this try  */
 			bf_set_hotparam_pntr_krnl<<<1,1>>>(fpntr, fpartype, p);
 			checkErrorAfterKernelLaunch("bf_set_hotparam_pntr_krnl");
@@ -1646,7 +1652,7 @@ __host__ double bestfit_gpu_pthreads(struct par_t *dpar, struct par_t *dpar1,
 			keep_iterating = ((beginerr - enderr)/enderr >= term_prec);
 		}
 
-	} while (keep_iterating);
+//	} while (keep_iterating);
 
 	/* Show final values of reduced chi-square, individual penalty functions,
 	 * and the objective function  */

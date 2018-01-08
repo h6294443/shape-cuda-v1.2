@@ -103,7 +103,7 @@ void vary_params( struct par_t *par, struct mod_t *mod, struct dat_t *dat,
 	sum_cos_subradarlat = 0.0;
 
 	/*  Process each dataset in turn  */
-	for (s=0; s<dat->nsets; s++) {
+	for (s=0; s<1/*dat->nsets*/; s++) {
 
 		switch (dat->set[s].type) {
 		case DELAY:
@@ -135,6 +135,7 @@ void vary_params( struct par_t *par, struct mod_t *mod, struct dat_t *dat,
 								(int) par->pos_smooth, 0, 0, c);
 					}
 
+//					dbg_print_pos_arrays_full_host(pos);
 					/* Zero out the fit delay-Doppler image and call pos2deldop
 					 * to create the fit image by mapping power from the plane
 					 * of sky to delay-Doppler space.                             */

@@ -289,7 +289,7 @@ double chi2( struct par_t *par, struct dat_t *dat, int list_breakdown)
 		case LGHTCRV:
 			dat->set[s].chi2 = chi2_lghtcrv( par, &dat->set[s].desc.lghtcrv,
 					list_breakdown, s, &chi2_all_lghtcrv);
-//			printf("chi2_set[%i] (lghtcrv), %3.8g\n", s, dat->set[s].chi2);
+			printf("chi2_set[%i] (lghtcrv), %3.8g\n", s, dat->set[s].chi2);
 			break;
 		default:
 			bailout("chi2.c: can't handle this type yet\n");
@@ -459,6 +459,7 @@ double chi2_deldop( struct par_t *par, struct deldop_t *deldop, int list_breakdo
 		calval = deldop->frame[f].cal.val;
 		err = weight*(o2 - 2*calval*om + calval*calval*m2);
 		deldop->frame[f].chi2 = err;
+//		printf("Set %i deldop, frame %i, %3.8g\n", s, f, deldop->frame[f].chi2);
 
 		chi2_set += err;
 		if (list_breakdown)
@@ -784,6 +785,7 @@ double chi2_doppler( struct par_t *par, struct doppler_t *doppler, int list_brea
 		chi2_set += err;
 		if (list_breakdown)
 			*chi2_all_doppler += err;
+//		printf("Set %i doppler, frame %i, %3.8g\n", s, f, doppler->frame[f].chi2);
 
 		/*  Compute the chi-square contributions and number of degrees of freedom
         due to bins whose model signal is less than or equal to
@@ -1142,7 +1144,7 @@ double chi2_lghtcrv( struct par_t *par, struct lghtcrv_t *lghtcrv, int list_brea
 		m2 += lghtcrv->fit[i] * lghtcrv->fit[i] * lghtcrv->oneovervar[i];
 		om += lghtcrv->fit[i] * lghtcrv->obs[i] * lghtcrv->oneovervar[i];
 //		printf("%i, %3.8g, %3.8g, %3.8g\n", i, lghtcrv->fit[i], lghtcrv->fit[i], lghtcrv->oneovervar[i]);
-//		printf("fit[%i], %3.8g\n", i, lghtcrv->fit[i]);
+		printf("fit[%i], %3.8g\n", i, lghtcrv->fit[i]);
 	}
 	/* If this lightcurve's calibration factor is allowed to float,
       set it to minimize chi-square, the sum over all points of
@@ -1166,6 +1168,7 @@ double chi2_lghtcrv( struct par_t *par, struct lghtcrv_t *lghtcrv, int list_brea
 	dof = lghtcrv->dof;
 	err = weight*(o2 - 2*calval*om + calval*calval*m2);
 	chi2_set = err;
+
 	if (list_breakdown)
 		*chi2_all_lghtcrv += err;
 

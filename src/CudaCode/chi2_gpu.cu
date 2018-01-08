@@ -813,8 +813,9 @@ __global__ void c2s_lghtcrv_serial_krnl(struct dat_t *ddat, int s, double *dof_c
 			fit = ddat->set[s].desc.lghtcrv.fit[i];
 			oneovervar = ddat->set[s].desc.lghtcrv.oneovervar[i];
 
+
 //			printf("%i, %3.8g, %3.8g, %3.8g\n", i, fit, fit, oneovervar);
-//			printf("fit[%i], %3.8g\n", i, fit);
+			printf("fit[%i], %3.8g\n", i, fit);
 			o2m2om[0].x += obs * obs * oneovervar;
 			o2m2om[0].y += fit * fit * oneovervar;
 			o2m2om[0].z += fit * obs * oneovervar;
@@ -1133,7 +1134,7 @@ __host__ double chi2_gpu(
 					&chi2_all_lghtcrv, hnframes[s], hlc_n[s]);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
 			checkErrorAfterKernelLaunch("c2_set_chi2_krnl, chi2_cuda");
-//			printf("chi2_set[%i] (lghtcrv), %3.8g\n", s, chi2);
+			printf("chi2_set[%i] (lghtcrv), %3.8g\n", s, chi2);
 			break;
 		default:
 			printf("chi2_cuda_streams.cu: can't handle this type yet\n");
@@ -1672,6 +1673,7 @@ __host__ double chi2_deldop_gpu64(
 	/* Add all frames from device memory to host memory and destroy streams */
 	for (f=0; f<nframes; f++) {
 		chi2_set += h_chi2_deldop_frame[f];
+//		printf("Set %i deldop, frame %i, %3.8g\n", s, f, h_chi2_deldop_frame[f]);
 
 		if (list_breakdown)
 			*chi2_all_deldop += h_chi2_deldop_frame[f];
@@ -1844,6 +1846,8 @@ __host__ double chi2_doppler_gpu64(struct par_t *dpar, struct dat_t *ddat, int s
 	for (f=0; f<nframes; f++) {
 		chi2_set += h_chi2_doppler_frame[f];
 //		printf("h_chi2_doppler_frame[%i]=%3.6g\n", f, h_chi2_doppler_frame[f]);
+//		printf("Set %i doppler, frame %i, %3.8g\n", s, f, h_chi2_doppler_frame[f]);
+
 
 		if (list_breakdown)
 			*chi2_all_doppler += h_chi2_doppler_frame[f];

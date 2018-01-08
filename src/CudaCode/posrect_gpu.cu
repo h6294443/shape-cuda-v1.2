@@ -132,3 +132,57 @@ __device__ void dev_POSrect_gpu64(
 		atomicMax(&pos[frm]->ylim[1], jmax);
 	}
 }
+__device__ void dev_POSrect_gpu64_short(double imin_dbl, double imax_dbl, double
+		jmin_dbl, double jmax_dbl, double4 *ijminmax_overall, int frm)	{
+
+	/* Update the POS region that contains the target without
+	 * regard to whether or not it extends beyond the POS frame */
+	atomicMin64(&ijminmax_overall[frm].w, imin_dbl);
+	atomicMax64(&ijminmax_overall[frm].x, imax_dbl);
+	atomicMin64(&ijminmax_overall[frm].y, jmin_dbl);
+	atomicMax64(&ijminmax_overall[frm].z, jmax_dbl);
+
+}
+
+
+__device__ void dev_POSrect_gpu64_shared(
+		double imin_dbl,
+		double imax_dbl,
+		double jmin_dbl,
+		double jmax_dbl,
+		double4 *ijminmax_overall_sh,
+		int n)	{
+
+	//int imin, imax, jmin, jmax;
+
+	/* Update the POS region that contains the target without
+	 * regard to whether or not it extends beyond the POS frame */
+	atomicMin64(&ijminmax_overall_sh->w, imin_dbl);
+	atomicMax64(&ijminmax_overall_sh->x, imax_dbl);
+	atomicMin64(&ijminmax_overall_sh->y, jmin_dbl);
+	atomicMax64(&ijminmax_overall_sh->z, jmax_dbl);
+
+//	/*  Update the subset of the POS frame that contains the target  */
+//	imin = (imin_dbl < INT_MIN) ? INT_MIN : (int) imin_dbl;
+//	imax = (imax_dbl > INT_MAX) ? INT_MAX : (int) imax_dbl;
+//	jmin = (jmin_dbl < INT_MIN) ? INT_MIN : (int) jmin_dbl;
+//	jmax = (jmax_dbl > INT_MAX) ? INT_MAX : (int) jmax_dbl;
+//
+//	/* Make sure it's smaller than n */
+//	imin = MAX(imin,-n);
+//	imax = MIN(imax, n);
+//	jmin = MAX(jmin,-n);
+//	jmax = MIN(jmax, n);
+//
+//	if (src) {
+//		atomicMin(&pos[frm]->xlim2[0], imin);
+//		atomicMax(&pos[frm]->xlim2[1], imax);
+//		atomicMin(&pos[frm]->ylim2[0], jmin);
+//		atomicMax(&pos[frm]->ylim2[1], jmax);
+//	} else {
+//		atomicMin(&pos[frm]->xlim[0], imin);
+//		atomicMax(&pos[frm]->xlim[1], imax);
+//		atomicMin(&pos[frm]->ylim[0], jmin);
+//		atomicMax(&pos[frm]->ylim[1], jmax);
+//	}
+}

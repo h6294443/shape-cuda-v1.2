@@ -358,7 +358,7 @@ __host__ int read_dat_gpu( struct par_t *par, struct mod_t *mod, struct dat_t *d
 	if (PIN)
 		set_up_pos_pinned(par, dat);
 	else
-		set_up_pos_gpu(par, dat);
+		set_up_pos_gpu(par, dat, mod->shape.comp[0].real.nf);
 
 	printf("# finished reading obs file\n");
 	fflush(stdout);
@@ -2460,7 +2460,7 @@ __host__ int read_doppler_mgpu( FILE *fp, struct par_t *par, struct doppler_t *d
 	return npar;
 }
 
-__host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
+__host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat, int nf)
 {
 	int s, f, i, j, n, size, npx;
 
@@ -2571,6 +2571,10 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
 				dat->set[s].desc.deldop.frame[f].pos.km_per_pixel = par->pos_width/(2.0*n);
 				dat->set[s].desc.deldop.frame[f].pos.bistatic = 0;
 				npx = (2*n+1)*(2*n+1);
+				dat->set[s].desc.deldop.frame[f].pos.xlim[0] = -n;
+				dat->set[s].desc.deldop.frame[f].pos.xlim[1] =  n;
+				dat->set[s].desc.deldop.frame[f].pos.ylim[0] = -n;
+				dat->set[s].desc.deldop.frame[f].pos.ylim[1] =  n;
 
 				/* First allocate the outer loop with cuda managed memory */
 				cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.body,
@@ -2679,6 +2683,11 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
 					dat->set[s].desc.deldop.frame[f].pos.compill[i] -= -n;
 					dat->set[s].desc.deldop.frame[f].pos.fill[i] 	-= -n;
 				}
+
+//				/* Allocate nf pos_facets for the tiled posvis routine */
+//				cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.facet, sizeof(struct pos_facet_t), nf);
+//				dat->set[s].desc.deldop.frame[f].pos.nf = nf;
+
 			}
 			break;
 		case DOPPLER:
@@ -2687,6 +2696,11 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
 				dat->set[s].desc.doppler.frame[f].pos.km_per_pixel = par->pos_width/(2.0*n);
 				dat->set[s].desc.doppler.frame[f].pos.bistatic = 0;
 				npx = (2*n+1)*(2*n+1);
+				dat->set[s].desc.doppler.frame[f].pos.xlim[0] = -n;
+				dat->set[s].desc.doppler.frame[f].pos.xlim[1] =  n;
+				dat->set[s].desc.doppler.frame[f].pos.ylim[0] = -n;
+				dat->set[s].desc.doppler.frame[f].pos.ylim[1] =  n;
+
 
 				/* First allocate the outer loop with cuda managed memory */
 				cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.body,
@@ -2795,6 +2809,9 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
 					dat->set[s].desc.doppler.frame[f].pos.compill[i]-= -n;
 					dat->set[s].desc.doppler.frame[f].pos.fill[i] 	-= -n;
 				}
+//				/* Allocate nf pos_facets for the tiled posvis routine */
+//				cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.facet, sizeof(struct pos_facet_t), nf);
+//				dat->set[s].desc.doppler.frame[f].pos.nf = nf;
 			}
 			break;
 		case POS:
@@ -2803,6 +2820,10 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
 				dat->set[s].desc.poset.frame[f].pos.km_per_pixel = par->pos_width/(2.0*n);
 				dat->set[s].desc.poset.frame[f].pos.bistatic = 1;
 				npx = (2*n+1)*(2*n+1);
+				dat->set[s].desc.poset.frame[f].pos.xlim[0] = -n;
+				dat->set[s].desc.poset.frame[f].pos.xlim[1] =  n;
+				dat->set[s].desc.poset.frame[f].pos.ylim[0] = -n;
+				dat->set[s].desc.poset.frame[f].pos.ylim[1] =  n;
 
 				/* First allocate the outer loop with cuda managed memory */
 				cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.body,
@@ -2911,6 +2932,9 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
 					dat->set[s].desc.poset.frame[f].pos.compill[i]	-= -n;
 					dat->set[s].desc.poset.frame[f].pos.fill[i] 	-= -n;
 				}
+//				/* Allocate nf pos_facets for the tiled posvis routine */
+//				cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.facet, sizeof(struct pos_facet_t), nf);
+//				dat->set[s].desc.poset.frame[f].pos.nf = nf;
 			}
 			break;
 		case LGHTCRV:
@@ -2919,6 +2943,10 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
 				dat->set[s].desc.lghtcrv.rend[f].pos.km_per_pixel = par->pos_width/(2.0*n);
 				dat->set[s].desc.lghtcrv.rend[f].pos.bistatic = 1;
 				npx = (2*n+1)*(2*n+1);
+				dat->set[s].desc.lghtcrv.rend[f].pos.xlim[0] = -n;
+				dat->set[s].desc.lghtcrv.rend[f].pos.xlim[1] =  n;
+				dat->set[s].desc.lghtcrv.rend[f].pos.ylim[0] = -n;
+				dat->set[s].desc.lghtcrv.rend[f].pos.ylim[1] =  n;
 
 				/* First allocate the outer loop with cuda managed memory */
 				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.body,
@@ -2972,8 +3000,8 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
 						dat->set[s].desc.lghtcrv.rend[f].pos.cosi[i] 	-= -n;
 						dat->set[s].desc.lghtcrv.rend[f].pos.cose[i] 	-= -n;
 						dat->set[s].desc.lghtcrv.rend[f].pos.z[i] 		-= -n;
-						dat->set[s].desc.lghtcrv.rend[f].pos.cosill[i] -= -n;
-						dat->set[s].desc.lghtcrv.rend[f].pos.zill[i] -= -n;
+						dat->set[s].desc.lghtcrv.rend[f].pos.cosill[i] 	-= -n;
+						dat->set[s].desc.lghtcrv.rend[f].pos.zill[i] 	-= -n;
 					}
 				}
 				else {
@@ -3027,6 +3055,9 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat)
 					dat->set[s].desc.lghtcrv.rend[f].pos.fill[j]	-= -n;
 					dat->set[s].desc.lghtcrv.rend[f].pos.b[j]	-= -n;
 				}
+//				/* Allocate nf pos_facets for the tiled posvis routine */
+//				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.facet, sizeof(struct pos_facet_t), nf);
+//				dat->set[s].desc.lghtcrv.rend[f].pos.nf = nf;
 			}
 			break;
 		default:
