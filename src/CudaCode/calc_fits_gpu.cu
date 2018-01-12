@@ -2686,7 +2686,7 @@ __host__ void calc_lghtcrv_gpu64(
 	posvis_gpu64(dpar, dmod, ddat, pos, verts, orbit_off3, hposn, outbndarr,
 			s, (nframes+1), 0, nf, 0, c, type, cf_stream, 0);
 
-	int frm=17, debug=0;
+	int frm=15, debug=0;
 	if (debug)
 		dbg_print_lc_pos_arrays_full64(pos, frm, hnpixels_full[frm], hposn[frm]);
 
@@ -2786,6 +2786,8 @@ __host__ void calc_lghtcrv_gpu64(
 	/* Compute model brightness for this lightcurve point then copy to device  */
 	apply_photo_gpu64(dmod, ddat, pos, xylim, span, BLKpx_bbox, hnpixels_bbox,
 			0, s, nframes, maxthds, maxxylim, cf_stream);
+
+
 	if (debug)
 		dbg_print_lc_pos_arrays_full64(pos, frm, hnpixels_full[frm], hposn[frm]);
 

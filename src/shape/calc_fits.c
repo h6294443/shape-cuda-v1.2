@@ -1659,7 +1659,7 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 			}
 
 		int debug = 0;
-		if (i==17)
+		if (i==15)
 			if (debug==1) {
 				dbg_print_lc_pos_arrays_full_host(pos);
 			}
@@ -1680,13 +1680,13 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 			/*  Identify and mask out shadowed POS pixels  */
 			posmask( pos, par->mask_tol);
 
-			if (i==17)
+			if (i==15)
 				if (debug==1) {
 					dbg_print_lc_pos_arrays_full_host(pos);
 				}
 		}
 
-		if (i==17)
+		if (i==15)
 			if (debug==1) {
 				dbg_print_lc_pos_arrays_full_host(pos);
 			}
@@ -1715,7 +1715,7 @@ void calc_lghtcrv( struct par_t *par, struct mod_t *mod, struct lghtcrv_t *lghtc
 		lghtcrv->y[i] = apply_photo( mod, lghtcrv->ioptlaw, lghtcrv->solar_phase[i],
 				intensityfactor, pos, 0, s, i);
 
-		if (i==17) {
+		if (i==15) {
 			if (debug)
 				dbg_print_lc_pos_arrays_full_host(pos);
 		}

@@ -324,7 +324,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	 * function as enderr.                          */
 	hotparam = &dummyval;
 
-//	printf("objective(0.0) call\n");
+	printf("objective(0.0) call\n");
 
 
 	enderr = objective(0.0);
@@ -389,7 +389,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 		cntr = first_fitpar % par->npar_update;
 //		p = first_fitpar;
 //		p = 1;
-		for (p=first_fitpar; p<1/*par->nfpar*/; p++) {
+		for (p=first_fitpar; p<2/*par->nfpar*/; p++) {
 
 			/*  Adjust only parameter p on this try  */
 			hotparam = par->fpntr[p];

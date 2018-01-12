@@ -1423,6 +1423,17 @@ __global__ void posvis_facet_krnl64modb(
 											if (pos[frm]->cosi[i][j] <= 0.0)
 												pos[frm]->cose[i][j] = 0.0;
 										}
+									} else {
+										if (src)
+											atomicExch((unsigned long long int*)&pos[frm]->cosill[i][j],
+													__double_as_longlong(0.0));
+										else
+											atomicExch((unsigned long long int*)&pos[frm]->cose[i][j],
+													__double_as_longlong(0.0));
+
+										if (!src && bistatic)
+											atomicExch((unsigned long long int*)&pos[frm]->cosi[i][j],
+													__double_as_longlong(0.0));
 									}
 									if (src) {
 //										pos[frm]->bodyill[i][j] = body;

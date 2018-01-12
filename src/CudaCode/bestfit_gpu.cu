@@ -514,9 +514,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	}
 	printf("rad_xsec: %f\n", rad_xsec_save);
 	printf("deldop_zmax: %f\n", deldop_zmax_save);
-//	int debug = 1;
-//	if (debug)
-//		return(0);
+
 	/* Point hotparam to a dummy variable (dummyval) rather than to a model pa-
 	 * rameter; then call objective(0.0) to set dummy variable = 0.0, realize
 	 * the initial model, calculate the fits, return initial model's objective
@@ -524,13 +522,17 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	bf_set_hotparam_initial_krnl<<<1,1>>>();
 	checkErrorAfterKernelLaunch("bf_set_hotparam_initial_krnl");
 
-//	printf("objective(0.0) call \n");
+	printf("objective(0.0) call \n");
 
 	enderr = objective_gpu(0.0, verts, htype, dtype, nframes,
 				nviews, lc_n, nsets, nf, bf_stream);
 
 	printf("#\n# searching for best fit ...\n");
 	printf("%4d %8.6f to begin", 0, enderr);
+
+//	int debug = 1;
+//	if (debug)
+//		return(0);
 
 	/* Launch single-thread kernel to retrieve flags in dev_par */
 	/*		flags[0] = dpar->baddiam;
@@ -603,7 +605,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % npar_update;
 //		p = first_fitpar;// = 1;
-		for (p=first_fitpar; p<1/*nfpar*/; p++) {
+		for (p=first_fitpar; p<2/*nfpar*/; p++) {
 
 			/*  Adjust only parameter p on this try  */
 			bf_set_hotparam_pntr_krnl<<<1,1>>>(fpntr, fpartype, p);
