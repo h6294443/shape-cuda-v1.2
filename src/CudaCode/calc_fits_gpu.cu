@@ -2788,8 +2788,7 @@ __host__ void calc_lghtcrv_gpu64(
 			0, s, nframes, maxthds, maxxylim, cf_stream);
 
 
-	if (debug)
-		dbg_print_lc_pos_arrays_full64(pos, frm, hnpixels_full[frm], hposn[frm]);
+//	dbg_print_lc_pos_arrays_full64(pos, frm, hnpixels_full[frm], hposn[frm]);
 
 //	dbg_print_lc_pos_arrays_full64(pos, 1, hnpixels_full[1], hposn[1]);
 	/* Now that we have calculated the model lightcurve brightnesses y at each

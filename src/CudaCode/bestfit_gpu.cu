@@ -578,7 +578,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	 * tive function at each step. Stop when fractional decrease in the objec-
 	 * tive function from one iteration to the next is less than term_prec.   */
 
-//	do {
+	do {
 		showvals = 1;        /* show reduced chi-square and penalties at beginning */
 		beginerr = enderr;
 		printf("# iteration %d %f", ++iter, beginerr);
@@ -605,7 +605,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % npar_update;
 //		p = first_fitpar;// = 1;
-		for (p=first_fitpar; p<2/*nfpar*/; p++) {
+		for (p=first_fitpar; p<nfpar; p++) {
 
 			/*  Adjust only parameter p on this try  */
 			bf_set_hotparam_pntr_krnl<<<1,1>>>(fpntr, fpartype, p);
@@ -681,7 +681,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 
 //			printf("ax, %g\n", ax);
 //			printf("bx, %g\n", bx);
-			printf("mnbrak start\n");
+//			printf("mnbrak start\n");
 			mnbrak_gpu(&ax, &bx, &cx, &obja, &objb, &objc,
 					objective_gpu, verts, htype, dtype, nframes,
 					nviews, lc_n, nsets, nf, bf_stream);
@@ -713,7 +713,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 //			printf("hfpartol[%i], %3.8g\n", p, hfpartol[p]);
 //			printf("hfparabstol[%i], %3.8g\n",p, hfparabstol[p]);
 
-			printf("brent_abs start\n");
+//			printf("brent_abs start\n");
 			enderr = brent_abs_gpu(ax, bx, cx, objective_gpu, hfpartol[p],
 					hfparabstol[p], &xmin, verts, htype, dtype, nframes, nviews, lc_n,
 					nsets, nf, bf_stream);
@@ -736,7 +736,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			checkErrorAfterKernelLaunch("bf_set_hotparam_val_krnl");
 			gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
 					sizeof(double),	0, cudaMemcpyDeviceToHost));
-			printf("xmin, %3.8g\n", xmin);
+//			printf("xmin, %3.8g\n", xmin);
 
 			if (newsize || newshape)
 				realize_mod_gpu(dpar, dmod, type, nf, bf_stream);
@@ -933,7 +933,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			keep_iterating = ((beginerr - enderr)/enderr >= term_prec);
 		}
 
-//	} while (keep_iterating);
+	} while (keep_iterating);
 
 		/* Show final values of reduced chi-square, individual penalty functions,
 		 * and the objective function  */

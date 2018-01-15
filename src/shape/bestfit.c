@@ -340,9 +340,9 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	printf("\n");
 	fflush(stdout);
 
-//	int debug = 1;
-//	if (debug)
-//		return(0);
+	int debug = 1;
+	if (debug)
+		return(0);
 
 
 	/* Display the region within each delay-Doppler or Doppler frame that, ac-
