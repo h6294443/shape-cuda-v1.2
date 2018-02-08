@@ -74,6 +74,28 @@ __global__ void add_offsets_to_euler_krnl(struct mod_t *dmod,
 			dmod->spin.angle[j].val += ddat->set[s].angleoff[j].val;
 	}
 }
+__global__ void add_offsets_to_euler_MFS_krnl(struct mod_t *dmod,
+		struct dat_t *ddat, double3 *angle_omega_save, int s)
+{
+	/* Single-threaded kernel */
+	/*	angle_omega_save[0].x,y,z = original anglesave[3]
+	 * 	angle_omega_save[1].x,y,z = original omegasave[3]
+	 * 		 */
+
+	if (threadIdx.x == 0) {
+
+		angle_omega_save[0].x = dmod->spin.angle[0].val;
+		angle_omega_save[0].y = dmod->spin.angle[1].val;
+		angle_omega_save[0].z = dmod->spin.angle[2].val;
+		angle_omega_save[1].x = dmod->spin.omega[0].val;
+		angle_omega_save[1].y = dmod->spin.omega[1].val;
+		angle_omega_save[1].z = dmod->spin.omega[2].val;
+
+		for (int f=0; f<ddat->set[s].desc.deldop.nframes; f++)
+			for (int j=0; j<=2; j++)
+				dmod->spin.angle[j].val += ddat->set[s].angleoff[j].val;
+	}
+}
 __global__ void realize_spin_dop_krnl(struct mod_t *dmod, struct dat_t *ddat,
 		struct par_t *dpar, int nviews, int s, int nfrm_alloc)
 {
@@ -141,6 +163,44 @@ __global__ void realize_spin_deldop_krnl(struct mod_t *dmod, struct dat_t *ddat,
 
 			for (j=0; j<=2; j++)
 				ddat->set[s].desc.deldop.frame[f].view[k].spin[j] = ddat->set[s].desc.deldop.frame[f].view[k].orbspin[j] +
+				ddat->set[s].desc.deldop.frame[f].view[k].intspin[j];
+        }
+	}
+}
+__global__ void realize_spin_deldop_MFS_krnl(struct mod_t *dmod, struct dat_t *ddat,
+		struct par_t *dpar, int nviews, int s, int size)
+{
+	/* nfrm_alloc-threaded kernel */
+	int j, k, f = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (f < size) {
+		for (k=0; k<nviews; k++) {
+			dev_realize_impulse(dmod->spin,
+					ddat->set[s].desc.deldop.frame[f].view[k].t,
+					ddat->set[s].desc.deldop.frame[f].t_integrate,
+					ddat->set[s].desc.deldop.frame[f].impulse,
+					&ddat->set[s].desc.deldop.frame[f].n_integrate,
+					s, f, k);
+
+			dev_inteuler(dmod->spin,
+					ddat->set[s].desc.deldop.frame[f].t_integrate,
+					ddat->set[s].desc.deldop.frame[f].impulse,
+					ddat->set[s].desc.deldop.frame[f].n_integrate,
+					ddat->set[s].desc.deldop.frame[f].view[k].intspin,
+					ddat->set[s].desc.deldop.frame[f].view[k].ae,
+					dmod->spin.pa, dpar->int_method, dpar->int_abstol);
+
+			for (j=0; j<=2; j++)
+				ddat->set[s].desc.deldop.frame[f].view[k].intspin[j] +=
+						ddat->set[s].desc.deldop.frame[f].omegaoff[j].val;
+
+			dev_cotrans2(ddat->set[s].desc.deldop.frame[f].view[k].intspin,
+					ddat->set[s].desc.deldop.frame[f].view[k].ae,
+					ddat->set[s].desc.deldop.frame[f].view[k].intspin, -1);
+
+			for (j=0; j<=2; j++)
+				ddat->set[s].desc.deldop.frame[f].view[k].spin[j] =
+						ddat->set[s].desc.deldop.frame[f].view[k].orbspin[j] +
 				ddat->set[s].desc.deldop.frame[f].view[k].intspin[j];
         }
 	}
@@ -454,6 +514,56 @@ __host__ void realize_spin_gpu(
 		default:
 			bailout("realize_spin_gpu2: can't handle this type yet\n");
 		}
+		/* Final kernel launch in realize_spin_cuda */
+		update_spin_angle_krnl<<<1,1>>>(dmod, angle_omega_save);
+		checkErrorAfterKernelLaunch("update_spin_angle_krnl");
+	}
+	cudaFree(angle_omega_save);
+}
+
+__host__ void realize_spin_MFS_gpu(
+		struct par_t *dpar,
+		struct mod_t *dmod,
+		struct dat_t *ddat,
+		int *nframes,
+		int nsets,
+		cudaStream_t *rs_stream)
+{
+	int s;
+	dim3 nsetsBLK, nsetsTHD, BLK, THD, BLKfrm, THD64;
+	double3 *angle_omega_save;
+	THD.x = maxThreadsPerBlock;
+	THD64.x = 64;
+
+	gpuErrchk(cudaMalloc((void**)&angle_omega_save, sizeof(double3)*2));
+
+	/* Calculate launch parameters for all kernels going over all vertices */
+	nsetsBLK.x = floor((THD.x - 1 + nsets) / THD.x);
+
+	/* Determine the model spin state for each dataset in turn */
+	for (s=0; s<nsets; s++) {
+
+		/* Add this dataset's angle offsets to the model Euler angles. Later
+		 * we'll add the spin offsets for each frame separately, after updating
+		 * the intrinsic spin vector to each epoch. Save the original Euler
+		 * angles to be restored later.          */
+		/* Launch kernel do add angle offsets to Euler angles.  Three threads total */
+		add_offsets_to_euler_MFS_krnl<<<1,1>>>(dmod,ddat,angle_omega_save,s);
+		checkErrorAfterKernelLaunch("add_offsets_to_euler_MFS_krnl");
+
+		BLKfrm.x = floor((THD64.x - 1 + nframes[s])/THD64.x);
+
+		/* See "case DOPPLER" above for more extensive comments, since the
+		 * Doppler and delay-Doppler procedures are identical.  */
+		/* Deal with spin impulses  */
+		/* Get the model's intrinsic spin vector (in body coordinates)
+		 * at the (light-time corrected) epoch of each view.            */
+		/* Apply dataset's spin offsets (also in body coordinates)
+		 * to the intrinsic spin vector of this view.                    */
+		realize_spin_deldop_MFS_krnl<<<BLKfrm,THD64>>>(dmod, ddat, dpar,
+				1, s, nframes[s]);
+		checkErrorAfterKernelLaunch("realize_spin_deldop_MFS_krnl");
+
 		/* Final kernel launch in realize_spin_cuda */
 		update_spin_angle_krnl<<<1,1>>>(dmod, angle_omega_save);
 		checkErrorAfterKernelLaunch("update_spin_angle_krnl");

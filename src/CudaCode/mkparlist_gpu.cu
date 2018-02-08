@@ -949,10 +949,10 @@ __global__ void mpl_dat_krnl(struct par_t *dpar, struct dat_t *ddat,
 		double **fpntr, double *fparstep, double *fpartol, double *fparabstol,
 		int *fpartype, int nsets) {
 	/* nsets-threaded kernel */
-	int s = blockIdx.x * blockDim.x + threadIdx.x;
+	//int s = blockIdx.x * blockDim.x + threadIdx.x;
 	int i, j;
 
-	if (s < nsets) {
+	for (int s=0; s<nsets; s++) {
 		for (i=0; i<=2; i++) {
 			if (ddat->set[s].angleoff[i].state == 'f') {
 				fpntr[++p] = &ddat->set[s].angleoff[i].val;
@@ -1029,7 +1029,54 @@ __global__ void mpl_dat_krnl(struct par_t *dpar, struct dat_t *ddat,
 		default:
 			printf("mkparlist_cuda.cu: can't handle that type of data yet\n");
 		}
+	}
+}
+__global__ void mpl_dat_MFS_krnl(struct par_t *dpar, struct dat_t *ddat,
+		double **fpntr, double *fparstep, double *fpartol, double *fparabstol,
+		int *fpartype, int nsets) {
+	/* nsets-threaded kernel */
+	//int s = blockIdx.x * blockDim.x + threadIdx.x;
+	int i, j;
 
+	for (int s=0; s<nsets; s++) {
+		for (int f=0; f<ddat->set[s].desc.deldop.nframes; f++) {
+			for (i=0; i<=2; i++) {
+				if (ddat->set[s].desc.deldop.frame[f].angleoff[i].state == 'f') {
+					fpntr[++p] = &ddat->set[s].desc.deldop.frame[f].angleoff[i].val;
+					fparstep[p] = dpar->angle_step;
+					fpartol[p] = dpar->angle_tol;
+					fparabstol[p] = dpar->angle_abstol;
+					fpartype[p] = SPINPAR;
+				}
+			}
+			for (i=0; i<=2; i++) {
+				if (ddat->set[s].desc.deldop.frame[f].omegaoff[i].state == 'f') {
+					fpntr[++p] = &ddat->set[s].desc.deldop.frame[f].omegaoff[i].val;
+					fparstep[p] = dpar->spin_step;
+					fpartol[p] = dpar->spin_tol;
+					fparabstol[p] = dpar->spin_abstol;
+					fpartype[p] = SPINPAR;
+				}
+			}
+
+			for (i=0; i<=ddat->set[s].desc.deldop.frame[f].delcor.n; i++) {
+				if (ddat->set[s].desc.deldop.frame[f].delcor.a[i].state == 'f') {
+					j = (i < MAXDELCORPAR) ? i : 0;
+					fpntr[++p] = &ddat->set[s].desc.deldop.frame[f].delcor.a[i].val;
+					fparstep[p] = dpar->delcor_step[j];
+					fpartol[p] = dpar->delcor_tol;
+					fparabstol[p] = dpar->delcor_abstol[j];
+					fpartype[p] = DELCORPAR;
+				}
+			}
+			if (ddat->set[s].desc.deldop.frame[f].dopscale.state == 'f') {
+				fpntr[++p] = &ddat->set[s].desc.deldop.frame[f].dopscale.val;
+				fparstep[p] = dpar->ratio_step;
+				fpartol[p] = dpar->ratio_tol;
+				fparabstol[p] = dpar->ratio_abstol;
+				fpartype[p] = DOPSCALEPAR;
+			}
+		}
 	}
 }
 
@@ -1070,8 +1117,12 @@ __host__ void mkparlist_gpu(struct par_t *dpar, struct mod_t *dmod,
 	 * parameters which are computed analytically)
 	 * Launching nsets threads here */
 	BLK.x = floor((THD.x - 1 + nsets)/THD.x);
-	mpl_dat_krnl<<<1,1>>>(dpar, ddat, fpntr, fparstep, fpartol,
-			fparabstol,	fpartype, nsets);
+	if (MFS)
+		mpl_dat_MFS_krnl<<<1,1>>>(dpar, ddat, fpntr, fparstep, fpartol,
+				fparabstol, fpartype, nsets);
+	else
+		mpl_dat_krnl<<<1,1>>>(dpar, ddat, fpntr, fparstep, fpartol,
+				fparabstol,	fpartype, nsets);
 	checkErrorAfterKernelLaunch("mpl_dat_krnl (mkparlist_cuda.cu)");
 
 }

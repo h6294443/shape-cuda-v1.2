@@ -125,6 +125,49 @@ __global__ void rd_deldop_krnl(struct dat_t *ddat, int s,
 		}
 	}
 }
+__global__ void rd_deldop_MFS_krnl(struct dat_t *ddat, int s,
+		double delta_delcor0, int delcor0_mode) {
+	/* nframes-threaded kernel */
+	int f = blockIdx.x * blockDim.x + threadIdx.x;
+	int i, n, sdelcor, ndelcor;
+	double t0, t0delcor;
+
+	if (f < ddat->set[s].desc.deldop.nframes) {
+//		n = ddat->set[s].desc.deldop.frame[f].delcor.n;
+//		t0 = ddat->set[s].desc.deldop.frame[f].delcor.t0;
+//
+//		if (ddat->set[s].desc.deldop.frame[f].delcor.a[0].state != '=') {
+//			sdelcor = s;
+//			ndelcor = n;
+//			t0delcor = t0;
+//			if (ddat->set[s].desc.deldop.frame[f].delcor.a[0].state == 'f') {
+//				if (delcor0_mode != 0)
+//					ddat->set[s].desc.deldop.frame[f].delcor.a[0].val =
+//							ddat->set[s].desc.deldop.frame[f].delcor.delcor0_save + delta_delcor0;
+//				if (delcor0_mode != 1)
+//					ddat->set[s].desc.deldop.frame[f].delcor.delcor0_save =
+//							ddat->set[s].desc.deldop.frame[f].delcor.a[0].val;
+//			}
+//		} else if (sdelcor < 0)
+//			printf("can't use \"=\" state for the first delay polynomial\n");
+//		else if (n != ndelcor)
+//			printf("delay polynomials must have same degree if state = \"=\"\n");
+//		else if (fabs(t0 - t0delcor) > HALFSECOND)
+//			printf("delay polynomials must have same t0 if state = \"=\"\n");
+//		else if (type_delcor == DELAY) {
+//			ddat->set[s].desc.deldop.delcor.t0 = t0_delcor;
+//			for (i=0; i<=n; i++)
+//				ddat->set[s].desc.deldop.delcor.a[i].val =
+//						ddat->set[s_delcor].desc.deldop.delcor.a[i].val;
+//		} else {
+//			ddat->set[s].desc.deldop.delcor.t0 = t0_delcor;
+//			for (i=0; i<=n; i++)
+//				ddat->set[s].desc.deldop.delcor.a[i].val =
+//						ddat->set[s_delcor].desc.doppler.delcor.a[i].val;
+//		}
+	}
+}
+
 __global__ void rd_doppler_krnl(struct dat_t *ddat, int s,
 		double delta_delcor0, int delcor0_mode) {
 	/* Single-threaded kernel */
@@ -222,6 +265,40 @@ __host__ void realize_delcor_gpu(struct dat_t *ddat, double delta_delcor0, int d
             the delay correction polynomial at the epoch of each data frame.  */
 			dopoffs_gpu(ddat, s, nframes[s]);
 		}
+	}
+}
+
+__host__ void realize_delcor_gpu_MFS(struct dat_t *ddat, double delta_delcor0, int delcor0_mode,
+		int nsets, int *nframes)
+{
+	int s;
+
+	/* If a dataset has delay correction polynomial coefficients with state '=',
+	 * go backwards in the datafile until we reach a delay-Doppler or Doppler
+	 * dataset whose polynomial coefficients have states 'f' and/or 'c' rather
+	 * than '='.
+	 * s_delcor is # of the dataset we find,
+	 * type_delcor is either delay-Doppler or Doppler,
+	 * n_delcor is # of coefficients in that dataset's polynomial,
+	 * t0_delcor is the reference epoch for the polynomial.  */
+
+	cudaSetDevice(GPU0);
+	/* Initialize the flags */
+	rd_init_flags_krnl<<<1,1>>>();
+	checkErrorAfterKernelLaunch("rd_init_flags_krnl");
+
+	for (s=0; s<nsets; s++) {
+
+		/* Launch the delay-doppler kernel for realize_delcor_cuda */
+//			rd_deldop_krnl<<<1,1>>>(ddat, s, delta_delcor0, delcor0_mode);
+//			checkErrorAfterKernelLaunch("rd_deldop_krnl (realize_delcor_cuda)");
+
+			/* Compute frame[*].deloff and frame[*].dopoff for delay-Doppler
+            dataset: float # of delay and Doppler bins corresponding to delay
+            correction polynomial at the epoch of each data frame.*/
+			deldopoffs_gpu(ddat, s, nframes[s]);
+
+
 	}
 }
 

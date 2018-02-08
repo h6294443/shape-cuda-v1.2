@@ -1158,6 +1158,26 @@ struct deldopfrm_t {
   double **map_facet_power;     /* array of facet contributions needed for the map action */
  // float **fit_overflow32;//[MAXOVERFLOW][MAXOVERFLOW];	/* for CUDA AF use */
  // double **fit_overflow64;
+  /* The following are used for models where we want to combine multiple sets with single frames
+   * into fewer sets with multiple frames    */
+  struct param_t angleoff[3];   /* Euler angles offsets */
+  struct param_t omegaoff[3];   /* spin vector offsets */
+  struct delcor_t delcor;		/* Delay correction polynomial */
+  double Ftx;					/* Transmitter frequency */
+  double del_per_pixel;			/* Delay resolution */
+  double dop_per_pixel;			/* Doppler resolution */
+  double dopDC;					/* Doppler bin of COM (1-based) */
+  double dopfftlen;				/* Doppler fft length */
+  double dopcom;                /* ephemeris doppler bin of COM (1-based) */
+  struct param_t dopscale;      /* Doppler scaling factor */
+  double dopscale_save;
+  int nviews;                   /* # of views per frame */
+  double view_interval;         /* time interval between views (secs, convert internally to days) */
+  unsigned char smearing_mode;  /* =0 frame epoch is center view, =1 frame epoch is first view */
+  int v0;                       /* # of the view corresponding to the frame epoch (0-based) */
+  int codemethod;               /* code+reduction combination used */
+  int spb;                      /* # samples per baud in original data */
+  int stride;                   /* # spb between adjacent image rows */
 };
 
 /* Structure deldop_t describes a delay-Doppler data set. */
@@ -1523,7 +1543,7 @@ void write_pos( struct par_t *par, struct mod_t *mod, struct pos_t *pos,
                 double spin_ecl[3], int iradlaw, int color_output, char *name);
 void write_wf( struct mod_t *mod);
 void initialize_delcor( struct dat_t *dat);
-
+void deldopoffs_MFS_initial( struct deldop_t *deldop);
 
 
 //int read_deldop( FILE *fp, struct par_t *par, struct deldop_t *deldop,

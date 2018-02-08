@@ -150,7 +150,7 @@ int posvis( struct vertices_t *verts, double orbit_offset[3], struct pos_t *pos,
 		/* Consider this facet further only if its normal points somewhat
 		 * towards the observer rather than away         */
 		if (n[2] > 0.0) {
-			dbg_cntr++;
+			//dbg_cntr++;
 			/* Convert the three sets of vertex coordinates from body to ob-
 			 * server coordinates; orbit_offset is the center-of-mass offset
 			 * (in observer coordinates) for this model at this frame's epoch

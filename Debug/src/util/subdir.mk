@@ -197,8 +197,8 @@ C_DEPS += \
 src/util/%.o: ../src/util/%.c
 	@echo 'Building file: $<'
 	@echo 'Invoking: NVCC Compiler'
-	/usr/local/cuda-9.0/bin/nvcc -G -g -lineinfo -pg -O0 -Xcompiler -rdynamic -gencode arch=compute_61,code=sm_61 -m64 -odir "src/util" -M -o "$(@:%.o=%.d)" "$<"
-	/usr/local/cuda-9.0/bin/nvcc -G -g -lineinfo -pg -O0 -Xcompiler -rdynamic --compile -m64  -x c -o  "$@" "$<"
+	/usr/local/cuda-9.1/bin/nvcc -G -g -lineinfo -pg -O0 -Xcompiler -rdynamic -gencode arch=compute_61,code=sm_61 -m64 -odir "src/util" -M -o "$(@:%.o=%.d)" "$<"
+	/usr/local/cuda-9.1/bin/nvcc -G -g -lineinfo -pg -O0 -Xcompiler -rdynamic --compile -m64  -x c -o  "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 

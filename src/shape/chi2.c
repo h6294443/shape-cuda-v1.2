@@ -289,7 +289,7 @@ double chi2( struct par_t *par, struct dat_t *dat, int list_breakdown)
 		case LGHTCRV:
 			dat->set[s].chi2 = chi2_lghtcrv( par, &dat->set[s].desc.lghtcrv,
 					list_breakdown, s, &chi2_all_lghtcrv);
-			printf("chi2_set[%i] (lghtcrv), %3.8g\n", s, dat->set[s].chi2);
+//			printf("chi2_set[%i] (lghtcrv), %3.8g\n", s, dat->set[s].chi2);
 			break;
 		default:
 			bailout("chi2.c: can't handle this type yet\n");

@@ -303,12 +303,17 @@ __global__ void bf_set_hotparam_pntr_krnl(double **fpntr,
 	if (threadIdx.x == 0) {
 		hotparam = fpntr[p];	/* This is pointing at a device variable */
 		bf_partype = fpartype[p];  /* parameter type */
+//		printf("bf_set_hotparam_pntr_krnl\n");
+//		printf("p=%i, partype=%i, *hotparam=%3.8g\n", p, fpartype[p], *hotparam);
 	}
 }
 __global__ void bf_get_hotparam_val_krnl() {
 	/* Single threaded kernel */
-	if (threadIdx.x == 0)
+	if (threadIdx.x == 0) {
 		bf_hotparamval = *hotparam;
+//		printf("hotparam=%3.8g\n", *hotparam);
+//		printf("bf_hotparamval=%3.8g\n", bf_hotparamval);
+	}
 }
 __global__ void bf_mult_hotparam_val_krnl(double factor) {
 	/* Single-threaded kernel */
@@ -440,7 +445,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	hfpartype 	 = (int *) 	  malloc(nfpar*sizeof(int));
 	hflags 		 = (int *) malloc(7*sizeof(int));
 
-	for (i=0; i<1/*nfpar*/; i++)
+	for (i=0; i<nfpar; i++)
 		cudaCalloc1((void**)&fpntr[i], sizeof(double), 1);
 
 	/* Set vertices shortcut and also set max_frames (the maximum number of
@@ -496,21 +501,16 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	{
 		realize_mod_gpu(dpar, dmod, type, nf, bf_stream);
 
-		realize_spin_gpu(dpar, dmod, ddat, htype, nframes, nviews,
+		if (MFS) realize_spin_MFS_gpu(dpar, dmod, ddat, nframes, nsets, bf_stream);
+		else realize_spin_gpu(dpar, dmod, ddat, htype, nframes, nviews,
 				nsets, bf_stream);
 
 		realize_photo_gpu(dpar, dmod, 1.0, 1.0, 0, nf);  /* set R_save to R */
 
-		if (FP64)
-			vary_params_gpu64(dpar, dmod, ddat, action, &deldop_zmax_save,
-					&rad_xsec_save, &opt_brightness_save, &cos_subradarlat_save,
-					nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-					bf_stream, max_frames);
-		else
-			vary_params_gpu32(dpar, dmod, ddat, action, &deldop_zmax_save,
-					&rad_xsec_save, &opt_brightness_save, &cos_subradarlat_save,
-					nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-					bf_stream, max_frames);
+		vary_params_gpu64(dpar, dmod, ddat, action, &deldop_zmax_save,
+				&rad_xsec_save, &opt_brightness_save, &cos_subradarlat_save,
+				nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+				bf_stream, max_frames);
 	}
 	printf("rad_xsec: %f\n", rad_xsec_save);
 	printf("deldop_zmax: %f\n", deldop_zmax_save);
@@ -522,7 +522,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	bf_set_hotparam_initial_krnl<<<1,1>>>();
 	checkErrorAfterKernelLaunch("bf_set_hotparam_initial_krnl");
 
-	printf("objective(0.0) call \n");
+//	printf("objective(0.0) call \n");
 
 	enderr = objective_gpu(0.0, verts, htype, dtype, nframes,
 				nviews, lc_n, nsets, nf, bf_stream);
@@ -530,6 +530,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	printf("#\n# searching for best fit ...\n");
 	printf("%4d %8.6f to begin", 0, enderr);
 
+//	printf("\n\nnfpar=%i\n", nfpar);
 //	int debug = 1;
 //	if (debug)
 //		return(0);
@@ -605,8 +606,9 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % npar_update;
 //		p = first_fitpar;// = 1;
+		printf("nfpar=%i\n", nfpar);
 		for (p=first_fitpar; p<nfpar; p++) {
-
+//			printf("p=%i\n", p);
 			/*  Adjust only parameter p on this try  */
 			bf_set_hotparam_pntr_krnl<<<1,1>>>(fpntr, fpartype, p);
 			checkErrorAfterKernelLaunch("bf_set_hotparam_pntr_krnl");
@@ -630,6 +632,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			 * changed value of the size parameter, in case the first call to
 			 * objective displays reduced chi-square and the penalty functions.  */
 			if (avoid_badpos && partype == SIZEPAR) {
+//				printf("entered badpos if-block\n");
 				bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 				checkErrorAfterKernelLaunch("bf_get_flags_krnl");
 				gpuErrchk(cudaMemcpy(hflags, flags, sizeof(int)*7,
@@ -658,13 +661,14 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 					}
 				}
 			}
-
+//			printf("p=%i\n", p);
 			/* Get value of (*hotparam) so that mnbrak can use it*/
 			bf_get_hotparam_val_krnl<<<1,1>>>();
 			checkErrorAfterKernelLaunch("bf_get_hotparam_val_krnl");
+//			cudaDeviceSynchronize();
 			gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
 					sizeof(double),	0, cudaMemcpyDeviceToHost));
-
+//			printf("host hotparamval=%3.8g\n", hotparamval);
 			/* Use Numerical Recipes routine mnbrak to bracket a minimum in the
 			 * objective function (reduced chi-square plus penalties) objec-
 			 * tive(x), where x is the value of parameter p.  As initial trial
@@ -678,7 +682,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			 * somewhere between ax and cx.          */
 			ax = hotparamval;
 			bx = ax + hfparstep[p]; /* par usage us fine here */
-
+//			printf("hfparstep[%i]=%3.8g\n", p, hfparstep[p]);
 //			printf("ax, %g\n", ax);
 //			printf("bx, %g\n", bx);
 //			printf("mnbrak start\n");
@@ -759,16 +763,10 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 				 * correction polynomial coefficients, to Doppler scaling fac-
 				 * tors, and to radar and optical albedos                  */
 
-				if (FP64)
-					vary_params_gpu64(dpar,dmod,ddat,11,&deldop_zmax,
-							&rad_xsec, &opt_brightness, &cos_subradarlat,
-							nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-							bf_stream, max_frames);
-				else
-					vary_params_gpu32(dpar,dmod,ddat,11,&deldop_zmax,
-							&rad_xsec, &opt_brightness, &cos_subradarlat,
-							nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-							bf_stream, max_frames);
+				vary_params_gpu64(dpar,dmod,ddat,11,&deldop_zmax,
+						&rad_xsec, &opt_brightness, &cos_subradarlat,
+						nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+						bf_stream, max_frames);
 
 				delta_delcor0 = (deldop_zmax - deldop_zmax_save)*KM2US;
 				if (cos_subradarlat != 0.0)
@@ -785,18 +783,12 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 				/* Must update opt_brightness_save for Hapke optical scattering
 				 * law, since single-scattering albedo w isn't just an overall
 				 * scaling factor  */
-				if (vary_hapke) {
-					if (FP64)
-						vary_params_gpu64(dpar,dmod,ddat,12,&dummyval2,
-								&dummyval3,&opt_brightness,&dummyval4,
-								nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-								bf_stream, max_frames);
-					else
-						vary_params_gpu32(dpar,dmod,ddat,12,&dummyval2,
-								&dummyval3,&opt_brightness,&dummyval4,
-								nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-								bf_stream, max_frames);
-				}
+				if (vary_hapke)
+					vary_params_gpu64(dpar,dmod,ddat,12,&dummyval2,
+							&dummyval3,&opt_brightness,&dummyval4,
+							nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+							bf_stream, max_frames);
+
 			} else if (newphoto) {
 				rad_xsec_save = rad_xsec;
 				opt_brightness_save = opt_brightness;
@@ -838,7 +830,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			if (check_posbnd || check_badposet || check_badradar)
 				objective_gpu(hotparamval, verts, htype, dtype,
 						nframes, nviews, lc_n, nsets, nf, bf_stream);
-
+//			printf("bf_get_flags\n");
 			/* Launch single-thread kernel to retrieve flags in dev_par */
 			bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 			checkErrorAfterKernelLaunch("bf_get_flags_krnl");
@@ -873,9 +865,10 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 				chi2_gpu(dpar, ddat, htype, dtype, nframes,
 						lc_n, 0, nsets, bf_stream, max_frames);
 
-//				write_mod( dpar, dmod);
-//				write_dat( dpar, ddat);
+				write_mod( dpar, dmod);
+				write_dat( dpar, ddat);
 			}
+//			printf("end fitpar loop\n");
 		}  // End fitpar loop
 
 		/* End of this iteration: Write model and data to disk, and display the
@@ -887,8 +880,8 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			chi2_gpu(dpar, ddat, htype, dtype, nframes,
 					lc_n, 0, nsets, bf_stream, max_frames);
 
-//			write_mod( dpar, dmod);
-//			write_dat( dpar, ddat);
+			write_mod( dpar, dmod);
+			write_dat( dpar, ddat);
 		}
 		show_deldoplim_gpu(ddat, htype, nsets, nframes, max_frames);
 
@@ -1819,17 +1812,10 @@ __host__ double objective_gpu(
 		/* Call vary_params to get the trial adjustments to 0th-order delay correc-
 		 * tion polynomial coefficients, to Doppler scaling factors,and to radar
 		 * and optical albedos, then send them to the branch nodes  */
-
-		if (FP64)
-			vary_params_gpu64(sdev_par, sdev_mod, sdev_dat, spar->action,
-					&deldop_zmax, &rad_xsec, &opt_brightness, &cos_subradarlat,
-					nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-					bf_stream, max_frames);
-		else
-			vary_params_gpu32(sdev_par, sdev_mod, sdev_dat, spar->action,
-					&deldop_zmax, &rad_xsec, &opt_brightness, &cos_subradarlat,
-					nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
-					bf_stream, max_frames);
+		vary_params_gpu64(sdev_par, sdev_mod, sdev_dat, spar->action,
+				&deldop_zmax, &rad_xsec, &opt_brightness, &cos_subradarlat,
+				nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
+				bf_stream, max_frames);
 
 		delta_delcor0 = (deldop_zmax - deldop_zmax_save)*KM2US;
 		if (cos_subradarlat != 0.0)

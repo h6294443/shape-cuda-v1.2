@@ -20,6 +20,7 @@ int maxThreadsPerBlock = 0;
 int HMT	= 0;
 int HMT_threads = 4;
 int EXP = 0;
+int MFS = 1;
 
 int main(int argc, char *argv[])
 {
@@ -266,12 +267,16 @@ int main(int argc, char *argv[])
 		}
 		else if (CUDA && !MGPU) {
 			par.nfpar += read_mod( &par, &mod);
-			par.nfpar += read_dat_gpu( &par, &mod, &dat);
+			if (MFS)
+				par.nfpar += read_dat_gpu_MFS(&par, &mod, &dat);
+			else
+				par.nfpar += read_dat_gpu( &par, &mod, &dat);
 		}
 		else {
 			par.nfpar += read_mod( &par, &mod);
 			par.nfpar += read_dat( &par, &mod, &dat);
 		}
+		return(0);
 		mkparlist( &par, &mod, &dat);
 
 		/* Make CUDA device copies of par, mod, dat (these copies reside

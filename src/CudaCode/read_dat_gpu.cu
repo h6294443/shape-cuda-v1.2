@@ -239,7 +239,9 @@ extern "C" {
 #include "../shape/head.h"
 }
 __host__ int read_deldop_gpu( FILE *fp, struct par_t *par, struct deldop_t *deldop,
-    		int nradlaws, int s, double *chi2_variance);
+		int nradlaws, int s, double *chi2_variance);
+__host__ int read_deldop_gpu_MFS( FILE *fp, struct par_t *par, struct deldop_t *deldop,
+		int nradlaws, int s, double *chi2_variance, int nframes);
 __host__ int read_deldop_mgpu( FILE *fp, struct par_t *par, struct deldop_t *deldop,
 		int nradlaws, int s, double *chi2_variance, int FULL);
 __host__ int read_doppler_gpu( FILE *fp, struct par_t *par, struct doppler_t *doppler,
@@ -254,6 +256,7 @@ __host__ int read_lghtcrv_gpu( struct dat_t *dat, FILE *fp, struct par_t *par, s
 		int noptlaws, int s, double *chi2_variance);
 __host__ int read_lghtcrv_mgpu( struct dat_t *dat, FILE *fp, struct par_t *par, struct lghtcrv_t *lghtcrv,
 		int noptlaws, int s, double *chi2_variance, int FULL);
+__host__ void initialize_delcor_MFS( struct dat_t *dat);
 
 __host__ int read_dat_gpu( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 {
@@ -332,7 +335,7 @@ __host__ int read_dat_gpu( struct par_t *par, struct mod_t *mod, struct dat_t *d
 		else if (!strcmp( str, "lightcurve")) {
 			dat->set[s].type = LGHTCRV;
 			npar += read_lghtcrv_gpu( dat, fp, par, &dat->set[s].desc.lghtcrv, mod->photo.noptlaws,
-				s, &chi2_variance);
+					s, &chi2_variance);
 			dat->dof_lghtcrv += dat->set[s].desc.lghtcrv.dof;
 			dat->sum_opt_brightness_weights +=
 					dat->set[s].desc.lghtcrv.sum_opt_brightness_weights;
@@ -361,6 +364,111 @@ __host__ int read_dat_gpu( struct par_t *par, struct mod_t *mod, struct dat_t *d
 		set_up_pos_gpu(par, dat, mod->shape.comp[0].real.nf);
 
 	printf("# finished reading obs file\n");
+	fflush(stdout);
+
+	/* Make sure we have switched back to the chosen main GPU */
+	gpuErrchk(cudaSetDevice(GPU0));
+	return npar;
+}
+
+__host__ int read_dat_gpu_MFS( struct par_t *par, struct mod_t *mod, struct dat_t *dat)
+{
+	/* This read_dat routine is used for sets that were combined from multiple
+	 * single-frame sets.  Certain quantities are moved from set level to frame
+	 * level: Euler/Angle offsets, radar parameters, delay correction, etc.
+	 * Currently works ONLY for Delay-Doppler.
+	 */
+	FILE *fp;
+	int s, npar=0, i, cntr=0, nframes=0;
+	double chi2_variance;
+	char str[80];
+
+	/*  Initialize degrees of freedom, variance of chi2 estimate, and sums of weights */
+	dat->dof = dat->dof_doppler = dat->dof_deldop = dat->dof_poset
+			= dat->dof_lghtcrv = 0.0;
+	dat->chi2_variance = 0.0;
+	dat->sum_deldop_zmax_weights = 0.0;
+	dat->sum_rad_xsec_weights = 0.0;
+	dat->sum_opt_brightness_weights = 0.0;
+	dat->sum_cos_subradarlat_weights = 0.0;
+
+	/*  Open obs file and read how many datasets there are  */
+	FOPEN( fp, dat->name, "r");
+	printf("#\n# fitting with GPU\n");
+	printf("#\n# reading data through file: %s ...\n", dat->name);
+	fflush(stdout);
+
+	dat->nsets = getint( fp);
+	cudaCalloc1((void**)&dat->set, sizeof(struct set_t), dat->nsets);
+
+	/*  Read each dataset in turn  */
+	for (s=0; s<dat->nsets; s++) {
+
+		/* Old use: Assign a processor node to this dataset.
+		 * New and improved use: assign a GPU id to this dataset for dual-GPU
+		 * processing.  */
+		dat->set[s].inputnode = getint( fp);
+		++cntr;
+		printf("# dataset %2d:\n", s);
+		fflush(stdout);
+
+		dat->set[s].desc.deldop.nframes = getint( fp);
+		cudaCalloc1((void**)&dat->set[s].desc.deldop.frame, sizeof(struct deldopfrm_t),
+				dat->set[s].desc.deldop.nframes);
+
+		for (int f=0; f<dat->set[s].desc.deldop.nframes; f++)  {
+			/* Read the angle and spin offsets for this frame  */
+			for (i=0; i<=2; i++) {
+				npar += readparam( fp, &dat->set[s].desc.deldop.frame[f].angleoff[i]);
+				dat->set[s].desc.deldop.frame[f].angleoff[i].val += 360.0*floor((180.0 -
+						dat->set[s].desc.deldop.frame[f].angleoff[i].val)/360.0);
+				dat->set[s].desc.deldop.frame[f].angleoff[i].val *= D2R;
+			}
+			for (i=0; i<=2; i++) {
+				npar += readparam( fp, &dat->set[s].desc.deldop.frame[f].omegaoff[i]);
+				dat->set[s].desc.deldop.frame[f].omegaoff[i].val *= D2R;
+			}
+		}
+		/*  Figure out what type of dataset this is (delay-Doppler, Doppler, etc.)
+        and call the appropriate routine to read in the rest of the information  */
+		gettstr( fp, str);
+		if (!strcmp( str, "doppler")) {
+			printf("DOPPLER NOT IMPLEMENTED YET\n");
+		}
+		else if (!strcmp( str, "delay-doppler")) {
+			dat->set[s].type = DELAY;
+			npar += read_deldop_gpu_MFS( fp, par, &dat->set[s].desc.deldop,
+					mod->photo.nradlaws, s, &chi2_variance, dat->set[s].desc.deldop.nframes);
+			dat->dof_deldop += dat->set[s].desc.deldop.dof;
+			dat->sum_deldop_zmax_weights +=
+					dat->set[s].desc.deldop.sum_deldop_zmax_weights;
+			dat->sum_rad_xsec_weights += dat->set[s].desc.deldop.sum_rad_xsec_weights;
+			dat->sum_cos_subradarlat_weights += dat->set[s].desc.deldop.sum_cos_subradarlat_weights;
+		}
+		else if (!strcmp( str, "plane-of-sky")) {
+			printf("POS NOT IMPLEMENTED YET\n");
+		}
+		else if (!strcmp( str, "lightcurve")) {
+			printf("LIGHTCURVE NOT IMPLEMENTED YET\n");
+		}
+		else {
+			printf("ERROR: Can't handle type '%s' for dataset %d\n", str, s);
+			bailout("read_dat.c\n");
+		}
+		dat->chi2_variance += chi2_variance;
+		deldopoffs_MFS_initial(&dat->set[s].desc.deldop);
+	}
+
+	dat->dof = dat->dof_doppler + dat->dof_deldop + dat->dof_poset
+			+ dat->dof_lghtcrv;
+	fclose( fp);
+
+	/* Initialize the delay correction polynomials, the horizontal and vertical offsets
+      for plane-of-sky datasets, and the plane-of-sky view(s)                           */
+
+	set_up_pos_gpu(par, dat, mod->shape.comp[0].real.nf);
+
+	printf("# finished reading MFS obs file\n");
 	fflush(stdout);
 
 	/* Make sure we have switched back to the chosen main GPU */
@@ -451,7 +559,7 @@ __host__ int read_dat_mgpu( struct par_t *par, struct mod_t *mod, struct dat_t *
 		else if (!strcmp( str, "lightcurve")) {
 			dat->set[s].type = LGHTCRV;
 			npar += read_lghtcrv_mgpu( dat, fp, par, &dat->set[s].desc.lghtcrv, mod->photo.noptlaws,
-				s, &chi2_variance, FULL);
+					s, &chi2_variance, FULL);
 			dat->dof_lghtcrv += dat->set[s].desc.lghtcrv.dof;
 			dat->sum_opt_brightness_weights +=
 					dat->set[s].desc.lghtcrv.sum_opt_brightness_weights;
@@ -514,7 +622,7 @@ __host__ int read_deldop_gpu( FILE *fp, struct par_t *par, struct deldop_t *deld
 	/* Read the asteroid ephemeris */
 	deldop->astephem.n = getint( fp);  //# of points in ephemeris
 	cudaCalloc1((void**)&deldop->astephem.pnt, sizeof(struct ephpnt_t),
-				deldop->astephem.n);
+			deldop->astephem.n);
 
 	for (i=0; i<deldop->astephem.n; i++) {
 		rdcal2jd( fp, &deldop->astephem.pnt[i].t);
@@ -563,16 +671,16 @@ __host__ int read_deldop_gpu( FILE *fp, struct par_t *par, struct deldop_t *deld
 	cudaCalloc((void**)&deldop->delcor.a, sizeof(struct param_t),
 			(deldop->delcor.n + 1));
 
-//	n_equals = 0;
+	//	n_equals = 0;
 	cudaCalloc1((void**)&deldop->delcor.equals_set, sizeof(int), deldop->delcor.n);
 	for (i=0; i<=deldop->delcor.n; i++) {
 		npar += readparam( fp, &deldop->delcor.a[i]);
 		if (deldop->delcor.a[i].state == '=')
 			deldop->delcor.equals_set[i] = -1;
-//			n_equals++;
+		//			n_equals++;
 	}
-//	if (n_equals > 0 && n_equals <= deldop->delcor.n)
-//		bailout("can't use \"=\" state for just part of a delay polynomial\n");
+	//	if (n_equals > 0 && n_equals <= deldop->delcor.n)
+	//		bailout("can't use \"=\" state for just part of a delay polynomial\n");
 	deldop->delcor.delcor0_save = deldop->delcor.a[0].val;
 
 	/* Read the Doppler scaling factor*/
@@ -866,6 +974,333 @@ __host__ int read_deldop_gpu( FILE *fp, struct par_t *par, struct deldop_t *deld
 	return npar;
 }
 
+__host__ int read_deldop_gpu_MFS( FILE *fp, struct par_t *par, struct deldop_t *deldop,
+		int nradlaws, int s, double *chi2_variance, int nframes)
+{
+	int i, j, npar=0, k, n_equals, swap_bytes, is_binary, is_fits, is_rdf,
+			bufferlength=128, idel_use[2], idop_use[2], jskip, kskip,
+			datafile_is_gzipped, n, nmaskvals;
+	char fullname[160], cmd[255], codestring[10], smearingstring[7], buffer[200],
+	pixweightfile[MAXLEN], datafile_temp[MAXLEN], datafile_gzipped_temp[MAXLEN];
+	FILE *fin, *wp=0;
+	double lookfact, se[3][3], dist, solar_phase, solar_azimuth, dof,
+	**pixweight=NULL;
+
+	/* Initialize degrees of freedom, variance of chi2 estimate, and weight sums*/
+	deldop->dof = 0.0;
+	*chi2_variance = 0.0;
+	deldop->sum_deldop_zmax_weights = 0.0;
+	deldop->sum_rad_xsec_weights = 0.0;
+	deldop->sum_cos_subradarlat_weights = 0.0;
+
+	/* Read which radar scattering law to use for this dataset*/
+	deldop->iradlaw = getint( fp);
+	if (deldop->iradlaw < 0 || deldop->iradlaw >= nradlaws) {
+		printf("ERROR in set %d: must have 0 <= radar scattering law <= %d\n",
+				s, nradlaws-1);
+		bailout("read_deldop in read_dat.c\n");	}
+
+	/* Read the asteroid ephemeris */
+	deldop->astephem.n = getint( fp);  //# of points in ephemeris
+	cudaCalloc1((void**)&deldop->astephem.pnt, sizeof(struct ephpnt_t),
+			deldop->astephem.n);
+
+	for (i=0; i<deldop->astephem.n; i++) {
+		rdcal2jd( fp, &deldop->astephem.pnt[i].t);
+		deldop->astephem.pnt[i].ra = getdouble( fp)*D2R;
+		deldop->astephem.pnt[i].dec = getdouble( fp)*D2R;
+		deldop->astephem.pnt[i].dist = getdouble( fp);
+	}
+
+	/* Read the transmitter frequency (MHz)*/
+	for (int f=0; f<nframes; f++) {
+		deldop->frame[f].Ftx = getdouble( fp);
+		/* Read delay information for the unvignetted images.*/
+
+		/* Note that del_per_pixel is NOT necessarily the baud length
+      for multiple-spb data: it is equal to the delay height of
+      each pixel (or image row), which is baud / (spb/stride). */
+		deldop->frame[f].ndel = getint( fp);  			//# delay bins
+		deldop->frame[f].del_per_pixel = getdouble( fp); //pixel height (usec)
+		deldop->frame[f].spb = getint( fp);  			//# samples per baud in original data
+		deldop->frame[f].stride = getint( fp); 			// image rows are stride spb's apart
+		if (deldop->frame[f].spb % deldop->frame[f].stride != 0)
+			bailout("read_deldop in read_dat.c: stride must divide evenly into spb\n");
+		gettstr( fp, codestring);    				//type of code+reduction used
+		if (!strcmp(codestring, "short"))
+			deldop->frame[f].codemethod = SHORT;
+		else if (!strcmp(codestring, "long1") || !strcmp(codestring, "long_orig"))
+			deldop->frame[f].codemethod = LONG_ORIG;
+		else if (!strcmp(codestring, "long2") || !strcmp(codestring, "long_mod"))
+			deldop->frame[f].codemethod = LONG_MOD;
+		else
+			bailout("read_deldop in read_dat.c: can't do that code method yet\n");
+
+		/* Read Doppler information for the unvignetted images*/
+		deldop->frame[f].ndop = getint( fp); 			// # doppler bins
+		deldop->frame[f].dop_per_pixel = getdouble( fp); // pixel width (Hz)
+		deldop->frame[f].dopcom = getdouble( fp);  		// ephemeris COM doppler bin (1-based)
+		deldop->frame[f].dopDC = getdouble( fp);  		// Doppler DC bin (1-based)
+		deldop->frame[f].dopfftlen = getint( fp);  		// Doppler fft length
+
+		/* Compute the reference epoch (JD) for the delay correction polynomial*/
+		rdcal2jd( fp, &deldop->frame[f].delcor.t0);
+
+		/* Read the delay correction polynomial itself:
+	      coefficients have units of usec, usec/day, usec/day^2, etc.*/
+		deldop->frame[f].delcor.n = getint( fp);
+		cudaCalloc1((void**)&deldop->frame[f].delcor.a, sizeof(struct param_t),
+				(deldop->frame[f].delcor.n + 1));
+
+		//	n_equals = 0;
+		cudaCalloc1((void**)&deldop->frame[f].delcor.equals_set,
+				sizeof(int), deldop->frame[f].delcor.n);
+		for (i=0; i<=deldop->frame[f].delcor.n; i++) {
+			npar += readparam( fp, &deldop->frame[f].delcor.a[i]);
+			if (deldop->frame[f].delcor.a[i].state == '=')
+				deldop->frame[f].delcor.equals_set[i] = -1;
+			//			n_equals++;
+		}
+		//	if (n_equals > 0 && n_equals <= deldop->delcor.n)
+		//		bailout("can't use \"=\" state for just part of a delay polynomial\n");
+		deldop->frame[f].delcor.delcor0_save = deldop->frame[f].delcor.a[0].val;
+
+		/* Read the Doppler scaling factor*/
+		npar += readparam( fp, &deldop->frame[f].dopscale);
+		deldop->frame[f].dopscale_save = deldop->frame[f].dopscale.val;
+
+		/* Read smearing information*/
+		deldop->frame[f].nviews = getint( fp);  			// # views per frame
+		deldop->frame[f].view_interval = getdouble( fp); // view interval (s)
+		deldop->frame[f].view_interval /= 86400;  		// convert to days
+		gettstr( fp, smearingstring);   			// smearing mode
+		if (!strcmp(smearingstring, "center")) {
+			deldop->frame[f].smearing_mode = SMEAR_CENTER;
+			deldop->frame[f].v0 = deldop->frame[f].nviews / 2;
+		} else if (!strcmp(smearingstring, "first")) {
+			deldop->frame[f].smearing_mode = SMEAR_FIRST;
+			deldop->frame[f].v0 = 0;
+		} else {
+			bailout("read_deldop in read_dat_gpu.c: can't do that smearing mode yet\n");
+		}
+	}
+
+	/* Get the data directory and the number of frames in the dataset*/
+	gettstr( fp, deldop->dir);
+
+	for (i=0; i<deldop->nframes; i++)
+		cudaCalloc1((void**)&deldop->frame[i].view, sizeof(struct
+				deldopview_t), deldop->frame[i].nviews);
+
+	/* Loop through the frames*/
+	for (i=0; i<deldop->nframes; i++) {
+
+		gettstr( fp, deldop->frame[i].name); // name of data file
+		sprintf( fullname, "%s/%s", deldop->dir, deldop->frame[i].name);
+		/*  Read this frame's mid-receive epoch and convert to a Julian date.*/
+		rdcal2jd( fp, &deldop->frame[i].t0);
+
+		/* Read sdev, calibration factor, number of looks, and
+        ephemeris COM delay bin (1-based) for this frame*/
+		deldop->frame[i].sdev = getdouble( fp);
+		readparam( fp, &deldop->frame[i].cal);
+		if (deldop->frame[i].cal.val <= 0.0 && deldop->frame[i].cal.state == 'c') {
+			printf("ERROR in set %d: frame %d has constant calfact <= 0.0\n", s, i);
+			bailout("read_deldop in read_dat_gpu.c\n");
+		}
+		if ((deldop->frame[i].nlooks = getdouble( fp)) > 0)
+			lookfact = 1/sqrt(deldop->frame[i].nlooks);
+		else
+			lookfact = 0.0;
+		deldop->frame[i].delcom = getdouble( fp);
+
+		/* Read this frame's relative weight and add to three weight sums	 */
+		deldop->frame[i].weight = getdouble( fp);
+		if (deldop->frame[i].delcor.a[0].state != 'c')
+			deldop->sum_deldop_zmax_weights += deldop->frame[i].weight;
+		if (deldop->frame[i].cal.state == 'c')
+			deldop->sum_rad_xsec_weights += deldop->frame[i].weight;
+		if (deldop->dopscale.state != 'c')
+			deldop->sum_cos_subradarlat_weights += deldop->frame[i].weight;
+
+		/* Read this frame's pixel-weighting "mask" flag		 */
+		deldop->frame[i].pixels_weighted = getint( fp);
+
+		/* If a pixel-weighting mask is being used, check that it has the
+        expected number of values and read them in, and then get the
+        frame's vignetted dimensions and number of degrees of freedom */
+		dof = 0.0;
+		if (deldop->frame[i].pixels_weighted) {
+			printf("Not yet implemented for MFS mode\n");
+		} else {
+			dof = deldop->frame[i].weight * deldop->frame[i].ndel * deldop->frame[i].ndop;
+			*chi2_variance += 2 * deldop->frame[i].weight * deldop->frame[i].weight
+					* deldop->frame[i].ndel * deldop->frame[i].ndop;
+			idel_use[0] = 1;
+			idel_use[1] = deldop->frame[i].ndel;
+			idop_use[0] = 1;
+			idop_use[1] = deldop->frame[i].ndop;
+		}
+		deldop->frame[i].dof = dof;
+		deldop->dof += dof;
+		deldop->frame[i].ndel = idel_use[1] - idel_use[0] + 1;
+		deldop->frame[i].ndop = idop_use[1] - idop_use[0] + 1;
+		deldop->frame[i].idelvig[0] = idel_use[0];
+		deldop->frame[i].idelvig[1] = idel_use[1];
+		deldop->frame[i].idopvig[0] = idop_use[0];
+		deldop->frame[i].idopvig[1] = idop_use[1];
+		deldop->frame[i].delcom_vig = deldop->frame[i].delcom - idel_use[0] + 1;
+		deldop->frame[i].dopcom_vig = deldop->dopcom - idop_use[0] + 1;
+		deldop->frame[i].dopDC_vig = deldop->dopDC - idop_use[0] + 1;
+
+		/* If this node handles this dataset, allocate memory for observed data and fits*/
+		int ndel = deldop->frame[i].ndel, ndop = deldop->frame[i].ndop;
+		int k, nbins = ndel * ndop;
+
+		/* Allocate double pointers (outer loop) and offset addressing */
+		cudaCalloc1((void**)&deldop->frame[i].fit, sizeof(double*), ndel);
+		deldop->frame[i].fit -= 1;
+		for (k=1; k<=ndel; k++) {
+			cudaCalloc1((void**)&deldop->frame[i].fit[k], sizeof(double), ndop);
+			deldop->frame[i].fit[k] -= 1;
+		}
+		cudaCalloc1((void**)&deldop->frame[i].obs, sizeof(double*), ndel);
+		cudaCalloc1((void**)&deldop->frame[i].oneovervar, sizeof(double*), ndel);
+		deldop->frame[i].obs -= 1;
+		deldop->frame[i].oneovervar -= 1;
+
+		/* Allocate double pointers (inner loop) and offset addressing */
+		for (k=1; k<=ndel; k++) {
+			cudaCalloc1((void**)&deldop->frame[i].obs[k], sizeof(double), ndop);
+			cudaCalloc1((void**)&deldop->frame[i].oneovervar[k], sizeof(double), ndop);
+			deldop->frame[i].obs[k] -= 1;
+			deldop->frame[i].oneovervar[k] -= 1;
+		}
+
+		/* If file is gzipped, copy to a temporary file, unzip, then read*/
+		if (!strcmp( ".gz", &fullname[strlen(fullname)-3])) {
+			datafile_is_gzipped = 1;
+			tempname(datafile_temp, MAXLEN, "datafile.temp", "dat");
+			strcpy(datafile_gzipped_temp, datafile_temp);
+			strcat(datafile_gzipped_temp, ".gz");
+			sprintf( cmd, "cp %s %s", fullname, datafile_gzipped_temp);
+			if (!system( cmd))
+				bailout("read_deldop in read_dat.c: can't make copy of gzipped data file\n");
+			sprintf( cmd, "gunzip -f %s", datafile_gzipped_temp);
+			if (!system( cmd))
+				bailout("read_deldop in read_dat.c: can't unzip gzipped data file\n");
+			FOPEN( fin, datafile_temp, "r");
+		} else {
+			datafile_is_gzipped = 0;
+			FOPEN( fin, fullname, "r");
+		}
+
+		/* Read first line of file so that we can identify file type*/
+		if (!fread(buffer, bufferlength, 1, fin))
+			bailout("read_deldop in read_dat.c: can't read first line of data file\n");
+		rewind(fin);
+
+		/* Set binary flag if first line is not ASCII*/
+		is_binary = 0;
+		for (j=0; j<bufferlength; j++)
+			if (!isascii(buffer[j]))
+				is_binary = 1;
+
+		/* Read data according to file type*/
+		swap_bytes = ( is_little_endian() && par->endian == BIG_ENDIAN_DATA) ||
+				(!is_little_endian() && par->endian == LITTLE_ENDIAN_DATA);
+		is_fits = !is_binary && (strstr(buffer, "SIMPLE") != NULL);
+		lowcase(buffer);
+		is_rdf = !is_binary && !is_fits && (strstr(buffer, "type") != NULL);
+
+		if (is_fits)
+			read_deldop_fits(fullname, deldop, i, idel_use, idop_use);
+		else if (is_rdf)
+			read_deldop_rdf(fin, deldop, i, idel_use, idop_use, swap_bytes);
+		else if (is_binary)
+			read_deldop_binary(fin, deldop, i, idel_use, idop_use, swap_bytes);
+		else
+			read_deldop_ascii(fin, deldop, i, idel_use, idop_use);
+
+		/* Get variance for each pixel;
+          apply gamma, speckle, and pixel weighting if desired*/
+		jskip = idel_use[0] - 1;
+		kskip = idop_use[0] - 1;
+
+		for (j=1; j<=deldop->frame[i].ndel; j++)
+			for (k=1; k<=deldop->frame[i].ndop; k++) {
+				if (par->dd_gamma != 1.0)
+					gamma_trans( &deldop->frame[i].obs[j][k], par->dd_gamma);
+				if (par->speckle)
+					deldop->frame[i].oneovervar[j][k] =
+							1/( pow(deldop->frame[i].sdev,2.0) +
+									pow(lookfact*deldop->frame[i].obs[j][k],2.0) );
+				else
+					deldop->frame[i].oneovervar[j][k] = 1/pow(deldop->frame[i].sdev,2.0);
+				if (deldop->frame[i].pixels_weighted)
+					deldop->frame[i].oneovervar[j][k] *= pixweight[j+jskip][k+kskip];
+			}
+
+		fclose( fin);
+		if (datafile_is_gzipped) {
+			sprintf( cmd, "\\rm -f %s %s", datafile_temp, datafile_gzipped_temp);
+			if (!system( cmd))
+				bailout("read_deldop in read_dat_gpu.c: can't delete gzipped and unzipped data files\n");
+		}
+
+		/* Free memory for the pixel-weighting mask*/
+		if (deldop->frame[i].pixels_weighted)
+			free_matrix( pixweight, 1, deldop->ndel, 1, deldop->ndop);
+
+		/* Loop through all views contributing to this (smeared) frame*/
+		for (k=0; k<deldop->frame[i].nviews; k++) {
+
+			/* Compute the epoch of this view, uncorrected for light-travel time*/
+			deldop->frame[i].view[k].t = deldop->frame[i].t0
+					+ (k - deldop->frame[i].v0)*deldop->frame[i].view_interval;
+
+			/* Use this dataset's ephemeris (and linear interpolation) to get the target's
+          distance (AU) at this view's epoch.  Also compute frame[i].view[k].oe, the
+          transformation matrix from ecliptic to observer coordinates at that epoch,
+          and frame[i].view[k].orbspin, the plane-of-sky-motion contribution to the
+          apparent spin vector at that epoch.  (orbspin is in ecliptic coordinates.)
+
+          Note that the final "0" in the call to ephem2mat signifies monostatic
+          observations; this means that arguments 2 and 5, which would pertain to
+          the Sun's ephemeris, are unused here, and arguments 7 and 8 (solar phase
+          angle and azimuth angle) are returned as 0.*/
+
+			dist = ephem2mat( deldop->astephem, deldop->astephem,
+					deldop->frame[i].view[k].t, deldop->frame[i].view[k].oe, se,
+					deldop->frame[i].view[k].orbspin, &solar_phase, &solar_azimuth, 0);
+
+			/* If the perform_ltc parameter is turned on, use the distance just
+          obtained to subtract the one-way light-travel time from this view's
+          epoch; then go back to the ephemeris and recompute frame[i].view[k].oe
+          and frame[i].view[k].orbspin for the corrected epoch. */
+			if (par->perform_ltc) {
+				deldop->frame[i].view[k].t -= DAYSPERAU*dist;
+				ephem2mat( deldop->astephem, deldop->astephem,
+						deldop->frame[i].view[k].t, deldop->frame[i].view[k].oe, se,
+						deldop->frame[i].view[k].orbspin, &solar_phase, &solar_azimuth, 0);
+			}
+
+		}
+
+		/* Initialize quantities related to spin impulses*/
+		deldop->frame[i].n_integrate = -999;
+		for (n=0; n<MAXIMP+2; n++) {
+			deldop->frame[i].t_integrate[n] = -HUGENUMBER;
+			for (j=0; j<=2; j++)
+				deldop->frame[i].impulse[n][j] = 0.0;
+		}
+
+		printf("#     %s\n", fullname);
+		fflush(stdout);
+	}
+	return npar;
+}
+
 __host__ int read_doppler_gpu( FILE *fp, struct par_t *par, struct doppler_t *doppler,
 		int nradlaws, int s, double *chi2_variance)
 {
@@ -1054,7 +1489,7 @@ __host__ int read_doppler_gpu( FILE *fp, struct par_t *par, struct doppler_t *do
 		if (FP64) {
 			cudaCalloc1((void**)&doppler->frame[i].fit, sizeof(double), ndop);
 			doppler->frame[i].fit -= 1;
-			}
+		}
 		else {
 			cudaCalloc1((void**)&doppler->frame[i].fit_s, sizeof(float), ndop);
 			doppler->frame[i].fit_s -= 1;
@@ -1184,7 +1619,7 @@ __host__ int read_poset_gpu( FILE *fp, struct par_t *par, struct poset_t *poset,
 	/* Read the asteroid ephemeris */
 	poset->astephem.n = getint( fp); // # of points in ephemeris
 	cudaCalloc1((void**)&poset->astephem.pnt, sizeof(struct ephpnt_t),
-				poset->astephem.n);
+			poset->astephem.n);
 
 	for (i=0; i<poset->astephem.n; i++) {
 		rdcal2jd( fp, &poset->astephem.pnt[i].t);
@@ -1196,7 +1631,7 @@ __host__ int read_poset_gpu( FILE *fp, struct par_t *par, struct poset_t *poset,
 	/* Read the solar ephemeris*/
 	poset->solephem.n = getint( fp); /* # of points in ephemeris*/
 	cudaCalloc1((void**)&poset->solephem.pnt, sizeof(struct ephpnt_t),
-				poset->solephem.n);
+			poset->solephem.n);
 
 	for (i=0; i<poset->solephem.n; i++) {
 		rdcal2jd( fp, &poset->solephem.pnt[i].t);
@@ -1228,7 +1663,7 @@ __host__ int read_poset_gpu( FILE *fp, struct par_t *par, struct poset_t *poset,
 	gettstr( fp, poset->dir);
 	poset->nframes = getint( fp);
 	cudaCalloc1((void**)&poset->frame, sizeof(struct posetfrm_t),
-				poset->nframes);
+			poset->nframes);
 
 	for (i=0; i<poset->nframes; i++)
 		cudaCalloc1((void**)&poset->frame[i].view, sizeof(struct posetview_t),
@@ -2352,7 +2787,7 @@ __host__ int read_doppler_mgpu( FILE *fp, struct par_t *par, struct doppler_t *d
 			}
 			else {
 				cudaCalloc1((void**)&doppler->frame[i].fit_s, sizeof(float), ndop);
-			doppler->frame[i].fit_s -= 1;
+				doppler->frame[i].fit_s -= 1;
 			}
 			cudaCalloc1((void**)&doppler->frame[i].obs, sizeof(double), ndop);
 			cudaCalloc1((void**)&doppler->frame[i].oneovervar, sizeof(double), ndop);
@@ -2592,8 +3027,8 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat, int nf)
 
 				/* Select double pointers */
 				if (FP64) {
-//					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.b,
-//							sizeof(double*), (2*n+1));
+					//					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.b,
+					//							sizeof(double*), (2*n+1));
 					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.cosi,
 							sizeof(double*),  (2*n+1));
 					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.cose,
@@ -2610,14 +3045,14 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat, int nf)
 					dat->set[s].desc.deldop.frame[f].pos.z		-= -n;
 					dat->set[s].desc.deldop.frame[f].pos.cosill -= -n;
 					dat->set[s].desc.deldop.frame[f].pos.zill 	-= -n;
-//					dat->set[s].desc.deldop.frame[f].pos.b	 	-= -n;
+					//					dat->set[s].desc.deldop.frame[f].pos.b	 	-= -n;
 
 					for (i=-n; i<=n; i++) {
 						/* First allocate the outer loop with cuda managed memory */
 						cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.cosi[i],
 								sizeof(double), 	(2*n+1));
-//						cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.b[i],
-//								sizeof(double), 	(2*n+1));
+						//						cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.b[i],
+						//								sizeof(double), 	(2*n+1));
 						cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.cose[i],
 								sizeof(double), 	(2*n+1));
 						cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.z[i],
@@ -2628,7 +3063,7 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat, int nf)
 								sizeof(double), 	(2*n+1));
 
 						/* Now offset indexing for the inner loop */
-//						dat->set[s].desc.deldop.frame[f].pos.b[i]	 	-= -n;
+						//						dat->set[s].desc.deldop.frame[f].pos.b[i]	 	-= -n;
 						dat->set[s].desc.deldop.frame[f].pos.cosi[i] 	-= -n;
 						dat->set[s].desc.deldop.frame[f].pos.cose[i] 	-= -n;
 						dat->set[s].desc.deldop.frame[f].pos.z[i] 		-= -n;
@@ -2640,8 +3075,8 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat, int nf)
 				else {
 					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.cosi_s,
 							sizeof(float),  npx);
-//					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.b_s,
-//							sizeof(float),  npx);
+					//					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.b_s,
+					//							sizeof(float),  npx);
 					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.cose_s,
 							sizeof(float),  npx);
 					cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.z_s,
@@ -2684,9 +3119,9 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat, int nf)
 					dat->set[s].desc.deldop.frame[f].pos.fill[i] 	-= -n;
 				}
 
-//				/* Allocate nf pos_facets for the tiled posvis routine */
-//				cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.facet, sizeof(struct pos_facet_t), nf);
-//				dat->set[s].desc.deldop.frame[f].pos.nf = nf;
+				//				/* Allocate nf pos_facets for the tiled posvis routine */
+				//				cudaCalloc1((void**)&dat->set[s].desc.deldop.frame[f].pos.facet, sizeof(struct pos_facet_t), nf);
+				//				dat->set[s].desc.deldop.frame[f].pos.nf = nf;
 
 			}
 			break;
@@ -2720,8 +3155,8 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat, int nf)
 				if (FP64) {
 					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.cosi,
 							sizeof(double*),  (2*n+1));
-//					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.b,
-//							sizeof(double*),(2*n+1));
+					//					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.b,
+					//							sizeof(double*),(2*n+1));
 					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.cose,
 							sizeof(double*),  (2*n+1));
 					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.z,
@@ -2732,7 +3167,7 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat, int nf)
 							sizeof(double*),  (2*n+1));
 
 					dat->set[s].desc.doppler.frame[f].pos.cosi 	 -= -n;
-//					dat->set[s].desc.doppler.frame[f].pos.b 	 -= -n;
+					//					dat->set[s].desc.doppler.frame[f].pos.b 	 -= -n;
 					dat->set[s].desc.doppler.frame[f].pos.cose 	 -= -n;
 					dat->set[s].desc.doppler.frame[f].pos.z 	 -= -n;
 					dat->set[s].desc.doppler.frame[f].pos.cosill -= -n;
@@ -2750,12 +3185,12 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat, int nf)
 								sizeof(double), 	(2*n+1));
 						cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.zill[i],
 								sizeof(double), 	(2*n+1));
-//						cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.b[i],
-//								sizeof(double), 	(2*n+1));
+						//						cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.b[i],
+						//								sizeof(double), 	(2*n+1));
 
 						/* Now offset indexing for the inner loop */
 						dat->set[s].desc.doppler.frame[f].pos.cosi[i] 	-= -n;
-//						dat->set[s].desc.doppler.frame[f].pos.b[i] 		-= -n;
+						//						dat->set[s].desc.doppler.frame[f].pos.b[i] 		-= -n;
 						dat->set[s].desc.doppler.frame[f].pos.cose[i] 	-= -n;
 						dat->set[s].desc.doppler.frame[f].pos.z[i] 		-= -n;
 						dat->set[s].desc.doppler.frame[f].pos.cosill[i] -= -n;
@@ -2766,8 +3201,8 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat, int nf)
 					/* Single-precision unrolled 1D pointers: */
 					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.cosi_s,
 							sizeof(float),  npx);
-//					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.b_s,
-//							sizeof(float),  npx);
+					//					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.b_s,
+					//							sizeof(float),  npx);
 					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.cose_s,
 							sizeof(float),  npx);
 					cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.z_s,
@@ -2809,9 +3244,9 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat, int nf)
 					dat->set[s].desc.doppler.frame[f].pos.compill[i]-= -n;
 					dat->set[s].desc.doppler.frame[f].pos.fill[i] 	-= -n;
 				}
-//				/* Allocate nf pos_facets for the tiled posvis routine */
-//				cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.facet, sizeof(struct pos_facet_t), nf);
-//				dat->set[s].desc.doppler.frame[f].pos.nf = nf;
+				//				/* Allocate nf pos_facets for the tiled posvis routine */
+				//				cudaCalloc1((void**)&dat->set[s].desc.doppler.frame[f].pos.facet, sizeof(struct pos_facet_t), nf);
+				//				dat->set[s].desc.doppler.frame[f].pos.nf = nf;
 			}
 			break;
 		case POS:
@@ -2932,9 +3367,9 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat, int nf)
 					dat->set[s].desc.poset.frame[f].pos.compill[i]	-= -n;
 					dat->set[s].desc.poset.frame[f].pos.fill[i] 	-= -n;
 				}
-//				/* Allocate nf pos_facets for the tiled posvis routine */
-//				cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.facet, sizeof(struct pos_facet_t), nf);
-//				dat->set[s].desc.poset.frame[f].pos.nf = nf;
+				//				/* Allocate nf pos_facets for the tiled posvis routine */
+				//				cudaCalloc1((void**)&dat->set[s].desc.poset.frame[f].pos.facet, sizeof(struct pos_facet_t), nf);
+				//				dat->set[s].desc.poset.frame[f].pos.nf = nf;
 			}
 			break;
 		case LGHTCRV:
@@ -3006,8 +3441,8 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat, int nf)
 				}
 				else {
 					/* Single-precision unrolled 1D pointers: */
-//					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.b_s,
-//							sizeof(float), npx);
+					//					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.b_s,
+					//							sizeof(float), npx);
 					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.cosi_s,
 							sizeof(float), npx);
 					cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.cose_s,
@@ -3055,9 +3490,9 @@ __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat, int nf)
 					dat->set[s].desc.lghtcrv.rend[f].pos.fill[j]	-= -n;
 					dat->set[s].desc.lghtcrv.rend[f].pos.b[j]	-= -n;
 				}
-//				/* Allocate nf pos_facets for the tiled posvis routine */
-//				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.facet, sizeof(struct pos_facet_t), nf);
-//				dat->set[s].desc.lghtcrv.rend[f].pos.nf = nf;
+				//				/* Allocate nf pos_facets for the tiled posvis routine */
+				//				cudaCalloc1((void**)&dat->set[s].desc.lghtcrv.rend[f].pos.facet, sizeof(struct pos_facet_t), nf);
+				//				dat->set[s].desc.lghtcrv.rend[f].pos.nf = nf;
 			}
 			break;
 		default:
@@ -4692,4 +5127,48 @@ __host__ int read_lghtcrv_mgpu(struct dat_t *dat, FILE *fp, struct par_t *par,
 	}
 
 	return npar;
+}
+
+
+__host__ void initialize_delcor_MFS( struct dat_t *dat)
+{
+	int nmax, s, i, s_delcor, n_delcor, n;
+	double t0_delcor, t0;
+	struct deldop_t *deldop;
+
+	nmax = -1;
+	for (s=0; s<dat->nsets; s++)
+		if (dat->set[s].type == DELAY)
+			for (int f=0; f<dat->set[s].desc.deldop.nframes; f++)
+				nmax = MAX( nmax, dat->set[s].desc.deldop.frame[f].delcor.n);
+	if (nmax < 0)
+		return;
+
+	for (i=0; i<=nmax; i++) {
+		s_delcor = -1;
+		n_delcor = -1;
+		t0_delcor = -1.0;
+		for (s=0; s<dat->nsets; s++)
+			if (dat->set[s].type == DELAY) {
+				deldop = &dat->set[s].desc.deldop;
+
+				for (int f=0; f<dat->set[s].desc.deldop.nframes; f++) {
+					n = deldop->frame[f].delcor.n;
+					t0 = deldop->frame[f].delcor.t0;
+					if (deldop->frame[f].delcor.a[i].state == '=') {
+						if (s_delcor < 0)
+							bailout("can't use \"=\" state for the first delay polynomial\n");
+						else if (n != n_delcor)
+							bailout("delay polynomials must have same degree if state = \"=\"\n");
+						else if (fabs(t0 - t0_delcor) > HALFSECOND)
+							bailout("delay polynomials must have same t0 if state = \"=\"\n");
+					} else {
+						s_delcor = s;
+						n_delcor = n;
+						t0_delcor = t0;
+					}
+					deldop->frame[f].delcor.equals_set[i] = s_delcor;
+				}
+			}
+	}
 }

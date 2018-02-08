@@ -67,7 +67,7 @@ all: shape-cuda-v1.0
 shape-cuda-v1.0: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: NVCC Linker'
-	/usr/local/cuda-9.0/bin/nvcc --cudart static -L/home/matt/CFITSIO/lib --relocatable-device-code=true -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -m64 -link -o  "shape-cuda-v1.0" $(OBJS) $(USER_OBJS) $(LIBS)
+	/usr/local/cuda-9.1/bin/nvcc --cudart static -L/home/matt/lib --relocatable-device-code=true -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -m64 -link -o  "shape-cuda-v1.0" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 

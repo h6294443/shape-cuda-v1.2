@@ -340,9 +340,9 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	printf("\n");
 	fflush(stdout);
 
-	int debug = 1;
-	if (debug)
-		return(0);
+//	int debug = 1;
+//	if (debug)
+//		return(0);
 
 
 	/* Display the region within each delay-Doppler or Doppler frame that, ac-
@@ -364,7 +364,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 	 * tive function at each step. Stop when fractional decrease in the objec-
 	 * tive function from one iteration to the next is less than term_prec.   */
 
-//	do {
+	do {
 		showvals = 1;        /* show reduced chi-square and penalties at beginning */
 		beginerr = enderr;
 		printf("# iteration %d %f", ++iter, beginerr);
@@ -389,7 +389,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 		cntr = first_fitpar % par->npar_update;
 //		p = first_fitpar;
 //		p = 1;
-		for (p=first_fitpar; p<2/*par->nfpar*/; p++) {
+		for (p=first_fitpar; p<par->nfpar; p++) {
 
 			/*  Adjust only parameter p on this try  */
 			hotparam = par->fpntr[p];
@@ -429,7 +429,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			 * objb is less than obja and objc.  Hence there is at least one
 			 * local minimum (but not necessarily *any* global minimum)
 			 * somewhere between ax and cx.          */
-			printf("mnbrak start\n");
+//			printf("mnbrak start\n");
 			ax = *hotparam;
 			bx = ax + par->fparstep[p];
 			mnbrak( &ax, &bx, &cx, &obja, &objb, &objc, objective);
@@ -462,12 +462,12 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			 * rance as one of its arguments, in addition to the existing
 			 * fractional tolerance.                                      */
 
-			printf("brent_abs start \n");
+//			printf("brent_abs start \n");
 			enderr = brent_abs( ax, bx, cx, objective,
 					par->fpartol[p], par->fparabstol[p], &xmin);
 
 
-			printf("xmin, %3.8g\n", xmin);
+//			printf("xmin, %3.8g\n", xmin);
 
 			/* Realize whichever part(s) of the model has changed.
 			 *
@@ -589,8 +589,8 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 				chi2( par, dat, 0);
 //				if (mpi_nproc > 1)
 //					get_calfact( dat);
-//				write_mod( par, mod);
-//				write_dat( par, dat);
+				write_mod( par, mod);
+				write_dat( par, dat);
 			}
 		}
 
@@ -602,8 +602,8 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			chi2( par, dat, 0);
 //			if (mpi_nproc > 1)
 //				get_calfact( dat);
-//			write_mod( par, mod);
-//			write_dat( par, dat);
+			write_mod( par, mod);
+			write_dat( par, dat);
 		}
 		show_deldoplim( dat);
 
@@ -651,7 +651,7 @@ double bestfit(struct par_t *par, struct mod_t *mod, struct dat_t *dat)
 			keep_iterating = ((beginerr - enderr)/enderr >= par->term_prec);
 		}
 
-//	} while (keep_iterating);
+	} while (keep_iterating);
 
 	/* Show final values of reduced chi-square, individual penalty functions,
 	 * and the objective function  */
