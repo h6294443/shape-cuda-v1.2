@@ -163,6 +163,47 @@ __global__ void posvis_init_krnl64(
 	}
 }
 
+__global__ void posvis_init_MFS_krnl64(
+		struct par_t *dpar,
+		struct pos_t **pos,
+		double4 *ijminmax_overall,
+		double3 *oa,
+		int *outbndarr,
+		int *mfs_outbnd,
+		int c,
+		int src,
+		int nsets) {
+
+	/* nsets-threaded */
+	int f=0,  s=blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (s==0)
+		pvst_smooth = dpar->pos_smooth;
+
+	if (s < nsets) {
+
+		mfs_outbnd[s] = 0;
+		ijminmax_overall[s].w = ijminmax_overall[s].y = HUGENUMBER;
+		ijminmax_overall[s].x = ijminmax_overall[s].z = -HUGENUMBER;
+		pos[s]->posbnd_logfactor = 0.0;
+
+		dev_mtrnsps2(oa, pos[s]->ae, s);
+		if (src) {
+			/* We're viewing the model from the sun: at the center of each pixel
+			 * in the projected view, we want cos(incidence angle), distance from
+			 * the COM towards the sun, and the facet number.                */
+			dev_mmmul2(oa, pos[s]->se, oa, s); /* oa takes ast into sun coords           */
+		} else {
+			/* We're viewing the model from Earth: at the center of each POS pixel
+			 * we want cos(scattering angle), distance from the COM towards Earth,
+			 * and the facet number.  For bistatic situations (lightcurves) we also
+									 want cos(incidence angle) and the unit vector towards the source.     */
+			dev_mmmul2(oa, pos[s]->oe, oa, s); /* oa takes ast into obs coords */
+		}
+		outbndarr[f] = 0;
+	}
+}
+
 __global__ void posvis_facet_krnl64(
 		struct pos_t **pos,
 		struct vertices_t **verts,
@@ -951,6 +992,287 @@ __global__ void posvis_facet_krnl64modb(
 	}
 }
 
+__global__ void posvis_facet_MFS_krnl64(
+		struct pos_t **pos,
+		struct vertices_t **verts,
+		double4 *ijminmax_overall_gm,
+		double3 orbit_offs,
+		double3 *oa_gm,
+		int nfacets,
+		int smooth,
+		int *outbndarr,
+		int set) {
+
+	/* This kernel uses shared memory for oa and usrc and also ijminmax_overall.
+	 * However, this doesn't work completely - ijminmax_overall will get written
+	 * to and there are multiple thread blocks.  Abandonded for now (12/28/2017)
+	 */
+
+	int f = blockIdx.x * blockDim.x + threadIdx.x;
+	int i, i1, i2, j, j1, j2, imin, imax, jmin, jmax;
+	double imin_dbl, imax_dbl, jmin_dbl, jmax_dbl, old, s, t, z, den, temp;
+	__shared__ double kmpxl, oa_sh[3][3];
+	__shared__ double3 usrc_sh;
+	__shared__ double4 ijminmax_overall_sh;
+	__shared__ int pn,bistatic;
+	int3 fidx;
+	double3 n, v0, v1, v2, tv0, tv1, tv2, n1n0;
+
+	if (threadIdx.x==0) {
+		pn = pos[frm]->n;
+		kmpxl = pos[frm]->km_per_pixel;
+		bistatic = pos[frm]->bistatic;
+
+		ijminmax_overall_sh.w = ijminmax_overall_sh.x =
+				ijminmax_overall_sh.y = ijminmax_overall_sh.z = 0.0f;
+
+		/* Load oa for this frame into shared memory */
+		oa_sh[0][0] = oa_gm[3*frm].x;	oa_sh[0][1] = oa_gm[3*frm].y;	oa_sh[0][2] = oa_gm[3*frm].z;
+		oa_sh[1][0] = oa_gm[3*frm+1].x;	oa_sh[1][1] = oa_gm[3*frm+1].y;	oa_sh[1][2] = oa_gm[3*frm+1].z;
+		oa_sh[2][0] = oa_gm[3*frm+2].x;	oa_sh[2][1] = oa_gm[3*frm+2].y;	oa_sh[2][2] = oa_gm[3*frm+2].z;
+
+		/* Load usrc for this frame into shared memory if it's a bistatic situation */
+		if (bistatic) {
+			usrc_sh.x =	usrc_gm[frm].x; usrc_sh.y = usrc_gm[frm].y;	usrc_sh.z = usrc_gm[frm].z;
+		}
+	}
+	__syncthreads();
+
+	if (f < nfacets) {
+
+		/* The following section transfers vertex coordinates from double[3]
+		 * storage to float3		 */
+		fidx.x = verts[0]->f[f].v[0];
+		fidx.y = verts[0]->f[f].v[1];
+		fidx.z = verts[0]->f[f].v[2];
+		tv0.x = verts[0]->v[fidx.x].x[0];
+		tv0.y = verts[0]->v[fidx.x].x[1];
+		tv0.z = verts[0]->v[fidx.x].x[2];
+		tv1.x = verts[0]->v[fidx.y].x[0];
+		tv1.y = verts[0]->v[fidx.y].x[1];
+		tv1.z = verts[0]->v[fidx.y].x[2];
+		tv2.x = verts[0]->v[fidx.z].x[0];
+		tv2.y = verts[0]->v[fidx.z].x[1];
+		tv2.z = verts[0]->v[fidx.z].x[2];
+		v0.x = v0.y = v0.z = v1.x = v1.y = v1.z = v2.x = v2.y = v2.z = 0.0;
+
+		/* Get the normal to this facet in body-fixed (asteroid) coordinates
+		 * and convert it to observer coordinates     */
+		n.x = verts[0]->f[f].n[0];
+		n.y = verts[0]->f[f].n[1];
+		n.z = verts[0]->f[f].n[2];
+		dev_cotrans1(&n, oa_sh, n, 1);
+
+		/* Consider this facet further only if its normal points somewhat
+		 * towards the observer rather than away         */
+		if (n.z > 0.0) {
+
+			/* Convert the three sets of vertex coordinates from body to ob-
+			 * server coordinates; orbit_offset is the center-of-mass offset
+			 * (in observer coordinates) for this model at this frame's epoch
+			 * due to orbital motion, in case the model is half of a binary
+			 * system.  */
+			dev_cotrans1(&v0, oa_sh, tv0, 1);
+			dev_cotrans1(&v1, oa_sh, tv1, 1);
+			dev_cotrans1(&v2, oa_sh, tv2, 1);
+
+			v0.x += orbit_offs.x;	v0.y += orbit_offs.x;	v0.z += orbit_offs.x;
+			v1.x += orbit_offs.y;	v1.y += orbit_offs.y;	v1.z += orbit_offs.y;
+			v2.x += orbit_offs.z;	v2.y += orbit_offs.z;	v2.z += orbit_offs.z;
+
+			/* Find rectangular region (in POS pixels) containing the projected
+			 * facet - use floats in case model has illegal parameters and the
+			 * pixel numbers exceed the limits for valid integers                         */
+			imin_dbl = floor(MIN(v0.x,MIN(v1.x,v2.x)) / kmpxl - SMALLVAL + 0.5);
+			imax_dbl = floor(MAX(v0.x,MAX(v1.x,v2.x)) / kmpxl + SMALLVAL + 0.5);
+			jmin_dbl = floor(MIN(v0.y,MIN(v1.y,v2.y)) / kmpxl - SMALLVAL + 0.5);
+			jmax_dbl = floor(MAX(v0.y,MAX(v1.y,v2.y)) / kmpxl + SMALLVAL + 0.5);
+
+			imin = (imin_dbl < INT_MIN) ? INT_MIN : (int) imin_dbl;
+			imax = (imax_dbl > INT_MAX) ? INT_MAX : (int) imax_dbl;
+			jmin = (jmin_dbl < INT_MIN) ? INT_MIN : (int) jmin_dbl;
+			jmax = (jmax_dbl > INT_MAX) ? INT_MAX : (int) jmax_dbl;
+
+			/*  Set the outbnd flag if the facet extends beyond the POS window  */
+			if ((imin < (-pn)) || (imax > pn) || (jmin < (-pn))	|| (jmax > pn)) {
+				posvis_streams_outbnd = 1;
+				atomicExch(&outbndarr[frm], 1);
+			}
+
+			/* Figure out if facet projects at least partly within POS window;
+			 * if it does, look at each "contained" POS pixel and get the
+			 * z-coordinate and cos(scattering angle)           */
+			i1 = MAX(imin, -pn);		j1 = MAX(jmin, -pn);
+			i2 = MIN(imax,  pn);		j2 = MIN(jmax,  pn);
+
+			if (i1 > pn || i2 < -pn || j1 > pn || j2 < -pn) {
+
+				/* Facet is entirely outside the POS frame: just keep track of
+				 * changed POS region     */
+				dev_POSrect_gpu64_shared(imin_dbl, imax_dbl, jmin_dbl, jmax_dbl,
+						&ijminmax_overall_sh, pn);
+			} else {
+
+				dev_POSrect_gpu64_shared((double)i1, (double)i2, (double)j1,
+						(double)j2, &ijminmax_overall_sh, pn);
+
+				/* Assign vertex normals if smoothing is enabled */
+				if (pvst_smooth) {
+					/* Assign temp. normal components as float3 */
+					tv0.x = verts[0]->v[fidx.x].n[0];	tv0.y = verts[0]->v[fidx.x].n[1];
+					tv0.z = verts[0]->v[fidx.x].n[2];	tv1.x = verts[0]->v[fidx.y].n[0];
+					tv1.y = verts[0]->v[fidx.y].n[1];	tv1.z = verts[0]->v[fidx.y].n[2];
+					tv2.x = verts[0]->v[fidx.z].n[0];	tv2.y = verts[0]->v[fidx.z].n[1];
+					tv2.z = verts[0]->v[fidx.z].n[2];
+					n1n0.x = tv1.x - tv0.x;	n1n0.y = tv1.y - tv0.y;	n1n0.z = tv1.z - tv0.z;
+					tv2.x -= tv1.x;	tv2.y -= tv1.y; tv2.z -= tv1.z;
+				}
+
+				/* Precalculate s and t components */
+				double a, b, c, d, e, h, ti, tj, si, sj, si0, sj0, ti0, tj0, sz, tz;
+				a = i1*kmpxl - v0.x;
+				b = v2.y - v1.y;
+				c = v2.x - v1.x;
+				d = j1*kmpxl - v0.y;
+				e = v1.x - v0.x;
+				h = v1.y - v0.y;
+				den = e*b - c*h;
+				ti = -h*kmpxl/den;
+				tj = e*kmpxl/den;
+				si = b*kmpxl/den;
+				sj = -c*kmpxl/den;
+				si0 = (a*b - c*d)/den;
+				ti0 = (e*d -a*h)/den;
+				sz = v1.z - v0.z;
+				tz = v2.z - v1.z;
+
+				/* Facet is at least partly within POS frame: find all POS
+				 * pixels whose centers project onto this facet  */
+				for (i = i1; i <= i2; i++) {
+
+					sj0 = si0;	/* Initialize this loop's base sj0, tj0 */
+					tj0 = ti0;
+
+					for (j = j1; j <= j2; j++) {
+
+						s = sj0;
+						t = tj0;
+
+						if ((s >= -SMALLVAL) && (s <= 1.0 + SMALLVAL)) {// &&
+							if(	(t >= -SMALLVAL) && (t <= s + SMALLVAL))	{
+
+								/* Compute z-coordinate of pixel center: its
+								 * distance measured from the origin towards
+								 * Earth.    */
+								z = v0.z + s*sz + t*tz;
+
+								if (pvst_smooth) {
+									/* Get pvs_smoothed version of facet unit
+									 * normal: Take the linear combination
+									 * of the three vertex normals; trans-
+									 * form from body to observer coordina-
+									 * tes; and make sure that it points
+									 * somewhat in our direction.         */
+									n.x = tv0.x + s * n1n0.x + t * tv2.x;
+									n.y = tv0.y + s * n1n0.y + t * tv2.y;
+									n.z = tv0.z + s * n1n0.z + t * tv2.z;
+									dev_cotrans1(&n, oa_sh, n, 1);
+									dev_normalize3(&n);
+								}
+
+								if (src) {
+									if ((n.z > 0.0) && (atomicMax64(&pos[frm]->zill[i][j], z) < z)) {
+										atomicExch(&pos[frm]->fill[i][j], f);
+										atomicExch((unsigned long long int*)&pos[frm]->cosill[i][j],
+												__double_as_longlong(n.z));
+									}
+								}
+
+								else if (!src) {
+									if (bistatic)
+										temp = dev_dot_d3(n, usrc_sh);
+
+									if ((n.z > 0.0) && (atomicMax64(&pos[frm]->z[i][j], z) < z)) {
+										atomicExch(&pos[frm]->f[i][j], f);
+										atomicExch((unsigned long long int*)&pos[frm]->cose[i][j],
+												__double_as_longlong(n.z));
+
+										if ((bistatic) && (pos[frm]->f[i][j]==f)) {
+											atomicExch((unsigned long long int*)&pos[frm]->cosi[i][j],
+													__double_as_longlong(temp));
+											if (temp <= 0.0)
+												atomicExch((unsigned long long int*)&pos[frm]->cose[i][j],
+														__double_as_longlong(0.0));
+										}
+									}
+								}
+
+//								if (old < z){
+//
+//									if (frm==15 && i==-23 && j==-7 && !src)
+//										printf("facet %i at (%i, %i). z=%3.8g, old=%3.8g, n.z=%3.8g\n", f, i, j, z, old, n.z);
+//
+//									if (n.z > 0.0) {
+//										double temp;
+//										double tol = 0.01;
+//										if (src)	temp = pos[frm]->zill[i][j];
+//										if (!src)	temp = pos[frm]->z[i][j];
+//
+//										if (src)// /*&& (temp >= z-tol) && (temp <= z+tol)*/)
+//											pos[frm]->cosill[i][j]=n.z;
+//											atomicExch((unsigned long long int*)&pos[frm]->cosill[i][j],
+//													__double_as_longlong(n.z));
+//										if (!src) { /*if (!src && (temp >= z-tol) && (temp <= z+tol))*/
+//											pos[frm]->cose[i][j]=n.z;
+//											if (frm==15 && i==-23 && j==-7 && !src)
+//												printf("%3.8g assigned to pos[%i]->cose[%i][%i]\n", n.z, frm, i, j);
+//										}
+//											atomicExch((unsigned long long int*)&pos[frm]->cose[i][j],
+//													__double_as_longlong(n.z));
+//
+//										if (!src && bistatic) {
+//											double temp = dev_dot_d3(n,usrc_sh);
+//											atomicExch((unsigned long long int*)&pos[frm]->cosi[i][j],
+//													__double_as_longlong(temp));
+//											pos[frm]->cosi[i][j]=temp;
+//											if (temp <= 0.0) {
+//												pos[frm]->cose[i][j] = 0.0;
+//												if (frm==15 && i==-23 && j==-7)
+//													printf("reset to zero\n");
+//											}
+//										}
+							} /* end if 0 <= t <= s (facet center is "in" this POS pixel) */
+						} /* end if 0 <= s <= 1 */
+
+						sj0 += sj;
+						tj0 += tj;
+					} /* end j-loop over POS rows */
+					/* Modify s and t step-wise for the next i-iteration of the pixel loop */
+					si0 += si;
+					ti0 += ti;
+
+				} /* end i-loop over POS columns */
+			} /* end else of if (i1 > pos->n || i2 < -pos->n || j1 > pos->n || j2 < -pos->n) */
+		} /* End if (n[2] > 0.0) */
+	} /* end if (f < nf) */
+
+	__syncthreads();
+
+	/* Now write the POS frame window limits from shared mem back to global mem */
+	if (threadIdx.x==0) {
+		/* Do atomic min/max here because we have multiple blocks with shared mem */
+		atomicMin64(&ijminmax_overall_gm[frm].w, ijminmax_overall_sh.w);
+		atomicMax64(&ijminmax_overall_gm[frm].x, ijminmax_overall_sh.x);
+		atomicMin64(&ijminmax_overall_gm[frm].y, ijminmax_overall_sh.y);
+		atomicMax64(&ijminmax_overall_gm[frm].z, ijminmax_overall_sh.z);
+
+//		if (frm==15&&blockIdx.x==0&&!src) {
+//			printf("facet %i pos[15]->cose[-23][-7]=%3.8g\n", f, pos[15]->cose[-23][-7]);
+//			printf("facet %i pos[15]->cosi[-23][-7]=%3.8g\n", f, pos[15]->cosi[-23][-7]);
+//		}
+	}
+}
+
 __global__ void posvis_facet_krnl64af(
 		struct pos_t **pos,
 		struct vertices_t **verts,
@@ -1378,6 +1700,79 @@ __host__ int posvis_gpu64(
 	cudaFree(oa);
 	cudaFree(usrc);
 
+	return outbnd;
+}
+
+__host__ int posvis_MFS_gpu64(
+		struct par_t *dpar,
+		struct mod_t *dmod,
+		struct pos_t **pos,
+		struct vertices_t **verts,
+		double3 orbit_offset,
+		int *posn,
+		int *outbndarr,
+		int nsets,
+		int src,
+		int nf,
+		int body, int comp, cudaStream_t *pv_stream,
+		int src_override) {
+
+	int f, outbnd, smooth, start, blocks, *set_outbnd;
+	dim3 BLK,THD, BLKfrm, THDsets, BLKaf, THDaf;
+	double4 *ijminmax_overall;
+	double3 *oa;
+
+	/* Launch parameters for the facet_streams kernel */
+	THD.x = maxThreadsPerBlock;	THDsets.x = nsets;
+	BLK.x = floor((THD.x - 1 + nf) / THD.x);
+	BLKsets.x = floor((THDsets.x - 1 + nsets)/THDsets.x);
+	THDaf.x = 384;
+	blocks = 12;
+	BLKaf.x = blocks * (nfrm_alloc-start);
+
+	int oasize = nfrm_alloc*3;
+	/* Allocate temporary arrays/structs */
+	gpuErrchk(cudaMalloc((void**)&ijminmax_overall, sizeof(double4) * nfrm_alloc));
+	gpuErrchk(cudaMalloc((void**)&oa, sizeof(double3) * oasize));
+	cudaCalloc((void**)&set_outbnd, sizeof(int), nsets);
+
+	posvis_init_MFS_krnl64<<<BLKsets,THDsets>>>(dpar, pos, ijminmax_overall, oa,
+			outbndarr, set_outbnd, comp, nsets);
+	checkErrorAfterKernelLaunch("posvis_init_MFS_krnl64");
+
+
+	for (f=start; f<nfrm_alloc; f++) {
+		/* Now the main facet kernel */
+//		posvis_facet_krnl64mod<<<BLK,THD, 0, pv_stream[f-start]>>>(pos, verts,
+//				ijminmax_overall, orbit_offset, oa, usrc,	src, body, comp,
+//				nf, f, smooth, outbndarr, set);
+//		posvis_facet_krnl64moda<<<BLK,THD, 0, pv_stream[f-start]>>>(pos, verts,
+//				ijminmax_overall, orbit_offset, oa, usrc,src, nf, f, smooth, outbndarr, set);
+		posvis_facet_krnl64modb<<<BLK,THD, 0, pv_stream[f-start]>>>(pos, verts,
+				ijminmax_overall, orbit_offset, oa, usrc,src, nf, f, smooth, outbndarr, set);
+	}
+//	posvis_facet_krnl64af<<<BLKaf,THDaf>>>(pos, verts, ijminmax_overall,
+//			orbit_offset, oa, usrc, src, nf, start, smooth, outbndarr, set,
+//			blocks);
+	checkErrorAfterKernelLaunch("posvis_facet_krnl64");
+
+	/* Take care of any posbnd flags */
+	posvis_outbnd_krnl64modb<<<BLKfrm,THD64>>>(pos,
+			outbndarr, ijminmax_overall, nfrm_alloc, start, src);
+	checkErrorAfterKernelLaunch("posvis_outbnd_krnl64");
+	gpuErrchk(cudaMemcpyFromSymbol(&outbnd, posvis_streams_outbnd, sizeof(int), 0,
+			cudaMemcpyDeviceToHost));
+
+//	int n = 200;
+//	int npixels = 401*401;
+//	f = 0;
+//	dbg_print_pos_arrays_full64(pos, f, npixels, n);
+
+	/* Free temp arrays, destroy streams and timers, as applicable */
+
+	cudaFree(ijminmax_overall);
+	cudaFree(oa);
+	cudaFree(set_outbnd);
 	return outbnd;
 }
 

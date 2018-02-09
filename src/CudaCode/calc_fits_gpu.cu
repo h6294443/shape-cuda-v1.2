@@ -338,35 +338,17 @@ extern "C" {
 #include "../shape/head.h"
 }
 
-__host__ void calc_deldop_gpu32(struct par_t *dpar, struct mod_t *dmod,
-		struct dat_t *ddat, struct vertices_t **verts, int s, int nframes,
-		int nviews, unsigned char type, int nf, struct pos_t **pos, struct
-		deldopfrm_t **frame, struct deldopview_t **view0, float **fit_store,
-		int *ndel, int *ndop, int *posn, int4 *xylim, float
-		*overflow, int *outbndarr, cudaStream_t *cf_stream);
 __host__ void calc_deldop_gpu64(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, struct vertices_t **verts, int s, int nframes,
 		int nviews, unsigned char type, int nf, struct pos_t **pos, struct
 		deldopfrm_t **frame, struct deldopview_t **view0, double **fit_store,
 		int *ndel, int *ndop, int *posn, int4 *xylim, double
 		*overflow, int *outbndarr, cudaStream_t *cf_stream);
-__host__ void calc_doppler_gpu32(struct par_t *dpar, struct mod_t *dmod,
-		struct dat_t *ddat, struct vertices_t **verts, int s, int nframes, int
-		nviews, unsigned char type, int nf, struct pos_t **pos, struct dopfrm_t
-		**frame, struct dopview_t **view0, float **fit_store, int *ndop, int
-		*posn, int4 *xylim, float *overflow, int	*outbndarr,
-		cudaStream_t *cf_stream);
 __host__ void calc_doppler_gpu64(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, struct vertices_t **verts, int s, int nframes, int
 		nviews, unsigned char type, int nf, struct pos_t **pos, struct dopfrm_t
 		**frame, struct dopview_t **view0, double **fit_store, int *ndop, int
 		*posn, int4 *xylim, double *overflow, int	*outbndarr,
-		cudaStream_t *cf_stream);
-__host__ void calc_lghtcrv_gpu32(struct par_t *dpar, struct mod_t *dmod,
-		struct dat_t *ddat, struct vertices_t **verts, int s, int nframes, int
-		nviews, unsigned char type, int lc_n, int nf, struct pos_t **pos,
-		struct crvrend_t **rend, int *posn, int *bistatic, float *pxlpkm, float
-		*overflow, int4 *xylim, int *outbndarr, double3 *so, double *u,
 		cudaStream_t *cf_stream);
 __host__ void calc_lghtcrv_gpu64(struct par_t *dpar, struct mod_t *dmod,
 		struct dat_t *ddat, struct vertices_t **verts, int s, int nframes, int

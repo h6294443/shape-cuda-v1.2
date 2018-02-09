@@ -26,6 +26,17 @@ __global__ void clrvect_krnl(struct dat_t *ddat, int size, int s, int f, int dbl
 	}
 }
 
+__global__ void clrvect_MFS_krnl(struct dat_t *ddat, int size, int s) {
+	/* Multi-threaded kernel */
+	int idel, idop, f=0, offset=blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (offset < size) {
+		idel = offset % ddat->set[s].desc.deldop.frame[f].ndel + 1;
+		idop = offset / ddat->set[s].desc.deldop.frame[f].ndel + 1;
+		ddat->set[s].desc.deldop.frame[f].fit[idel][idop] = 0.0;
+	}
+}
+
 __global__ void clrvect_krnl64af(struct dat_t *ddat, int *size, int s, int blocks) {
 	/* Multi-threaded kernel */
 	/* This version limits itself to the window defined by frame[f]->idellim

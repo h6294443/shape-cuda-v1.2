@@ -304,6 +304,8 @@ __global__ void calcfits_posclr_lc_krnl64mod(struct pos_t **pos, int *posn, int 
 
 __global__ void clrvect_krnl64af(struct dat_t *ddat, int *size, int s, int blocks);
 
+__global__ void clrvect_MFS_krnl(struct dat_t *ddat, int size, int s);
+
 __global__ void posclr_mgpu_krnl(struct pos_t **pos, int *posn, int f, int hf,
 		int bdflag);
 
