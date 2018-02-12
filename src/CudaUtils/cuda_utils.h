@@ -1,6 +1,6 @@
 /* Cuda utility functions */
 __device__ double atomicAdd_dbl(double* address, double val);
-__global__ void clrvect_krnl(struct dat_t *ddat, int size, int s, int f, int dblflg);
+__global__ void clrvect_krnl(struct dat_t *ddat, int size, int s, int f);
 __global__ void zero_fit_overflow_krnl(struct dat_t *ddat, int s, int f, int size);
 __device__ int cubic_realroots_cuda( double *coeff, double *realroot);
 __device__ void dev_bsstep(double *y, double *dydx, double *xx, double htry, double eps,

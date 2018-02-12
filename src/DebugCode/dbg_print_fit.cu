@@ -171,25 +171,14 @@ __host__ void dbg_print_deldop_fit(struct dat_t *ddat, int s, int f, const char 
 
 	nThreads = (xlim[1] - xlim[0] + 1) * (ylim[1] - ylim[0] + 1);
 	nbins = ndop * ndel;
-	if (FP64) {
-		cudaCalloc((void**)&fit_dd64, sizeof(double), nbins);
-		host_fit64 = (double *)malloc(sizeof(double) * nbins);
-	} else {
-		cudaCalloc((void**)&fit_dd32, sizeof(float), nbins);
-		host_fit32 = (float *)malloc(sizeof(float) * nbins);
-	}
+	cudaCalloc((void**)&fit_dd64, sizeof(double), nbins);
+	host_fit64 = (double *)malloc(sizeof(double) * nbins);
 	THD.x = maxThreadsPerBlock;
 	BLK.x = floor((THD.x - 1 + nbins)/THD.x);
 
-	if (FP64) {
-		dbg_print_fit_deldop_krnl2_64<<<BLK,THD>>>(ddat, fit_dd64, s, f);
-		checkErrorAfterKernelLaunch("dbg_print_fit_deldop_krnl_2_64");
-		cudaMemcpy(host_fit64, fit_dd64, sizeof(double)*nbins, cudaMemcpyDeviceToHost);
-	} else {
-		dbg_print_fit_deldop_krnl2_32<<<BLK,THD>>>(ddat, fit_dd32, s, f);
-		checkErrorAfterKernelLaunch("dbg_print_fit_deldop_krnl_2_32");
-		cudaMemcpy(host_fit32, fit_dd32, sizeof(float)*nbins, cudaMemcpyDeviceToHost);
-	}
+	dbg_print_fit_deldop_krnl2_64<<<BLK,THD>>>(ddat, fit_dd64, s, f);
+	checkErrorAfterKernelLaunch("dbg_print_fit_deldop_krnl_2_64");
+	cudaMemcpy(host_fit64, fit_dd64, sizeof(double)*nbins, cudaMemcpyDeviceToHost);
 
 	fp_fit = fopen(filename_fit, "w+");
 
@@ -207,10 +196,7 @@ __host__ void dbg_print_deldop_fit(struct dat_t *ddat, int s, int f, const char 
 		/* Write the rest of the row values: fit[idel][idop] */
 		for (idel=1; idel<=ndel; idel++) {
 			offset = (idop-1)*ndel + (idel-1);
-			if (FP64)
-				fprintf(fp_fit, " %g , ", host_fit64[offset]);
-			else
-				fprintf(fp_fit, " %g , ", host_fit32[offset]);//fit_dd[offset]);
+			fprintf(fp_fit, " %g , ", host_fit64[offset]);
 		}
 	}
 	fprintf(fp_fit, "\nxlim0 , %i", xlim[0]);

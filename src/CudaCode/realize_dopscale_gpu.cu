@@ -147,7 +147,46 @@ __global__ void realize_dopscale_gpu_krnl(struct par_t *dpar, struct dat_t
 		}
 	}
 }
+__global__ void realize_dopscale_gpu_MFS_krnl(struct par_t *dpar, struct dat_t
+		*ddat, double dopscale_factor, int dopscale_mode, int nsets) {
 
+	/* nset-threaded kernel */
+	int s = blockIdx.x * blockDim.x + threadIdx.x;
+	int s_dopscale = -1, type_dopscale = -1;
+
+	if (s==0) {
+		dpar->baddopscale = 0;
+		dpar->baddopscale_logfactor = 0.0;
+	}
+	__syncthreads();
+
+	if (s < nsets) {
+
+		if (ddat->set[s].desc.deldop.dopscale.state != '=') {
+			s_dopscale = s;
+			type_dopscale = DELAY;
+			if (ddat->set[s].desc.deldop.dopscale.state == 'f') {
+				if (dopscale_mode != 0)
+					ddat->set[s].desc.deldop.dopscale.val =
+							ddat->set[s].desc.deldop.dopscale_save * dopscale_factor;
+				if (dopscale_mode != 1)
+					ddat->set[s].desc.deldop.dopscale_save =
+							ddat->set[s].desc.deldop.dopscale.val;
+			}
+			dev_checkdopscale( ddat->set[s].desc.deldop.dopscale.val,
+					dpar->dopscale_min, dpar->dopscale_max, 3,
+					&dpar->baddopscale, &dpar->baddopscale_logfactor);
+		} else if (s_dopscale < 0) {
+			printf("can't use \"=\" state for the first (delay-)Doppler dataset\n");
+		} else if (type_dopscale == DELAY) {
+			ddat->set[s].desc.deldop.dopscale.val =
+					ddat->set[s_dopscale].desc.deldop.dopscale.val;
+		} else {
+			ddat->set[s].desc.deldop.dopscale.val =
+					ddat->set[s_dopscale].desc.doppler.dopscale.val;
+		}
+	}
+}
 __global__ void realize_dopscale_pthreads_krnl(struct par_t *dpar, struct dat_t
 		*ddat, double dopscale_factor, int dopscale_mode, int nsets, unsigned
 		char *type, int *GPUID, int gpuid) {
@@ -239,6 +278,27 @@ __host__ void realize_dopscale_gpu(struct par_t *dpar, struct dat_t
 	/* Launch nset-threaded kernel */
 	realize_dopscale_gpu_krnl<<<BLK,THD64>>>(dpar, ddat, dopscale_factor,
 			dopscale_mode, nsets, dtype);
+	checkErrorAfterKernelLaunch("realize_dopscale_cuda_krnl (realize_dopscale)");
+}
+
+__host__ void realize_dopscale_MFS_gpu(struct par_t *dpar, struct dat_t
+		*ddat, double dopscale_factor, int dopscale_mode, int nsets)
+{
+	/* This version doesn't use streams itself, but it is meant to be used with
+	 * bestfit_cuda2 which uses streams versions to pass launch parameters to */
+	dim3 BLK,THD64;
+	THD64.x = 64;
+	BLK.x = floor((THD64.x - 1 + nsets)/THD64.x);
+
+	/* If a dataset has a Doppler scaling factor with state = '=', go backwards
+	 * in the datafile until we reach a delay-Doppler or Doppler dataset whose
+	 * Doppler scaling factor has state 'f' or 'c' rather than '='.
+	 *   s_dopscale is the number of the dataset we find.
+	 *   type_dopscale tells whether that dataset is delay-Doppler or Doppler. */
+
+	/* Launch nset-threaded kernel */
+	realize_dopscale_gpu_MFS_krnl<<<BLK,THD64>>>(dpar, ddat, dopscale_factor,
+			dopscale_mode, nsets);
 	checkErrorAfterKernelLaunch("realize_dopscale_cuda_krnl (realize_dopscale)");
 }
 

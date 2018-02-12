@@ -190,6 +190,76 @@ __host__ void show_deldoplim_gpu(struct dat_t *ddat,
  	cudaFree(idoplim);
  }
 
+__host__ void show_deldoplim_MFS_gpu(struct dat_t *ddat, int nsets)
+ {
+ 	int *ndel, *ndop, *hndel, *hndop, s, f, header_displayed;
+ 	header_displayed = 0;
+ 	int2 *idellim, *idoplim, *hidellim, *hidoplim;
+ 	dim3 BLK[nsets],THD;
+ 	THD.x = maxThreadsPerBlock;
+
+ 	/* Allocate host and device memory */
+ 	gpuErrchk(cudaMalloc((void**)&ndel, sizeof(int) * nsets));
+ 	gpuErrchk(cudaMalloc((void**)&ndop, sizeof(int) * nsets));
+ 	gpuErrchk(cudaMalloc((void**)&idoplim, sizeof(int2) * nsets));
+ 	gpuErrchk(cudaMalloc((void**)&idellim, sizeof(int2) * nsets));
+
+ 	hndel 	 = (int *) malloc(nsets*sizeof(int));
+ 	hndop 	 = (int *) malloc(nsets*sizeof(int));
+ 	hidellim = (int2 *) malloc(nsets*sizeof(int2));
+ 	hidoplim = (int2 *) malloc(nsets*sizeof(int2));
+
+ 	for (s=0; s<nsets; s++) {
+ 		if (!header_displayed) {
+ 			printf("#\n");
+ 			printf("# model delay-Doppler regions (1-based) with nonzero power:\n");
+ 			fflush(stdout);
+ 			header_displayed = 1;
+ 		}
+
+ 		BLK[s] = floor((THD.x - 1 + nsets) / THD.x);
+
+ 		/* Get the delay and Doppler limits*/
+ 		sho_ddl_get_lims_krnl<<<BLK[s],THD>>>(ddat, idellim,
+ 				idoplim, ndel, ndop, s, 1);
+ 		checkErrorAfterKernelLaunch("sho_ddl_get_lims_streams_krnl");
+ 		gpuErrchk(cudaMemcpy(hidellim, idellim, sizeof(int2)*1,
+ 				cudaMemcpyDeviceToHost));
+ 		gpuErrchk(cudaMemcpy(hidoplim, idoplim, sizeof(int2)*1,
+ 				cudaMemcpyDeviceToHost));
+ 		gpuErrchk(cudaMemcpy(hndel, ndel, sizeof(int)*1,
+ 				cudaMemcpyDeviceToHost));
+ 		gpuErrchk(cudaMemcpy(hndop, ndop, sizeof(int)*1,
+ 				cudaMemcpyDeviceToHost));
+
+ 		/*  Display the limits for this frame  */
+ 		printf("#         Set %2d frame %2d:  rows %2d to %2d , cols %2d to %2d",
+ 				s, f, hidellim[0].x, hidellim[0].y, hidoplim[0].x, hidoplim[0].y);
+ 		if (hidellim[0].y < 1 || hidellim[0].x > hndel[0]
+ 		                                               || hidoplim[0].y < 1 || hidoplim[0].x > hndop[0])
+ 			printf("  (MODEL ENTIRELY OUTSIDE FRAME)");
+ 		else if (hidellim[f].x < 1 || hidellim[0].y > hndel[0]
+ 		                                                    || hidoplim[0].x < 1 || hidoplim[0].y > hndop[0])
+ 			printf("  (VIGNETTING TOO TIGHT)");
+ 		printf("\n");
+ 		fflush(stdout);
+
+ 	}  /* end loop over datasets */
+
+ 	if (header_displayed) {
+ 		printf("#\n");
+ 		fflush(stdout);
+ 	}
+ 	free(hndop);
+ 	free(hndel);
+ 	free(hidellim);
+ 	free(hidoplim);
+ 	cudaFree(ndop);
+ 	cudaFree(ndel);
+ 	cudaFree(idellim);
+ 	cudaFree(idoplim);
+ }
+
 __host__ void show_deldoplim_pthread(struct dat_t *ddat0, struct dat_t *ddat1,
 		unsigned char *type, int nsets, int *nframes, int maxframes, int *GPUID)
  {

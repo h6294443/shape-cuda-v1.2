@@ -1,34 +1,27 @@
 /*****************************************************************************************
  posvis.c
-
  Fill in the portion of a plane-of-sky image due to a particular model component: Assign
  each relevant POS pixel a z-value in observer coordinates (distance from the origin
  towards Earth) and a value of cos(scattering angle).
-
  Return 1 if any portion of this component lies outside the specified POS window,
  0 otherwise.
-
  If the "src" argument is true, the "observer" is the Sun rather than Earth, and
  "plane-of-sky" becomes "projection as viewed from the Sun."
-
  Modified 2014 February 20 by CM:
  Allow facets that partly project outside the POS frame to contribute to the POS frame
  (thus avoiding see-through "holes" in the model at the edge of a POS image)
-
  Modified 2010 May 18 by CM:
  Bug fix: When checking if a POS pixel hasn't already been assigned
  values during a previous call to posvis for a different component,
  check for fac[i][j] < 0 rather than cosa[i][j] == 0.0, since for
  bistatic situations the latter condition will also be true for
  pixels centered on Earth-facing facets that don't face the Sun
-
  Modified 2009 July 2 by CM:
  Eliminate the check that facets are "active": this term is now being
  interpreted to mean "not lying interior to the model," so the
  check is unnecessary and the determination of active vs. inactive
  status is inaccurate for half-exposed facets at the intersections
  between model components
-
  Modified 2009 April 3 by CM:
  Compute the "posbnd_logfactor" parameter: if the model extends beyond
  the POS frame, posbnd_logfactor is set to the logarithm of the
@@ -38,35 +31,26 @@
  initially, in case the sky rendering for a model with illegal
  parameters would involve huge pixel numbers that exceed the
  limits for valid integers
-
  Modified 2007 August 4 by CM:
  Add "orbit_offset" and "body" parameters and remove "facet" parameter
  Add body, bodyill, comp, and compill matrices for POS frames
-
  Modified 2006 June 21 by CM:
  For POS renderings, change res to km_per_pixel
-
  Modified 2005 September 19 by CM:
  Allow for roundoff error when determining which POS pixels project
  onto each model facet
-
  Modified 2005 June 27 by CM:
  Renamed "round" function to "iround" to avoid conflicts
-
  Modified 2005 June 22 by CM:
  Slightly modified some comments
-
  Modified 2005 January 25 by CM:
  Take care of unused and uninitialized variables
-
  Modified 2004 December 19 by CM:
  Added more comments
  Put update of rectangular POS area into "POSrect" routine and applied it
  even to facets which lie outside the POS frame
-
  Modified 2004 Feb 11 by CM:
  Added comments
-
  Modified 2003 May 5 by CM:
  Removed redundant coordinate transformation of the unit normal n
  for the no-pvs_smoothing case
@@ -169,9 +153,7 @@ __global__ void posvis_init_MFS_krnl64(
 		double4 *ijminmax_overall,
 		double3 *oa,
 		int *outbndarr,
-		int *mfs_outbnd,
 		int c,
-		int src,
 		int nsets) {
 
 	/* nsets-threaded */
@@ -181,26 +163,16 @@ __global__ void posvis_init_MFS_krnl64(
 		pvst_smooth = dpar->pos_smooth;
 
 	if (s < nsets) {
-
-		mfs_outbnd[s] = 0;
 		ijminmax_overall[s].w = ijminmax_overall[s].y = HUGENUMBER;
 		ijminmax_overall[s].x = ijminmax_overall[s].z = -HUGENUMBER;
 		pos[s]->posbnd_logfactor = 0.0;
-
 		dev_mtrnsps2(oa, pos[s]->ae, s);
-		if (src) {
-			/* We're viewing the model from the sun: at the center of each pixel
-			 * in the projected view, we want cos(incidence angle), distance from
-			 * the COM towards the sun, and the facet number.                */
-			dev_mmmul2(oa, pos[s]->se, oa, s); /* oa takes ast into sun coords           */
-		} else {
-			/* We're viewing the model from Earth: at the center of each POS pixel
-			 * we want cos(scattering angle), distance from the COM towards Earth,
-			 * and the facet number.  For bistatic situations (lightcurves) we also
-									 want cos(incidence angle) and the unit vector towards the source.     */
-			dev_mmmul2(oa, pos[s]->oe, oa, s); /* oa takes ast into obs coords */
-		}
-		outbndarr[f] = 0;
+		/* We're viewing the model from Earth: at the center of each POS pixel
+		 * we want cos(scattering angle), distance from the COM towards Earth,
+		 * and the facet number.  For bistatic situations (lightcurves) we also
+		 * want cos(incidence angle) and the unit vector towards the source.     */
+		dev_mmmul2(oa, pos[s]->oe, oa, s); /* oa takes ast into obs coords */
+		outbndarr[s] = 0;
 	}
 }
 
@@ -999,42 +971,32 @@ __global__ void posvis_facet_MFS_krnl64(
 		double3 orbit_offs,
 		double3 *oa_gm,
 		int nfacets,
-		int smooth,
 		int *outbndarr,
 		int set) {
 
-	/* This kernel uses shared memory for oa and usrc and also ijminmax_overall.
-	 * However, this doesn't work completely - ijminmax_overall will get written
-	 * to and there are multiple thread blocks.  Abandonded for now (12/28/2017)
-	 */
+	/* This kernel is functionally identical to the modb kernel with one distinction:
+	 * This kernel assumes that each data set has only one frame and will switch
+	 * sets instead of frames.	 */
 
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
 	int i, i1, i2, j, j1, j2, imin, imax, jmin, jmax;
 	double imin_dbl, imax_dbl, jmin_dbl, jmax_dbl, old, s, t, z, den, temp;
 	__shared__ double kmpxl, oa_sh[3][3];
-	__shared__ double3 usrc_sh;
 	__shared__ double4 ijminmax_overall_sh;
-	__shared__ int pn,bistatic;
+	__shared__ int pn;
 	int3 fidx;
 	double3 n, v0, v1, v2, tv0, tv1, tv2, n1n0;
 
 	if (threadIdx.x==0) {
-		pn = pos[frm]->n;
-		kmpxl = pos[frm]->km_per_pixel;
-		bistatic = pos[frm]->bistatic;
-
+		pn = pos[set]->n;
+		kmpxl = pos[set]->km_per_pixel;
 		ijminmax_overall_sh.w = ijminmax_overall_sh.x =
 				ijminmax_overall_sh.y = ijminmax_overall_sh.z = 0.0f;
 
 		/* Load oa for this frame into shared memory */
-		oa_sh[0][0] = oa_gm[3*frm].x;	oa_sh[0][1] = oa_gm[3*frm].y;	oa_sh[0][2] = oa_gm[3*frm].z;
-		oa_sh[1][0] = oa_gm[3*frm+1].x;	oa_sh[1][1] = oa_gm[3*frm+1].y;	oa_sh[1][2] = oa_gm[3*frm+1].z;
-		oa_sh[2][0] = oa_gm[3*frm+2].x;	oa_sh[2][1] = oa_gm[3*frm+2].y;	oa_sh[2][2] = oa_gm[3*frm+2].z;
-
-		/* Load usrc for this frame into shared memory if it's a bistatic situation */
-		if (bistatic) {
-			usrc_sh.x =	usrc_gm[frm].x; usrc_sh.y = usrc_gm[frm].y;	usrc_sh.z = usrc_gm[frm].z;
-		}
+		oa_sh[0][0] = oa_gm[3*set].x;	oa_sh[0][1] = oa_gm[3*set].y;	oa_sh[0][2] = oa_gm[3*set].z;
+		oa_sh[1][0] = oa_gm[3*set+1].x;	oa_sh[1][1] = oa_gm[3*set+1].y;	oa_sh[1][2] = oa_gm[3*set+1].z;
+		oa_sh[2][0] = oa_gm[3*set+2].x;	oa_sh[2][1] = oa_gm[3*set+2].y;	oa_sh[2][2] = oa_gm[3*set+2].z;
 	}
 	__syncthreads();
 
@@ -1095,8 +1057,7 @@ __global__ void posvis_facet_MFS_krnl64(
 
 			/*  Set the outbnd flag if the facet extends beyond the POS window  */
 			if ((imin < (-pn)) || (imax > pn) || (jmin < (-pn))	|| (jmax > pn)) {
-				posvis_streams_outbnd = 1;
-				atomicExch(&outbndarr[frm], 1);
+				atomicExch(&outbndarr[set], 1);
 			}
 
 			/* Figure out if facet projects at least partly within POS window;
@@ -1180,68 +1141,12 @@ __global__ void posvis_facet_MFS_krnl64(
 									dev_normalize3(&n);
 								}
 
-								if (src) {
-									if ((n.z > 0.0) && (atomicMax64(&pos[frm]->zill[i][j], z) < z)) {
-										atomicExch(&pos[frm]->fill[i][j], f);
-										atomicExch((unsigned long long int*)&pos[frm]->cosill[i][j],
-												__double_as_longlong(n.z));
+								if ((n.z > 0.0) && (atomicMax64(&pos[set]->z[i][j], z) < z)) {
+									atomicExch(&pos[set]->f[i][j], f);
+									atomicExch((unsigned long long int*)&pos[set]->cose[i][j],
+											__double_as_longlong(n.z));
 									}
-								}
-
-								else if (!src) {
-									if (bistatic)
-										temp = dev_dot_d3(n, usrc_sh);
-
-									if ((n.z > 0.0) && (atomicMax64(&pos[frm]->z[i][j], z) < z)) {
-										atomicExch(&pos[frm]->f[i][j], f);
-										atomicExch((unsigned long long int*)&pos[frm]->cose[i][j],
-												__double_as_longlong(n.z));
-
-										if ((bistatic) && (pos[frm]->f[i][j]==f)) {
-											atomicExch((unsigned long long int*)&pos[frm]->cosi[i][j],
-													__double_as_longlong(temp));
-											if (temp <= 0.0)
-												atomicExch((unsigned long long int*)&pos[frm]->cose[i][j],
-														__double_as_longlong(0.0));
-										}
-									}
-								}
-
-//								if (old < z){
-//
-//									if (frm==15 && i==-23 && j==-7 && !src)
-//										printf("facet %i at (%i, %i). z=%3.8g, old=%3.8g, n.z=%3.8g\n", f, i, j, z, old, n.z);
-//
-//									if (n.z > 0.0) {
-//										double temp;
-//										double tol = 0.01;
-//										if (src)	temp = pos[frm]->zill[i][j];
-//										if (!src)	temp = pos[frm]->z[i][j];
-//
-//										if (src)// /*&& (temp >= z-tol) && (temp <= z+tol)*/)
-//											pos[frm]->cosill[i][j]=n.z;
-//											atomicExch((unsigned long long int*)&pos[frm]->cosill[i][j],
-//													__double_as_longlong(n.z));
-//										if (!src) { /*if (!src && (temp >= z-tol) && (temp <= z+tol))*/
-//											pos[frm]->cose[i][j]=n.z;
-//											if (frm==15 && i==-23 && j==-7 && !src)
-//												printf("%3.8g assigned to pos[%i]->cose[%i][%i]\n", n.z, frm, i, j);
-//										}
-//											atomicExch((unsigned long long int*)&pos[frm]->cose[i][j],
-//													__double_as_longlong(n.z));
-//
-//										if (!src && bistatic) {
-//											double temp = dev_dot_d3(n,usrc_sh);
-//											atomicExch((unsigned long long int*)&pos[frm]->cosi[i][j],
-//													__double_as_longlong(temp));
-//											pos[frm]->cosi[i][j]=temp;
-//											if (temp <= 0.0) {
-//												pos[frm]->cose[i][j] = 0.0;
-//												if (frm==15 && i==-23 && j==-7)
-//													printf("reset to zero\n");
-//											}
-//										}
-							} /* end if 0 <= t <= s (facet center is "in" this POS pixel) */
+								} /* end if 0 <= t <= s (facet center is "in" this POS pixel) */
 						} /* end if 0 <= s <= 1 */
 
 						sj0 += sj;
@@ -1261,15 +1166,10 @@ __global__ void posvis_facet_MFS_krnl64(
 	/* Now write the POS frame window limits from shared mem back to global mem */
 	if (threadIdx.x==0) {
 		/* Do atomic min/max here because we have multiple blocks with shared mem */
-		atomicMin64(&ijminmax_overall_gm[frm].w, ijminmax_overall_sh.w);
-		atomicMax64(&ijminmax_overall_gm[frm].x, ijminmax_overall_sh.x);
-		atomicMin64(&ijminmax_overall_gm[frm].y, ijminmax_overall_sh.y);
-		atomicMax64(&ijminmax_overall_gm[frm].z, ijminmax_overall_sh.z);
-
-//		if (frm==15&&blockIdx.x==0&&!src) {
-//			printf("facet %i pos[15]->cose[-23][-7]=%3.8g\n", f, pos[15]->cose[-23][-7]);
-//			printf("facet %i pos[15]->cosi[-23][-7]=%3.8g\n", f, pos[15]->cosi[-23][-7]);
-//		}
+		atomicMin64(&ijminmax_overall_gm[set].w, ijminmax_overall_sh.w);
+		atomicMax64(&ijminmax_overall_gm[set].x, ijminmax_overall_sh.x);
+		atomicMin64(&ijminmax_overall_gm[set].y, ijminmax_overall_sh.y);
+		atomicMax64(&ijminmax_overall_gm[set].z, ijminmax_overall_sh.z);
 	}
 }
 
@@ -1623,6 +1523,53 @@ __global__ void posvis_outbnd_krnl64modb(struct pos_t **pos, int *outbndarr,
 	}
 }
 
+__global__ void posvis_outbnd_MFS_krnl64(struct pos_t **pos, int *outbndarr,
+		double4 *ijminmax_overall, int nsets) {
+	/* This kernel is functionally almost identical to posvis_outbnd_krnl64modb.
+	 * However, it assumes that all data sets have one frame only, that they are
+	 * delay-Doppler, and multiple sets of it.   */
+	int posn, s=blockIdx.x * blockDim.x + threadIdx.x;
+	double xfactor, yfactor;
+	int pn, imin, imax, jmin, jmax;
+
+	if (s <nsets) {
+
+		/* First calculate each frame's pos xlim and ylim values that define
+		 * the pos window containing the model asteroid 		 */
+		pn = pos[s]->n;
+		imin = (ijminmax_overall[s].w < INT_MIN) ? INT_MIN : (int) ijminmax_overall[s].w;
+		imax = (ijminmax_overall[s].x > INT_MAX) ? INT_MAX : (int) ijminmax_overall[s].x;
+		jmin = (ijminmax_overall[s].y < INT_MIN) ? INT_MIN : (int) ijminmax_overall[s].y;
+		jmax = (ijminmax_overall[s].z > INT_MAX) ? INT_MAX : (int) ijminmax_overall[s].z;
+
+		/* Make sure it's smaller than n */
+		imin = MAX(imin,-pn);
+		imax = MIN(imax, pn);
+		jmin = MAX(jmin,-pn);
+		jmax = MIN(jmax, pn);
+
+		atomicMin(&pos[s]->xlim[0], imin);
+		atomicMax(&pos[s]->xlim[1], imax);
+		atomicMin(&pos[s]->ylim[0], jmin);
+		atomicMax(&pos[s]->ylim[1], jmax);
+
+		/* Now take care of out of bounds business */
+		if (outbndarr[s]) {
+			/* ijminmax_overall.w = imin_overall
+			 * ijminmax_overall.x = imax_overall
+			 * ijminmax_overall.y = jmin_overall
+			 * ijminmax_overall.z = jmax_overall	 */
+			posvis_streams_outbnd = 1;
+			posn = pos[s]->n;
+			xfactor = (MAX( ijminmax_overall[s].x,  posn) -
+					MIN( ijminmax_overall[s].w, -posn) + 1) / (2*posn+1);
+			yfactor = (MAX( ijminmax_overall[s].z,  posn) -
+					MIN( ijminmax_overall[s].y, -posn) + 1) / (2*posn+1);
+			pos[s]->posbnd_logfactor = log(xfactor*yfactor);
+		}
+	}
+}
+
 __host__ int posvis_gpu64(
 		struct par_t *dpar,
 		struct mod_t *dmod,
@@ -1712,13 +1659,11 @@ __host__ int posvis_MFS_gpu64(
 		int *posn,
 		int *outbndarr,
 		int nsets,
-		int src,
 		int nf,
-		int body, int comp, cudaStream_t *pv_stream,
-		int src_override) {
+		int body, int comp, cudaStream_t *pv_stream) {
 
-	int f, outbnd, smooth, start, blocks, *set_outbnd;
-	dim3 BLK,THD, BLKfrm, THDsets, BLKaf, THDaf;
+	int s, outbnd;
+	dim3 BLK,THD, BLKsets, THDsets;
 	double4 *ijminmax_overall;
 	double3 *oa;
 
@@ -1726,53 +1671,36 @@ __host__ int posvis_MFS_gpu64(
 	THD.x = maxThreadsPerBlock;	THDsets.x = nsets;
 	BLK.x = floor((THD.x - 1 + nf) / THD.x);
 	BLKsets.x = floor((THDsets.x - 1 + nsets)/THDsets.x);
-	THDaf.x = 384;
-	blocks = 12;
-	BLKaf.x = blocks * (nfrm_alloc-start);
+	int oasize = nsets*3;
 
-	int oasize = nfrm_alloc*3;
 	/* Allocate temporary arrays/structs */
-	gpuErrchk(cudaMalloc((void**)&ijminmax_overall, sizeof(double4) * nfrm_alloc));
+	gpuErrchk(cudaMalloc((void**)&ijminmax_overall, sizeof(double4) * nsets));
 	gpuErrchk(cudaMalloc((void**)&oa, sizeof(double3) * oasize));
-	cudaCalloc((void**)&set_outbnd, sizeof(int), nsets);
 
 	posvis_init_MFS_krnl64<<<BLKsets,THDsets>>>(dpar, pos, ijminmax_overall, oa,
-			outbndarr, set_outbnd, comp, nsets);
+			outbndarr, comp, nsets);
 	checkErrorAfterKernelLaunch("posvis_init_MFS_krnl64");
 
-
-	for (f=start; f<nfrm_alloc; f++) {
+	for (s=0; s<nsets; s++) {
 		/* Now the main facet kernel */
-//		posvis_facet_krnl64mod<<<BLK,THD, 0, pv_stream[f-start]>>>(pos, verts,
-//				ijminmax_overall, orbit_offset, oa, usrc,	src, body, comp,
-//				nf, f, smooth, outbndarr, set);
-//		posvis_facet_krnl64moda<<<BLK,THD, 0, pv_stream[f-start]>>>(pos, verts,
-//				ijminmax_overall, orbit_offset, oa, usrc,src, nf, f, smooth, outbndarr, set);
-		posvis_facet_krnl64modb<<<BLK,THD, 0, pv_stream[f-start]>>>(pos, verts,
-				ijminmax_overall, orbit_offset, oa, usrc,src, nf, f, smooth, outbndarr, set);
+		posvis_facet_MFS_krnl64<<<BLK,THD, 0, pv_stream[s]>>>(pos, verts,
+				ijminmax_overall, orbit_offset, oa, nf, outbndarr, s);
 	}
-//	posvis_facet_krnl64af<<<BLKaf,THDaf>>>(pos, verts, ijminmax_overall,
-//			orbit_offset, oa, usrc, src, nf, start, smooth, outbndarr, set,
-//			blocks);
-	checkErrorAfterKernelLaunch("posvis_facet_krnl64");
+	checkErrorAfterKernelLaunch("posvis_facet_MFS_krnl64");
 
 	/* Take care of any posbnd flags */
-	posvis_outbnd_krnl64modb<<<BLKfrm,THD64>>>(pos,
-			outbndarr, ijminmax_overall, nfrm_alloc, start, src);
-	checkErrorAfterKernelLaunch("posvis_outbnd_krnl64");
+	posvis_outbnd_MFS_krnl64<<<BLKsets,THDsets>>>(pos,
+			 outbndarr, ijminmax_overall, nsets);
+	checkErrorAfterKernelLaunch("posvis_outbnd_MFS_krnl64");
 	gpuErrchk(cudaMemcpyFromSymbol(&outbnd, posvis_streams_outbnd, sizeof(int), 0,
 			cudaMemcpyDeviceToHost));
 
-//	int n = 200;
-//	int npixels = 401*401;
-//	f = 0;
-//	dbg_print_pos_arrays_full64(pos, f, npixels, n);
-
-	/* Free temp arrays, destroy streams and timers, as applicable */
-
 	cudaFree(ijminmax_overall);
 	cudaFree(oa);
-	cudaFree(set_outbnd);
+
+//	if (outbnd)
+//	printf("Outbnd in posvis_MFS_gpu64 is TRUE\n");
+
 	return outbnd;
 }
 

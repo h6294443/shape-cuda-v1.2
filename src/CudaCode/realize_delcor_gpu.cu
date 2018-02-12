@@ -268,8 +268,8 @@ __host__ void realize_delcor_gpu(struct dat_t *ddat, double delta_delcor0, int d
 	}
 }
 
-__host__ void realize_delcor_gpu_MFS(struct dat_t *ddat, double delta_delcor0, int delcor0_mode,
-		int nsets, int *nframes)
+__host__ void realize_delcor_MFS_gpu(struct dat_t *ddat, double delta_delcor0, int delcor0_mode,
+		int nsets)
 {
 	int s;
 
@@ -290,14 +290,13 @@ __host__ void realize_delcor_gpu_MFS(struct dat_t *ddat, double delta_delcor0, i
 	for (s=0; s<nsets; s++) {
 
 		/* Launch the delay-doppler kernel for realize_delcor_cuda */
-//			rd_deldop_krnl<<<1,1>>>(ddat, s, delta_delcor0, delcor0_mode);
-//			checkErrorAfterKernelLaunch("rd_deldop_krnl (realize_delcor_cuda)");
+		rd_deldop_krnl<<<1,1>>>(ddat, s, delta_delcor0, delcor0_mode);
+		checkErrorAfterKernelLaunch("rd_deldop_krnl (realize_delcor_cuda)");
 
-			/* Compute frame[*].deloff and frame[*].dopoff for delay-Doppler
-            dataset: float # of delay and Doppler bins corresponding to delay
-            correction polynomial at the epoch of each data frame.*/
-			deldopoffs_gpu(ddat, s, nframes[s]);
-
+		/* Compute frame[*].deloff and frame[*].dopoff for delay-Doppler
+	            dataset: float # of delay and Doppler bins corresponding to delay
+	            correction polynomial at the epoch of each data frame.*/
+		deldopoffs_gpu(ddat, s, 1);
 
 	}
 }

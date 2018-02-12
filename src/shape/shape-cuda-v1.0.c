@@ -13,14 +13,13 @@ int CUDA   = 0;		/* Use CUDA code or run CPU code 	*/
 int TIMING = 0;		/* Time certain kernel executions	*/
 int GPU0   = 1;		/* Which GPU will run code 			*/
 int GPU1   = 0;
-int FP64   = 1;
 int MGPU   = 0;		/* Switch for dual-gpu mode (interweave) 		*/
 int PIN    = 0;
 int maxThreadsPerBlock = 0;
 int HMT	= 0;
 int HMT_threads = 4;
 int EXP = 0;
-int MFS = 1;
+int MFS = 0;
 
 int main(int argc, char *argv[])
 {
@@ -58,10 +57,9 @@ int main(int argc, char *argv[])
 			x = strtol(argv[5], NULL, 10);
 			GPU0 = (int)x;
 
-			if (argc > 6) {
-				if (strcmp(argv[6], "-FP32")==0)		FP64 = 0;
-				if (strcmp(argv[6], "-FP64")==0)		FP64 = 1;
-			}
+			if (argc > 6)
+				if (strcmp(argv[6], "-MFS")==0)
+					MFS = 1;
 		}
 		else if (strcmp(argv[4],"-MGPU")==0) {
 			CUDA = 1;
@@ -71,10 +69,9 @@ int main(int argc, char *argv[])
 			if (GPU0==0)	GPU1 = 1;
 			else GPU1 = 0;
 
-			if (argc > 6) {
-				if (strcmp(argv[6], "-FP32")==0)		FP64 = 0;
-				if (strcmp(argv[6], "-FP64")==0)		FP64 = 1;
-			}
+			if (argc > 6)
+				if (strcmp(argv[6], "-MFS")==0)
+					MFS = 1;
 		}
 		else if (strcmp(argv[4], "-HMT")==0) {
 			CUDA = 0;
@@ -147,7 +144,7 @@ int main(int argc, char *argv[])
 		printf("Shape-CUDA-v1.2 running\n");
 		printf("Now with even more face-melting concurrency.\n");
 		/* Check available CUDA devices, if any, before proceeding */
-		CUDACount(0);
+		CUDACount(1);
 		maxThreadsPerBlock = 256;
 		gpuErrchk(cudaSetDevice(GPU0));
 	}
@@ -267,16 +264,13 @@ int main(int argc, char *argv[])
 		}
 		else if (CUDA && !MGPU) {
 			par.nfpar += read_mod( &par, &mod);
-			if (MFS)
-				par.nfpar += read_dat_gpu_MFS(&par, &mod, &dat);
-			else
-				par.nfpar += read_dat_gpu( &par, &mod, &dat);
+			par.nfpar += read_dat_gpu( &par, &mod, &dat);
 		}
 		else {
 			par.nfpar += read_mod( &par, &mod);
 			par.nfpar += read_dat( &par, &mod, &dat);
 		}
-		return(0);
+//		return(0);
 		mkparlist( &par, &mod, &dat);
 
 		/* Make CUDA device copies of par, mod, dat (these copies reside
@@ -310,7 +304,10 @@ int main(int argc, char *argv[])
 						&dat1, thread1, thread2);
 			}
 			else if (!MGPU)
-				bestfit_gpu(dev_par,dev_mod,dev_dat, &par,&mod,&dat);
+				if (MFS)
+					bestfit_MFS_gpu(dev_par,dev_mod,dev_dat, &par,&mod,&dat);
+				else
+					bestfit_gpu(dev_par,dev_mod,dev_dat, &par,&mod,&dat);
 		}
 		else if (HMT)
 			bestfit_hmt(&par, &mod, &dat);
@@ -629,11 +626,8 @@ int main(int argc, char *argv[])
 	elapsed += (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
 
 	printf("\n\n###   Elapsed time from start to finish: %g    ###\n\n", elapsed);
-	if (FP64&&CUDA)
+	if (CUDA)
 		printf("Full double-precision (more accurate) shape-cuda performed with one GPU\n");
-	if (!FP64&&CUDA)
-		printf("Mixed single/double-precision (faster) shape-cuda performed with one GPU\n");
-
 	return 0;
 }
 

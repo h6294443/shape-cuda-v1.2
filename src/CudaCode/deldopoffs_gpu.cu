@@ -83,9 +83,6 @@ __host__ void deldopoffs_gpu(struct dat_t *ddat, int s, int nframes)
 
 	/* Launch nframes-threaded kernel */
 	THD.x = nframes;
-	if (MFS)
-		deldopoffs_MFS_krnl<<<BLK,THD>>>(ddat, s, nframes);
-	else
-		deldopoffs_krnl<<<BLK,THD>>>(ddat, s, nframes);
+	deldopoffs_krnl<<<BLK,THD>>>(ddat, s, nframes);
 	checkErrorAfterKernelLaunch("deldopoffs_cuda_krnl (deldopoffs_cuda)");
 }

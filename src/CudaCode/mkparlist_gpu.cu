@@ -1117,12 +1117,8 @@ __host__ void mkparlist_gpu(struct par_t *dpar, struct mod_t *dmod,
 	 * parameters which are computed analytically)
 	 * Launching nsets threads here */
 	BLK.x = floor((THD.x - 1 + nsets)/THD.x);
-	if (MFS)
-		mpl_dat_MFS_krnl<<<1,1>>>(dpar, ddat, fpntr, fparstep, fpartol,
-				fparabstol, fpartype, nsets);
-	else
-		mpl_dat_krnl<<<1,1>>>(dpar, ddat, fpntr, fparstep, fpartol,
-				fparabstol,	fpartype, nsets);
+	mpl_dat_krnl<<<1,1>>>(dpar, ddat, fpntr, fparstep, fpartol,
+			fparabstol,	fpartype, nsets);
 	checkErrorAfterKernelLaunch("mpl_dat_krnl (mkparlist_cuda.cu)");
 
 }

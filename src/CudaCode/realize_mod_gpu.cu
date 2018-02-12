@@ -131,7 +131,6 @@ static int nv, nf, ns;
 static dim3 nvBLK,nvTHD,nfBLK,nfTHD,nsBLK,nsTHD;
 __host__ void realize_coordinates_gpu(struct par_t *dpar, struct mod_t *dmod, unsigned char type, int gpuid);
 __host__ void check_surface_gpu(struct mod_t *dmod, cudaStream_t *rm_streams);
-__host__ void compute_moments_gpu32(struct mod_t *dmod, int nf, cudaStream_t *cm_streams);
 __host__ void compute_moments_gpu64(struct mod_t *dmod, int nf, cudaStream_t *cm_streams);
 void *realize_mod_pthread_sub(void *ptr);
 
@@ -627,8 +626,8 @@ void *realize_mod_pthread_sub(void *ptr) {
 	check_surface_gpu(data->model, data->gpu_stream);
 
 	/*  Compute the area and moments (volume, center of mass, and
-      inertia tensor) of each component and of the overall model  */
-	compute_moments_gpu32(data->model, data->nf, data->gpu_stream);
+//      inertia tensor) of each component and of the overall model  */
+//	compute_moments_gpu32(data->model, data->nf, data->gpu_stream);
 	return(0);
 }
 
@@ -887,71 +886,7 @@ __global__ void comp_moments_com_krnl(struct mod_t *dmod) {
 	}
 }
 
-__host__ void compute_moments_gpu32(struct mod_t *dmod, int nf, cudaStream_t *cm_streams) {
 
-    float area1=0.0, area2=0.0, *dv, *dcom0, *dcom1, *dcom2, *dI00, *dI01, *dI02,
-			*dI10, *dI11, *dI12, *dI20, *dI21, *dI22;
-	size_t arrsz = sizeof(float)*nf;
-	int c=0;
-
-	/*  Initialize the model's surface area, volume, center-of-mass (COM)
-	 * displacement, and inertia tensor  */
-	comp_moments_1stinit_krnl<<<1,1>>>(dmod);
-	checkErrorAfterKernelLaunch("comp_moments_init_krnl, line 945");
-
-	/* CUDA note:  Only single-component models for now.
-	 * Loop over all model components, computing areas and moments (volume,
-	 * center of mass, and inertia tensor); COM and inertia tensor are computed
-	 * assuming uniform density. For multiple-component models, when computing
-	 * the area and the moments for overall model, ignore facets interior to
-	 * the model (i.e., that are inside some other component).         */
-	/* Note that area2 (area of active facets summed up) is not currently
-	 * implemented. A single-component model is assumed, in which case every
-	 * facet is active and area1=area2 */
-	//	for (c=0; c<dmod->shape.ncomp; c++) {
-	area1 = compute_model_area32(dmod, c, nf);
-	area2 = area1;
-
-	/* Allocate temporary dv, dcom, dI pointers */
-	gpuErrchk(cudaMalloc((void**)&dv,   arrsz));
-	gpuErrchk(cudaMalloc((void**)&dcom0,arrsz));
-	gpuErrchk(cudaMalloc((void**)&dcom1,arrsz));
-	gpuErrchk(cudaMalloc((void**)&dcom2,arrsz));
-	gpuErrchk(cudaMalloc((void**)&dI00, arrsz));
-	gpuErrchk(cudaMalloc((void**)&dI01, arrsz));
-	gpuErrchk(cudaMalloc((void**)&dI02, arrsz));
-	gpuErrchk(cudaMalloc((void**)&dI10, arrsz));
-	gpuErrchk(cudaMalloc((void**)&dI11, arrsz));
-	gpuErrchk(cudaMalloc((void**)&dI12, arrsz));
-	gpuErrchk(cudaMalloc((void**)&dI20, arrsz));
-	gpuErrchk(cudaMalloc((void**)&dI21, arrsz));
-	gpuErrchk(cudaMalloc((void**)&dI22, arrsz));
-
-	/* Set area and initialize per-component COM and Inertia arrays */
-	comp_moments_2ndinit_krnl32<<<1,1>>>(dmod, area1, area2, c);
-	checkErrorAfterKernelLaunch("comp_moments_2ndinit_krnl");
-
-	/* Load the temporary arrays with data */
-	comp_moments_facet_krnl32<<<nfBLK,nfTHD>>>(dmod, c, dv, dcom0, dcom1, dcom2,
-			dI00, dI01, dI02, dI10, dI11, dI12, dI20, dI21, dI22);
-	checkErrorAfterKernelLaunch("comp_moments_facets_krnl32");
-
-	/* Calculate surface area for this component; for active facets, also add
-	 * the contributions to the area of the overall model    */
-	dvdI_reduce_streams32(dmod, dv, dcom0, dcom1, dcom2, dI00, dI01, dI02,
-			dI10, dI11, dI12, dI20, dI21, dI22, nf, c, cm_streams);
-
-	/* This kernel computes the overall COM vector */
-	comp_moments_com_krnl<<<1,1>>>(dmod);
-	checkErrorAfterKernelLaunch("comp_moments_facets_krnl");
-
-	/* Free up the temporary arrays */
-	cudaFree(dv);
-	cudaFree(dcom0);	cudaFree(dcom1);	cudaFree(dcom2);
-	cudaFree(dI00);		cudaFree(dI01);		cudaFree(dI02);
-	cudaFree(dI10);		cudaFree(dI11);		cudaFree(dI12);
-	cudaFree(dI20);		cudaFree(dI21);		cudaFree(dI22);
-}
 // TO DO:  all functions in this file need to be adapated to handle multi-component
 // models, which they currently do not support.
 __host__ void compute_moments_gpu64(struct mod_t *dmod, int nf, cudaStream_t *cm_streams)
