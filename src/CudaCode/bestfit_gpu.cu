@@ -1,6 +1,5 @@
 /*****************************************************************************************
                                                                                 bestfit.c
-
 Iterate over all floating parameters, at each step adjusting just one parameter x in order
 to minimize objective(x), the objective function (reduced chi-square plus penalties).
 Continue until the fractional reduction in objective(x) due to a full pass through the
@@ -11,23 +10,18 @@ Modified 2016 July 7 by Matt Engels:
 ------------------------------------------------------------------------------------------
 Modified 2014 February 19 by CM:
     Allow for multiple optical scattering laws when setting the "vary_hapke" flag
-
 Modified 2013 July 14 by CM:
     Implement the "term_maxiter" parameter
-
 Modified 2012 July 5 by MCN and CM:
     Use the gethostname function rather than the HOST environment variable to get root's
         hostname
     List root's PID in addition to the hostname
     List the PID for each branch node, not just the hostname
-
 Modified 2012 June 13 by CM:
     Implement "objfunc_start" parameter
-
 Modified 2012 March 23 by CM:
     Implement Doppler scaling -- more particularly, simultaneous adjustment of shape/spin
         parameters and Doppler scale factors via the "vary_dopscale" parameter
-
 Modified 2010 April 12 by CM:
     Bug fix: When fitting a size, shape, or spin parameter with the
          "vary_delcor0" parameter being used, call realize_delcor to reset
@@ -35,15 +29,12 @@ Modified 2010 April 12 by CM:
          saved values before calling vary_params.  (For infinitely fine
          model resolution and delay-Doppler resolution this wouldn't
          matter but in practice it does.)
-
 Modified 2009 November 15 by CM:
     Fix printf statement with too many arguments
-
 Modified 2009 July 5 by CM:
     Add "npar_update" parameter rather than hard-wiring an update (rewrite
         mod and obs files and display reduced chi2 and penalty functions)
         every 20th parameter adjustment
-
 Modified 2009 April 3 by CM:
     If the model has illegal properties (e.g., negative ellipsoid diameters)
         then, for each type of problem, multiply the objective function not
@@ -75,18 +66,14 @@ Modified 2009 April 3 by CM:
     For MPI_Recv calls, mpi_par[0] is no longer equal to the MPI action,
         since the message tag argument already serves that purpose (as of
         2008 April 10) -- so the other mpi_par elements are renumbered
-
 Modified 2008 August 10 by CM:
     Never terminate the fit at the end of a partial iteration -- that is,
         after the first iteration of a fit where first_fitpar > 0
-
 Modified 2008 July 11 by CM:
     Display the hostname even for single-processor fits
-
 Modified 2008 April 10 by CM:
     For parallel-processing fits, display the hostname for each node
     Use message tag argument to MPI_Recv to identify the MPI action
-
 Modified 2007 August 29 by CM:
     Implement the "avoid_badpos" parameter: if this parameter is turned on
         and the model extends beyond the POS frame and it is time to fit a
@@ -98,16 +85,13 @@ Modified 2007 August 29 by CM:
         models that extend beyond the plane-of-sky frame.  (Previously
         this factor was fixed at 2.0.)
     Rename MPI_TAG to MPI_TAG_1 to avoid name conflict with mpich headers
-
 Modified 2007 August 16 by CM:
     Implement the "term_badmodel" parameter: If this parameter is turned on
         and, at the end of any fit iteration, the model ever extends beyond
         the POS frame OR has any illegal photometric parameters OR has any
         tiny or negative ellipsoid diameters, the fit is terminated.
-
 Modified 2007 August 10 by CM:
     Eliminate unused variables
-
 Modified 2006 December 20 by CM:
     Revise MPI_CALC so that root receives the "posbnd" parameter from each
         branch node, so that the objective function can be doubled if the
@@ -115,23 +99,19 @@ Modified 2006 December 20 by CM:
     If the model extends beyond the plane-of-sky frame for any trial value
         of a parameter, evaluate the model for the best-fit parameter value
         to check whether or not it extends beyond the POS frame
-
 Modified 2006 October 1 by CM:
     Add two new arguments to realize_delcor
     Add three new arguments to realize_photo
     Implement "vary_delcor0" "vary_radalb" and "vary_optalb" parameters
     Implement SIZEPAR parameters via the "newsize" variable
-
 Modified 2005 June 27 by CM:
     Renamed "round" function to "iround" to avoid conflict
-
 Modified 2005 March 17 by CM:
     For parallel processing, check that root is receiving the responses
         to the correct broadcast
     Root no longer needs to compute degrees of freedom or to receive
         dof values from branch nodes: Now they are computed in read_dat
     Degrees of freedom can now be floating-point rather than integer
-
 Modified 2005 February 28 by CM:
     Add screen warnings if objective function has been doubled due to
         (a) tiny or negative ellipsoid diameters
@@ -143,11 +123,9 @@ Modified 2005 February 28 by CM:
         these three parameters can be used for actions other than "fit"
     Rename DATAPAR to be DELCORPAR
     Add XYOFFPAR and implement the new realize_xyoff routine
-
 Modified 2005 February 22 by CM:
     Move branch nodes' signoff statements from shape.c to here, so that
         they can appear in order
-
 Modified 2005 February 13 by CM:
     Rename objective function "f(x)" to be "objective(x)"
     Only broadcast to branch nodes if there are any branch nodes
@@ -166,52 +144,40 @@ Modified 2005 February 13 by CM:
     Avoid unnecessary model realizations for root by allowing newshape,
         newspin, newphoto, and newdelcor to be 0, not always 1 as before
     Move MPI_DONE broadcast to here from shape.c
-
 Modified 2005 January 25 by CM:
     Eliminated unused variable
-
 Modified 2005 January 10 by CM:
     When fitting using parallel processing, ping all of the branch nodes
         and inform the user that they're active
-
 Modified 2004 October 29 by CM:
     Add "first_fitpar" parameter so that a fit can be started (or resumed)
         at some parameter (counting from 0) other than the first parameter
-
 Modified 2004 October 10 by CM:
     Fix chi-square display at start of each iteration and at the
         end of the fit by calling realize_mod, realize_spin, realize_photo,
         realize_delcor, and calc_fits before calling chi2
-
 Modified 2004 August 13 by CM:
     Call modified minimum search routine brent_abs rather than brent
         so that absolute fitting tolerances can be specified
-
 Modified 2004 May 21 by CM:
     Display the final values of the individual penalty functions
-
 Modified 2004 April 3 by CM:
     Add the "list_breakdown" argument to routine chi2 so that we can
         display the chi2 breakdown by data type (Doppler, delay-Doppler,
         POS, lightcurves) at the start of each fit iteration and at
         the end of the fit
-
 Modified 2004 February 26 by CM:
     realize_photo now takes two arguments rather than one
-
 Modified 2003 April 26 by CM:
     Added "show_deldoplim" call at the end of each fit iteration,
         to check for overly tight data vignetting
-
 Modified 2003 April 23 by CM:
     Implemented '=' state for delay correction polynomial coefficients
         via the "realize_delcor" routine
-
 Modified 2003 April 17 by CM:
     Added "baddiam" parameter to function f so that the objective
         function is doubled if an ellipsoid component has a tiny or
         negative diameter
-
 Modified 2003 April 2 by CM:
     In function f (which computes reduced-chi-squared-plus-penalties),
         moved call to "penalties" from before spar->showstate is set
@@ -1876,7 +1842,6 @@ __host__ double bestfit_MFS_gpu(struct par_t *dpar, struct mod_t *dmod,
 
 	/* Compute deldop_zmax_save, cos_subradarlat_save, rad_xsec_save, and
 	 * opt_brightness_save for the initial model  */
-	//call_vary_params=1;
 	if (call_vary_params)
 	{
 		realize_mod_gpu(dpar, dmod, type, nf, bf_stream);
@@ -1896,10 +1861,7 @@ __host__ double bestfit_MFS_gpu(struct par_t *dpar, struct mod_t *dmod,
 	bf_set_hotparam_initial_krnl<<<1,1>>>();
 	checkErrorAfterKernelLaunch("bf_set_hotparam_initial_krnl");
 
-//	printf("objective(0.0) call \n");
-
 	enderr = objective_MFS_gpu(0.0, verts, nviews, nsets, nf, bf_stream);
-
 	printf("#\n# searching for best fit ...\n");
 	printf("%4d %8.6f to begin", 0, enderr);
 
@@ -1975,10 +1937,8 @@ __host__ double bestfit_MFS_gpu(struct par_t *dpar, struct mod_t *dmod,
 
 		/*  Loop through the free parameters  */
 		cntr = first_fitpar % npar_update;
-//		p = first_fitpar;// = 1;
 		printf("nfpar=%i\n", nfpar);
 		for (p=first_fitpar; p<nfpar; p++) {
-//			printf("p=%i\n", p);
 			/*  Adjust only parameter p on this try  */
 			bf_set_hotparam_pntr_krnl<<<1,1>>>(fpntr, fpartype, p);
 			checkErrorAfterKernelLaunch("bf_set_hotparam_pntr_krnl");
@@ -2002,7 +1962,6 @@ __host__ double bestfit_MFS_gpu(struct par_t *dpar, struct mod_t *dmod,
 			 * changed value of the size parameter, in case the first call to
 			 * objective displays reduced chi-square and the penalty functions.  */
 			if (avoid_badpos && partype == SIZEPAR) {
-//				printf("entered badpos if-block\n");
 				bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 				checkErrorAfterKernelLaunch("bf_get_flags_krnl");
 				gpuErrchk(cudaMemcpy(hflags, flags, sizeof(int)*7,
@@ -2069,17 +2028,6 @@ __host__ double bestfit_MFS_gpu(struct par_t *dpar, struct mod_t *dmod,
 			 * a modified version of brent that has an absolute fitting tole-
 			 * rance as one of its arguments, in addition to the existing
 			 * fractional tolerance.                                      */
-
-//			printf("ax, %3.8g\n", ax);
-//			printf("bx, %3.8g\n", bx);
-//			printf("cx, %3.8g\n", cx);
-//			printf("obja, %3.8g\n", obja);
-//			printf("objb, %3.8g\n", objb);
-//			printf("objc, %3.8g\n", objc);
-//			printf("hfpartol[%i], %3.8g\n", p, hfpartol[p]);
-//			printf("hfparabstol[%i], %3.8g\n",p, hfparabstol[p]);
-
-//			printf("brent_abs start\n");
 			enderr = brent_abs_MFS_gpu(ax, bx, cx, objective_MFS_gpu, hfpartol[p],
 					hfparabstol[p], &xmin, verts, nviews, nsets, nf, bf_stream);
 
@@ -2101,20 +2049,17 @@ __host__ double bestfit_MFS_gpu(struct par_t *dpar, struct mod_t *dmod,
 			checkErrorAfterKernelLaunch("bf_set_hotparam_val_krnl");
 			gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
 					sizeof(double),	0, cudaMemcpyDeviceToHost));
-//			printf("xmin, %3.8g\n", xmin);
 
 			if (newsize || newshape)
 				realize_mod_gpu(dpar, dmod, type, nf, bf_stream);
-			if (newspin) {
+			if (newspin)
 				realize_spin_MFS_gpu(dpar, dmod, ddat, nsets);
-			}
 			if ((newsize && vary_alb_size) || ((newshape ||
 					newspin) && vary_alb_shapespin))
 				realize_photo_gpu(dpar, dmod, 1.0, 1.0, 1, nf);  /* set R to R_save */
 			if ((newsize && vary_delcor0_size) || ((newshape || newspin)
-					&& vary_delcor0_shapespin)) {
+					&& vary_delcor0_shapespin))
 				realize_delcor_MFS_gpu(ddat, 0.0, 1, nsets);  /* set delcor0 to delcor0_save */
-			}
 			if ((newspin && vary_dopscale_spin) || ((newsize || newshape)
 					&& vary_dopscale_sizeshape))
 				realize_dopscale_MFS_gpu(dpar, ddat, 1.0, 1, nsets);  /* set dopscale to dopscale_save */
@@ -2122,7 +2067,6 @@ __host__ double bestfit_MFS_gpu(struct par_t *dpar, struct mod_t *dmod,
 				/* Call vary_params to get the adjustments to 0th-order delay
 				 * correction polynomial coefficients, to Doppler scaling fac-
 				 * tors, and to radar and optical albedos                  */
-
 				vary_params_MFS_gpu64(dpar,dmod,ddat,11,&deldop_zmax,
 						&rad_xsec, &opt_brightness, &cos_subradarlat,
 						nviews, verts, nf, nsets, bf_stream);
@@ -2185,7 +2129,7 @@ __host__ double bestfit_MFS_gpu(struct par_t *dpar, struct mod_t *dmod,
 			 * calc_fits to evaluate the model for all datasets.          */
 			if (check_posbnd || check_badposet || check_badradar)
 				objective_MFS_gpu(hotparamval, verts, nviews, nsets, nf, bf_stream);
-//			printf("bf_get_flags\n");
+
 			/* Launch single-thread kernel to retrieve flags in dev_par */
 			bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 			checkErrorAfterKernelLaunch("bf_get_flags_krnl");
@@ -2289,8 +2233,6 @@ __host__ double bestfit_MFS_gpu(struct par_t *dpar, struct mod_t *dmod,
 	final_redchi2 = final_chi2/dat->dof;
 	printf("# search completed\n");
 
-	/* Launch single-thread kernel to get these final flags from dev->par:
-	 * pen.n, baddiam, badphoto, posbnd, badposet, badradar, baddopscale */
 	/* Launch single-thread kernel to retrieve flags in dev_par */
 	bf_get_flags_krnl<<<1,1>>>(dpar, flags);
 	checkErrorAfterKernelLaunch("bf_get_flags_krnl");
@@ -2340,7 +2282,7 @@ __host__ double bestfit_MFS_gpu(struct par_t *dpar, struct mod_t *dmod,
 
 	/* Destroy the streams */
 	cudaSetDevice(GPU0);
-	for (int s=0; s<max_frames; s++)
+	for (int s=0; s<max_streams; s++)
 		cudaStreamDestroy(bf_stream[s]);
 
 	free(hflags);
@@ -2374,7 +2316,6 @@ __host__ double objective_MFS_gpu(
 {
 	double err, pens, delta_delcor0, dopscale_factor, radalb_factor,
 		optalb_factor, *dlogfactors, *hlogfactors;
-//	unsigned char *dflags, *hflags;
 	int *dflags, *hflags;
 	int max_frames;
 
@@ -2411,10 +2352,8 @@ __host__ double objective_MFS_gpu(
 		realize_spin_MFS_gpu(sdev_par, sdev_mod, sdev_dat, nsets);
 	if ((newsize && vary_alb_size) || ((newshape || newspin) && vary_alb_shapespin))
 		realize_photo_gpu(sdev_par, sdev_mod, 1.0, 1.0, 1, nf);  /* set R to R_save */
-	if ((newsize && vary_delcor0_size) || ((newshape || newspin) && vary_delcor0_shapespin)) {
+	if ((newsize && vary_delcor0_size) || ((newshape || newspin) && vary_delcor0_shapespin))
 		realize_delcor_MFS_gpu(sdev_dat, 0.0, 1, nsets);  /* set delcor0 to delcor0_save */
-	}
-
 	if ((newspin && vary_dopscale_spin) || ((newsize || newshape) && vary_dopscale_sizeshape))
 		realize_dopscale_MFS_gpu(sdev_par, sdev_dat, 1.0, 1, nsets);  /* set dopscale to dopscale_save */
 	if (call_vary_params) {
@@ -2438,19 +2377,16 @@ __host__ double objective_MFS_gpu(
 		realize_photo_gpu(sdev_par, sdev_mod, radalb_factor, optalb_factor, 1, nf);  /* adjust R */
 	else if (newphoto)
 		realize_photo_gpu(sdev_par, sdev_mod, 1.0, 1.0, 0, nf);  /* set R_save to R */
-	if ((newsize && vary_delcor0_size) || ((newshape || newspin) && vary_delcor0_shapespin)) {
+	if ((newsize && vary_delcor0_size) || ((newshape || newspin) && vary_delcor0_shapespin))
 		realize_delcor_MFS_gpu(sdev_dat, delta_delcor0, 1, nsets);  /* adjust delcor0 */
-	}
-	else if (newdelcor) {
+	else if (newdelcor)
 		realize_delcor_MFS_gpu(sdev_dat, 0.0, 0, nsets);  /* set delcor0_save to delcor0 */
-	}
 	if ((newspin && vary_dopscale_spin) || ((newsize || newshape) && vary_dopscale_sizeshape))
 		realize_dopscale_MFS_gpu(sdev_par, sdev_dat, dopscale_factor, 1, nsets);  /* adjust dopscale */
 	else if (newdopscale)
 		realize_dopscale_MFS_gpu(sdev_par, sdev_dat, 1.0, 0, nsets);  /* set dopscale_save to dopscale */
 
 	calc_fits_MFS_gpu(sdev_par, sdev_mod, sdev_dat, verts, nviews, nsets, nf, bf_stream);
-
 	err = chi2_MFS_gpu(sdev_par, sdev_dat, 0, nsets, bf_stream);
 	/* Divide chi-square by DOF to get reduced chi-square.    */
 	err /= sdat->dof;
@@ -2556,7 +2492,6 @@ __host__ double objective_MFS_gpu(
 	free(hlogfactors);
 	cudaFree(dflags);
 	cudaFree(dlogfactors);
-	//printf("(GPU MODE) err (return value): %g\n", err);
 	return err;
 }
 
@@ -2701,7 +2636,6 @@ __host__ double objective_gpu(
 		flags[3] = dpar->badposet;
 		flags[4] = dpar->badradar;
 		flags[5] = dpar->baddopscale;
-
 		dlogfactors[0] = dpar->bad_objfactor;
 		dlogfactors[1] = dpar->baddiam_logfactor;
 		dlogfactors[2] = dpar->badphoto_logfactor;
@@ -2940,7 +2874,6 @@ __host__ double objective_pthreads(
 		flags[3] = dpar->badposet;
 		flags[4] = dpar->badradar;
 		flags[5] = dpar->baddopscale;
-
 		dlogfactors[0] = dpar->bad_objfactor;
 		dlogfactors[1] = dpar->baddiam_logfactor;
 		dlogfactors[2] = dpar->badphoto_logfactor;

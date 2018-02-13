@@ -150,7 +150,7 @@ __global__ void realize_spin_deldop_MFS_krnl(struct mod_t *dmod, struct dat_t *d
 		struct par_t *dpar, int s)
 {
 	/* nsets-threaded kernel */
-	int j, k, f = 0;
+	int j, k = 0, f = 0;
 
 	if (threadIdx.x==0) {
 		dev_realize_impulse(dmod->spin,

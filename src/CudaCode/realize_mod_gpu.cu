@@ -911,7 +911,7 @@ __host__ void compute_moments_gpu64(struct mod_t *dmod, int nf, cudaStream_t *cm
 	 * implemented. A single-component model is assumed, in which case every
 	 * facet is active and area1=area2 */
 	//	for (c=0; c<dmod->shape.ncomp; c++) {
-	area1 = compute_model_area64(dmod, c, nf);
+	area1 = compute_model_area(dmod, c, nf);
 	area2 = area1;
 
 	/* Allocate temporary dv, dcom, dI pointers */
@@ -940,7 +940,7 @@ __host__ void compute_moments_gpu64(struct mod_t *dmod, int nf, cudaStream_t *cm
 
 	/* Calculate surface area for this component; for active facets, also add
 	 * the contributions to the area of the overall model    */
-	dvdI_reduce_streams64(dmod, dv, dcom0, dcom1, dcom2, dI00, dI01, dI02,
+	dvdI_reduce_streams(dmod, dv, dcom0, dcom1, dcom2, dI00, dI01, dI02,
 			dI10, dI11, dI12, dI20, dI21, dI22, nf, c, cm_streams);
 
 	/* This kernel computes the overall COM vector */

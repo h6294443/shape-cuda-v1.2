@@ -1138,13 +1138,13 @@ __host__ void vary_params_gpu64(
 			/* Calculate zmax for all frames (assumption: all pos in this set
 			 * have the same pixel dimensions) */
 			if (hcomp_zmax[s]) {
-				zmax = compute_zmax_gpu64(ddat, pos, nfrm_alloc, npxls_full[0], s, vp_stream);
+				zmax = compute_zmax_gpu(ddat, pos, nfrm_alloc, npxls_full[0], s, vp_stream);
 				zmax_final_krnl64<<<1,1>>>(zmax);
 				checkErrorAfterKernelLaunch("zmax_final_krnl64");
 			}
 
 			/* Calculate radar cross section for each frame in set */
-			xsec[0] = compute_deldop_xsec_gpu64(ddat, hnframes[s], hdeldopsize[0], s, vp_stream);
+			xsec[0] = compute_deldop_xsec_gpu(ddat, hnframes[s], hdeldopsize[0], s, vp_stream);
 			xsec_deldop_krnl64<<<1,1>>>(xsec[0]);
 			checkErrorAfterKernelLaunch("xsec_deldop_krnl64");
 
@@ -1212,7 +1212,7 @@ __host__ void vary_params_gpu64(
 				if (hcomp_xsec[f]) {
 					/* Compute cross section */
 					xsec[f]=0.0;
-					xsec[f] = compute_doppler_xsec64(ddat, hndop[f], s, f);
+					xsec[f] = compute_doppler_xsec(ddat, hndop[f], s, f);
 				}
 			}
 			/* Finalize the xsec calculations and calculate cosdelta if specified */
@@ -1319,7 +1319,7 @@ __host__ void vary_params_gpu64(
 				/* Compute model brightness for this lightcurve point */
 				/* lghtcrv->y[ncalc]: calculated points for interpolation,
 				 * ncalc-points total 					 */
-				apply_photo_gpu64(dmod, ddat, pos, xylim, span, BLK, nThreadspx1,
+				apply_photo_gpu(dmod, ddat, pos, xylim, span, BLK, nThreadspx1,
 							0, s, hnframes[s], maxthds, maxxylim, vp_stream);
 
 				/* Now that we have calculated the model lightcurve brightnesses
@@ -1511,14 +1511,14 @@ __host__ void vary_params_MFS_gpu64(
 
     /* Calculate zmax for all frames (assumption: all pos in this set
      * have the same pixel dimensions) */
-    zmax = compute_zmax_MFS_gpu64(ddat, pos, nsets, npxls_full[0], vp_stream);
+    zmax = compute_zmax_MFS_gpu(ddat, pos, nsets, npxls_full[0], vp_stream);
     zmax_final_krnl64<<<1,1>>>(zmax);
     checkErrorAfterKernelLaunch("zmax_final_krnl64");
 
     /* Calculate radar cross section for each frame in set */
 //    xsec[0] = compute_deldop_xsec_MFS_gpu64(ddat, nsets, hdeldopsize, vp_stream);
     for (s=0; s<nsets; s++) {
-    	xsec[0] = compute_deldop_xsec_gpu64(ddat, 1, hdeldopsize[s], s, vp_stream);
+    	xsec[0] = compute_deldop_xsec_gpu(ddat, 1, hdeldopsize[s], s, vp_stream);
     	xsec_deldop_krnl64<<<1,1>>>(xsec[0]);
     }
     checkErrorAfterKernelLaunch("xsec_deldop_krnl64");

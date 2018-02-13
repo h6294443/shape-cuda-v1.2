@@ -2078,7 +2078,7 @@ __host__ void calc_lghtcrv_gpu64(
 	} checkErrorAfterKernelLaunch("cf_mark_pixels_krnl");
 
 	/* Compute model brightness for this lightcurve point then copy to device  */
-	apply_photo_gpu64(dmod, ddat, pos, xylim, span, BLKpx_bbox, hnpixels_bbox,
+	apply_photo_gpu(dmod, ddat, pos, xylim, span, BLKpx_bbox, hnpixels_bbox,
 			0, s, nframes, maxthds, maxxylim, cf_stream);
 
 

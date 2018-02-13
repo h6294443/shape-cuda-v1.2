@@ -1361,7 +1361,7 @@ __host__ double chi2_deldop_gpu64(
 	/* Add contributions from power within limits of data frame. This kernel
 	 * also takes care of the frame's calibration factor and  computes chi2
 	 * for this frame */
-	sum_o2m2om_gpu64(ddat, o2, m2, om, nframes, hndel[0]*hndop[0], s, c2s_stream);
+	sum_o2m2om_gpu(ddat, o2, m2, om, nframes, hndel[0]*hndop[0], s, c2s_stream);
 
 	c2s_add_deldop_contributions_krnl64<<<BLKfrm,THD64>>>(dpar, ddat, o2, m2,
 			om, weight, ndel, ndop, chi2_deldop_frame, s, nframes);
