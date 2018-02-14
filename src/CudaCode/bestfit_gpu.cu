@@ -471,7 +471,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 		realize_spin_gpu(dpar, dmod, ddat, htype, nframes, nviews,
 				nsets, bf_stream);
 		realize_photo_gpu(dpar, dmod, 1.0, 1.0, 0, nf);  /* set R_save to R */
-		vary_params_gpu64(dpar, dmod, ddat, action, &deldop_zmax_save,
+		vary_params_gpu(dpar, dmod, ddat, action, &deldop_zmax_save,
 				&rad_xsec_save, &opt_brightness_save, &cos_subradarlat_save,
 				nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
 				bf_stream, max_frames);
@@ -727,7 +727,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 				 * correction polynomial coefficients, to Doppler scaling fac-
 				 * tors, and to radar and optical albedos                  */
 
-				vary_params_gpu64(dpar,dmod,ddat,11,&deldop_zmax,
+				vary_params_gpu(dpar,dmod,ddat,11,&deldop_zmax,
 						&rad_xsec, &opt_brightness, &cos_subradarlat,
 						nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
 						bf_stream, max_frames);
@@ -748,7 +748,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 				 * law, since single-scattering albedo w isn't just an overall
 				 * scaling factor  */
 				if (vary_hapke)
-					vary_params_gpu64(dpar,dmod,ddat,12,&dummyval2,
+					vary_params_gpu(dpar,dmod,ddat,12,&dummyval2,
 							&dummyval3,&opt_brightness,&dummyval4,
 							nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
 							bf_stream, max_frames);
@@ -1847,7 +1847,7 @@ __host__ double bestfit_MFS_gpu(struct par_t *dpar, struct mod_t *dmod,
 		realize_mod_gpu(dpar, dmod, type, nf, bf_stream);
 		realize_spin_MFS_gpu(dpar, dmod, ddat, nsets);
 		realize_photo_gpu(dpar, dmod, 1.0, 1.0, 0, nf);  /* set R_save to R */
-		vary_params_MFS_gpu64(dpar, dmod, ddat, action, &deldop_zmax_save,
+		vary_params_MFS_gpu(dpar, dmod, ddat, action, &deldop_zmax_save,
 				&rad_xsec_save, &opt_brightness_save, &cos_subradarlat_save,
 				nviews, verts, nf, nsets, bf_stream);
 	}
@@ -2067,7 +2067,7 @@ __host__ double bestfit_MFS_gpu(struct par_t *dpar, struct mod_t *dmod,
 				/* Call vary_params to get the adjustments to 0th-order delay
 				 * correction polynomial coefficients, to Doppler scaling fac-
 				 * tors, and to radar and optical albedos                  */
-				vary_params_MFS_gpu64(dpar,dmod,ddat,11,&deldop_zmax,
+				vary_params_MFS_gpu(dpar,dmod,ddat,11,&deldop_zmax,
 						&rad_xsec, &opt_brightness, &cos_subradarlat,
 						nviews, verts, nf, nsets, bf_stream);
 
@@ -2087,7 +2087,7 @@ __host__ double bestfit_MFS_gpu(struct par_t *dpar, struct mod_t *dmod,
 				 * law, since single-scattering albedo w isn't just an overall
 				 * scaling factor  */
 				if (vary_hapke)
-					vary_params_MFS_gpu64(dpar,dmod,ddat,12,&dummyval2,
+					vary_params_MFS_gpu(dpar,dmod,ddat,12,&dummyval2,
 							&dummyval3,&opt_brightness,&dummyval4, nviews,
 							verts, nf, nsets, bf_stream);
 
@@ -2360,7 +2360,7 @@ __host__ double objective_MFS_gpu(
 		/* Call vary_params to get the trial adjustments to 0th-order delay correc-
 		 * tion polynomial coefficients, to Doppler scaling factors,and to radar
 		 * and optical albedos, then send them to the branch nodes  */
-		vary_params_MFS_gpu64(sdev_par, sdev_mod, sdev_dat, spar->action,
+		vary_params_MFS_gpu(sdev_par, sdev_mod, sdev_dat, spar->action,
 				&deldop_zmax, &rad_xsec, &opt_brightness, &cos_subradarlat,
 				nviews, verts, nf, nsets, bf_stream);
 
@@ -2563,7 +2563,7 @@ __host__ double objective_gpu(
 		/* Call vary_params to get the trial adjustments to 0th-order delay correc-
 		 * tion polynomial coefficients, to Doppler scaling factors,and to radar
 		 * and optical albedos, then send them to the branch nodes  */
-		vary_params_gpu64(sdev_par, sdev_mod, sdev_dat, spar->action,
+		vary_params_gpu(sdev_par, sdev_mod, sdev_dat, spar->action,
 				&deldop_zmax, &rad_xsec, &opt_brightness, &cos_subradarlat,
 				nframes, lc_n, nviews, verts, htype, dtype, nf, nsets,
 				bf_stream, max_frames);

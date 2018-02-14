@@ -29,7 +29,7 @@ __global__ void clrvect_MFS_krnl(struct dat_t *ddat, int size, int s) {
 	}
 }
 
-__global__ void clrvect_krnl64af(struct dat_t *ddat, int *size, int s, int blocks) {
+__global__ void clrvect_krnl_af(struct dat_t *ddat, int *size, int s, int blocks) {
 	/* Multi-threaded kernel */
 	/* This version limits itself to the window defined by frame[f]->idellim
 	 * and frame[f]->idoplim.  It also uses shared memory for variables used

@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
 //	}
 
 	if (CUDA) {
-		printf("Shape-CUDA-v1.2 running\n");
+		printf("Shape-CUDA-v1.2(A) running\n");
 		printf("Now with even more face-melting concurrency.\n");
 		/* Check available CUDA devices, if any, before proceeding */
 		CUDACount(1);

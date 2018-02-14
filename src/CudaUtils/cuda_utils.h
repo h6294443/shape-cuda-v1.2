@@ -23,8 +23,7 @@ __device__ void dev_euler2mat( double m[3][3], double phi, double theta, double 
 __device__ void dev_facmom( double fv0[3], double fv1[3], double fv2[3], double fn[3],
         double *dv, double dvr[3], double dI[3][3]);
 __device__ double dev_facnrm( struct vertices_t verts, int fi);
-__device__ int dev_gamma_trans32(float *datum, double gamma);
-__device__ int dev_gamma_trans64(double *datum, double gamma);
+__device__ int dev_gamma_trans(double *datum, double gamma);
 __device__ double dev_gammln(double xx);
 __device__ double dev_hapke( double cosi, double cose, double phase,
         double w, double h, double B0, double g, double theta);

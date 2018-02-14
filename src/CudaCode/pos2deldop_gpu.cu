@@ -147,10 +147,6 @@ p2ds_stride, p2ds_spb_sq, p2ds_dopfftlen, p2ds_spb_over_stride, p2ds_nsinc2_sq;
 __device__ double p2ds_const1, p2ds_const2, p2ds_one_over_spb, p2ds_delfact,
 p2ds_dopfact;
 
-//__device__ int dbg_cntr1=0;
-
-//__device__ float p2ds_const1f, p2ds_const2f, p2ds_one_over_spbf, p2ds_delfactf, p2ds_dopfactf;
-
 __device__ static float atomicMin64(double* address, double val)
 {
 	unsigned long long* address_as_i = (unsigned long long*) address;
@@ -238,7 +234,7 @@ __global__ void pos2deldop_init_MFS_krnl(
 	}
 }
 
-__global__ void pos2deldop_data_sampling_krnl64(
+__global__ void pos2deldop_data_sampling_krnl(
 		struct par_t *dpar,
 		struct dat_t *ddat,
 		struct deldopfrm_t **frame,
@@ -364,7 +360,7 @@ __global__ void pos2deldop_data_sampling_krnl64(
 	}
 }
 
-__global__ void pos2deldop_data_sampling_MFS_krnl64(
+__global__ void pos2deldop_data_sampling_MFS_krnl(
 		struct par_t *dpar,
 		struct dat_t *ddat,
 		struct deldopfrm_t **frame,
@@ -500,7 +496,7 @@ __global__ void pos2deldop_data_sampling_MFS_krnl64(
 	}
 }
 
-__global__ void pos2deldop_pixel_krnl64(
+__global__ void pos2deldop_pixel_krnl(
 		struct par_t *dpar,
 		struct mod_t *dmod,
 		struct dat_t *ddat,
@@ -732,7 +728,7 @@ __global__ void pos2deldop_pixel_krnl64(
 	}
 }
 
-__global__ void pos2deldop_pixel_krnl64moda(
+__global__ void pos2deldop_pixel_krnl_moda(
 		struct par_t *dpar,
 		struct mod_t *dmod,
 		struct dat_t *ddat,
@@ -997,7 +993,7 @@ __global__ void pos2deldop_pixel_krnl64moda(
 	}
 }
 
-__global__ void pos2deldop_pixel_MFS_krnl64(
+__global__ void pos2deldop_pixel_MFS_krnl(
 		struct par_t *dpar,
 		struct mod_t *dmod,
 		struct dat_t *ddat,
@@ -1262,7 +1258,7 @@ __global__ void pos2deldop_pixel_MFS_krnl64(
 	}
 }
 
-__global__ void pos2deldop_pixel_krnl64modb(
+__global__ void pos2deldop_pixel_krnl_modb(
 		struct par_t *dpar,
 		struct mod_t *dmod,
 		struct dat_t *ddat,
@@ -1537,7 +1533,7 @@ __global__ void pos2deldop_pixel_krnl64modb(
 	}
 }
 
-__global__ void pos2deldop_deldoplim_krnl64(
+__global__ void pos2deldop_deldoplim_krnl(
 		struct dat_t *ddat,
 		struct deldopfrm_t **frame,
 		double4 *deldoplim,
@@ -1571,7 +1567,7 @@ __global__ void pos2deldop_deldoplim_krnl64(
 	}
 }
 
-__global__ void pos2deldop_deldoplim_MFS_krnl64(
+__global__ void pos2deldop_deldoplim_MFS_krnl(
 		struct dat_t *ddat,
 		struct deldopfrm_t **frame,
 		double4 *deldoplim,
@@ -1604,7 +1600,7 @@ __global__ void pos2deldop_deldoplim_MFS_krnl64(
 	}
 }
 
-__global__ void pos2deldop_overflow_krnl64(
+__global__ void pos2deldop_overflow_krnl(
 		struct par_t *dpar,
 		struct deldopfrm_t **frame,
 		int *idel0,
@@ -1657,7 +1653,7 @@ __global__ void pos2deldop_overflow_krnl64(
 	}
 }
 
-__global__ void pos2deldop_overflow_MFS_krnl64(
+__global__ void pos2deldop_overflow_MFS_krnl(
 		struct par_t *dpar,
 		struct deldopfrm_t **frame,
 		int *idel0,
@@ -1709,7 +1705,7 @@ __global__ void pos2deldop_overflow_MFS_krnl64(
 	}
 }
 
-__host__ void pos2deldop_gpu64(
+__host__ void pos2deldop_gpu(
 		struct par_t *dpar,
 		struct mod_t *dmod,
 		struct dat_t *ddat,
@@ -1738,9 +1734,6 @@ __host__ void pos2deldop_gpu64(
 	THD.x = maxThreadsPerBlock;	THD64.x = 64;
 	BLKfrm.x = floor((THD64.x - 1 + nfrm_alloc)/THD64.x);
 
-	cudaEvent_t start1, stop1;
-	float milliseconds;
-
 	gpuErrchk(cudaMalloc((void**)&idop0, sizeof(int)*nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&idel0, sizeof(int)*nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&any_overflow, sizeof(int)*nfrm_alloc));
@@ -1754,12 +1747,12 @@ __host__ void pos2deldop_gpu64(
 	/* Launch single-thread initialization kernel */
 	pos2deldop_init_krnl<<<BLKfrm,THD64>>>(ddat, frame, idel0, idop0, ndel,
 			ndop, set, nfrm_alloc, badradararr, any_overflow);
-	checkErrorAfterKernelLaunch("pos2deldop_init_krnl2");
+	checkErrorAfterKernelLaunch("pos2deldop_init_krnl");
 	/* Launch kernel to determine data sampling/radar parameters.  */
-	pos2deldop_data_sampling_krnl64<<<BLKfrm,THD64>>>(dpar, ddat, frame, pos,
+	pos2deldop_data_sampling_krnl<<<BLKfrm,THD64>>>(dpar, ddat, frame, pos,
 			axay, xyincr, deldopshift, w, dop, deldoplim, xylim, set,
 			nfrm_alloc, v, orbit_dopoff, badradararr);
-	checkErrorAfterKernelLaunch("pos2deldop_data_sampling_krnl64");
+	checkErrorAfterKernelLaunch("pos2deldop_data_sampling_krnl");
 	gpuErrchk(cudaMemcpy(host_xylim, xylim, nfrm_alloc*sizeof(int4), cudaMemcpyDeviceToHost));
 
 	/* Figure out the kernel launch parameters for every stream */
@@ -1770,41 +1763,26 @@ __host__ void pos2deldop_gpu64(
 		BLK[f].x = floor((THD.x -1 + nThreads[f]) / THD.x);
 	}
 
-//
-//	cudaEventCreate(&start1);
-//	cudaEventCreate(&stop1);
-//	cudaEventRecord(start1);
-
-
-
 	/* Assign 1 stream to each frame's iteration each of the three kernels */
 	for (int f=0; f<nfrm_alloc; f++) {
-//		pos2deldop_pixel_krnl64<<<BLK[f],THD,0,p2d_stream[f]>>>(dpar, dmod, ddat, pos,
-//				frame, deldoplim, dop, deldopshift, axay, xyincr, idel0, idop0,
-//				ndel, ndop, xspan[f], nThreads[f], body, orbit_xoff, orbit_yoff,
-//				set, f, any_overflow);
-		pos2deldop_pixel_krnl64moda<<<BLK[f],THD,0,p2d_stream[f]>>>(dpar, dmod, ddat, pos,
+		pos2deldop_pixel_krnl_moda<<<BLK[f],THD/*,0,p2d_stream[f]*/>>>(dpar, dmod, ddat, pos,
 				frame, deldoplim, dop, deldopshift, axay, xyincr, idel0, idop0,
 				ndel, ndop, xspan[f], nThreads[f], orbit_xoff, orbit_yoff,
 				set, f, any_overflow);
-	} checkErrorAfterKernelLaunch("pos2deldop_pixel_krnl64");
+	} checkErrorAfterKernelLaunch("pos2deldop_pixel_krnl_moda");
 
-
-//	cudaEventRecord(stop1);
-//	cudaEventSynchronize(stop1);
-//
-//	cudaEventElapsedTime(&milliseconds, start1, stop1);
-//	printf("time for pos2deldop_pixel_krnl: %3.8g\n", milliseconds);
-
+	/* Synchronize streams to default stream */
+	for (int f=0; f<nfrm_alloc; f++)
+		cudaStreamSynchronize(p2d_stream[f]);
 
 	/* Launch kernel to copy the deldop limits back to original doubles in
 	 * the frame structures.	 */
-	pos2deldop_deldoplim_krnl64<<<BLKfrm,THD64>>>(ddat, frame,
+	pos2deldop_deldoplim_krnl<<<BLKfrm,THD64>>>(ddat, frame,
 			deldoplim, dop, deldopshift, set, nfrm_alloc);
 	checkErrorAfterKernelLaunch("pos2deldop_deldoplim_krnl");
 
 	/* Launch kernel to take care of any bin overflow */
-	pos2deldop_overflow_krnl64<<<BLKfrm,THD64>>>(dpar, frame, idel0, idop0, ndel,
+	pos2deldop_overflow_krnl<<<BLKfrm,THD64>>>(dpar, frame, idel0, idop0, ndel,
 			ndop, set, nfrm_alloc, badradararr, any_overflow);
 	checkErrorAfterKernelLaunch("pos2deldop_overflow_krnl");
 
@@ -1818,7 +1796,7 @@ __host__ void pos2deldop_gpu64(
 	cudaFree(dop);
 }
 
-__host__ void pos2deldop_MFS_gpu64(
+__host__ void pos2deldop_MFS_gpu(
 		struct par_t *dpar,
 		struct mod_t *dmod,
 		struct dat_t *ddat,
@@ -1874,13 +1852,14 @@ __host__ void pos2deldop_MFS_gpu64(
 	pos2deldop_init_MFS_krnl<<<BLKsets,THDsets>>>(ddat, frame, idel0, idop0, ndel,
 			ndop, nsets, badradararr, any_overflow);
 	checkErrorAfterKernelLaunch("pos2deldop_init_MFS_krnl");
+
 	/* Launch kernel to determine data sampling/radar parameters.  */
-	pos2deldop_data_sampling_MFS_krnl64<<<BLKsets,THDsets>>>(dpar, ddat, frame, pos,
+	pos2deldop_data_sampling_MFS_krnl<<<BLKsets,THDsets>>>(dpar, ddat, frame, pos,
 			axay, xyincr, deldopshift, w, dop, deldoplim, xylim, nsets, v,
 			orbit_dopoff, badradararr, codemethod, spb, stride, dopfftlen,
 			spb_over_stride, spb_sq, one_over_spb, const1, const2, delfact,
 			dopfact);
-	checkErrorAfterKernelLaunch("pos2deldop_data_sampling_krnl64");
+	checkErrorAfterKernelLaunch("pos2deldop_data_sampling_MFS_krnl");
 	gpuErrchk(cudaMemcpy(host_xylim, xylim, nsets*sizeof(int4), cudaMemcpyDeviceToHost));
 
 	/* Figure out the kernel launch parameters for every stream */
@@ -1893,21 +1872,25 @@ __host__ void pos2deldop_MFS_gpu64(
 
 	/* Assign 1 stream to each frame's iteration each of the three kernels */
 	for (int s=0; s<nsets; s++) {
-		pos2deldop_pixel_MFS_krnl64<<<BLK[s],THD,0,p2d_stream[s]>>>(dpar, dmod,
+		pos2deldop_pixel_MFS_krnl<<<BLK[s],THD/*,0,p2d_stream[s]*/>>>(dpar, dmod,
 			ddat, pos,frame, deldoplim, dop, deldopshift, axay, xyincr, idel0,
 			idop0, ndel, ndop, xspan[s], nThreads[s], orbit_xoff, orbit_yoff, s,
 			any_overflow, codemethod, spb, stride, dopfftlen, spb_over_stride,
 			spb_sq, one_over_spb, const1, const2, delfact, dopfact);
-	} checkErrorAfterKernelLaunch("pos2deldop_pixel_MFS_krnl64");
+	} checkErrorAfterKernelLaunch("pos2deldop_pixel_MFS_krnl");
+
+	/* Synchronize streams to default stream */
+	for (int s=0; s<nsets; s++)
+		cudaStreamSynchronize(p2d_stream[s]);
 
 	/* Launch kernel to copy the deldop limits back to original doubles in
 	 * the frame structures.	 */
-	pos2deldop_deldoplim_MFS_krnl64<<<BLKsets,THDsets>>>(ddat, frame,
+	pos2deldop_deldoplim_MFS_krnl<<<BLKsets,THDsets>>>(ddat, frame,
 			deldoplim, dop, deldopshift, nsets);
 	checkErrorAfterKernelLaunch("pos2deldop_deldoplim_MFS_krnl");
 
 	/* Launch kernel to take care of any bin overflow */
-	pos2deldop_overflow_MFS_krnl64<<<BLKsets,THDsets>>>(dpar, frame, idel0,
+	pos2deldop_overflow_MFS_krnl<<<BLKsets,THDsets>>>(dpar, frame, idel0,
 		idop0, ndel, ndop, nsets, badradararr, any_overflow);
 	checkErrorAfterKernelLaunch("pos2deldop_overflow_MFS_krnl");
 

@@ -11,14 +11,7 @@ extern "C" {
 #include "../shape/head.h"
 }
 
-__device__ int dev_gamma_trans32(float *datum, double gamma)
-{
-  if ((*datum) <= 0.0)
-    return 0;
-  (*datum) = pow( (double)(*datum), 1/gamma);
-  return 1;
-}
-__device__ int dev_gamma_trans64(double *datum, double gamma)
+__device__ int dev_gamma_trans(double *datum, double gamma)
 {
   if ((*datum) <= 0.0)
     return 0;

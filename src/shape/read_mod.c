@@ -2397,6 +2397,7 @@ void setupsides( struct vertices_t *vt)
 	/*=======================================================================*/
 		
 	for (f=0; f<vt->nf; f++) {          /* go through every facet */
+//		printf("facet #%i\n", f);
 		for (i=0; i<=2; i++)                /* make list of 3 vertices */
 			v[i] = vt->f[f].v[i];
 		if (v[0] < 0 || v[0] >= vt->nv || v[1] < 0 || v[1] >= vt->nv

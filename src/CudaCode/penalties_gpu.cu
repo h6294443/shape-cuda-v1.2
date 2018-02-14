@@ -1,46 +1,34 @@
+
 /*****************************************************************************************
                                                                               penalties.c
-
 Compute the penalty functions for all penalties being applied to this model
-
 Modified 2016 December 8 by ME:
 	Converted to "FIT" action-only, CUDA code
-
 Modified 2014 February 15 by CM:
     Adjust several penalty functions to accommodate multiple radar and optical
         scattering laws within a mod file
-
 Modified 2013 July 6 by CM:
     Add the "pa3tilt" penalty
-
 Modified 2011 September 2 by CM:
     Add the "harmlambert" and "inholambert" cases for the "optalbdel" and "optalbvar"
         penalties
-
 Modified 2011 August 22 by CM:
     Add the "impulse" penalty
-
 Modified 2010 August 31 by CM:
     Fix bug in the "noncosine" penalty: forgot to assign value to n
-
 Modified 2010 June 1 by CM:
     Revise the "rdev" and "maxrdev" penalties now that the "scalefactor"
         parameter is a 3-component vector rather than a scalar
-
 Modified 2010 May 12 by CM:
     Revise the "bifurcation" penalty so that it's not sensitive to the
         exact positions of vertices that lie near zone boundaries
-
 Modified 2010 April 27 by CM:
     Add the "noncosine" and "bifurcation" penalties
-
 Modified 2009 November 15 by CM:
     Remove unused variable
-
 Modified 2009 August 2 by CM:
     Adjust the nonsmooth and concavity penalties to pay attention to the
         "act" (active) flags of model sides rather than of model facets
-
 Modified 2009 July 2 by CM:
     For various penalties, only sum over active facets/vertices/sides,
         thus excluding interior regions for multiple-component models
@@ -49,7 +37,6 @@ Modified 2009 July 2 by CM:
         each component
     For the "maxellipdev" penalty, compute deviations from the overall
         model's DEEVE, not from each component's DEEVE
-
 Modified 2007 February 21 by CM:
     Add the "maxrdev" and "maxellipdev" penalties
     Fix bugs in "rdev" penalty, and change this penalty so that each
@@ -57,54 +44,42 @@ Modified 2007 February 21 by CM:
         component
     Change the "comdev" penalty so that the COM displacement is normalized
         to the model's effective radius
-
 Modified 2005 September 7 by CM:
     Add the "harmlommel" "harmhapke" and "harmkaas" cases for the
         "optalbdel" and "optalbvar" penalties
     Add the "harmhapke" case for the "thetadel" and "thetavar" penalties
     Add the "harmcosine" case for the "radalbdel" "radalbvar" "rad_c_del"
         and "rad_c_var" penalties
-
 Modified 2005 August 10 by CM:
     Add the "inhokaas" case for the "optalbdel" and "optalbvar" penalties
-
 Modified 2005 July 20 by CM:
     Add the "thetadel" penalty for the "inhohapke" optical scattering law
     Add four penalties for the "inhocosine" radar scattering law:
         "radalbdel" "radalbvar" "rad_c_del" "rad_c_var"
     Don't display "changed negative penalty to 0.0" messages at all, since
         these situations are always due to slight roundoff error
-
 Modified 2005 July 7 by CM:
     Don't display "changed negative penalty to 0.0" messages to the screen
         unless the par->showstate flag is turned on
-
 Modified 2005 July 4 by CM:
     Adjust the structure for the "inholommel" optical scattering law
     Enable the "optalbdel" penalty for the "inhohapke" optical scattering
         law
     Protect against division by zero for "rdev" penalty
-
 Modified 2005 March 8 by CM:
     Fix bug with negative penalty weights
-
 Modified 2005 February 28 by CM:
     Eliminate checks that photometric parameters are valid, since these
         checks are now performed in routine realize_photo
-
 Modified 2005 January 25 by CM:
     Initialize variable to avoid compilation warning
-
 Modified 2004 May 4 by CM:
     Added "flattening" penalty
-
 Modified 2004 April 25 by CM:
     Added "inertiadev_uni" and "nonpa_uni" penalties for PA rotators
-
 Modified 2003 April 21 by CM:
     Added comments
     Protected against division by zero (for negative penalty weights)
-
 Modified 2003 April 17 by CM:
     Removed the large code block for computing 0th, 1st, and 2nd-order
         moments, partly because it wasn't executed if none of the three

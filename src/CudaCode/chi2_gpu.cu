@@ -1,48 +1,36 @@
 /*****************************************************************************************
                                                                                    chi2.c
-
 Compute chi-square for a model that was previously created.
-
 Modified 2016 December 8 by ME:
 	Converted to "FIT" action-only, CUDA code
-
 Modified 2015 June 10 by CM:
     Implement smearing for the "fit" and "write" actions
-
 Modified 2013 April 24 by CM:
     Adjust names of output files so they are in alphanumeric order if > 100 per dataset
-
 Modified 2012 December 6 by CM:
     Fix bug introduced on December 6: take "calval" into account when determining whether
         or not model signal is greater than 'chi2fit0_thresh' sigmas
-
 Modified 2012 December 5 by CM:
     When the "write_chi2fit0" parameter is turned on, display the number of degrees of
         freedom with zero model signal in addition to the chi2 contribution, and list
         chi2 and dof for all data combined
     Implement the 'chi2fit0_thresh' parameter
-
 Modified 2012 March 24 by CM:
     When the root node calls chi2 with list_breakdown = 1 (e.g., for the "write" action),
         print a warning if the value of any (delay-)Doppler dataset's Doppler scaling
         factor is out of the allowed range
-
 Modified 2010 August 25 by CM:
     Move TINYCALFACT definition to const.h
-
 Modified 2010 August 10 by CM:
     Implement the "radfitmin" and "radobsmin" parameters: these are the
         pixel values that map to black for all fit and obs pgm images
         that are output for delay-Doppler frames
-
 Modified 2010 March 20 by CM:
     For the "write" action for lightcurve datasets, include magnitude
         uncertainties as a new column in output files fit_MM.dat
-
 Modified 2009 August 9 by CM:
     For the "write" action with the "listfit" parameter turned on, replace
         a ".rdf" or ".fits" or ".fit" suffix with ".fitdat"
-
 Modified 2009 April 3 by CM:
     When the root node calls chi2 with list_breakdown = 1 (e.g., for the
         "write" action), print a warning if any plane-of-sky fit image is
@@ -52,25 +40,20 @@ Modified 2009 April 3 by CM:
     For MPI_Recv calls, mpi_par[0] is no longer equal to the MPI action,
         since the message tag argument already serves that purpose (as of
         2008 April 10) -- so the other mpi_par elements are renumbered
-
 Modified 2008 June 29 by CM:
     For the "write" and "orbit" actions, zero out fit pixels/bins in
         delay-Doppler, Doppler, and plane-of-sky frames for which those
         pixels/bins have been zeroed out in the pixel mask
-
 Modified 2008 April 10 by CM:
     Use message tag argument to MPI_Recv to identify the MPI action
-
 Modified 2007 September 13 by CM:
     Implement "write_chi2fit0" parameter: for the "write" and "orbit"
         actions, output chi2 for delay-Doppler, Doppler, and plane-of-sky
         pixels/bins with zero model power; do this both for each individual
         frame, for all delay-Doppler data taken together, for all Doppler
         data taken together, and for all plane-of-sky data taken together
-
 Modified 2007 August 18 by CM:
     Rename MPI_TAG to MPI_TAG_1 to avoid name conflict with mpich headers
-
 Modified 2007 August 10 by CM:
     Create chi2_deldop, chi2_doppler, chi2_poset, and chi2_lghtcrv
         routines so that the code isn't one giant switch statement
@@ -79,19 +62,15 @@ Modified 2007 August 10 by CM:
     Implement the "radfitmax" and "radobsmax" parameters for applying the
         same brightness scale to all fit and obs pgm images output for
         delay-Doppler frames
-
 Modified 2007 August 4 by CM:
     Carry out "write" action steps for the "orbit" action as well
-
 Modified 2007 January 6 by CM:
     For the "write" action for lightcurve datasets, output rotation phases
         to files fit_MM.dat and calc_MM.dat.
-
 Modified 2006 October 1 by CM:
     For lightcurve datasets, chi-square is now computed in intensity space
         rather than in magnitude space.  (File output is still in
         magnitudes.)
-
 Modified 2006 June 21 by CM:
     In delay-Doppler section, changed delres to del_per_pixel and dopres to
         dop_per_pixel
@@ -102,7 +81,6 @@ Modified 2006 June 21 by CM:
         any photometric parameter has an illegal value, or if any ellipsoid
         diameter is tiny or negative.  (This change will cause such
         warnings to be displayed for the "write" action.)
-
 Modified 2006 June 18 by CM:
     Allow each delay-Doppler frame within a dataset to have different
         dimensions after vignetting
@@ -111,15 +89,12 @@ Modified 2006 June 18 by CM:
     Allow plane-of-sky frames to be rectangular rather than square
     For the "write" action, adjust output for delay-Doppler, Doppler, and
         plane-of-sky frames to allow for masked-out pixels
-
 Modified 2005 June 27 by CM:
     Renamed "round" function to "iround" to avoid conflict
-
 Modified 2005 April 25 by CM:
     For the "write" action, compute the one-sigma percentage uncertainty
         on chi2 correctly; the expression used until now, 100*sqrt(2/dof),
         is only valid when all data are weighted equally.
-
 Modified 2005 March 17 by CM:
     For the "fit" action with parallel processing, check that root receives
         the responses to the correct broadcast
@@ -132,17 +107,14 @@ Modified 2005 March 17 by CM:
     For the "write" action with "speckle" turned on, write Doppler file
         fit_MM_NN.dat with spectral values normalized to the input sdev
         value, not to the sdev value increased for self-noise.
-
 Modified 2005 March 6 by CM:
     For the "write" action, write calibration factors for plane-of-sky
         datasets to disk if the "list_posetcal" parameter is turned on
-
 Modified 2005 March 2 by CM:
     Rename some "sdev" and "var" values to be "oneovervar" (1/variance)
     For the "write" action, adjust arguments of revised "resampim" routine
     For the "write" action, rotate plane-of-sky fit/obs/res frames so that
         north is upward, unless poset_scaling = NONE
-
 Modified 2005 February 22 by CM:
     For the "write" action, fix bug (incorrect array dimensions) in
         scaling fit vs. obs pgm image brightness for plane-of-sky datasets
@@ -152,10 +124,8 @@ Modified 2005 February 22 by CM:
         (i.e., which are greatly undersampled).  This situation probably
         won't arise often: The real importance of "image_rebin" is for
         dealing with plane-of-sky fit frames in routine calc_fits.
-
 Modified 2005 January 25 by CM:
     Take care of uninitialized variables
-
 Modified 2005 January 20 by CM:
     For the "write" action, implement the bilinear and bicubic
         interpolation options for the "dd_scaling" parameter
@@ -168,7 +138,6 @@ Modified 2005 January 20 by CM:
         don't allow it to be negative: instead set it to zero.  Also
         display a warning, unless this is a fit and we're not at the end
         of an iteration.
-
 Modified 2005 January 12 by CM:
     For the "fit" action with parallel processing, revise the code so
         that "list_breakdown" will work: For each dataset which is handled
@@ -178,48 +147,39 @@ Modified 2005 January 12 by CM:
         branch node calls chi2 just once to process *all* of its datasets
         in one shot, without keeping results for different data types
         (Doppler, delay-Doppler, etc.) separate.
-
 Modified 2004 December 1 by CM:
     For the "write" action, adjust the "listfit" option so that
         the "listfit_path" directory can be created on the fly
         if necessary
-
 Modified 2004 November 30 by CM:
     For the "write" action, implement the "listfit" option to write
         out the model "data" files for all delay-Doppler frames
-
 Modified 2004 July 26 by CM:
     If the calibration factor for a Doppler or delay-Doppler frame
         is a floating parameter, don't allow it to be negative: instead
         set it to zero.  Also display a warning, unless this is a fit
         and we're not at the end of an iteration.
-
 Modified 2004 June 27 by CM:
     Fixed bug: For 'dd_scaling' = 'block' the number of pixels per side
         for the resampled delay-Doppler obs/fit/residual images wasn't
         being defined
-
 Modified 2004 April 3 by CM:
     Add the "list_breakdown" argument so that we can list chi2 by
         data type (Doppler, delay-Doppler, POS, lightcurves) for
         both the "fit" and the "write" action as desired
-
 Modified 2004 March 20 by CM:
     For the "write" action, move final summary screen display from
         the main program (shape.c) to here
     For the "write" action, display summaries for each form of data
         (Doppler, delay-Doppler, POS, lightcurves) taken separately,
         in addition to the overall summary
-
 Modified 2004 February 29 by CM:
     For lightcurve output, replace JD244 variable with jdoffset parameter
     For the "write" action, move all screen and file output which
         relies on updated calibration factors to this routine
-
 Modified 2003 May 10 by CM:
     Account for contributions to chi-square from model (delay-)Doppler
         power which lies outside the data frame
-
 Modified 2003 April 24 by CM:
     Display chi-square for Doppler datasets when action = "write"
     Implement the new "weight" parameter
@@ -233,8 +193,6 @@ __device__ unsigned char c2s_write_chi2fit0, c2s_badradar,
 		c2s_badphoto, c2s_baddopscale, c2s_badposet, c2s_posbnd, c2s_baddiam;
 __device__ double c2s_dof_deldop, c2s_dof_doppler, c2s_dof_poset, c2s_dof_lghtcrv,
 		c2s_dof, c2s_chi2, c2s_chi2_set, c2s_chi2_all_doppler;
-//__device__ float c2s_chi2_fit0_deldop32, c2s_dof_fit0_deldop32, c2s_chi2_all_deldop32,
-//	c2s_chi2_fit0_doppler32, c2s_dof_fit0_doppler32;
 __device__ double c2s_chi2_fit0_deldop64, c2s_dof_fit0_deldop64, c2s_chi2_all_deldop64,
 	c2s_chi2_fit0_doppler64, c2s_dof_fit0_doppler64;
 
@@ -269,10 +227,10 @@ typedef struct chi2_thread_t
 /* File-scope CUDA structures */
 
 /* Function prototype declarations */
-__host__ double chi2_deldop_gpu64(struct par_t *dpar, struct dat_t *ddat,
+__host__ double chi2_deldop_gpu(struct par_t *dpar, struct dat_t *ddat,
 		int s, int list_breakdown, double *chi2_all_deldop, double *chi2_fit0_deldop,
 		double *dof_fit0_deldop, int nframes, cudaStream_t *c2s_stream);
-__host__ double chi2_doppler_gpu64(struct par_t *dpar, struct dat_t *ddat, int s,
+__host__ double chi2_doppler_gpu(struct par_t *dpar, struct dat_t *ddat, int s,
 		int list_breakdown, double *chi2_all_doppler, double *chi2_fit0_doppler,
 		double *dof_fit0_doppler, int nframes, cudaStream_t *c2s_stream);
 __host__ double chi2_lghtcrv_gpu(struct par_t *dpar, struct dat_t *ddat,
@@ -292,7 +250,7 @@ __global__ void c2s_retrieve_chi2_krnl(struct dat_t *ddat) {
 	if (threadIdx.x == 0)
 		c2s_chi2 = ddat->chi2;
 }
-__global__ void c2s_deldop_init_krnl64(struct dat_t *ddat, int s, int *ndel,
+__global__ void c2s_deldop_init_krnl(struct dat_t *ddat, int s, int *ndel,
 		int *ndop, double *o2, double *m2, double *om, double *weight, int nframes) {
 	/* nframes-threaded kernelDELDOP only */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
@@ -306,7 +264,7 @@ __global__ void c2s_deldop_init_krnl64(struct dat_t *ddat, int s, int *ndel,
 		weight[f] = ddat->set[s].desc.deldop.frame[f].weight;
 	}
 }
-__global__ void c2s_doppler_init_krnl64(struct dat_t *ddat, int s, int *ndop,
+__global__ void c2s_doppler_init_krnl(struct dat_t *ddat, int s, int *ndop,
 		double *o2, double *m2, double *om, double *weight, int nframes) {
 	/* nframes-threaded kernel */
 	int f = blockIdx.x * blockDim.x + threadIdx.x;
@@ -322,7 +280,7 @@ __global__ void c2s_doppler_init_krnl64(struct dat_t *ddat, int s, int *ndop,
 /* WARNING WARNING WARNING */
 /* This kernel is for accuracy testing only. Must develop a proper
  * parallel reduction for this instead */
-__global__ void c2s_deldop_add_o2_krnl64(
+__global__ void c2s_deldop_add_o2_krnl(
 		struct par_t *dpar,
 		struct dat_t *ddat,
 		double *o2,
@@ -362,7 +320,7 @@ __global__ void c2s_deldop_add_o2_krnl64(
 		atomicAdd(&om[f], temp);
 	}
 }
-__global__ void c2s_add_deldop_contributions_krnl64(
+__global__ void c2s_add_deldop_contributions_krnl(
 		struct par_t *dpar,
 		struct dat_t *ddat,
 		double *o2,
@@ -423,7 +381,7 @@ __global__ void c2s_add_deldop_contributions_krnl64(
 		}
 	}
 }
-__global__ void c2s_add_dop_contrbts_srl_krnl64(
+__global__ void c2s_add_dop_contrbts_srl_krnl(
 		struct par_t *dpar,
 		struct dat_t *ddat,
 		double *o2,
@@ -545,7 +503,7 @@ __global__ void c2s_add_dop_contrbts_srl_krnl64(
 //		}
 //	}
 //}
-__global__ void c2s_doppler_add_o2_krnl64(struct dat_t *ddat, double *o2, double
+__global__ void c2s_doppler_add_o2_krnl(struct dat_t *ddat, double *o2, double
 		*m2, double *om, int *ndop, int s, int f) {
 	/* ndop-threaded kernel */
 	int j = blockIdx.x * blockDim.x + threadIdx.x+1;
@@ -653,7 +611,7 @@ __global__ void c2_set_chi2_krnl(struct dat_t *ddat, double chi2, int s) {
 	if (threadIdx.x == 0)
 		ddat->set[s].chi2 = chi2;
 }
-__global__ void deldop_wrt_chi2fit0_krnl64(struct par_t *dpar, struct dat_t *ddat,
+__global__ void deldop_wrt_chi2fit0_krnl(struct par_t *dpar, struct dat_t *ddat,
 		int s, int f, int *ndel, int *ndop, int nThreads, double *returns,
 		double *o2_fit0_dof_fit0) {
 
@@ -699,7 +657,7 @@ __global__ void deldop_wrt_chi2fit0_krnl64(struct par_t *dpar, struct dat_t *dda
 			returns[0] = returns[1] = 0.0;
 
 }
-__global__ void dop_wrt_chi2fit0_krnl64(struct par_t *dpar, struct dat_t *ddat,
+__global__ void dop_wrt_chi2fit0_krnl(struct par_t *dpar, struct dat_t *ddat,
 		int s, int f, int nThreads, double *returns, double *o2_fit0_dof_fit0) {
 
 	/* ndop-threaded kernel */
@@ -769,7 +727,6 @@ __host__ double chi2_gpu(
 	double dof_deldop, dof_doppler, dof_poset, dof_lghtcrv;
 	char dofstring[MAXLEN], dof0string[MAXLEN];
 
-	//gpuErrchk(cudaSetDevice(GPU0));
 	/*  Initialize variables that accumulate chi-square values  */
 	chi2_all_deldop = chi2_all_doppler = chi2_all_poset = chi2_all_lghtcrv =
 			chi2_fit0_deldop = chi2_fit0_doppler /*= chi2_fit0_poset*/ = 0.0;
@@ -784,7 +741,7 @@ __host__ double chi2_gpu(
 	for (s=0; s<nsets; s++) {
 		switch (htype[s]) {
 		case DELAY:
-			chi2 = chi2_deldop_gpu64(dpar, ddat, s, list_breakdown,
+			chi2 = chi2_deldop_gpu(dpar, ddat, s, list_breakdown,
 					&chi2_all_deldop, &chi2_fit0_deldop, &dof_fit0_deldop,
 					hnframes[s], c2s_stream);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
@@ -792,7 +749,7 @@ __host__ double chi2_gpu(
 //			printf("chi2_set[%i] (Deldop), %3.8g\n", s, chi2);
 			break;
 		case DOPPLER:
-			chi2 = chi2_doppler_gpu64(dpar, ddat, s,list_breakdown,
+			chi2 = chi2_doppler_gpu(dpar, ddat, s,list_breakdown,
 					&chi2_all_doppler, &chi2_fit0_doppler, &dof_fit0_doppler,
 					hnframes[s], c2s_stream);
 			c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
@@ -811,7 +768,7 @@ __host__ double chi2_gpu(
 //			printf("chi2_set[%i] (lghtcrv), %3.8g\n", s, chi2);
 			break;
 		default:
-			printf("chi2_cuda_streams.cu: can't handle this type yet\n");
+			printf("chi2_gpu.cu: can't handle this type yet\n");
 		}
 
 		/* Single-thread kernel adds ddat->set[s].chi2 to ddat->chi2 */
@@ -824,7 +781,6 @@ __host__ double chi2_gpu(
 	checkErrorAfterKernelLaunch("c2s_retrieve_chi2_krnl, chi2_cuda_streams");
 	gpuErrchk(cudaMemcpyFromSymbol(&chi2, c2s_chi2, sizeof(double),
 			0, cudaMemcpyDeviceToHost));
-//	printf("Retrieved chi2=%3.6g\n", chi2);
 	/*.......................................................................*/
 
 
@@ -956,7 +912,7 @@ __host__ double chi2_MFS_gpu(
 	 * provide screen and image output                            */
 	for (s=0; s<nsets; s++) {
 
-		chi2 = chi2_deldop_gpu64(dpar, ddat, s, list_breakdown,
+		chi2 = chi2_deldop_gpu(dpar, ddat, s, list_breakdown,
 				&chi2_all_deldop, &chi2_fit0_deldop, &dof_fit0_deldop,
 				1, c2s_stream);
 		c2_set_chi2_krnl<<<1,1>>>(ddat, chi2, s);
@@ -972,9 +928,7 @@ __host__ double chi2_MFS_gpu(
 	checkErrorAfterKernelLaunch("c2s_retrieve_chi2_krnl, chi2_cuda_streams");
 	gpuErrchk(cudaMemcpyFromSymbol(&chi2, c2s_chi2, sizeof(double),
 			0, cudaMemcpyDeviceToHost));
-//	printf("Retrieved chi2=%3.6g\n", chi2);
 	/*.......................................................................*/
-
 
 	/* Call kernel to get flags from ddat */
 	c2s_get_prntflgs_krnl<<<1,1>>>(dpar, ddat);
@@ -1312,7 +1266,7 @@ void *chi2_pthread_sub(void *ptr)
 //	pthread_exit(0);
 }
 
-__host__ double chi2_deldop_gpu64(
+__host__ double chi2_deldop_gpu(
 		struct par_t *dpar,
 		struct dat_t *ddat,
 		int s,
@@ -1346,7 +1300,7 @@ __host__ double chi2_deldop_gpu64(
 	hreturns[0] = hreturns[1] = 0.0;
 
 	/* Get values for ndel and ndop, and the overflow parameters o2, m2, om */
-	c2s_deldop_init_krnl64<<<BLKfrm,THD64>>>(ddat, s, ndel, ndop, o2, m2, om,
+	c2s_deldop_init_krnl<<<BLKfrm,THD64>>>(ddat, s, ndel, ndop, o2, m2, om,
 			weight, nframes);
 	checkErrorAfterKernelLaunch("c2s_deldop_init_krnl64");
 	gpuErrchk(cudaMemcpy(&hndel, ndel, sizeof(int)*nframes, cudaMemcpyDeviceToHost));
@@ -1363,9 +1317,9 @@ __host__ double chi2_deldop_gpu64(
 	 * for this frame */
 	sum_o2m2om_gpu(ddat, o2, m2, om, nframes, hndel[0]*hndop[0], s, c2s_stream);
 
-	c2s_add_deldop_contributions_krnl64<<<BLKfrm,THD64>>>(dpar, ddat, o2, m2,
+	c2s_add_deldop_contributions_krnl<<<BLKfrm,THD64>>>(dpar, ddat, o2, m2,
 			om, weight, ndel, ndop, chi2_deldop_frame, s, nframes);
-	checkErrorAfterKernelLaunch("c2s_add_deldop_contributions_krnl64");
+	checkErrorAfterKernelLaunch("c2s_add_deldop_contributions_krnl");
 
 	gpuErrchk(cudaMemcpy(&h_chi2_deldop_frame, chi2_deldop_frame,
 			sizeof(double) * nframes, cudaMemcpyDeviceToHost));
@@ -1384,7 +1338,7 @@ __host__ double chi2_deldop_gpu64(
 			/* WARNING WARNING WARNING */
 			/* This kernel is for accuracy testing only. Must develop a proper
 			 * parallel reduction for this instead */
-			deldop_wrt_chi2fit0_krnl64<<<BLK[f],THD, 0, c2s_stream[f]>>>(dpar,
+			deldop_wrt_chi2fit0_krnl<<<BLK[f],THD, 0, c2s_stream[f]>>>(dpar,
 					ddat, s, f, ndel, ndop, nThreads[f], returns, o2_fit0_dof_fit0);
 			checkErrorAfterKernelLaunch("deldop_wrt_chi2fit0_krnl64");
 		}
@@ -1407,7 +1361,7 @@ __host__ double chi2_deldop_gpu64(
 	return chi2_set;
 }
 
-__host__ double chi2_doppler_gpu64(struct par_t *dpar, struct dat_t *ddat, int s,
+__host__ double chi2_doppler_gpu(struct par_t *dpar, struct dat_t *ddat, int s,
 		int list_breakdown, double *chi2_all_doppler, double *chi2_fit0_doppler,
 		double *dof_fit0_doppler, int nframes, cudaStream_t *c2s_stream)
 {
@@ -1430,7 +1384,7 @@ __host__ double chi2_doppler_gpu64(struct par_t *dpar, struct dat_t *ddat, int s
 	hreturns[0] = hreturns[1] = 0.0;
 
 	/* Get values for ndel and ndop, and the overflow parameters o2, m2, om */
-	c2s_doppler_init_krnl64<<<BLKfrm,THD64>>>(ddat, s, ndop, o2, m2, om, weight,
+	c2s_doppler_init_krnl<<<BLKfrm,THD64>>>(ddat, s, ndop, o2, m2, om, weight,
 			nframes);
 	checkErrorAfterKernelLaunch("c2s_doppler_init_krnl64");
 	gpuErrchk(cudaMemcpy(&hndop, ndop, sizeof(int)*nframes, cudaMemcpyDeviceToHost));
@@ -1443,7 +1397,7 @@ __host__ double chi2_doppler_gpu64(struct par_t *dpar, struct dat_t *ddat, int s
 	for (f=0; f<nframes; f++) {
 		/* Add contributions from power within data frame limits. This kernel
 		 * also considers frame's calibration factor & computes frame chi2  */
-		c2s_doppler_add_o2_krnl64<<<BLK[f],THD,0,c2s_stream[f]>>>(ddat, o2, m2,
+		c2s_doppler_add_o2_krnl<<<BLK[f],THD,0,c2s_stream[f]>>>(ddat, o2, m2,
 				om, ndop, s, f);
 	}
 	checkErrorAfterKernelLaunch("c2_doppler_add_o2_krnl64");
@@ -1451,7 +1405,7 @@ __host__ double chi2_doppler_gpu64(struct par_t *dpar, struct dat_t *ddat, int s
 //	c2s_add_dop_contrbts_krnl<<<BLKfrm,THD64>>>(dpar, ddat, o2, m2, om, weight,
 //			ndop, chi2_doppler_frame, s, nframes);
 	for (f=0; f<nframes; f++) {
-		c2s_add_dop_contrbts_srl_krnl64<<<1,1>>>(dpar, ddat, o2, m2, om, weight,
+		c2s_add_dop_contrbts_srl_krnl<<<1,1>>>(dpar, ddat, o2, m2, om, weight,
 				ndop, chi2_doppler_frame, s, f);
 	}
 	checkErrorAfterKernelLaunch("c2_add_dop_contrbts_krnl64");
@@ -1474,14 +1428,14 @@ __host__ double chi2_doppler_gpu64(struct par_t *dpar, struct dat_t *ddat, int s
 	 *  standard deviations of the noise in the data frame   */
 	if (list_breakdown) {
 		for (f=0; f<nframes; f++) {
-			dop_wrt_chi2fit0_krnl64<<<BLK[f],THD, 0, c2s_stream[f]>>>(dpar,
+			dop_wrt_chi2fit0_krnl<<<BLK[f],THD, 0, c2s_stream[f]>>>(dpar,
 					ddat, s, f, hndop[f], returns, o2_fit0_dof_fit0);
 			checkErrorAfterKernelLaunch("dop_wrt_chi2fit0_krnl64");
 		}
 		gpuErrchk(cudaMemcpy(&hreturns, returns, sizeof(double) * 2,
 				cudaMemcpyDeviceToHost));
-		*chi2_fit0_doppler = /*(double)*/hreturns[0];
-		*dof_fit0_doppler = /*(double)*/hreturns[1];
+		*chi2_fit0_doppler = hreturns[0];
+		*dof_fit0_doppler  = hreturns[1];
 	}
 
 	cudaFree(o2);
@@ -1494,70 +1448,6 @@ __host__ double chi2_doppler_gpu64(struct par_t *dpar, struct dat_t *ddat, int s
 	cudaFree(o2_fit0_dof_fit0);
 	return chi2_set;
 }
-//__host__ double chi2_poset_cuda(struct par_t *dpar, struct poset_t *poset,
-//		int s, double *chi2_all_poset, double *chi2_fit0_poset,
-//		double *dof_fit0_poset)
-//{
-//	int f, i, j, n_pix, n_pos, nrow, ncol;
-//	double chi2_set, err, err_fit0, o2, m2, om, o2_fit0, calval, fit255, obs255,
-//	xoff, yoff, resamp_fact, resamp_x0, resamp_y0, resamp_width,
-//	resamp_angle, weight, dof, dof_fit0, thresh_fit0;
-//	double **obs, **fit, **res, **oneovervar, **resamp_fit, **resamp_obs,
-//	**resamp_res;
-//
-//	/*  Initialize chi-square for dataset  */
-//
-//	chi2_set = 0.0;
-//
-//	/*  Loop through all frames for this dataset  */
-//
-//	for (f=0; f<poset->nframes; f++) {
-//		ncol = poset->frame[f].ncol;
-//		nrow = poset->frame[f].nrow;
-//		obs = poset->frame[f].obs.b;
-//		fit = poset->frame[f].fit.b;
-//		oneovervar = poset->frame[f].oneovervar;  /* 1/variance */
-//		weight = poset->frame[f].weight;
-//		dof = poset->frame[f].dof;
-//
-//		o2 = m2 = om = 0.0;
-//		for (i=1; i<=ncol; i++)
-//			for (j=1; j<=nrow; j++) {
-//				o2 += obs[i][j]*obs[i][j]*oneovervar[i][j];
-//				m2 += fit[i][j]*fit[i][j]*oneovervar[i][j];
-//				om += fit[i][j]*obs[i][j]*oneovervar[i][j];
-//			}
-//
-//		/*  The calibration factor always floats for plane-of-sky frames:
-//        set it to minimize chi-square, the sum over all pixels of
-//        { (obs - calfact*fit)^2 / variance }.                          */
-//
-//		if (om > 0.0)
-//			poset->frame[f].cal.val = om/m2;
-//		else
-//			poset->frame[f].cal.val = TINYCALFACT;
-//
-//		/*  Compute chi-square for this frame  */
-//
-//		calval = poset->frame[f].cal.val;
-//		err = weight*(o2 - 2*calval*om + calval*calval*m2);
-//		poset->frame[f].chi2 = err;
-//		chi2_set += err;
-//
-//		/*  Compute the chi-square contributions and number of degrees of freedom
-//        due to pixels whose model signal is less than or equal to
-//        'chi2fit0_thresh' standard deviations of the noise in the data frame   */
-//
-//		o2_fit0 = 0.0;
-//		dof_fit0 = 0.0;
-//		err_fit0 = 0.0;
-//		thresh_fit0 = par->chi2fit0_thresh;  /* "sdev" = 1.0 for plane-of-sky data */
-//
-//	}  /* end for loop over frames */
-//
-//	return chi2_set;
-//}
-
 __host__ double chi2_lghtcrv_gpu(
 		struct par_t *dpar,
 		struct dat_t *ddat,
@@ -1595,4 +1485,3 @@ __host__ double chi2_lghtcrv_gpu(
 //	free(h_o2m2om);
 	return h_dof_chi2set[1];
 }
-

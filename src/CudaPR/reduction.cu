@@ -2253,49 +2253,62 @@ __host__ void dvdI_reduce_streams(struct mod_t *dmod, double *dv, double *dcom0,
 	gpuErrchk(cudaMalloc((void**)&d_odata_dI21,  arrsz));
 	gpuErrchk(cudaMalloc((void**)&d_odata_dI22,  arrsz));
 
-	gpuErrchk(cudaMemsetAsync(d_odata_dv, 0, arrsz, dv_streams[0]));
-	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock, 0, dv_streams[0] >>>(dv, d_odata_dv, size);
+	//gpuErrchk(cudaMemsetAsync(d_odata_dv, 0, arrsz, dv_streams[0]));
+	gpuErrchk(cudaMemset(d_odata_dv, 0, arrsz));
+	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock/*, 0, dv_streams[0] */>>>(dv, d_odata_dv, size);
 
-	gpuErrchk(cudaMemsetAsync(d_odata_dcom0, 0, arrsz, dv_streams[1]));
-	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock, 0, dv_streams[1] >>>(dcom0, d_odata_dcom0, size);
+	gpuErrchk(cudaMemset(d_odata_dv, 0, arrsz));
+//	gpuErrchk(cudaMemsetAsync(d_odata_dcom0, 0, arrsz, dv_streams[1]));
+	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock/*, 0, dv_streams[1]*/ >>>(dcom0, d_odata_dcom0, size);
 
+	gpuErrchk(cudaMemset(d_odata_dv, 0, arrsz));
 	gpuErrchk(cudaMemsetAsync(d_odata_dcom1, 0, arrsz, dv_streams[2]));
-	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock, 0, dv_streams[2] >>>(dcom1, d_odata_dcom1, size);
+	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock/*, 0, dv_streams[2]*/ >>>(dcom1, d_odata_dcom1, size);
 
-	gpuErrchk(cudaMemsetAsync(d_odata_dcom2, 0, arrsz, dv_streams[3]));
-	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock, 0, dv_streams[3] >>>(dcom2, d_odata_dcom2, size);
+	gpuErrchk(cudaMemset(d_odata_dv, 0, arrsz));
+//	gpuErrchk(cudaMemsetAsync(d_odata_dcom2, 0, arrsz, dv_streams[3]));
+	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock/*, 0, dv_streams[3] */>>>(dcom2, d_odata_dcom2, size);
 
-	gpuErrchk(cudaMemsetAsync(d_odata_dI00, 0, arrsz, dv_streams[4]));
-	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock, 0, dv_streams[4] >>>(dI00, d_odata_dI00, size);
+	gpuErrchk(cudaMemset(d_odata_dv, 0, arrsz));
+//	gpuErrchk(cudaMemsetAsync(d_odata_dI00, 0, arrsz, dv_streams[4]));
+	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock/*, 0, dv_streams[4] */>>>(dI00, d_odata_dI00, size);
 
-	gpuErrchk(cudaMemsetAsync(d_odata_dI01, 0, arrsz, dv_streams[5]));
-	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock, 0, dv_streams[5] >>>(dI01, d_odata_dI01, size);
+	gpuErrchk(cudaMemset(d_odata_dv, 0, arrsz));
+//	gpuErrchk(cudaMemsetAsync(d_odata_dI01, 0, arrsz, dv_streams[5]));
+	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock/*, 0, dv_streams[5] */>>>(dI01, d_odata_dI01, size);
 
-	gpuErrchk(cudaMemsetAsync(d_odata_dI02, 0, arrsz, dv_streams[6]));
-	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock, 0, dv_streams[6] >>>(dI02, d_odata_dI02, size);
+	gpuErrchk(cudaMemset(d_odata_dv, 0, arrsz));
+//	gpuErrchk(cudaMemsetAsync(d_odata_dI02, 0, arrsz, dv_streams[6]));
+	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock/*, 0, dv_streams[6]*/ >>>(dI02, d_odata_dI02, size);
 
-	gpuErrchk(cudaMemsetAsync(d_odata_dI10, 0, arrsz, dv_streams[7]));
-	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock, 0, dv_streams[7] >>>(dI10, d_odata_dI10, size);
+	gpuErrchk(cudaMemset(d_odata_dv, 0, arrsz));
+//	gpuErrchk(cudaMemsetAsync(d_odata_dI10, 0, arrsz, dv_streams[7]));
+	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock/*, 0, dv_streams[7] */>>>(dI10, d_odata_dI10, size);
 
-	gpuErrchk(cudaMemsetAsync(d_odata_dI11, 0, arrsz, dv_streams[8]));
-	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock, 0, dv_streams[8] >>>(dI11, d_odata_dI11, size);
+	gpuErrchk(cudaMemset(d_odata_dv, 0, arrsz));
+//	gpuErrchk(cudaMemsetAsync(d_odata_dI11, 0, arrsz, dv_streams[8]));
+	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock/*, 0, dv_streams[8] */>>>(dI11, d_odata_dI11, size);
 
-	gpuErrchk(cudaMemsetAsync(d_odata_dI12, 0, arrsz, dv_streams[9]));
-	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock, 0, dv_streams[9] >>>(dI12, d_odata_dI12, size);
+	gpuErrchk(cudaMemset(d_odata_dv, 0, arrsz));
+//	gpuErrchk(cudaMemsetAsync(d_odata_dI12, 0, arrsz, dv_streams[9]));
+	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock/*, 0, dv_streams[9]*/ >>>(dI12, d_odata_dI12, size);
 
-	gpuErrchk(cudaMemsetAsync(d_odata_dI20, 0, arrsz, dv_streams[10]));
-	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock, 0, dv_streams[10] >>>(dI20, d_odata_dI20, size);
+	gpuErrchk(cudaMemset(d_odata_dv, 0, arrsz));
+//	gpuErrchk(cudaMemsetAsync(d_odata_dI20, 0, arrsz, dv_streams[10]));
+	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock/*, 0, dv_streams[10]*/ >>>(dI20, d_odata_dI20, size);
 
-	gpuErrchk(cudaMemsetAsync(d_odata_dI21, 0, arrsz, dv_streams[11]));
-	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock, 0, dv_streams[11] >>>(dI21, d_odata_dI21, size);
+	gpuErrchk(cudaMemset(d_odata_dv, 0, arrsz));
+//	gpuErrchk(cudaMemsetAsync(d_odata_dI21, 0, arrsz, dv_streams[11]));
+	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock/*, 0, dv_streams[11] */>>>(dI21, d_odata_dI21, size);
 
-	gpuErrchk(cudaMemsetAsync(d_odata_dI22, 0, arrsz, dv_streams[12]));
-	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock, 0, dv_streams[12] >>>(dI22, d_odata_dI22, size);
+	gpuErrchk(cudaMemset(d_odata_dv, 0, arrsz));
+//	gpuErrchk(cudaMemsetAsync(d_odata_dI22, 0, arrsz, dv_streams[12]));
+	device_reduce_block_atomic_kernel<<< dimGrid, dimBlock/*, 0, dv_streams[12] */>>>(dI22, d_odata_dI22, size);
 	checkErrorAfterKernelLaunch("device_reduce_block_atomic_kernel");
 
 	/* Synchronize streams before continuing with default stream */
-	for (int f=0; f<13; f++)
-		cudaStreamSynchronize(dv_streams[f]);
+//	for (int f=0; f<13; f++)
+//		cudaStreamSynchronize(dv_streams[f]);
 
 	/* Copy and assign */
 	set_dv_dcom_di_krnl<<<1,1>>>(d_odata_dv, d_odata_dcom0, d_odata_dcom1,

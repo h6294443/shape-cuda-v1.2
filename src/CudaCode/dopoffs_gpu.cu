@@ -1,15 +1,11 @@
 /*****************************************************************************************
                                                                                 dopoffs.c
-
 Takes the delay-correction polynomial for a Doppler dataset and figures out the COM
 Doppler corrections (in units of Doppler bins) for each frame.
-
 Modified 2015 June 3 by CM:
     Implement smearing for the "fit" and "write" actions
-
 Modified 2006 June 21 by CM:
     Changed dopres to dop_per_bin
-
 Modified 2003 April 26 by CM:
     Removed delay computation
 *****************************************************************************************/
@@ -28,7 +24,7 @@ __global__ void dopoffs_krnl(struct dat_t *ddat, int s, int nframes) {
 			dop = 0.0;
 			arg = ddat->set[s].desc.doppler.frame[f].view[k].t -
 					ddat->set[s].desc.doppler.delcor.t0;
-			for (n=1; n<=2/*ddat->set[s].desc.doppler.delcor.n*/; n++) {
+			for (n=1; n<=ddat->set[s].desc.doppler.delcor.n; n++) {
 //				printf("n:%i\n", n);
 //				printf("nviews=%i and delcor.n=%i\n", ddat->set[s].desc.doppler.nviews, ddat->set[s].desc.doppler.delcor.n);
 //				printf("set[%i] delcor.a[%i] = %3.6g\n", s, n, ddat->set[s].desc.doppler.delcor.a[n].val);
