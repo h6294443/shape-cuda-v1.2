@@ -1316,7 +1316,7 @@ __host__ void vary_params_gpu(
 				/* Change launch parameters from ncalc threads to n threads */
 				//BLKncalc.x = floor((THD.x - 1 + hlc_n[s]) / THD.x);
 				lghtcrv_splint_krnl<<<1,1>>>(ddat, s, hlc_n[s], hnframes[s]);
-				checkErrorAfterKernelLaunch("lghtcrv_splint_streams_krnl");
+				checkErrorAfterKernelLaunch("lghtcrv_splint_krnl");
 
 				/* Finalize the optical brightness calculation */
 				opt_brightness_krnl<<<1,1>>>(ddat, s, hlc_n[s]);
@@ -1463,12 +1463,12 @@ __host__ void vary_params_MFS_gpu(
 
     /* Launch posclr_streams_krnl to initialize POS view */
     for (s=0; s<nsets; s++)
-    	posclr_radar_krnl<<<BLK[s],THD/*, 0, vp_stream[s]*/>>>(pos, posn, s);
+    	posclr_radar_krnl<<<BLK[s],THD, 0, vp_stream[s]>>>(pos, posn, s);
     checkErrorAfterKernelLaunch("posclr_radar_krnl64");
 
     /* Synchronize streams to default stream */
-//	for (s=0; s<=nsets; s++)
-//		cudaStreamSynchronize(vp_stream[s]);
+	for (s=0; s<=nsets; s++)
+		cudaStreamSynchronize(vp_stream[s]);
 
     /* Determine which POS pixels cover the target, and get distance
      * toward Earth of each POS pixel. Pass the frame streams, too. */
@@ -1480,13 +1480,13 @@ __host__ void vary_params_MFS_gpu(
     	/* Zero out the fit delay-Doppler image and call pos2deldop
     	 * to create the fit image by mapping power from the plane
     	 * of sky to delay-Doppler space.    				  */
-    	clrvect_MFS_krnl<<<ddBLK[s],THD/*, 0, vp_stream[s]*/>>>(ddat,
+    	clrvect_MFS_krnl<<<ddBLK[s],THD, 0, vp_stream[s]>>>(ddat,
     			hdeldopsize[s], s);
     } checkErrorAfterKernelLaunch("clrvect_krnl");
 
 	/* Synchronize streams to default stream */
-//	for (s=0; s<=nsets; s++)
-//		cudaStreamSynchronize(vp_stream[s]);
+	for (s=0; s<=nsets; s++)
+		cudaStreamSynchronize(vp_stream[s]);
 
     /* Call the CUDA pos2deldop function */
     pos2deldop_MFS_gpu(dpar, dmod, ddat, pos, ddframe, xylim, ndel, ndop,
@@ -1499,12 +1499,11 @@ __host__ void vary_params_MFS_gpu(
     checkErrorAfterKernelLaunch("zmax_final_krnl64");
 
     /* Calculate radar cross section for each frame in set */
-//    xsec[0] = compute_deldop_xsec_MFS_gpu64(ddat, nsets, hdeldopsize, vp_stream);
     for (s=0; s<nsets; s++) {
     	xsec[0] = compute_deldop_xsec_gpu(ddat, 1, hdeldopsize[s], s, vp_stream);
     	xsec_deldop_krnl<<<1,1>>>(xsec[0]);
     }
-    checkErrorAfterKernelLaunch("xsec_deldop_krnl64");
+    checkErrorAfterKernelLaunch("xsec_deldop_krnl");
 
     cosdelta_MFS_krnl<<<BLKsets,THDsets>>>(ddat, nsets);
     checkErrorAfterKernelLaunch("cosdelta_MFS_krnl");

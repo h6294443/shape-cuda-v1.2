@@ -121,12 +121,8 @@ extern "C" {
 /* These 2 device variables are to get nf and nv from the GPU-located dmod file */
 __device__ int dnv, dnf, dns;
 __device__ double d_a[3];
-//__device__ float3 d_af;
-//__device__ float af_radius, a_over_b_f, b_over_c_f, k_asym_f, x0term_f, numer_f, denom_f, x0_f;
 __device__ double a_radius, a_over_b, b_over_c, k_asym, x0term, numer, denom, x0;
 __device__ int harmonic_scatlaw;
-//__device__ float rm_area=0.0, rm_ifarea=0.0, rm_vol=0.0, rm_ifvol=0.0,
-//		rm_dcom[3], rm_ifdcom[3], rm_dI[3][3], rm_ifdI[3][3];
 static int nv, nf, ns;
 static dim3 nvBLK,nvTHD,nfBLK,nfTHD,nsBLK,nsTHD;
 __host__ void realize_coordinates_gpu(struct par_t *dpar, struct mod_t *dmod, unsigned char type, int gpuid);
@@ -763,14 +759,14 @@ __host__ void check_surface_gpu(struct mod_t *dmod, cudaStream_t *rm_streams) {
 	nsBLK.x = floor((THD.x - 1 + ns) / THD.x);
 
 	/* 1-component model: flag all vertices and facets as active, then return  */
-	set_real_active_vert_krnl<<<nvBLK,THD/*,0,rm_streams[0]*/>>>(dmod);
-	set_real_active_facet_krnl<<<nfBLK,THD/*,0,rm_streams[1]*/>>>(dmod);
-	set_real_active_side_krnl<<<nsBLK,THD/*,0,rm_streams[2]*/>>>(dmod);
+	set_real_active_vert_krnl<<<nvBLK,THD,0,rm_streams[0]>>>(dmod);
+	set_real_active_facet_krnl<<<nfBLK,THD,0,rm_streams[1]>>>(dmod);
+	set_real_active_side_krnl<<<nsBLK,THD,0,rm_streams[2]>>>(dmod);
 	checkErrorAfterKernelLaunch("set_real_active_side_krnl");
 
 	/* Synchronize streams to default stream */
-	/*for (int f=0; f<3; f++)
-		cudaStreamSynchronize(rm_streams[f]);*/
+	for (int f=0; f<3; f++)
+		cudaStreamSynchronize(rm_streams[f]);
 }
 
 __global__ void comp_moments_1stinit_krnl(struct mod_t *dmod) {

@@ -1612,14 +1612,14 @@ __host__ int posvis_gpu(
 
 	for (f=start; f<nfrm_alloc; f++) {
 		/* Now the main facet kernel */
-		posvis_facet_krnl_modb<<<BLK,THD/*, 0, pv_stream[f-start]*/>>>(pos, verts,
+		posvis_facet_krnl_modb<<<BLK,THD, 0, pv_stream[f-start]>>>(pos, verts,
 				ijminmax_overall, orbit_offset, oa, usrc,src, nf, f, smooth, outbndarr, set);
 	}
 	checkErrorAfterKernelLaunch("posvis_facet_krnl");
 
 	/* Synchronize streams to default stream */
-//	for (f=start; f<nfrm_alloc; f++)
-//		cudaStreamSynchronize(pv_stream[f-start]);
+	for (f=start; f<nfrm_alloc; f++)
+		cudaStreamSynchronize(pv_stream[f-start]);
 
 	/* Take care of any posbnd flags */
 	posvis_outbnd_krnl_modb<<<BLKfrm,THD64>>>(pos,
@@ -1668,7 +1668,7 @@ __host__ int posvis_MFS_gpu(
 
 	for (s=0; s<nsets; s++) {
 		/* Now the main facet kernel */
-		posvis_facet_MFS_krnl<<<BLK,THD/*, 0, pv_stream[s]*/>>>(pos, verts,
+		posvis_facet_MFS_krnl<<<BLK,THD, 0, pv_stream[s]>>>(pos, verts,
 				ijminmax_overall, orbit_offset, oa, nf, outbndarr, s);
 	}
 	checkErrorAfterKernelLaunch("posvis_facet_MFS_krnl");

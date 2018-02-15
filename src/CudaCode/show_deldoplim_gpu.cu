@@ -125,7 +125,7 @@ __host__ void show_deldoplim_gpu(struct dat_t *ddat,
  				/* Get the delay and Doppler limits*/
  				sho_ddl_get_lims_krnl<<<BLK[s],THD>>>(ddat, idellim,
  						idoplim, ndel, ndop, s, nframes[s]);
- 				checkErrorAfterKernelLaunch("sho_ddl_get_lims_streams_krnl");
+ 				checkErrorAfterKernelLaunch("sho_ddl_get_lims_krnl");
  				gpuErrchk(cudaMemcpy(hidellim, idellim, sizeof(int2)*nframes[s],
  						cudaMemcpyDeviceToHost));
  				gpuErrchk(cudaMemcpy(hidoplim, idoplim, sizeof(int2)*nframes[s],
@@ -155,7 +155,7 @@ __host__ void show_deldoplim_gpu(struct dat_t *ddat,
  				/* Get the delay and Doppler limits */
  				sho_ddl_get_lims_krnl<<<BLK[s],THD>>>(ddat, idellim,
  						idoplim, ndel, ndop, s, nframes[s]);
- 				checkErrorAfterKernelLaunch("sho_ddl_get_lims_streams_krnl");
+ 				checkErrorAfterKernelLaunch("sho_ddl_get_lims_krnl");
  				gpuErrchk(cudaMemcpy(hidoplim, idoplim, sizeof(int2)*nframes[s],
  						cudaMemcpyDeviceToHost));
  				gpuErrchk(cudaMemcpy(hndop, ndop, sizeof(int)*nframes[s],
@@ -222,7 +222,7 @@ __host__ void show_deldoplim_MFS_gpu(struct dat_t *ddat, int nsets)
  		/* Get the delay and Doppler limits*/
  		sho_ddl_get_lims_krnl<<<BLK[s],THD>>>(ddat, idellim,
  				idoplim, ndel, ndop, s, 1);
- 		checkErrorAfterKernelLaunch("sho_ddl_get_lims_streams_krnl");
+ 		checkErrorAfterKernelLaunch("sho_ddl_get_lims_krnl");
  		gpuErrchk(cudaMemcpy(hidellim, idellim, sizeof(int2)*1,
  				cudaMemcpyDeviceToHost));
  		gpuErrchk(cudaMemcpy(hidoplim, idoplim, sizeof(int2)*1,
@@ -337,7 +337,7 @@ __host__ void show_deldoplim_pthread(struct dat_t *ddat0, struct dat_t *ddat1,
  				if (GPUID[s]==GPU1)
  					sho_ddl_get_lims_krnl<<<BLK[s],THD>>>(ddat1, idellim,
  							idoplim, ndel, ndop, s, nframes[s]);
- 				checkErrorAfterKernelLaunch("sho_ddl_get_lims_streams_krnl");
+ 				checkErrorAfterKernelLaunch("sho_ddl_get_lims_krnl");
  				gpuErrchk(cudaMemcpy(hidoplim, idoplim, sizeof(int2)*nframes[s],
  						cudaMemcpyDeviceToHost));
  				gpuErrchk(cudaMemcpy(hndop, ndop, sizeof(int)*nframes[s],

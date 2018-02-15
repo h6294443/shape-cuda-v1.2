@@ -1765,15 +1765,15 @@ __host__ void pos2deldop_gpu(
 
 	/* Assign 1 stream to each frame's iteration each of the three kernels */
 	for (int f=0; f<nfrm_alloc; f++) {
-		pos2deldop_pixel_krnl_moda<<<BLK[f],THD/*,0,p2d_stream[f]*/>>>(dpar, dmod, ddat, pos,
+		pos2deldop_pixel_krnl_moda<<<BLK[f],THD,0,p2d_stream[f]>>>(dpar, dmod, ddat, pos,
 				frame, deldoplim, dop, deldopshift, axay, xyincr, idel0, idop0,
 				ndel, ndop, xspan[f], nThreads[f], orbit_xoff, orbit_yoff,
 				set, f, any_overflow);
 	} checkErrorAfterKernelLaunch("pos2deldop_pixel_krnl_moda");
 
 	/* Synchronize streams to default stream */
-//	for (int f=0; f<nfrm_alloc; f++)
-//		cudaStreamSynchronize(p2d_stream[f]);
+	for (int f=0; f<nfrm_alloc; f++)
+		cudaStreamSynchronize(p2d_stream[f]);
 
 	/* Launch kernel to copy the deldop limits back to original doubles in
 	 * the frame structures.	 */
@@ -1872,7 +1872,7 @@ __host__ void pos2deldop_MFS_gpu(
 
 	/* Assign 1 stream to each frame's iteration each of the three kernels */
 	for (int s=0; s<nsets; s++) {
-		pos2deldop_pixel_MFS_krnl<<<BLK[s],THD/*,0,p2d_stream[s]*/>>>(dpar, dmod,
+		pos2deldop_pixel_MFS_krnl<<<BLK[s],THD,0,p2d_stream[s]>>>(dpar, dmod,
 			ddat, pos,frame, deldoplim, dop, deldopshift, axay, xyincr, idel0,
 			idop0, ndel, ndop, xspan[s], nThreads[s], orbit_xoff, orbit_yoff, s,
 			any_overflow, codemethod, spb, stride, dopfftlen, spb_over_stride,

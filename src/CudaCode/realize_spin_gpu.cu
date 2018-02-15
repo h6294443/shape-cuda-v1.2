@@ -398,10 +398,10 @@ __host__ void realize_spin_gpu(
 	/* Get the three components of the angle and spin offsets for all datasets,
 	 * with any "=" states taken into account  */
 	realize_angleoff_krnl<<<1,1>>>(ddat, -1);
-	checkErrorAfterKernelLaunch("realize_angleoff_krnl (realize_spin_cuda_streams2.cu)");
+	checkErrorAfterKernelLaunch("realize_angleoff_krnl");
 
 	realize_omegaoff_krnl<<<nsetsBLK,THD>>>(ddat, -1);
-	checkErrorAfterKernelLaunch("realize_omegaoff_krnl, (realize_spin_cuda_streams2.cu");
+	checkErrorAfterKernelLaunch("realize_omegaoff_krnl");
 
 	/* Note: Maybe turn the dataset loop into cudaStreams later */
 	/* Determine the model spin state for each dataset in turn */
