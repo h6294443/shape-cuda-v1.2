@@ -1618,8 +1618,8 @@ __host__ int posvis_gpu(
 	checkErrorAfterKernelLaunch("posvis_facet_krnl");
 
 	/* Synchronize streams to default stream */
-	for (f=start; f<nfrm_alloc; f++)
-		cudaStreamSynchronize(pv_stream[f-start]);
+//	for (f=start; f<nfrm_alloc; f++)
+//		cudaStreamSynchronize(pv_stream[f-start]);
 
 	/* Take care of any posbnd flags */
 	posvis_outbnd_krnl_modb<<<BLKfrm,THD64>>>(pos,

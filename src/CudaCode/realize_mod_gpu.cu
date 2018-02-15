@@ -130,7 +130,6 @@ __device__ int harmonic_scatlaw;
 static int nv, nf, ns;
 static dim3 nvBLK,nvTHD,nfBLK,nfTHD,nsBLK,nsTHD;
 __host__ void realize_coordinates_gpu(struct par_t *dpar, struct mod_t *dmod, unsigned char type, int gpuid);
-__host__ void check_surface_gpu(struct mod_t *dmod, cudaStream_t *rm_streams);
 __host__ void compute_moments_gpu(struct mod_t *dmod, int nf, cudaStream_t *cm_streams);
 void *realize_mod_pthread_sub(void *ptr);
 

@@ -1772,8 +1772,8 @@ __host__ void pos2deldop_gpu(
 	} checkErrorAfterKernelLaunch("pos2deldop_pixel_krnl_moda");
 
 	/* Synchronize streams to default stream */
-	for (int f=0; f<nfrm_alloc; f++)
-		cudaStreamSynchronize(p2d_stream[f]);
+//	for (int f=0; f<nfrm_alloc; f++)
+//		cudaStreamSynchronize(p2d_stream[f]);
 
 	/* Launch kernel to copy the deldop limits back to original doubles in
 	 * the frame structures.	 */

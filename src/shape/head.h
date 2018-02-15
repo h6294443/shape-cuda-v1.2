@@ -33,3 +33,4 @@ Top-level header file for shape-cuda - adapted from head.h in v2.10.0 of shape.
 #include "../DebugCode/debug_routines.h"
 #include "../CudaPR/parallel_reductions.h"
 #include "../HostMultiThreading/hmt.h"
+#include "../HybridCode/hybrid.h"

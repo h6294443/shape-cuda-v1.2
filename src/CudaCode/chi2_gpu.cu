@@ -1338,7 +1338,7 @@ __host__ double chi2_deldop_gpu(
 			/* WARNING WARNING WARNING */
 			/* This kernel is for accuracy testing only. Must develop a proper
 			 * parallel reduction for this instead */
-			deldop_wrt_chi2fit0_krnl<<<BLK[f],THD, 0, c2s_stream[f]>>>(dpar,
+			deldop_wrt_chi2fit0_krnl<<<BLK[f],THD/*, 0, c2s_stream[f]*/>>>(dpar,
 					ddat, s, f, ndel, ndop, nThreads[f], returns, o2_fit0_dof_fit0);
 			checkErrorAfterKernelLaunch("deldop_wrt_chi2fit0_krnl64");
 		}

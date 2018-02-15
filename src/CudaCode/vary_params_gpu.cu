@@ -1480,7 +1480,7 @@ __host__ void vary_params_MFS_gpu(
     	/* Zero out the fit delay-Doppler image and call pos2deldop
     	 * to create the fit image by mapping power from the plane
     	 * of sky to delay-Doppler space.    				  */
-//    	clrvect_MFS_krnl<<<ddBLK[s],THD, 0, vp_stream[s]>>>(ddat,
+    	clrvect_MFS_krnl<<<ddBLK[s],THD/*, 0, vp_stream[s]*/>>>(ddat,
     			hdeldopsize[s], s);
     } checkErrorAfterKernelLaunch("clrvect_krnl");
 

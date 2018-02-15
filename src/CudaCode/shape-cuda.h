@@ -110,6 +110,8 @@ __host__ void calc_fits_pthreads(struct par_t *dpar0, struct par_t *dpar1,
 		int nsets, int nf, int max_frames, pthread_t thread1, pthread_t thread2,
 		cudaStream_t *gpu0_stream, cudaStream_t *gpu1_stream);
 
+__host__ void check_surface_gpu(struct mod_t *dmod, cudaStream_t *rm_streams);
+
 __host__ double chi2_gpu(struct par_t *dpar, struct dat_t *ddat, unsigned char
 		*htype, unsigned char *dtype, int *nframes, int *lc_n, int
 		list_breakdown,	int nsets, cudaStream_t *c2s_stream, int max_frames);
