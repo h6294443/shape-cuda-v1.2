@@ -523,7 +523,7 @@ __global__ void set_real_active_vert_krnl(struct mod_t *dmod) {
 	/* nv-threaded kernel */
 	int v = blockIdx.x * blockDim.x + threadIdx.x;
 
-	if (v < dnv) //dmod->shape.comp[0].real.nv)
+	if (v < dmod->shape.comp[0].real.nv) //dmod->shape.comp[0].real.nv)
 		dmod->shape.comp[0].real.v[v].act = 1;
 }
 __global__ void set_real_active_facet_krnl(struct mod_t *dmod) {
@@ -888,7 +888,7 @@ __host__ void compute_moments_gpu(struct mod_t *dmod, int nf, cudaStream_t *cm_s
 
 	/* Calculate surface area for this component; for active facets, also add
 	 * the contributions to the area of the overall model    */
-	dvdI_reduce_streams(dmod, dv, dcom0, dcom1, dcom2, dI00, dI01, dI02,
+	dvdI_reduce_gpu(dmod, dv, dcom0, dcom1, dcom2, dI00, dI01, dI02,
 			dI10, dI11, dI12, dI20, dI21, dI22, nf, c, cm_streams);
 
 	/* This kernel computes the overall COM vector */

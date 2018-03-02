@@ -66,3 +66,6 @@ __device__ int dev_vp_iroundf(float x);
 __device__ void dev_jacobi(double a[3][3], int n, double d[3], double v[3][3], int *nrot);
 __device__ double dev_distance(double x[3], double y[3]);
 __device__ double dev_vecnorm( double x[3]);
+void mtrnsps2(double3 *a, double b[3][3], int frm);
+void mmmul2(double3 *x, double y[3][3], double3 *z, int frm);
+void cotrans5(double3 *y, double a[3][3], double x[3], int dir, int f);

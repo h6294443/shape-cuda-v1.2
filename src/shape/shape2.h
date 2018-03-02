@@ -1590,3 +1590,10 @@ void write_pos_poset( struct par_t *par, struct mod_t *mod,
 		struct poset_t *poset, int s, int f);
 void write_pos_lghtcrv( struct par_t *par, struct mod_t *mod,
 		struct lghtcrv_t *lghtcrv, int s, int i);
+
+void realize_impulse( struct spin_t spin, double t, double t_integrate[],
+		double impulse[][3], int *n_integrate);
+void realize_angleoff( struct dat_t *dat);
+void realize_omegaoff( struct dat_t *dat);
+void checkphotopar( double parval, double parmin, double parmax, int mode,
+                    unsigned char *badphoto, double *badphoto_logfactor);

@@ -127,6 +127,27 @@ __device__ void dev_cotrans5(double3 *y, double a[3][3], double x[3], int dir, i
 		y[f].y = t[1];
 		y[f].z = t[2];
 }
+void cotrans5(double3 *y, double a[3][3], double x[3], int dir, int f) {
+	/* This version replaces double y[3] and double x[3] with double3 y and double3 x */
+	double t[3];
+	int i, j;
+
+	if (dir==1)
+			for (i=0;i<=2;i++) {
+				t[i] = 0.0;
+				for (j=0;j<=2;j++)
+					t[i] += a[i][j]*x[j];
+			}
+		if (dir==(-1))
+			for (i=0;i<=2;i++) {
+				t[i] = 0.0;
+				for (j=0;j<=2;j++)
+					t[i] += a[j][i]*x[j];
+			}
+		y[f].x = t[0];
+		y[f].y = t[1];
+		y[f].z = t[2];
+}
 __device__ void dev_cotrans6(double y[3], double3 *a, double x[3], int dir, int frm) {
 	/* This version replaces double a[3][3] with a double3 pointers of lenght
 	 * nframes, selected with 'f'	 */

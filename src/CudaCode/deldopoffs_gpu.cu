@@ -1,12 +1,9 @@
 /*****************************************************************************************
                                                                              deldopoffs.c
-
 Takes the delay-correction polynomial for a delay-doppler set and figures out the COM
 delay and doppler corrections (in units of image rows and columns) for each frame.
-
 Modified 2015 June 3 by CM:
     Implement smearing for the "fit" and "write" actions
-
 Modified 2006 June 21 by CM:
     Changed delres to del_per_pixel and dopres to dop_per_pixel
  *****************************************************************************************/

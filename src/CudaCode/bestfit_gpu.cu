@@ -389,7 +389,7 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 	(void) gethostname(hostname, MAXLEN-1);
 	pid = getpid();
 	pid_long = (long) pid;  /* Assumes pid_t fits in a long */
-	printf("#\n# CUDA fit (pid %ld on %s)\n", pid_long, hostname);
+	printf("#\n# Regular GPU CUDA fit (pid %ld on %s)\n", pid_long, hostname);
 	fflush(stdout);
 
 	/* Allocate memory for pointers, steps, and tolerances on bothhost and
@@ -629,10 +629,10 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			/* Get value of (*hotparam) so that mnbrak can use it*/
 			bf_get_hotparam_val_krnl<<<1,1>>>();
 			checkErrorAfterKernelLaunch("bf_get_hotparam_val_krnl");
-//			cudaDeviceSynchronize();
+
 			gpuErrchk(cudaMemcpyFromSymbol(&hotparamval, bf_hotparamval,
 					sizeof(double),	0, cudaMemcpyDeviceToHost));
-//			printf("host hotparamval=%3.8g\n", hotparamval);
+
 			/* Use Numerical Recipes routine mnbrak to bracket a minimum in the
 			 * objective function (reduced chi-square plus penalties) objec-
 			 * tive(x), where x is the value of parameter p.  As initial trial
@@ -646,14 +646,10 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			 * somewhere between ax and cx.          */
 			ax = hotparamval;
 			bx = ax + hfparstep[p]; /* par usage us fine here */
-//			printf("hfparstep[%i]=%3.8g\n", p, hfparstep[p]);
-//			printf("ax, %g\n", ax);
-//			printf("bx, %g\n", bx);
-//			printf("mnbrak start\n");
 			mnbrak_gpu(&ax, &bx, &cx, &obja, &objb, &objc,
 					objective_gpu, verts, htype, dtype, nframes,
 					nviews, lc_n, nsets, nf, bf_stream);
-//			printf("mnbrak, over\n");
+
 			/* Before homing in on local minimum, initialize flags that will
 			 * tell us if model extended beyond POS frame (sky rendering) for
 			 * any trial parameter value(s), if it extended beyond any POS ima-
@@ -671,17 +667,6 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			 * a modified version of brent that has an absolute fitting tole-
 			 * rance as one of its arguments, in addition to the existing
 			 * fractional tolerance.                                      */
-
-//			printf("ax, %3.8g\n", ax);
-//			printf("bx, %3.8g\n", bx);
-//			printf("cx, %3.8g\n", cx);
-//			printf("obja, %3.8g\n", obja);
-//			printf("objb, %3.8g\n", objb);
-//			printf("objc, %3.8g\n", objc);
-//			printf("hfpartol[%i], %3.8g\n", p, hfpartol[p]);
-//			printf("hfparabstol[%i], %3.8g\n",p, hfparabstol[p]);
-
-//			printf("brent_abs start\n");
 			enderr = brent_abs_gpu(ax, bx, cx, objective_gpu, hfpartol[p],
 					hfparabstol[p], &xmin, verts, htype, dtype, nframes, nviews, lc_n,
 					nsets, nf, bf_stream);
@@ -823,14 +808,14 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			 * parameters (i.e. delay correction polynomial coefficients) do.  */
 			if (++cntr >= npar_update) {
 				cntr = 0;
-//				showvals = 1;
+				showvals = 1;
 				calc_fits_gpu(dpar, dmod, ddat, verts, nviews,
 						nframes, lc_n, htype, nsets, nf, bf_stream, max_frames);
 				chi2_gpu(dpar, ddat, htype, dtype, nframes,
 						lc_n, 0, nsets, bf_stream, max_frames);
 
-//				write_mod( dpar, dmod);
-//				write_dat( dpar, ddat);
+				write_mod( dpar, dmod);
+				write_dat( dpar, ddat);
 			}
 //			printf("end fitpar loop\n");
 		}  // End fitpar loop
@@ -844,8 +829,8 @@ __host__ double bestfit_gpu(struct par_t *dpar, struct mod_t *dmod,
 			chi2_gpu(dpar, ddat, htype, dtype, nframes,
 					lc_n, 0, nsets, bf_stream, max_frames);
 
-//			write_mod( dpar, dmod);
-//			write_dat( dpar, ddat);
+			write_mod( dpar, dmod);
+			write_dat( dpar, ddat);
 		}
 		show_deldoplim_gpu(ddat, htype, nsets, nframes, max_frames);
 
@@ -2163,8 +2148,8 @@ __host__ double bestfit_MFS_gpu(struct par_t *dpar, struct mod_t *dmod,
 						nsets, nf, bf_stream);
 				chi2_MFS_gpu(dpar, ddat, 0, nsets, bf_stream);
 
-//				write_mod( dpar, dmod);
-//				write_dat( dpar, ddat);
+				write_mod( dpar, dmod);
+				write_dat( dpar, ddat);
 			}
 			//			printf("end fitpar loop\n");
 		}  // End fitpar loop
@@ -2177,8 +2162,8 @@ __host__ double bestfit_MFS_gpu(struct par_t *dpar, struct mod_t *dmod,
 					nsets, nf, bf_stream);
 			chi2_MFS_gpu(dpar, ddat, 0, nsets, bf_stream);
 
-//			write_mod( dpar, dmod);
-//			write_dat( dpar, ddat);
+			write_mod( dpar, dmod);
+			write_dat( dpar, ddat);
 		}
 		show_deldoplim_MFS_gpu(ddat, nsets);
 
@@ -2394,6 +2379,7 @@ __host__ double objective_MFS_gpu(
 	 * spar->showstate = 1, so that when function penalties is called later,
 	 * it "knows" that it should display the individual penalty values.
 	 * Reset showstate to 0 if showvals = 0.  */
+//	showvals=1;
 	if (showvals) {
 		printf("# %15s %e\n", "reduced chi2", err);
 		spar->showstate = 1;

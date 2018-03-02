@@ -34,6 +34,7 @@ extern int EXP;				/* Experimental flag - currently used for the a
 							 * tiled, shared memory posvis implementation */
 extern int MFS;				/* Multi-frame set flag. Use only for combining multiple
 							 * single-frame sets into a single multi-frame set */
+extern int HYB;				/* Flag for hybrid CPU/GPU code */
 
 /* Structures */
 extern struct par_t *dev_par;
@@ -188,6 +189,10 @@ __host__ int posvis_gpu(struct par_t *dpar, struct mod_t *dmod, struct pos_t
 __host__ int posvis_MFS_gpu(struct par_t *dpar, struct mod_t *dmod, struct pos_t
 		**pos, struct vertices_t **verts, double3 orbit_offset, int *posn, int
 		*outbndarr, int nsets, int nf, int body, int comp, cudaStream_t *pv_stream);
+
+__host__ int posvis_MFS_hyb(struct par_t *dpar, struct mod_t *dmod,	struct pos_t **pos,
+		double3 orbit_offset, int *outbndarr, int nsets, int body, int comp,
+		cudaStream_t *pv_stream);
 
 __host__ int read_dat_gpu( struct par_t *par, struct mod_t *mod, struct dat_t *dat);
 
@@ -367,3 +372,6 @@ __device__ void dev_splint_cfs(double *xa,double *ya,double *y2a,int n,double x,
 __host__ void set_up_pos_pinned(struct par_t *par, struct dat_t *dat);
 __host__ void set_up_pos_mgpu(struct par_t *par, struct dat_t *dat, int gpuid);
 __host__ void set_up_pos_gpu( struct par_t *par, struct dat_t *dat, int nf);
+__global__ void set_real_active_vert_krnl(struct mod_t *dmod);
+__global__ void set_real_active_facet_krnl(struct mod_t *dmod);
+__global__ void set_real_active_side_krnl(struct mod_t *dmod);

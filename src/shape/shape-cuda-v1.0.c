@@ -20,6 +20,7 @@ int HMT	= 0;
 int HMT_threads = 4;
 int EXP = 0;
 int MFS = 0;
+int HYB = 0;
 
 int main(int argc, char *argv[])
 {
@@ -83,63 +84,6 @@ int main(int argc, char *argv[])
 		else
 			CUDA = 0;
 	}
-//	else if (argc == 7){
-//		if (strcmp(argv[4],"MGPU")==0) {
-//			CUDA = 1;
-//			MGPU = 1;
-//			x = strtol(argv[5], NULL, 10);
-//			GPU0 = (int)x;
-//			x = strtol(argv[6], NULL, 10);
-//			GPU1 = (int)x;
-//		}
-//		else {
-//			CUDA = 0;
-//			MGPU = 0;
-//		}
-//	}
-
-
-
-//	if (argc == 6) {
-//		if (strcmp(argv[4], "-GPU")==0) {
-//			CUDA = 1;
-//			MGPU = 0;
-//			x = strtol(argv[5], NULL, 10);
-//			GPU0 = (int)x;
-//		}
-//		else if (strcmp(argv[4],"-MGPU")==0) {
-//			CUDA = 1;
-//			MGPU = 1;
-//			x = strtol(argv[5], NULL, 10);
-//			GPU0 = (int)x;
-//			if (GPU0==0)	GPU1 = 1;
-//			else GPU1 = 0;
-//		}
-//		else if (strcmp(argv[4], "-HMT")==0) {
-//			CUDA = 0;
-//			MGPU = 0;
-//			HMT = 1;
-//			x = strtol(argv[5], NULL, 10);
-//			HMT_threads = (int) x;
-//		}
-//		else
-//			CUDA = 0;
-//	}
-//	else if (argc == 7){
-//		if (strcmp(argv[4],"MGPU")==0) {
-//			CUDA = 1;
-//			MGPU = 1;
-//			x = strtol(argv[5], NULL, 10);
-//			GPU0 = (int)x;
-//			x = strtol(argv[6], NULL, 10);
-//			GPU1 = (int)x;
-//		}
-//		else {
-//			CUDA = 0;
-//			MGPU = 0;
-//		}
-//	}
-
 	if (CUDA) {
 		printf("Shape-CUDA-v1.2(A) running\n");
 		printf("Now with even more face-melting concurrency.\n");
@@ -148,7 +92,6 @@ int main(int argc, char *argv[])
 		maxThreadsPerBlock = 256;
 		gpuErrchk(cudaSetDevice(GPU0));
 	}
-
 
 	/* Read the par file, get the action, and make sure actions other than
 	 * "fit" do NOT use parallel processing. If in CUDA dual-GPU mode, read
@@ -306,6 +249,8 @@ int main(int argc, char *argv[])
 			else if (!MGPU)
 				if (MFS)
 					bestfit_MFS_gpu(dev_par,dev_mod,dev_dat, &par,&mod,&dat);
+				else if (HYB)
+					bestfit_MFS_hyb(dev_par, dev_mod, dev_dat, &par, &mod, &dat);
 				else
 					bestfit_gpu(dev_par,dev_mod,dev_dat, &par,&mod,&dat);
 		}

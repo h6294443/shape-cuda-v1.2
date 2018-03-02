@@ -364,21 +364,21 @@ __global__ void c2s_add_deldop_contributions_krnl(
 		 * standard deviations of the noise in the data frame   */
 		o2_fit0 = dof_fit0 = err_fit0 = 0.0;
 		thresh_fit0 = dpar->chi2fit0_thresh * ddat->set[s].desc.deldop.frame[f].sdev;
-		if (dpar->write_chi2fit0) {
-			for (i=0; i<ndel[f]; i++)
-				for (j=0; j<ndop[f]; j++)
-					off = j*ndel[f] + i; // For the unrolled fit, obs pointers
-					if (calval*ddat->set[s].desc.deldop.frame[f].fit_s[off] <= thresh_fit0) {
-						o2_fit0 += ddat->set[s].desc.deldop.frame[f].obs[i][j]*
-								ddat->set[s].desc.deldop.frame[f].obs[i][j]*
-								ddat->set[s].desc.deldop.frame[f].oneovervar[i][j];
-						if (ddat->set[s].desc.deldop.frame[f].oneovervar[i][j] > 0.0)
-							dof_fit0 += weight[f];
-					}
-			err_fit0 = weight[f] * o2_fit0;
-			atomicAdd(&c2s_chi2_fit0_deldop64, err_fit0);
-			atomicAdd(&c2s_dof_fit0_deldop64, dof_fit0);
-		}
+//		if (dpar->write_chi2fit0) {
+//			for (i=0; i<ndel[f]; i++)
+//				for (j=0; j<ndop[f]; j++)
+//					off = j*ndel[f] + i; // For the unrolled fit, obs pointers
+//					if (calval*ddat->set[s].desc.deldop.frame[f].fit[i][j] <= thresh_fit0) {
+//						o2_fit0 += ddat->set[s].desc.deldop.frame[f].obs[i][j]*
+//								ddat->set[s].desc.deldop.frame[f].obs[i][j]*
+//								ddat->set[s].desc.deldop.frame[f].oneovervar[i][j];
+//						if (ddat->set[s].desc.deldop.frame[f].oneovervar[i][j] > 0.0)
+//							dof_fit0 += weight[f];
+//					}
+//			err_fit0 = weight[f] * o2_fit0;
+//			atomicAdd(&c2s_chi2_fit0_deldop64, err_fit0);
+//			atomicAdd(&c2s_dof_fit0_deldop64, dof_fit0);
+//		}
 	}
 }
 __global__ void c2s_add_dop_contrbts_srl_krnl(
@@ -569,7 +569,7 @@ __global__ void deldop_wrt_chi2fit0_krnl(struct par_t *dpar, struct dat_t *ddat,
 			thresh_fit0 = dpar->chi2fit0_thresh * ddat->set[s].desc.deldop.frame[f].sdev;
 
 			if (ddat->set[s].desc.deldop.frame[f].cal.val *
-					ddat->set[s].desc.deldop.frame[f].fit_s[offset] <= thresh_fit0) {
+					ddat->set[s].desc.deldop.frame[f].fit[i][j] <= thresh_fit0) {
 
 				temp = ddat->set[s].desc.deldop.frame[f].obs[i][j] *
 						ddat->set[s].desc.deldop.frame[f].obs[i][j] *
@@ -1241,7 +1241,7 @@ __host__ double chi2_deldop_gpu(
 	/* Get values for ndel and ndop, and the overflow parameters o2, m2, om */
 	c2s_deldop_init_krnl<<<BLKfrm,THD64>>>(ddat, s, ndel, ndop, o2, m2, om,
 			weight, nframes);
-	checkErrorAfterKernelLaunch("c2s_deldop_init_krnl64");
+	checkErrorAfterKernelLaunch("c2s_deldop_init_krnl");
 	gpuErrchk(cudaMemcpy(&hndel, ndel, sizeof(int)*nframes, cudaMemcpyDeviceToHost));
 	gpuErrchk(cudaMemcpy(&hndop, ndop, sizeof(int)*nframes, cudaMemcpyDeviceToHost));
 

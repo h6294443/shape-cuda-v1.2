@@ -214,7 +214,7 @@ __global__ void pos2deldop_init_MFS_krnl(
 		int *badradararr,
 		int *any_overflow) {
 	/* nfrm_alloc-threaded kernel */
-	int f=0, s=blockIdx.x * blockDim.x + threadIdx.x;
+	int s=blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (s < nsets) {
 		/*  Initialize variables to avoid compilation warnings  */
@@ -532,7 +532,7 @@ __global__ void pos2deldop_pixel_krnl(
 	int offset = blockIdx.x * blockDim.x + threadIdx.x;
 	int x = offset % xspan + pos[f]->xlim[0];
 	int y = offset / xspan + pos[f]->ylim[0];
-	int n, fac, c, i, j, k, idel, idel_min, idel_max, idop_min, idop_max,
+	int n, fac, i, j, k, idel, idel_min, idel_max, idop_min, idop_max,
 	idop, m, m_min, m_max, idel1, idel2, idop1, idop2, zaddr, in_bounds;
 
 	double delPOS, dopPOS, codefactor, tmp, arg_sample, amp, arg_left,
@@ -1044,6 +1044,7 @@ __global__ void pos2deldop_pixel_MFS_krnl(
 
 	/* Load variables that are used by every thread into shared memory */
 	if (threadIdx.x==0) {
+		p2ds_nsinc2_sq = dpar->nsinc2 * dpar->nsinc2;
 		xincr = xyincr[s].x;
 		yincr = xyincr[s].y;
 		xlim0 = pos[s]->xlim[0];
@@ -1152,7 +1153,7 @@ __global__ void pos2deldop_pixel_MFS_krnl(
 					default:
 						del_contribution[idel-idel_min] = 0.0;
 						m_min = MAX( (int) floor((delPOS - idel - const2[s])
-								* p2ds_stride) , 0 );
+								* stride[s]) , 0 );
 						m_max = MIN( (int) ceil((delPOS - idel + const1[s])
 								* stride[s]) , spb[s] ) - 1;
 						arg_sample = (delPOS - (idel - const2[s])) /
@@ -1772,8 +1773,8 @@ __host__ void pos2deldop_gpu(
 	} checkErrorAfterKernelLaunch("pos2deldop_pixel_krnl_moda");
 
 	/* Synchronize streams to default stream */
-	for (int f=0; f<nfrm_alloc; f++)
-		cudaStreamSynchronize(p2d_stream[f]);
+//	for (int f=0; f<nfrm_alloc; f++)
+//		cudaStreamSynchronize(p2d_stream[f]);
 
 	/* Launch kernel to copy the deldop limits back to original doubles in
 	 * the frame structures.	 */
@@ -1880,8 +1881,8 @@ __host__ void pos2deldop_MFS_gpu(
 	} checkErrorAfterKernelLaunch("pos2deldop_pixel_MFS_krnl");
 
 	/* Synchronize streams to default stream */
-	for (int s=0; s<nsets; s++)
-		cudaStreamSynchronize(p2d_stream[s]);
+//	for (int s=0; s<nsets; s++)
+//		cudaStreamSynchronize(p2d_stream[s]);
 
 	/* Launch kernel to copy the deldop limits back to original doubles in
 	 * the frame structures.	 */

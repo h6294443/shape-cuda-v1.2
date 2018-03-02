@@ -225,7 +225,7 @@ __host__ void realize_delcor_gpu(struct dat_t *ddat, double delta_delcor0, int d
 	 * n_delcor is # of coefficients in that dataset's polynomial,
 	 * t0_delcor is the reference epoch for the polynomial.  */
 
-	cudaSetDevice(GPU0);
+//	cudaSetDevice(GPU0);
 	/* Initialize the flags */
 	rd_init_flags_krnl<<<1,1>>>();
 	checkErrorAfterKernelLaunch("rd_init_flags_krnl");
@@ -282,7 +282,7 @@ __host__ void realize_delcor_MFS_gpu(struct dat_t *ddat, double delta_delcor0, i
 	 * n_delcor is # of coefficients in that dataset's polynomial,
 	 * t0_delcor is the reference epoch for the polynomial.  */
 
-	cudaSetDevice(GPU0);
+//	cudaSetDevice(GPU0);
 	/* Initialize the flags */
 	rd_init_flags_krnl<<<1,1>>>();
 	checkErrorAfterKernelLaunch("rd_init_flags_krnl");

@@ -925,7 +925,6 @@ __host__ void calc_fits_gpu(
 
 	/* Allocate memory for all arrays that are needed for any possible data set.
 	 * This is done to avoid repeat allocations/deallocations	 */
-//	gpuErrchk(cudaMalloc((void**)&pos, sizeof(pos_t*) * nfrm_alloc));
 	cudaCalloc1((void**)&pos, sizeof(pos_t*), nfrm_alloc);
 	gpuErrchk(cudaMalloc((void**)&ddframe, sizeof(deldopfrm_t*) * nfrm_alloc));
 	gpuErrchk(cudaMalloc((void**)&ddview0, sizeof(deldopview_t*) * nfrm_alloc));
@@ -1109,12 +1108,12 @@ __host__ void calc_fits_MFS_gpu(
 	/* Launch posclr_streams_krnl to initialize POS view */
 	BLK.x = floor((THD.x - 1 + npixels_full)/THD.x);
 	for (s=0; s<nsets; s++)
-		posclr_radar_krnl<<<BLK,THD/*, 0, cf_stream[s]*/>>>(pos, posn, s);
+		posclr_radar_krnl<<<BLK,THD, 0, cf_stream[s]>>>(pos, posn, s);
 	checkErrorAfterKernelLaunch("posclr_radar_krnl64");
 
 	/* Synchronize streams to default stream */
-	for (s=0; s<nsets; s++)
-		cudaStreamSynchronize(cf_stream[s]);
+//	for (s=0; s<nsets; s++)
+//		cudaStreamSynchronize(cf_stream[s]);
 
 	/* Determine which POS pixels cover the target, and get distance
 	 * toward Earth of each POS pixel. Pass the frame streams, too. */
@@ -1126,13 +1125,13 @@ __host__ void calc_fits_MFS_gpu(
 	for (s=0; s<nsets; s++)
 		if ((houtbndarr[s])) {
 			/* Call single-threaded kernel to set dpar->posbnd and dpar->posbnd_logfactor */
-			cfs_set_posbnd_MFS_krnl<<<1,1/*,0,cf_stream[s]*/>>>(dpar, ddat, pos, nsets);
+			cfs_set_posbnd_MFS_krnl<<<1,1,0,cf_stream[s]>>>(dpar, ddat, pos, nsets);
 			houtbndarr[s]=0;
 		} checkErrorAfterKernelLaunch("cfs_set_posbnd_MFS_krnl");
 
-	/* Synchronize streams to default stream */
-	for (s=0; s<nsets; s++)
-		cudaStreamSynchronize(cf_stream[s]);
+//	/* Synchronize streams to default stream */
+//	for (s=0; s<nsets; s++)
+//		cudaStreamSynchronize(cf_stream[s]);
 
 	/* Get xlim and ylim and exclude_seen flag and copy them back to host memory */
 	cfs_get_exclude_seen_MFS_krnl<<<BLKsets,THDsets>>>(dpar,pos,xylim,nsets);
@@ -1154,18 +1153,18 @@ __host__ void calc_fits_MFS_gpu(
 		 * scattering angle and mark the facets which project onto their
 		 * centers as having been "seen" at least once                   */
 		if (s != exclude_seen)
-			cf_mark_pixels_seen_krnl<<<BLKpx[s],THD/*,0,cf_stream[s]*/>>>(
+			cf_mark_pixels_seen_krnl<<<BLKpx[s],THD,0,cf_stream[s]>>>(
 					dpar, dmod, pos, xylim, hnpixels[s], hxspan[s], s);
 		/* Zero out the fit delay-Doppler image and call pos2deldop
 		* to create the fit image by mapping power from the plane
 		 * of sky to delay-Doppler space.    				  */
-		clrvect_MFS_krnl<<<BLKdd[s],THD/*, 0, cf_stream[s]*/>>>(ddat,
+		clrvect_MFS_krnl<<<BLKdd[s],THD, 0, cf_stream[s]>>>(ddat,
 					hdeldopsize[s], s);
 	}
 	checkErrorAfterKernelLaunch("cf_mark_pixels_seen_MFS_krnl");
 	/* Synchronize streams to default stream */
-	for (s=0; s<nsets; s++)
-		cudaStreamSynchronize(cf_stream[s]);
+//	for (s=0; s<nsets; s++)
+//		cudaStreamSynchronize(cf_stream[s]);
 
 	/* Call the CUDA pos2deldop function */
 	pos2deldop_MFS_gpu(dpar, dmod, ddat, pos, ddframe, xylim, ndel, ndop,
@@ -1178,17 +1177,17 @@ __host__ void calc_fits_MFS_gpu(
 		if (houtbndarr[s]) {
 			/* Call single-threaded kernel to set badradar flag and
 			 * associated badradar_logfactor			 */
-			cf_set_badradar_MFS_krnl<<<1,1/*,0,cf_stream[s]*/>>>(dpar, ddat, s);
+			cf_set_badradar_MFS_krnl<<<1,1,0,cf_stream[s]>>>(dpar, ddat, s);
 			checkErrorAfterKernelLaunch("cf_set_badradar_MFS_krnl");
 		}
-		cf_gamma_trans_MFS_krnl<<<BLKdd[s],THD/*,0,cf_stream[s]*/>>>(dpar, ddat, s,
+		cf_gamma_trans_MFS_krnl<<<BLKdd[s],THD,0,cf_stream[s]>>>(dpar, ddat, s,
 				nThreadsdd[s], ndel);
 		checkErrorAfterKernelLaunch("cf_gamma_trans_MFS_krnl");
 	}
 
 	/* Synchronize streams to default stream */
-	for (s=0; s<nsets; s++)
-		cudaStreamSynchronize(cf_stream[s]);
+//	for (s=0; s<nsets; s++)
+//		cudaStreamSynchronize(cf_stream[s]);
 
 	/* Complete calculations of values that will be used during a fit to
 	 * increase the objective function for models with bad properties   */
@@ -1464,18 +1463,9 @@ __host__ void calc_deldop_gpu(struct par_t *dpar, struct mod_t *dmod,
 	for (v2=v0_index+1; v2<=v0_index+nviews; v2++) {
 		v[v2] = v2 % nviews;
 		/* Launch 9-threaded kernel to set pos->ae,pos->oe,pos->bistatic.*/
-		cfs_set_pos_ae_krnl<<<BLKfrm,THD64/*, 0, cf_stream[v2]*/>>>(ddat, pos, s, nframes,
+		cfs_set_pos_ae_krnl<<<BLKfrm,THD64, 0, cf_stream[v2]>>>(ddat, pos, s, nframes,
 				type, v[v2], 0);
 	}
-
-	//	for (f=0; f<nframes; f++)
-	//		/* Launch posclr_krnl to initialize POS view */
-	//		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f, FP64, 0);
-	//		posclr_fast_krnl2<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f, FP64, 0);
-	//		posclr_radar_krnl64<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f);
-	//		posclr_radar_krnl64mod<<<BLKpx[f],THD,0,cf_stream[f]>>>(pos, posn, f,
-	//				xspan[f], xylim, nThreadspx1[f]);
-	//	checkErrorAfterKernelLaunch("posclr_krnl");
 
 	posclr_radar_krnl_af<<<BLKaf,THDaf>>>(pos, posn, dxspan, xylim, dnpixels,
 			blocks);
@@ -1496,15 +1486,15 @@ __host__ void calc_deldop_gpu(struct par_t *dpar, struct mod_t *dmod,
 		for (v2=v0_index+1; v2<=v0_index+nviews; v2++) {
 			if ((houtbndarr[f]) && (v[v2] == v0_index)) {
 				/* Call single-threaded kernel to set dpar->posbnd and dpar->posbnd_logfactor */
-				cfs_set_posbnd_krnl<<<1,1/*,0,cf_stream[f]*/>>>(dpar, ddat, pos, s, f, type);
+				cfs_set_posbnd_krnl<<<1,1,0,cf_stream[f]>>>(dpar, ddat, pos, s, f, type);
 				houtbndarr[f]=0;
 			}
 		}
 	}checkErrorAfterKernelLaunch("cfs_set_posbnd_krnl");
 
 	/* Synchronize streams to default stream */
-	for (f=0; f<nframes; f++)
-		cudaStreamSynchronize(cf_stream[f]);
+//	for (f=0; f<nframes; f++)
+//		cudaStreamSynchronize(cf_stream[f]);
 
 	/* Get xlim and ylim and exclude_seen flag */
 	cfs_get_exclude_seen_krnl<<<BLKfrm,THD64>>>(dpar,pos,xylim,nframes, 0);
@@ -1532,14 +1522,14 @@ __host__ void calc_deldop_gpu(struct par_t *dpar, struct mod_t *dmod,
 			 * scattering angle and mark the facets which project onto their
 			 * centers as having been "seen" at least once                   */
 			if (s != exclude_seen && v[v2] == v0_index)
-				cf_mark_pixels_seen_krnl<<<BLKpx[f],THD/*,0,cf_stream[f]*/>>>(
+				cf_mark_pixels_seen_krnl<<<BLKpx[f],THD,0,cf_stream[f]>>>(
 						dpar, dmod, pos, xylim, hnpixels[f], hxspan[f], f);
 		}
 	} checkErrorAfterKernelLaunch("clrvect_krnl and cf_mark_pixels_seen_streams_krnl");
 
 	/* Synchronize streams to default stream */
-	for (f=0; f<nframes; f++)
-		cudaStreamSynchronize(cf_stream[f]);
+//	for (f=0; f<nframes; f++)
+//		cudaStreamSynchronize(cf_stream[f]);
 
 	clrvect_krnl_af<<<BLKaf,THDaf>>>(ddat, ddeldopsize, s, blocks);
 	checkErrorAfterKernelLaunch("clrvect_krnl and cf_mark_pixels_seen_streams_krnl");
@@ -1557,7 +1547,7 @@ __host__ void calc_deldop_gpu(struct par_t *dpar, struct mod_t *dmod,
 			if (houtbndarr[f]) {
 				/* Call single-threaded kernel to set badradar flag and
 				 * associated badradar_logfactor			 */
-				cf_set_badradar_krnl<<<1,1/*,0,cf_stream[f]*/>>>(dpar, ddat, s, f, type);
+				cf_set_badradar_krnl<<<1,1,0,cf_stream[f]>>>(dpar, ddat, s, f, type);
 			}
 		}
 	}
@@ -1565,7 +1555,7 @@ __host__ void calc_deldop_gpu(struct par_t *dpar, struct mod_t *dmod,
 	 * from this view in the summed results for this frame  */
 	if (nviews > 1) {
 		/* Launch ndel*ndop-threaded kernel to add fit[i][j] to fit_store[i][j]*/
-		cf_add_fit_store_krnl1<<<BLKdd[f],THD/*,0,cf_stream[f]*/>>>(
+		cf_add_fit_store_krnl1<<<BLKdd[f],THD,0,cf_stream[f]>>>(
 				ddat,fit_store,nThreadsdd[f],s,f, type, ndel);
 		cf_add_fit_store_krnl2<<<1,1>>>(ddat, s, f, overflow, type);
 	} checkErrorAfterKernelLaunch("cf_deldop_set_badradar_krnl (calc_fits_cuda)");
@@ -1576,19 +1566,19 @@ __host__ void calc_deldop_gpu(struct par_t *dpar, struct mod_t *dmod,
 	 * par->dd_gamma flag is not set  */
 	if (nviews > 1) {
 		for (f=0; f<nframes; f++) {
-			cf_finish_fit_store_krnl<<<BLKdd[f],THD/*,0,cf_stream[f]*/>>>(
+			cf_finish_fit_store_krnl<<<BLKdd[f],THD,0,cf_stream[f]>>>(
 					ddat, fit_store, s, f, nThreadsdd[f], type, ndel);
 
-			cf_finish_fit_krnl2<<<1,1/*,0,cf_stream[f]*/>>>(ddat, overflow, s, f, type);
+			cf_finish_fit_krnl2<<<1,1,0,cf_stream[f]>>>(ddat, overflow, s, f, type);
 		} checkErrorAfterKernelLaunch("cf_finish_fit_store_streams kernels");
 		/* Synchronize streams to default stream */
-		for (f=0; f<nframes; f++)
-			cudaStreamSynchronize(cf_stream[f]);
+//		for (f=0; f<nframes; f++)
+//			cudaStreamSynchronize(cf_stream[f]);
 		cudaFree(fit_store);
 	}
 
 	for (f=0; f<nframes; f++) {
-		cf_gamma_trans_krnl<<<BLKdd[f],THD/*,0,cf_stream[f]*/>>>(dpar, ddat, s, f,
+		cf_gamma_trans_krnl<<<BLKdd[f],THD,0,cf_stream[f]>>>(dpar, ddat, s, f,
 				nThreadsdd[f], type, ndel);
 	} checkErrorAfterKernelLaunch("cf_gamma_trans_krnl");
 
@@ -1668,8 +1658,8 @@ __host__ void calc_doppler_gpu(struct par_t *dpar, struct mod_t *dmod,
 	} checkErrorAfterKernelLaunch("cfs_set_pos_ae_krnl");
 
 	/* Synchronize streams to default stream */
-	for (f=0; f<nframes; f++)
-		cudaStreamSynchronize(cf_stream[f]);
+//	for (f=0; f<nframes; f++)
+//		cudaStreamSynchronize(cf_stream[f]);
 
 	posclr_radar_krnl_af<<<BLKaf,THDaf>>>(pos, posn, dxspan, xylim, dnpixels,
 			blocks);
@@ -1697,8 +1687,8 @@ __host__ void calc_doppler_gpu(struct par_t *dpar, struct mod_t *dmod,
 		}
 
 	/* Synchronize streams to default stream */
-	for (f=0; f<nframes; f++)
-		cudaStreamSynchronize(cf_stream[f]);
+//	for (f=0; f<nframes; f++)
+//		cudaStreamSynchronize(cf_stream[f]);
 
 	/* Get xlim and ylim and exclude_seen flag */
 	cfs_get_exclude_seen_krnl<<<BLKfrm,THD64>>>(dpar,pos,xylim,nframes, 0);
@@ -1734,8 +1724,8 @@ __host__ void calc_doppler_gpu(struct par_t *dpar, struct mod_t *dmod,
 	}
 
 	/* Synchronize streams to default stream */
-	for (f=0; f<nframes; f++)
-		cudaStreamSynchronize(cf_stream[f]);
+//	for (f=0; f<nframes; f++)
+//		cudaStreamSynchronize(cf_stream[f]);
 
 	/* Call pos2deldop to calculate the Doppler radar fit image */
 	for (v2=v0_index+1; v2<=v0_index+nviews; v2++) {
@@ -1768,8 +1758,8 @@ __host__ void calc_doppler_gpu(struct par_t *dpar, struct mod_t *dmod,
 	}
 
 	/* Synchronize streams to default stream */
-	for (f=0; f<nframes; f++)
-		cudaStreamSynchronize(cf_stream[f]);
+//	for (f=0; f<nframes; f++)
+//		cudaStreamSynchronize(cf_stream[f]);
 
 	/* If smearing is being modeled, compute mean values over all views for
 	 * this frame and store them in the standard frame structure     */
@@ -1899,15 +1889,6 @@ __host__ void calc_lghtcrv_gpu(
 	 * (i=1,2,...,n) at which actual lightcurve observations were made.  */
 	cfs_set_pos_ae_krnl<<<BLKfrm,THD64>>>(ddat, pos, s, nframes,type, 0, 1);
 
-//	for (f=1; f<=ncalc; f++) {
-//		/* Clear the POS-view to initialize */
-//		posclr_krnl<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn, f, FP64, 1);
-//		posclr_fast_krnl2<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn, f, FP64, 1);
-//		calcfits_posclr_lc_krnl64<<<BLKpx_full[f],THD,0,cf_stream[f-1]>>>(pos, posn, f);
-//		calcfits_posclr_lc_krnl64mod<<<BLKpx[f],THD,0,cf_stream[f-1]>>>(pos, posn,
-//				f, span[f].x, xylim, hnpixels_bbox[f]);
-//	} checkErrorAfterKernelLaunch("cfs_set_pos_ae and posclr_krnl");
-
 	posclr_lc_krnl_af<<<BLKaf,THDaf>>>(pos, posn, dxspan_combined, xylim_combined, dnpixels_combined, blocks);
 	checkErrorAfterKernelLaunch("posclr_lc_krnl64af");
 
@@ -1931,8 +1912,8 @@ __host__ void calc_lghtcrv_gpu(
 	}
 
 	/* Synchronize streams to default stream */
-	for (f=1; f<=nframes; f++)
-		cudaStreamSynchronize(cf_stream[f-1]);
+//	for (f=1; f<=nframes; f++)
+//		cudaStreamSynchronize(cf_stream[f-1]);
 
 	/* Now view model from source (sun) and get facet number and distance
 	 * toward source of each pixel in this projected view; use this
@@ -1954,8 +1935,8 @@ __host__ void calc_lghtcrv_gpu(
 		}
 	}
 	/* Synchronize streams to default stream */
-	for (f=1; f<=nframes; f++)
-		cudaStreamSynchronize(cf_stream[f-1]);
+//	for (f=1; f<=nframes; f++)
+//		cudaStreamSynchronize(cf_stream[f-1]);
 
 	/* Initialize this stream for the posmask kernel to follow */
 	posmask_init_krnl<<<BLKfrm,THD64>>>(pos, so, pxlpkm, nframes);
@@ -1968,8 +1949,8 @@ __host__ void calc_lghtcrv_gpu(
 	} checkErrorAfterKernelLaunch("posmask_krnl64");
 
 	/* Synchronize streams to default stream */
-	for (f=1; f<=nframes; f++)
-		cudaStreamSynchronize(cf_stream[f-1]);
+//	for (f=1; f<=nframes; f++)
+//		cudaStreamSynchronize(cf_stream[f-1]);
 
 	/* Go through all visible and unshadowed POS pixels with low enough
 	 * scattering and incidence angles, and mark facets which project onto
@@ -2016,8 +1997,8 @@ __host__ void calc_lghtcrv_gpu(
 	} checkErrorAfterKernelLaunch("cf_mark_pixels_krnl");
 
 	/* Synchronize streams to default stream */
-	for (f=1; f<=nframes; f++)
-		cudaStreamSynchronize(cf_stream[f-1]);
+//	for (f=1; f<=nframes; f++)
+//		cudaStreamSynchronize(cf_stream[f-1]);
 
 	/* Compute model brightness for this lightcurve point then copy to device  */
 	apply_photo_gpu(dmod, ddat, pos, xylim, span, BLKpx_bbox, hnpixels_bbox,

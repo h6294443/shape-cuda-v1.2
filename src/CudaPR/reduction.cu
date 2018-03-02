@@ -67,7 +67,7 @@ __inline__ __device__ double blockReduceMaxD(double val) {
   static __shared__ double shared[32];
   int lane=threadIdx.x%warpSize;
   int wid=threadIdx.x/warpSize;
-  val=warpReduceMax(val);
+  val=warpReduceMaxD(val);
 
   //write reduced value to shared memory
   if(lane==0) shared[wid]=val;
@@ -1101,6 +1101,13 @@ __global__ void zmax_intermediary_krnl(struct dat_t *ddat, double *d_in,
 	if (threadIdx.x ==0)
 		d_out[f] = d_in[0] * ddat->set[s].desc.deldop.frame[f].weight;
 }
+__global__ void zmax_intermediary_MFS_krnl(struct dat_t *ddat, double *d_in,
+		double *d_out, int s) {
+	/* Single-threaded kernel to add each frame's zmax to a sum for the set */
+	int f = 0;
+	if (threadIdx.x ==0)
+		d_out[s] = d_in[0] * ddat->set[s].desc.deldop.frame[f].weight;
+}
 __global__ void zmax_mgpu_intermediary_krnl(struct dat_t *ddat, float *d_in,
 		float *d_out, int s, int hf, int oddflg) {
 	/* Single-threaded kernel to add each frame's zmax to a sum for the set */
@@ -1239,8 +1246,8 @@ __host__ void sum_brightness_gpu(struct dat_t *ddat, struct pos_t **pos,
 		cudaMemsetAsync(d_odata5, 0, arrsz, sb_stream[5]);
 	}
 	checkErrorAfterKernelLaunch("device_reduce_block_atomic_krnl_brt");
-	for (f=0; f<6; f++)
-		cudaStreamSynchronize(sb_stream[f]);
+//	for (f=0; f<6; f++)
+//		cudaStreamSynchronize(sb_stream[f]);
 
 
 	cudaFree(d_odata0);
@@ -1343,8 +1350,8 @@ __host__ double compute_zmax_gpu(struct dat_t *ddat, struct pos_t **pos,
 	}
 	checkErrorAfterKernelLaunch("device_zmax_block_atomic_krnl");
 
-	for (f=0; f<5; f++)
-		cudaStreamSynchronize(sb_stream[f]);
+//	for (f=0; f<5; f++)
+//		cudaStreamSynchronize(sb_stream[f]);
 
 	/* Now just sum up all frames in d_odata_final in a loop, copy results back
 	 * to a host array and then return the first element - sum_deldop_zmax */
@@ -1417,45 +1424,45 @@ __host__ double compute_zmax_MFS_gpu(struct dat_t *ddat, struct pos_t **pos,
 		cudaMemsetAsync(d_odata0, 0, arrsz, sb_stream[0]);
 		device_zmax_block_atomic_krnl<<< dimGrid,dimBlock,0,sb_stream[0]>>>
 				(pos, d_odata0,	pos_size, s);
-		zmax_intermediary_krnl<<<1,1,0,sb_stream[0]>>>
-				(ddat, d_odata0, d_odata_final, s, f);
+		zmax_intermediary_MFS_krnl<<<1,1,0,sb_stream[0]>>>
+				(ddat, d_odata0, d_odata_final, s);
 
 		s++;
 		if (s >= nsets) break;
 		cudaMemsetAsync(d_odata1, 0, arrsz, sb_stream[1]);
 		device_zmax_block_atomic_krnl<<< dimGrid,dimBlock,0,sb_stream[1]>>>
 				(pos, d_odata1, pos_size, s);
-		zmax_intermediary_krnl<<<1,1,0,sb_stream[1]>>>
-				(ddat, d_odata1, d_odata_final, s, f);
+		zmax_intermediary_MFS_krnl<<<1,1,0,sb_stream[1]>>>
+				(ddat, d_odata1, d_odata_final, s);
 
 		s++;
 		if (s >= nsets) break;
 		cudaMemsetAsync(d_odata2, 0, arrsz, sb_stream[2]);
 		device_zmax_block_atomic_krnl<<< dimGrid,dimBlock,0,sb_stream[2]>>>
 				(pos, d_odata2, pos_size, s);
-		zmax_intermediary_krnl<<<1,1,0,sb_stream[2]>>>
-				(ddat, d_odata2, d_odata_final, s, f);
+		zmax_intermediary_MFS_krnl<<<1,1,0,sb_stream[2]>>>
+				(ddat, d_odata2, d_odata_final, s);
 
 		s++;
 		if (s >= nsets) break;
 		cudaMemsetAsync(d_odata3, 0, arrsz, sb_stream[3]);
 		device_zmax_block_atomic_krnl<<< dimGrid,dimBlock,0,sb_stream[3]>>>
 				(pos, d_odata3, pos_size, s);
-		zmax_intermediary_krnl<<<1,1,0,sb_stream[3]>>>
-				(ddat, d_odata3, d_odata_final, s, f);
+		zmax_intermediary_MFS_krnl<<<1,1,0,sb_stream[3]>>>
+				(ddat, d_odata3, d_odata_final, s);
 
 		s++;
 		if (s >= nsets) break;
 		cudaMemsetAsync(d_odata4, 0, arrsz, sb_stream[4]);
 		device_zmax_block_atomic_krnl<<< dimGrid,dimBlock,0,sb_stream[4]>>>
 				(pos, d_odata4, pos_size, s);
-		zmax_intermediary_krnl<<<1,1,0,sb_stream[4]>>>
-				(ddat, d_odata4, d_odata_final, s, f);
+		zmax_intermediary_MFS_krnl<<<1,1,0,sb_stream[4]>>>
+				(ddat, d_odata4, d_odata_final, s);
 	}
 	checkErrorAfterKernelLaunch("device_zmax_block_atomic_krnl");
 
-	for (s=0; s<=5; s++)
-		cudaStreamSynchronize(sb_stream[s]);
+//	for (s=0; s<=5; s++)
+//		cudaStreamSynchronize(sb_stream[s]);
 
 	/* Now just sum up all frames in d_odata_final in a loop, copy results back
 	 * to a host array and then return the first element - sum_deldop_zmax */
@@ -1526,35 +1533,40 @@ __host__ double compute_zmax_MFS_hyb(struct dat_t *ddat, struct pos_t **pos,
 		cudaMemsetAsync(d_odata0, 0, arrsz, sb_stream[0]);
 		device_zmax_block_atomic_krnl<<< dimGrid,dimBlock,0,sb_stream[0]>>>
 				(pos, d_odata0,	pos_size, s);
-		d_odata_final[s] = d_odata0[0] * ddat->set[s].desc.deldop.frame[0].weight;
-						
+		zmax_intermediary_MFS_krnl<<<1,1,0,sb_stream[0]>>>
+				(ddat, d_odata0, d_odata_final, s);
+
 		s++;
 		if (s >= nsets) break;
 		cudaMemsetAsync(d_odata1, 0, arrsz, sb_stream[1]);
 		device_zmax_block_atomic_krnl<<< dimGrid,dimBlock,0,sb_stream[1]>>>
 				(pos, d_odata1, pos_size, s);
-		d_odata_final[s] = d_odata1[0] * ddat->set[s].desc.deldop.frame[0].weight;
-		
+		zmax_intermediary_MFS_krnl<<<1,1,0,sb_stream[1]>>>
+				(ddat, d_odata1, d_odata_final, s);
+
 		s++;
 		if (s >= nsets) break;
 		cudaMemsetAsync(d_odata2, 0, arrsz, sb_stream[2]);
 		device_zmax_block_atomic_krnl<<< dimGrid,dimBlock,0,sb_stream[2]>>>
 				(pos, d_odata2, pos_size, s);
-		d_odata_final[s] = d_odata2[0] * ddat->set[s].desc.deldop.frame[0].weight;
+		zmax_intermediary_MFS_krnl<<<1,1,0,sb_stream[2]>>>
+				(ddat, d_odata2, d_odata_final, s);
 
 		s++;
 		if (s >= nsets) break;
 		cudaMemsetAsync(d_odata3, 0, arrsz, sb_stream[3]);
 		device_zmax_block_atomic_krnl<<< dimGrid,dimBlock,0,sb_stream[3]>>>
 				(pos, d_odata3, pos_size, s);
-		d_odata_final[s] = d_odata3[0] * ddat->set[s].desc.deldop.frame[0].weight;
+		zmax_intermediary_MFS_krnl<<<1,1,0,sb_stream[3]>>>
+				(ddat, d_odata3, d_odata_final, s);
 
 		s++;
 		if (s >= nsets) break;
 		cudaMemsetAsync(d_odata4, 0, arrsz, sb_stream[4]);
 		device_zmax_block_atomic_krnl<<< dimGrid,dimBlock,0,sb_stream[4]>>>
 				(pos, d_odata4, pos_size, s);
-		d_odata_final[s] = d_odata4[0] * ddat->set[s].desc.deldop.frame[0].weight;
+		zmax_intermediary_MFS_krnl<<<1,1,0,sb_stream[4]>>>
+				(ddat, d_odata4, d_odata_final, s);
 	}
 	checkErrorAfterKernelLaunch("device_zmax_block_atomic_krnl");
 
@@ -1566,6 +1578,7 @@ __host__ double compute_zmax_MFS_hyb(struct dat_t *ddat, struct pos_t **pos,
 	for (int s=1; s<nsets; s++)
 		d_odata_final[0] += d_odata_final[s];
 	
+
 	cudaFree(d_odata0);
 	cudaFree(d_odata1);
 	cudaFree(d_odata2);
@@ -1667,8 +1680,8 @@ __host__ double compute_deldop_xsec_gpu(struct dat_t *ddat, int nframes,
 	}
 	checkErrorAfterKernelLaunch("device_reduce_block_atomic_krnl_ddf2");
 
-	for (f=0; f<5; f++)
-		cudaStreamSynchronize(sb_stream[f]);
+//	for (f=0; f<5; f++)
+//		cudaStreamSynchronize(sb_stream[f]);
 
 	/* Now copy dsum_rad_xsec over to a host copy */
 	gpuErrchk(cudaMemcpy(hsum_rad_xsec, dsum_rad_xsec, sizeof(double)*2,
@@ -1817,7 +1830,8 @@ __host__ double compute_deldop_xsec_hyb(struct dat_t *ddat, int nframes,
 	int maxBlocks = 2048;		// max # of blocks per grid
 	int numBlocks = 0;			// initialize numBlocks
 	int numThreads = 0;			// initialize numThreads
-	double *d_odata0, *d_odata1, *d_odata2, *d_odata3, *d_odata4, sum_deldop_xsec;
+	double *d_odata0, *d_odata1, *d_odata2, *d_odata3, *d_odata4, sum_deldop_xsec,
+		*deldop_cross_section;
 	float2 xblock_ythread;		// used for return value of getNumBlocksAndThreads
 	dim3 BLK,THD;
 	THD.x = maxThreadsPerBlock;
@@ -1839,7 +1853,7 @@ __host__ double compute_deldop_xsec_hyb(struct dat_t *ddat, int nframes,
 	cudaCalloc1((void**)&d_odata2, arrsz, 1);
 	cudaCalloc1((void**)&d_odata3, arrsz, 1);
 	cudaCalloc1((void**)&d_odata4, arrsz, 1);
-	cudaCalloc1((void**)&deldop_cross_section, arrsz2));
+	cudaCalloc1((void**)&deldop_cross_section, arrsz2, 1);
 	gpuErrchk(cudaMemset(deldop_cross_section, 0, arrsz2));
 	
 	/* Call reduction  */
@@ -1849,10 +1863,10 @@ __host__ double compute_deldop_xsec_hyb(struct dat_t *ddat, int nframes,
 		cudaMemsetAsync(d_odata0, 0, arrsz, sb_stream[0]);
 		device_reduce_block_atomic_kernel_ddf2<<< dimGrid, dimBlock, 0, sb_stream[0]>>>
 				(ddat,d_odata0, size, f, set);
-		deldop_cross_section[f] = ddat->set[s].desc.deldop.frame[f].overflow_xsec;
+		deldop_cross_section[f] = ddat->set[set].desc.deldop.frame[f].overflow_xsec;
 		deldop_cross_section[f] += d_odata0[0];
-		deldop_cross_section[f] *= ddat->set[s].desc.deldop.frame[f].cal.val;
-		sum_deldop_xsec += ddat->set[s].desc.deldop.frame[f].weight *
+		deldop_cross_section[f] *= ddat->set[set].desc.deldop.frame[f].cal.val;
+		sum_deldop_xsec += ddat->set[set].desc.deldop.frame[f].weight *
 				deldop_cross_section[f];
 	
 		f++;
@@ -1860,10 +1874,10 @@ __host__ double compute_deldop_xsec_hyb(struct dat_t *ddat, int nframes,
 		cudaMemsetAsync(d_odata1, 0, arrsz, sb_stream[1]);
 		device_reduce_block_atomic_kernel_ddf2<<< dimGrid, dimBlock, 0, sb_stream[1]>>>
 				(ddat, d_odata1, size, f, set);
-		deldop_cross_section[f] = ddat->set[s].desc.deldop.frame[f].overflow_xsec;
+		deldop_cross_section[f] = ddat->set[set].desc.deldop.frame[f].overflow_xsec;
 		deldop_cross_section[f] += d_odata1[0];
-		deldop_cross_section[f] *= ddat->set[s].desc.deldop.frame[f].cal.val;
-		sum_deldop_xsec += ddat->set[s].desc.deldop.frame[f].weight *
+		deldop_cross_section[f] *= ddat->set[set].desc.deldop.frame[f].cal.val;
+		sum_deldop_xsec += ddat->set[set].desc.deldop.frame[f].weight *
 				deldop_cross_section[f];		
 		
 		f++;
@@ -1871,10 +1885,10 @@ __host__ double compute_deldop_xsec_hyb(struct dat_t *ddat, int nframes,
 		cudaMemsetAsync(d_odata2, 0, arrsz, sb_stream[2]);
 		device_reduce_block_atomic_kernel_ddf2<<< dimGrid, dimBlock, 0, sb_stream[2]>>>
 				(ddat, d_odata2, size, f, set);
-		deldop_cross_section[f] = ddat->set[s].desc.deldop.frame[f].overflow_xsec;
+		deldop_cross_section[f] = ddat->set[set].desc.deldop.frame[f].overflow_xsec;
 		deldop_cross_section[f] += d_odata2[0];
-		deldop_cross_section[f] *= ddat->set[s].desc.deldop.frame[f].cal.val;
-		sum_deldop_xsec += ddat->set[s].desc.deldop.frame[f].weight *
+		deldop_cross_section[f] *= ddat->set[set].desc.deldop.frame[f].cal.val;
+		sum_deldop_xsec += ddat->set[set].desc.deldop.frame[f].weight *
 				deldop_cross_section[f];
 
 		f++;
@@ -1882,10 +1896,10 @@ __host__ double compute_deldop_xsec_hyb(struct dat_t *ddat, int nframes,
 		cudaMemsetAsync(d_odata3, 0, arrsz, sb_stream[3]);
 		device_reduce_block_atomic_kernel_ddf2<<< dimGrid, dimBlock, 0, sb_stream[3]>>>
 				(ddat, d_odata3, size, f, set);
-		deldop_cross_section[f] = ddat->set[s].desc.deldop.frame[f].overflow_xsec;
+		deldop_cross_section[f] = ddat->set[set].desc.deldop.frame[f].overflow_xsec;
 		deldop_cross_section[f] += d_odata3[0];
-		deldop_cross_section[f] *= ddat->set[s].desc.deldop.frame[f].cal.val;
-		sum_deldop_xsec += ddat->set[s].desc.deldop.frame[f].weight *
+		deldop_cross_section[f] *= ddat->set[set].desc.deldop.frame[f].cal.val;
+		sum_deldop_xsec += ddat->set[set].desc.deldop.frame[f].weight *
 				deldop_cross_section[f];
 
 		f++;
@@ -1893,18 +1907,17 @@ __host__ double compute_deldop_xsec_hyb(struct dat_t *ddat, int nframes,
 		cudaMemsetAsync(d_odata4, 0, arrsz, sb_stream[4]);
 		device_reduce_block_atomic_kernel_ddf2<<< dimGrid, dimBlock, 0, sb_stream[4]>>>
 				(ddat, d_odata4, size, f, set);
-		deldop_cross_section[f] = ddat->set[s].desc.deldop.frame[f].overflow_xsec;
+		deldop_cross_section[f] = ddat->set[set].desc.deldop.frame[f].overflow_xsec;
 		deldop_cross_section[f] += d_odata4[0];
-		deldop_cross_section[f] *= ddat->set[s].desc.deldop.frame[f].cal.val;
-		sum_deldop_xsec += ddat->set[s].desc.deldop.frame[f].weight *
+		deldop_cross_section[f] *= ddat->set[set].desc.deldop.frame[f].cal.val;
+		sum_deldop_xsec += ddat->set[set].desc.deldop.frame[f].weight *
 				deldop_cross_section[f];
 	}
 	checkErrorAfterKernelLaunch("device_reduce_block_atomic_krnl_ddf2");
 
-	for (f=0; f<5; f++)
-		cudaStreamSynchronize(sb_stream[f]);
+//	for (f=0; f<5; f++)
+//		cudaStreamSynchronize(sb_stream[f]);
 
-	cudaFree(deldop_cross_section);
 	cudaFree(d_odata0);
 	cudaFree(d_odata1);
 	cudaFree(d_odata2);
@@ -2438,8 +2451,8 @@ __host__ void dvdI_reduce_gpu(struct mod_t *dmod, double *dv, double *dcom0,
 	checkErrorAfterKernelLaunch("device_reduce_block_atomic_kernel");
 
 	/* Synchronize streams before continuing with default stream */
-	for (int f=0; f<13; f++)
-		cudaStreamSynchronize(dv_streams[f]);
+//	for (int f=0; f<13; f++)
+//		cudaStreamSynchronize(dv_streams[f]);
 
 	/* Copy and assign */
 	set_dv_dcom_di_krnl<<<1,1>>>(d_odata_dv, d_odata_dcom0, d_odata_dcom1,
@@ -2536,8 +2549,8 @@ __host__ void dvdI_reduce_hyb(struct mod_t *dmod, double *dv, double *dcom0,
 	checkErrorAfterKernelLaunch("device_reduce_block_atomic_kernel");
 
 	/* Synchronize streams before continuing with default stream */
-	for (int f=0; f<13; f++)
-		cudaStreamSynchronize(dv_streams[f]);
+//	for (int f=0; f<13; f++)
+//		cudaStreamSynchronize(dv_streams[f]);
 
 	/* Copy and assign */
 	dmod->shape.comp[c].volume = dmod->shape.volume = d_odata_dv[0];
@@ -2608,8 +2621,8 @@ __host__ void sum_o2m2om_gpu(struct dat_t *ddat, double *o2, double *m2, double 
 				(ddat, d_odata2, size, f, set);
 
 		/* Synchronize host to all three streams used */
-		for (int s=0; s<3; s++)
-			gpuErrchk(cudaStreamSynchronize(sb_stream[s]));
+//		for (int s=0; s<3; s++)
+//			gpuErrchk(cudaStreamSynchronize(sb_stream[s]));
 		
 		/* Now transfer the calculated sums to variables o2, m2, and om of
 		 * this frame, then set the sum arrays back to zero */
